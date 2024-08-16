@@ -1,11 +1,10 @@
 #ifndef MECANUM_ROBOT_H
 #define MECANUM_ROBOT_H
 
+#include <SPI.h>
 #include <Adafruit_MotorShield.h>
 #include <ArduinoJson.h>
-#include <SPI.h>
-
-#include "common/commands.h"
+#include "commands.h"
 
 class MecanumRobot {
   // Define the MotorParams struct

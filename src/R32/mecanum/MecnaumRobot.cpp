@@ -38,7 +38,6 @@ void MecanumRobot::stop() {
 }
 
 void MecanumRobot::moveForward(int speed, int duration) {
-  Serial.println("SPEED: " + String(speed));
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -207,13 +206,10 @@ void MecanumRobot::unknownCommand() {
 void MecanumRobot::executeCommand(JsonDocument doc) {
   int command = doc["command"].as<int>();
   int speed = doc["speed"].as<int>();
-  
   int duration = 100;
 
-  
   switch (command) {
     case MOVE_FORWARD:
-      Serial.println("Moving forward");
       moveForward(speed, duration);
       break;
     case MOVE_BACKWARD:

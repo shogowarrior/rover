@@ -40,6 +40,6 @@
 #define ROTATE_CLOCKWISE 17
 #define ROTATE_COUNTERCLOCKWISE 18
 
-#define LIMIT_SPEED 100 
+#define LIMIT_SPEED 50 
 
 #endif
