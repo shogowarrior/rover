@@ -4,8 +4,8 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 
-void connectWiFi();
+void serverStart();
 void printWiFiStatus();
-void startOTA();
+void serverHandler();
 
 #endif

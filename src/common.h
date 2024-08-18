@@ -1,7 +1,11 @@
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef COMMON_H
+#define COMMON_H
+#include "MecanumRobot.h"
+#include "Controller.h"
 
 #pragma once
+extern MecanumRobot robot;
+extern Controller controller;
 
 #define MAC_ADDRESS "94:b9:7e:c7:af:12"
 #define DEADZONE_THRESHOLD 20

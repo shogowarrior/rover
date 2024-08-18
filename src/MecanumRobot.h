@@ -1,12 +1,21 @@
 #ifndef MECANUM_ROBOT_H
 #define MECANUM_ROBOT_H
 
-#include <SPI.h>
+#pragma once
+
 #include <Adafruit_MotorShield.h>
 #include <ArduinoJson.h>
-#include "commands.h"
+#include <SPI.h>
+#include <Ultrasonic.h>
 
 class MecanumRobot {
+  Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+
+  Adafruit_DCMotor *frontLeft;
+  Adafruit_DCMotor *frontRight;
+  Adafruit_DCMotor *rearLeft;
+  Adafruit_DCMotor *rearRight;
+
   // Define the MotorParams struct
   struct MotorParams {
     Adafruit_DCMotor *motor;

@@ -1,11 +1,7 @@
 #include "MecanumRobot.h"
+#include "common.h"
 
-Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-
-Adafruit_DCMotor *frontLeft;
-Adafruit_DCMotor *frontRight;
-Adafruit_DCMotor *rearLeft;
-Adafruit_DCMotor *rearRight;
+Ultrasonic ultrasonic(12, 13);
 
 void MecanumRobot::initRobot() {
   AFMS.begin();
@@ -13,6 +9,7 @@ void MecanumRobot::initRobot() {
   rearRight = AFMS.getMotor(MOTOR1_A);
   frontRight = AFMS.getMotor(MOTOR1_B);
   frontLeft = AFMS.getMotor(MOTOR2_B);
+  ultrasonic.setTimeout(40000UL);
 }
 
 // Run a motor
@@ -271,8 +268,6 @@ void MecanumRobot::executeCommand(JsonDocument doc) {
       break;
   }
 }
-
-
 
 void MecanumRobot::testMove(Move move) {
   (this->*move)(DEFAULT_SPEED, DEFAULT_TIME);
