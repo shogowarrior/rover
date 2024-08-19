@@ -1,4 +1,7 @@
+#include "common.h"
 #include "Service.h"
+
+unsigned long startMillis = millis();
 
 // Static IP configuration
 IPAddress ip(192, 168, 0, 115);
@@ -72,9 +75,31 @@ void Service::start() {
 void Service::handle() {
   webSocket.loop();
   ArduinoOTA.handle();
+
+  long currentMillis = millis();
+  if (currentMillis - startMillis >= REPORT_INTERVAL)
+  {
+  }
 }
 
 void Service::printWifiStatus() {
   Serial.printf("Address: %s\n", WiFi.localIP());
   Serial.printf("Hostname: %s\n", WiFi.getHostname());
+}
+
+
+/**
+ * Send periodic data as a package
+ *  - sonar distance
+ *  - Moves
+ *  - Location
+ *  - Wifi Strength
+ * Future:
+ *  - Accelerometer
+ *  - Temparature
+ *  - Voltage / Amperage
+ */
+void Service::sendData() {
+    String roverData = rover.getData();
+    webSocket.broadcastTXT(roverData);
 }

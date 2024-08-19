@@ -1,31 +1,30 @@
-#include "MecanumRobot.h"
 #include "common.h"
 
-Ultrasonic ultrasonic(12, 13);
+Ultrasonic sonar(12, 13);
 
-void MecanumRobot::initRobot() {
+void Rover::initRover() {
   AFMS.begin();
   rearLeft = AFMS.getMotor(MOTOR2_A);
   rearRight = AFMS.getMotor(MOTOR1_A);
   frontRight = AFMS.getMotor(MOTOR1_B);
   frontLeft = AFMS.getMotor(MOTOR2_B);
-  ultrasonic.setTimeout(40000UL);
+  sonar.setTimeout(SONAR_TIMEOUT);
 }
 
 // Run a motor
-void MecanumRobot::runMotor(MotorParams motorParam) {
+void Rover::runMotor(MotorParams motorParam) {
   motorParam.motor->setSpeed(motorParam.speed);
   motorParam.motor->run(motorParam.direction);
 }
 
-void MecanumRobot::runMotors(MotorParams motorParams[]) {
+void Rover::runMotors(MotorParams motorParams[]) {
   int numMotors = 4;
   for (int i = 0; i < numMotors; i++) {
     runMotor(motorParams[i]);
   }
 }
 
-void MecanumRobot::stop() {
+void Rover::stop() {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, RELEASE, 0},
@@ -34,7 +33,7 @@ void MecanumRobot::stop() {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveForward(int speed, int duration) {
+void Rover::moveForward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -43,7 +42,7 @@ void MecanumRobot::moveForward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveBackward(int speed, int duration) {
+void Rover::moveBackward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, BACKWARD, (uint8_t)speed},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -52,7 +51,7 @@ void MecanumRobot::moveBackward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveLeft(int speed, int duration) {
+void Rover::moveLeft(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, BACKWARD, (uint8_t)speed},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -61,7 +60,7 @@ void MecanumRobot::moveLeft(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveRight(int speed, int duration) {
+void Rover::moveRight(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -70,7 +69,7 @@ void MecanumRobot::moveRight(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::rotateClockwise(int speed, int duration) {
+void Rover::rotateClockwise(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, BACKWARD, (uint8_t)speed},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -79,7 +78,7 @@ void MecanumRobot::rotateClockwise(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::rotateCounterClockwise(int speed, int duration) {
+void Rover::rotateCounterClockwise(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -88,7 +87,7 @@ void MecanumRobot::rotateCounterClockwise(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveDiagonal45(int speed, int duration) {
+void Rover::moveDiagonal45(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, RELEASE, 0},
@@ -97,7 +96,7 @@ void MecanumRobot::moveDiagonal45(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveDiagonal135(int speed, int duration) {
+void Rover::moveDiagonal135(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -106,7 +105,7 @@ void MecanumRobot::moveDiagonal135(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveDiagonal225(int speed, int duration) {
+void Rover::moveDiagonal225(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, BACKWARD, (uint8_t)speed},
       {frontRight, RELEASE, 0},
@@ -115,7 +114,7 @@ void MecanumRobot::moveDiagonal225(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::moveDiagonal315(int speed, int duration) {
+void Rover::moveDiagonal315(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -124,7 +123,7 @@ void MecanumRobot::moveDiagonal315(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotRightForward(int speed, int duration) {
+void Rover::pivotRightForward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -133,7 +132,7 @@ void MecanumRobot::pivotRightForward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotRightBackward(int speed, int duration) {
+void Rover::pivotRightBackward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -142,7 +141,7 @@ void MecanumRobot::pivotRightBackward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotLeftForward(int speed, int duration) {
+void Rover::pivotLeftForward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, BACKWARD, (uint8_t)speed},
       {frontRight, RELEASE, 0},
@@ -151,7 +150,7 @@ void MecanumRobot::pivotLeftForward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotLeftBackward(int speed, int duration) {
+void Rover::pivotLeftBackward(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, RELEASE, 0},
@@ -160,7 +159,7 @@ void MecanumRobot::pivotLeftBackward(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotSidewaysForwardRight(int speed, int duration) {
+void Rover::pivotSidewaysForwardRight(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, BACKWARD, (uint8_t)speed},
@@ -169,7 +168,7 @@ void MecanumRobot::pivotSidewaysForwardRight(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotSidewaysForwardLeft(int speed, int duration) {
+void Rover::pivotSidewaysForwardLeft(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, RELEASE, 0},
@@ -178,7 +177,7 @@ void MecanumRobot::pivotSidewaysForwardLeft(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotSidewaysBackwardRight(int speed, int duration) {
+void Rover::pivotSidewaysBackwardRight(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, RELEASE, 0},
       {frontRight, FORWARD, (uint8_t)speed},
@@ -187,7 +186,7 @@ void MecanumRobot::pivotSidewaysBackwardRight(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::pivotSidewaysBackwardLeft(int speed, int duration) {
+void Rover::pivotSidewaysBackwardLeft(int speed, int duration) {
   MotorParams motorParams[] = {
       {frontLeft, FORWARD, (uint8_t)speed},
       {frontRight, RELEASE, 0},
@@ -196,11 +195,11 @@ void MecanumRobot::pivotSidewaysBackwardLeft(int speed, int duration) {
   runMotors(motorParams);
 }
 
-void MecanumRobot::unknownCommand() {
+void Rover::unknownMove() {
   // Handle unknown command
 }
 
-void MecanumRobot::executeCommand(JsonDocument doc) {
+void Rover::executeMove(JsonDocument doc) {
   int command = doc["command"].as<int>();
   int speed = doc["speed"].as<int>();
   int duration = 100;
@@ -264,33 +263,51 @@ void MecanumRobot::executeCommand(JsonDocument doc) {
       rotateCounterClockwise(speed, duration);
       break;
     default:
-      unknownCommand();
+      unknownMove();
       break;
   }
 }
 
-void MecanumRobot::testMove(Move move) {
-  (this->*move)(DEFAULT_SPEED, DEFAULT_TIME);
+float Rover::getTemperature() {
+  int tempRaw = (int)temperatureRead();
+  return (tempRaw / 2.0) + 25.0; // Adjust calibration
 }
 
-// Test Wheels
-void MecanumRobot::testRobot() {
-  testMove(&MecanumRobot::moveForward);
-  testMove(&MecanumRobot::moveBackward);
-  testMove(&MecanumRobot::moveRight);
-  testMove(&MecanumRobot::moveLeft);
-  testMove(&MecanumRobot::rotateClockwise);
-  testMove(&MecanumRobot::rotateCounterClockwise);
-  // testMove(&MecanumRobot::moveDiagonal45);
-  // testMove(&MecanumRobot::moveDiagonal135);
-  // testMove(&MecanumRobot::moveDiagonal225);
-  // testMove(&MecanumRobot::moveDiagonal315);
-  // testMove(&MecanumRobot::pivotRightForward);
-  // testMove(&MecanumRobot::pivotRightBackward);
-  // testMove(&MecanumRobot::pivotLeftForward);
-  // testMove(&MecanumRobot::pivotLeftBackward);
-  // testMove(&MecanumRobot::pivotSidewaysForwardRight);
-  // testMove(&MecanumRobot::pivotSidewaysForwardLeft);
-  // testMove(&MecanumRobot::pivotSidewaysBackwardRight);
-  // testMove(&MecanumRobot::pivotSidewaysBackwardLeft);
+unsigned int Rover::getDistance() {
+  return sonar.read();
 }
+
+String Rover::getData() {
+  JsonDocument doc;
+  doc["distance"] = getDistance();
+  doc["temperature"] = getTemperature();
+  String jsonStr;
+  serializeJson(doc, jsonStr);
+  return jsonStr;
+}
+
+// void Rover::testMove(Move move) {
+//   (this->*move)(DEFAULT_SPEED, DEFAULT_TIME);
+// }
+
+// // Test Wheels
+// void Rover::testRobot() {
+//   testMove(&Rover::moveForward);
+//   testMove(&Rover::moveBackward);
+//   testMove(&Rover::moveRight);
+//   testMove(&Rover::moveLeft);
+//   testMove(&Rover::rotateClockwise);
+//   testMove(&Rover::rotateCounterClockwise);
+//   testMove(&Rover::moveDiagonal45);
+//   testMove(&Rover::moveDiagonal135);
+//   testMove(&Rover::moveDiagonal225);
+//   testMove(&Rover::moveDiagonal315);
+//   testMove(&Rover::pivotRightForward);
+//   testMove(&Rover::pivotRightBackward);
+//   testMove(&Rover::pivotLeftForward);
+//   testMove(&Rover::pivotLeftBackward);
+//   testMove(&Rover::pivotSidewaysForwardRight);
+//   testMove(&Rover::pivotSidewaysForwardLeft);
+//   testMove(&Rover::pivotSidewaysBackwardRight);
+//   testMove(&Rover::pivotSidewaysBackwardLeft);
+// }

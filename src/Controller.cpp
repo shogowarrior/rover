@@ -70,7 +70,7 @@ void Controller::getTriggers(JsonArray array) {
 }
 
 
-void controlMecanum() {
+void controlRover() {
   JsonDocument newDoc;
   JsonArray array = newDoc.to<JsonArray>();
 
@@ -96,7 +96,7 @@ void controlMecanum() {
 
   for (JsonDocument doc : array) {
     serializeJsonPretty(doc, Serial);
-    robot.executeCommand(doc);
+    rover.executeMove(doc);
   }
 }
 
@@ -105,7 +105,7 @@ void onConnect() {
 }
 
 void Controller::attach() {
-  Ps3.attach(controlMecanum);
+  Ps3.attach(controlRover);
   Ps3.attachOnConnect(onConnect);
   Ps3.begin(MAC_ADDRESS);
 }

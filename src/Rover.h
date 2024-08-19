@@ -1,5 +1,5 @@
-#ifndef MECANUM_ROBOT_H
-#define MECANUM_ROBOT_H
+#ifndef ROVER_H
+#define ROVER_H
 
 #pragma once
 
@@ -8,7 +8,8 @@
 #include <SPI.h>
 #include <Ultrasonic.h>
 
-class MecanumRobot {
+class Rover {
+ private:
   Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
   Adafruit_DCMotor *frontLeft;
@@ -23,13 +24,8 @@ class MecanumRobot {
     uint8_t speed;
   };
 
- public:
-  void initRobot();
-  void testRobot();
 
-  // Using declaration for member function pointer
-  using Move = void (MecanumRobot::*)(int, int);
-
+  using Move = void (Rover::*)(int, int);
   void runMotor(MotorParams motorParam);
   void runMotors(MotorParams motorParams[]);
   void moveForward(int speed, int duration);
@@ -50,10 +46,17 @@ class MecanumRobot {
   void pivotSidewaysForwardLeft(int speed, int duration);
   void pivotSidewaysBackwardRight(int speed, int duration);
   void pivotSidewaysBackwardLeft(int speed, int duration);
-  void setMotorsSpeed(int speed);
   void stop();
-  void unknownCommand();
-  void executeCommand(JsonDocument doc);
+  void unknownMove();
+
+ public:
+  void initRover();
+  void testRover();
+
+  String getData();
+  float getTemperature();
+  unsigned int getDistance();
+  void executeMove(JsonDocument doc);
 
   // Test related methods
   void testMove(Move move);

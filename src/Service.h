@@ -19,11 +19,12 @@ class Service {
   void wifiService();
   void setHostName();
   void setIP();
-  void wsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
+  void wsEvent(uint8_t, WStype_t, uint8_t*, size_t);
 
  public:
   void start();
   void handle();
+  void sendData();
   void printWifiStatus();
 };
 

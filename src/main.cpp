@@ -1,18 +1,21 @@
-#include "MecanumRobot.h"
 #include "common.h"
 #include "Service.h"
 
-MecanumRobot robot;
+Rover rover;
 Controller controller;
 Service Service;
 
 void setup() {
   Serial.begin(HW_SERIAL_SPEED);
-  robot.initRobot();
+  rover.initRover();
   controller.attach();
   Service.start();
 }
 
 void loop() {
+
+
+
+
   Service.handle();
 }

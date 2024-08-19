@@ -1,29 +1,29 @@
 #ifndef COMMON_H
 #define COMMON_H
-#include "MecanumRobot.h"
-#include "Controller.h"
 
 #pragma once
-extern MecanumRobot robot;
-extern Controller controller;
 
+#include "Rover.h"
+#include "Controller.h"
+
+extern Rover rover;
+extern Controller controller;
+extern unsigned long startMillis;
+
+// PS3 mac address
 #define MAC_ADDRESS "94:b9:7e:c7:af:12"
 #define DEADZONE_THRESHOLD 20
-#define LOG_INTERVAL 3000
-#define CONTROL_INTERVAL 50
-
-#define DEFAULT_SPEED 150
-#define DEFAULT_TIME 500
-
-// Arduino Software UART pins
-#define SW_UART_TX_PIN 10
-#define SW_UART_RX_PIN 11
 
 // Common constants
 #define HW_SERIAL_SPEED 115200L
 #define SW_SERIAL_SPEED 9600L
 
-// Define command constants
+// Sonar
+#define TRIG_PIN 12
+#define ECHO_PIN 12
+#define SONAR_TIMEOUT 40000UL
+
+// Define commands
 #define STOP 0
 #define MOVE_FORWARD 1
 #define MOVE_BACKWARD 2
@@ -45,5 +45,15 @@ extern Controller controller;
 #define ROTATE_COUNTERCLOCKWISE 18
 
 #define LIMIT_SPEED 50 
+#define REPORT_INTERVAL 1000L
+
+// // Test move constants
+// #define DEFAULT_SPEED 150
+// #define DEFAULT_TIME 500
+
+// // Arduino Software UART pins
+// #define SW_UART_TX_PIN 10
+// #define SW_UART_RX_PIN 11
+
 
 #endif
