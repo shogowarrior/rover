@@ -13,9 +13,5 @@ void setup() {
 }
 
 void loop() {
-
-
-
-
   Service.handle();
 }

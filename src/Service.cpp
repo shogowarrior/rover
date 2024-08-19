@@ -1,7 +1,9 @@
-#include "common.h"
 #include "Service.h"
 
+#include "common.h"
+
 unsigned long startMillis = millis();
+WebSocketsServer webSocket = WebSocketsServer(81);
 
 // Static IP configuration
 IPAddress ip(192, 168, 0, 115);
@@ -27,18 +29,15 @@ void Service::setHostName() {
 void Service::wsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
-      Serial.printf("[%u] Disconnected!\n", num);
       break;
     case WStype_CONNECTED: {
       IPAddress ip = webSocket.remoteIP(num);
       Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-      webSocket.sendTXT(num, "Hello from ESP32!");
+      webSocket.sendTXT(num, "Hello from Rover");
       break;
     }
     case WStype_TEXT:
       Serial.printf("[%u] Received text: %s\n", num, payload);
-      // Echo the received message back to the client
-      webSocket.sendTXT(num, payload, length);
       break;
   }
 }
@@ -63,30 +62,19 @@ void Service::wifiService() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("WiFi connected.");
+  Serial.println("Wireless connected.");
   printWifiStatus();
 }
 
-void Service::start() {
-  wifiService();
-  otaService();
-}
-
-void Service::handle() {
-  webSocket.loop();
-  ArduinoOTA.handle();
-
-  long currentMillis = millis();
-  if (currentMillis - startMillis >= REPORT_INTERVAL)
-  {
-  }
+void Service::wsService() {
+  webSocket.begin();
+  webSocket.onEvent(Service::wsEvent);
 }
 
 void Service::printWifiStatus() {
   Serial.printf("Address: %s\n", WiFi.localIP());
   Serial.printf("Hostname: %s\n", WiFi.getHostname());
 }
-
 
 /**
  * Send periodic data as a package
@@ -100,6 +88,20 @@ void Service::printWifiStatus() {
  *  - Voltage / Amperage
  */
 void Service::sendData() {
+  if (millis() - startMillis >= REPORT_INTERVAL) {
     String roverData = rover.getData();
     webSocket.broadcastTXT(roverData);
+  }
+}
+
+void Service::start() {
+  wifiService();
+  otaService();
+  wsService();
+}
+
+void Service::handle() {
+  webSocket.loop();
+  ArduinoOTA.handle();
+  sendData();
 }
