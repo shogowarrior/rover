@@ -64,12 +64,12 @@ void Service::wifiService() {
   printWifiStatus();
 }
 
-void Service::serverStart() {
+void Service::start() {
   wifiService();
   otaService();
 }
 
-void Service::serverHandler() {
+void Service::handle() {
   webSocket.loop();
   ArduinoOTA.handle();
 }

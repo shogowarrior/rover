@@ -11,7 +11,7 @@ class Controller {
   int calculateSpeed(int x, int y, int speed);
   float calculateAngle(int x, int y);
   
-  void attachController();
+  void attach();
   void getLeftJoyStick(JsonArray array);
   void getRightJoyStick(JsonArray array);
   void getTriggers(JsonArray array);

@@ -104,7 +104,7 @@ void onConnect() {
   Serial.println("PS3 controller connected!");
 }
 
-void Controller::attachController() {
+void Controller::attach() {
   Ps3.attach(controlMecanum);
   Ps3.attachOnConnect(onConnect);
   Ps3.begin(MAC_ADDRESS);
