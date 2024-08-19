@@ -1,23 +1,27 @@
-#include "server.h"
-
-#include <WebSocketsServer.h>
-
-bool isStaticIp = true;
+#include "Service.h"
 
 // Static IP configuration
-IPAddress local_IP(192, 168, 0, 115);
+IPAddress ip(192, 168, 0, 115);
 IPAddress gateway(192, 168, 0, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress primaryDNS(8, 8, 8, 8);
 IPAddress secondaryDNS(8, 8, 4, 4);
 
-const char* ssid = "Arjun";
-const char* password = "Laurie123";
-const char* hostname = "car";
-WebSocketsServer webSocket = WebSocketsServer(81);
+void Service::setIP() {
+  if (isStaticIp) {
+    if (!WiFi.config(ip, gateway, subnet, primaryDNS, secondaryDNS)) {
+      Serial.println("STA Failed to configure");
+    }
+  }
+}
 
-// Function to handle WebSocket events
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+void Service::setHostName() {
+  if (!WiFi.setHostname(hostname)) {
+    Serial.println("Failed to set hostname");
+  }
+}
+
+void Service::wsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.printf("[%u] Disconnected!\n", num);
@@ -36,26 +40,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length)
   }
 }
 
-void setStaticIP() {
-  if (isStaticIp) {
-    if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-      Serial.println("STA Failed to configure");
-    }
-  }
-}
-
-void setHostName() {
-  if (!WiFi.setHostname(hostname)) {
-    Serial.println("Failed to set hostname");
-  }
-}
-
-void printWiFiStatus() {
-  Serial.printf("Address: %s\n", WiFi.localIP());
-  Serial.printf("Hostname: %s\n", WiFi.getHostname());
-}
-
-void startOTAService() {
+void Service::otaService() {
   ArduinoOTA
       .onStart([]() { Serial.println("Starting Flash upgrade..."); })
       .onError([](ota_error_t error) { Serial.printf("Error[%u]: ", error); })
@@ -66,9 +51,9 @@ void startOTAService() {
   ArduinoOTA.begin();
 }
 
-void startWiFiService() {
+void Service::wifiService() {
   setHostName();
-  setStaticIP();
+  setIP();
   Serial.printf("Connecting to %s\n", ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -76,15 +61,20 @@ void startWiFiService() {
     Serial.print(".");
   }
   Serial.println("WiFi connected.");
-  printWiFiStatus();
+  printWifiStatus();
 }
 
-void serverStart() {
-  startWiFiService();
-  startOTAService();
+void Service::serverStart() {
+  wifiService();
+  otaService();
 }
 
-void serverHandler() {
+void Service::serverHandler() {
   webSocket.loop();
   ArduinoOTA.handle();
+}
+
+void Service::printWifiStatus() {
+  Serial.printf("Address: %s\n", WiFi.localIP());
+  Serial.printf("Hostname: %s\n", WiFi.getHostname());
 }
