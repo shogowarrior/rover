@@ -10,18 +10,15 @@ extern Rover rover;
 extern Controller controller;
 extern unsigned long startMillis;
 
-// PS3 mac address
-#define MAC_ADDRESS "94:b9:7e:c7:af:12"
-#define DEADZONE_THRESHOLD 20
-
-// Common constants
 #define HW_SERIAL_SPEED 115200L
 #define SW_SERIAL_SPEED 9600L
 
 // Sonar
-#define TRIG_PIN 12
-#define ECHO_PIN 12
-#define SONAR_TIMEOUT 40000UL
+#define _CM 0.0344  // Speed of sound in cm/μs
+#define _MM 0.344   // Speed of sound in mm/μs
+#define _M 0.0344e-3 // Speed of sound in m/μs
+#define TRIG_PIN 16
+#define ECHO_PIN 17
 
 // Define commands
 #define STOP 0
@@ -45,7 +42,7 @@ extern unsigned long startMillis;
 #define ROTATE_COUNTERCLOCKWISE 18
 
 #define LIMIT_SPEED 50 
-#define REPORT_INTERVAL 1000L
+#define REPORT_INTERVAL 2000L
 
 // // Test move constants
 // #define DEFAULT_SPEED 150
@@ -55,5 +52,8 @@ extern unsigned long startMillis;
 // #define SW_UART_TX_PIN 10
 // #define SW_UART_RX_PIN 11
 
+// PS3 mac address
+#define MAC_ADDRESS "94:b9:7e:c7:af:12"
+#define DEADZONE_THRESHOLD 20
 
 #endif

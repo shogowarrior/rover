@@ -6,7 +6,6 @@
 #include <Adafruit_MotorShield.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
-#include <Ultrasonic.h>
 
 class Rover {
  private:
@@ -23,7 +22,6 @@ class Rover {
     int direction;
     uint8_t speed;
   };
-
 
   using Move = void (Rover::*)(int, int);
   void runMotor(MotorParams motorParam);
@@ -55,7 +53,7 @@ class Rover {
 
   String getData();
   float getTemperature();
-  unsigned int getDistance();
+  float getDistance();
   void executeMove(JsonDocument doc);
 
   // Test related methods

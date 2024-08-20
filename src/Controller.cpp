@@ -26,9 +26,9 @@ void Controller::getLeftJoyStick(JsonArray array) {
     json["speed"] = calculateSpeed(lx, ly, LIMIT_SPEED);
     float angle = calculateAngle(lx, ly);
     if (angle >= 0 && angle < 180) {
-      json["command"] = MOVE_FORWARD;
+      json["move"] = MOVE_FORWARD;
     } else if (angle >= 180 && angle < 360) {
-      json["command"] = MOVE_BACKWARD;
+      json["move"] = MOVE_BACKWARD;
     }
     array.add(json);
   }
@@ -45,9 +45,9 @@ void Controller::getRightJoyStick(JsonArray array) {
     float angle = calculateAngle(rx, ry);
 
     if (angle >= 180 && angle < 270) {
-      json["command"] = ROTATE_COUNTERCLOCKWISE;
+      json["move"] = ROTATE_COUNTERCLOCKWISE;
     } else {
-      json["command"] = ROTATE_CLOCKWISE;
+      json["move"] = ROTATE_CLOCKWISE;
     }
     array.add(json);
   }
@@ -60,11 +60,11 @@ void Controller::getTriggers(JsonArray array) {
   JsonDocument json;
   if (abs(l2) > DEADZONE_THRESHOLD) {
     json["speed"] = calculateSpeed(l2, 0, LIMIT_SPEED / 2);
-    json["command"] = ROTATE_CLOCKWISE;
+    json["move"] = ROTATE_CLOCKWISE;
     array.add(json);
   } else if (abs(r2) > DEADZONE_THRESHOLD) {
     json["speed"] = calculateSpeed(r2, 0, LIMIT_SPEED / 2);
-    json["command"] = ROTATE_COUNTERCLOCKWISE;
+    json["move"] = ROTATE_COUNTERCLOCKWISE;
     array.add(json);
   }
 }
@@ -85,12 +85,12 @@ void controlRover() {
   if (array.size() == 0) {
     JsonDocument json;
     json["speed"] = 0;
-    json["command"] = STOP;
+    json["move"] = STOP;
     array.add(json);
   }
 
   if (array.size() == 1) {
-    if (currDoc == array[0] && currDoc["command"] == STOP) return;
+    if (currDoc == array[0] && currDoc["move"] == STOP) return;
     currDoc = array[0];
   }
 
@@ -123,27 +123,27 @@ void Controller::attach() {
 //     float angle = calculateAngle(lx, ly);
 
 //     // if (angle >= 337.5 || angle < 22.5) {
-//     //   json["command"] = MOVE_RIGHT;
+//     //   json["move"] = MOVE_RIGHT;
 //     // } else if (angle >= 22.5 && angle < 67.5) {
-//     //   json["command"] = MOVE_DIAGONAL45;
+//     //   json["move"] = MOVE_DIAGONAL45;
 //     // } else if (angle >= 67.5 && angle < 112.5) {
-//     //   json["command"] = MOVE_FORWARD;
+//     //   json["move"] = MOVE_FORWARD;
 //     // } else if (angle >= 112.5 && angle < 157.5) {
-//     //   json["command"] = MOVE_DIAGONAL135;
+//     //   json["move"] = MOVE_DIAGONAL135;
 //     // } else if (angle >= 157.5 && angle < 202.5) {
-//     //   json["command"] = MOVE_LEFT;
+//     //   json["move"] = MOVE_LEFT;
 //     // } else if (angle >= 202.5 && angle < 247.5) {
-//     //   json["command"] = MOVE_DIAGONAL225;
+//     //   json["move"] = MOVE_DIAGONAL225;
 //     // } else if (angle >= 247.5 && angle < 292.5) {
-//     //   json["command"] = MOVE_BACKWARD;
+//     //   json["move"] = MOVE_BACKWARD;
 //     // } else if (angle >= 292.5 && angle < 337.5) {
-//     //   json["command"] = MOVE_DIAGONAL315;
+//     //   json["move"] = MOVE_DIAGONAL315;
 //     // }
 
 //     if (angle >= 0 && angle < 180) {
-//       json["command"] = MOVE_FORWARD;
+//       json["move"] = MOVE_FORWARD;
 //     } else if (angle >= 180 && angle < 360) {
-//       json["command"] = MOVE_BACKWARD;
+//       json["move"] = MOVE_BACKWARD;
 //     }
 //     array.add(json);
 //   }
@@ -158,21 +158,21 @@ void Controller::attach() {
 //     doc["speed"] = calculateSpeed(rx, ry, LIMIT_SPEED);
 //     float angle = calculateAngle(rx, ry);
 //     if (angle >= 337.5 || angle < 22.5) {
-//       doc["command"] = PIVOT_RIGHT_FORWARD;
+//       doc["move"] = PIVOT_RIGHT_FORWARD;
 //     } else if (angle >= 22.5 && angle < 67.5) {
-//       doc["command"] = PIVOT_SIDEWAYS_FORWARD_RIGHT;
+//       doc["move"] = PIVOT_SIDEWAYS_FORWARD_RIGHT;
 //     } else if (angle >= 67.5 && angle < 112.5) {
-//       doc["command"] = PIVOT_SIDEWAYS_FORWARD_LEFT;
+//       doc["move"] = PIVOT_SIDEWAYS_FORWARD_LEFT;
 //     } else if (angle >= 112.5 && angle < 157.5) {
-//       doc["command"] = PIVOT_LEFT_FORWARD;
+//       doc["move"] = PIVOT_LEFT_FORWARD;
 //     } else if (angle >= 157.5 && angle < 202.5) {
-//       doc["command"] = PIVOT_LEFT_BACKWARD;
+//       doc["move"] = PIVOT_LEFT_BACKWARD;
 //     } else if (angle >= 202.5 && angle < 247.5) {
-//       doc["command"] = PIVOT_SIDEWAYS_BACKWARD_LEFT;
+//       doc["move"] = PIVOT_SIDEWAYS_BACKWARD_LEFT;
 //     } else if (angle >= 247.5 and angle < 292.5) {
-//       doc["command"] = PIVOT_RIGHT_BACKWARD;
+//       doc["move"] = PIVOT_RIGHT_BACKWARD;
 //     } else if (angle >= 292.5 and angle < 337.5) {
-//       doc["command"] = PIVOT_SIDEWAYS_BACKWARD_RIGHT;
+//       doc["move"] = PIVOT_SIDEWAYS_BACKWARD_RIGHT;
 //     }
 //   }
 // }

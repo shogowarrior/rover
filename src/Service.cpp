@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-unsigned long startMillis = millis();
+unsigned long previousMillis = millis();
 WebSocketsServer webSocket = WebSocketsServer(81);
 
 // Static IP configuration
@@ -28,16 +28,18 @@ void Service::setHostName() {
 
 void Service::wsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
-    case WStype_DISCONNECTED:
+    case WStype_TEXT: {
+      JsonDocument input;
+      deserializeJson(input, payload);
+      rover.executeMove(input);
       break;
+    }
     case WStype_CONNECTED: {
       IPAddress ip = webSocket.remoteIP(num);
       Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-      webSocket.sendTXT(num, "Hello from Rover");
       break;
     }
-    case WStype_TEXT:
-      Serial.printf("[%u] Received text: %s\n", num, payload);
+    case WStype_DISCONNECTED:
       break;
   }
 }
@@ -62,7 +64,7 @@ void Service::wifiService() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("Wireless connected.");
+  Serial.println("\nWireless connected.");
   printWifiStatus();
 }
 
@@ -72,7 +74,7 @@ void Service::wsService() {
 }
 
 void Service::printWifiStatus() {
-  Serial.printf("Address: %s\n", WiFi.localIP());
+  Serial.println(WiFi.localIP());
   Serial.printf("Hostname: %s\n", WiFi.getHostname());
 }
 
@@ -88,7 +90,9 @@ void Service::printWifiStatus() {
  *  - Voltage / Amperage
  */
 void Service::sendData() {
-  if (millis() - startMillis >= REPORT_INTERVAL) {
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= REPORT_INTERVAL) {
+    previousMillis = currentMillis;
     String roverData = rover.getData();
     webSocket.broadcastTXT(roverData);
   }

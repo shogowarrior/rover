@@ -1,14 +1,15 @@
 #include "common.h"
 
-Ultrasonic sonar(12, 13);
-
 void Rover::initRover() {
   AFMS.begin();
   rearLeft = AFMS.getMotor(MOTOR2_A);
   rearRight = AFMS.getMotor(MOTOR1_A);
   frontRight = AFMS.getMotor(MOTOR1_B);
   frontLeft = AFMS.getMotor(MOTOR2_B);
-  sonar.setTimeout(SONAR_TIMEOUT);
+
+  // Setup Sonar
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 }
 
 // Run a motor
@@ -199,12 +200,12 @@ void Rover::unknownMove() {
   // Handle unknown command
 }
 
-void Rover::executeMove(JsonDocument doc) {
-  int command = doc["command"].as<int>();
-  int speed = doc["speed"].as<int>();
+void Rover::executeMove(JsonDocument input) {
+  int move = input["move"].as<int>();
+  int speed = input["speed"].as<int>();
   int duration = 100;
 
-  switch (command) {
+  switch (move) {
     case MOVE_FORWARD:
       moveForward(speed, duration);
       break;
@@ -269,12 +270,20 @@ void Rover::executeMove(JsonDocument doc) {
 }
 
 float Rover::getTemperature() {
-  int tempRaw = (int)temperatureRead();
-  return (tempRaw / 2.0) + 25.0; // Adjust calibration
+  int temp = (int)temperatureRead();
+  return (temp / 2.0) + 25.0; // Adjust calibration
 }
 
-unsigned int Rover::getDistance() {
-  return sonar.read();
+float Rover::getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  float distance = (duration / 2.0) * _CM;
+  return distance;
 }
 
 String Rover::getData() {
