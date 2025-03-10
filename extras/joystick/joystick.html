@@ -1,0 +1,58 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+  <title>Joy</title>
+  <meta charset="utf-8">
+  <meta name="description" content="Joystick">
+  <meta name="author" content="Baba Bhutti">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0px;
+      padding: 0px;
+      font-family: monospace;
+    }
+
+    .row {
+      display: inline-flex;
+      clear: both;
+    }
+
+    .columnLateral {
+      float: left;
+      width: 15%;
+      min-width: 300px;
+    }
+
+    .columnCetral {
+      float: left;
+      width: 70%;
+      min-width: 300px;
+    }
+
+    #joystick {
+      border: 1px solid #FF0000;
+    }
+  </style>
+  <script src="joy.js"></script>
+</head>
+
+<body>
+  <!-- Example of two JoyStick integrated in the page structure -->
+  <div class="row">
+    <div class="columnLateral">
+      <div id="joy1Div" style="width:200px;height:200px;margin:50px"></div>
+      Posizione X:<input id="joy1PosizioneX" type="text" /><br />
+      Posizione Y:<input id="joy1PosizioneY" type="text" /><br />
+      Direzione:<input id="joy1Direzione" type="text" /><br />
+      X :<input id="joy1X" type="text" /></br>
+      Y :<input id="joy1Y" type="text" />
+    </div>
+    <script src="webjoy.js"></script>
+</body>
+
+</html>
