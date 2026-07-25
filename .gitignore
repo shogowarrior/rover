@@ -1,0 +1,7 @@
+.pio
+.vscode
+.venv
+.DS_Store
+
+# WiFi SSID and password for this specific device.
+config.h
