@@ -1,20 +1,27 @@
 #ifndef CONTROLLER_H
 #define CONTROLLER_H
 
-#pragma once
-#include <ArduinoJson.h>
 #include <Ps3Controller.h>
 
+#include "MoveCodes.h"
+
 class Controller {
-    
-  public:
-  int calculateSpeed(int x, int y, int speed);
-  float calculateAngle(int x, int y);
-  
+ public:
+  struct Command {
+    MoveCode move;
+    int speed;
+  };
+
+  // Pair with the gamepad and start delivering commands to the rover.
   void attach();
-  void getLeftJoyStick(JsonArray array);
-  void getRightJoyStick(JsonArray array);
-  void getTriggers(JsonArray array);
+
+  // Translate the current gamepad state into a single command. Returns
+  // {STOP, 0} when nothing is deflected past the deadzone.
+  Command readGamepad() const;
+
+ private:
+  Command fromLeftStick() const;
+  Command fromTriggers() const;
 };
 
 #endif
