@@ -1,26 +1,36 @@
+#!/usr/bin/env python3
+"""Minimal telemetry listener -- prints whatever the rover broadcasts.
+
+    python3 client/ws.py [host]
+
+For anything interactive use client/drive.py, which can also send commands.
+"""
+
 import asyncio
+import sys
+
 import websockets
 
-async def listen():
-    uri = "ws://192.168.0.115:81"
+DEFAULT_HOST = "192.168.0.115"
+PORT = 81
 
+
+async def listen(host: str) -> None:
+    uri = f"ws://{host}:{PORT}"
     async with websockets.connect(uri) as websocket:
-        print("Connected to ESP32 WebSocket server")
+        print(f"Connected to {uri}")
+        try:
+            async for message in websocket:
+                print(message)
+        except websockets.ConnectionClosed:
+            print("Connection closed")
 
-        while True:
-            try:
-                message = await websocket.recv()
-                print(f"Received: {message}")
 
-                # Optionally, you can parse JSON messages if the ESP32 sends JSON data
-                # data = json.loads(message)
-                # print(f"Distance: {data['distance']} cm")
-
-            except websockets.ConnectionClosed:
-                print("Connection closed")
-                break
-print("hello")
-# Run the event loop to listen to the WebSocket server
-asyncio.get_event_loop().run_until_complete(listen())
-
-print("hello")
+if __name__ == "__main__":
+    host = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_HOST
+    try:
+        # asyncio.run() replaces get_event_loop().run_until_complete(), which is
+        # deprecated and raises on Python 3.12+ when no loop is already running.
+        asyncio.run(listen(host))
+    except KeyboardInterrupt:
+        pass

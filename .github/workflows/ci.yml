@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Unit tests (host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-native-${{ hashFiles('platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      # Kinematics has no Arduino dependencies, so this needs no toolchain and
+      # no config.h -- build_src_filter keeps the rest of src/ out.
+      - name: Run tests
+        run: pio test -e native
+
+  build:
+    name: Build firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-esp32-${{ hashFiles('platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      # src/config.h is gitignored because it holds real WiFi credentials.
+      # The template compiles identically, which is all a build check needs.
+      - name: Provide placeholder credentials
+        run: cp src/config.example.h src/config.h
+      - name: Build both environments
+        run: pio run

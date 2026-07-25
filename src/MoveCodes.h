@@ -28,6 +28,11 @@ enum MoveCode {
   PIVOT_SIDEWAYS_BACKWARD_LEFT = 16,
   ROTATE_CLOCKWISE = 17,
   ROTATE_COUNTERCLOCKWISE = 18,
+
+  // Not a motion. Hands control back to autonomous exploration, which any
+  // other command takes away. Without this, the first command a client sends
+  // pins the rover in manual mode until it is power-cycled.
+  RESUME_AUTONOMOUS = 19,
 };
 
 #endif

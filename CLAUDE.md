@@ -34,13 +34,16 @@ under `src/`. Do not disable it.
 | `src/Kinematics.{h,cpp}` | Pure decision/geometry logic — **no Arduino dependencies** |
 | `src/common.h` | Shared constants and the move-code enum |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits.** |
+| `src/config.example.h` | Template for the above; CI compiles against it |
 | `test/` | Host-side unit tests for `Kinematics` |
-| `client/ws.py`, `extras/joystick/` | WebSocket clients |
+| `client/drive.py` | Interactive control + telemetry over WebSocket |
+| `client/ws.py` | Telemetry listener only |
+| `extras/joystick/` | Browser joystick UI — **not wired to the rover** |
 | `docs/`, `images/` | Wiring, BOM, pinouts |
 
 `src/config.h` holds the live WiFi SSID and password. A `PreToolUse` hook
-blocks reading it. It defines `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_HOSTNAME`,
-and `WIFI_IS_STATIC_IP` — that is everything you need to know about it.
+blocks reading it. Its shape is in `src/config.example.h` — that is everything
+you need to know about it.
 
 ## Invariants
 
@@ -69,8 +72,10 @@ link, add its failsafe in the same change.
 
 **Autonomous and manual modes never both drive.** `Rover::explore()` returns
 immediately unless the mode is `MODE_AUTONOMOUS`. An incoming WebSocket move
-switches to `MODE_MANUAL`. Without this arbitration, exploration overwrites
-every remote command a few milliseconds after it arrives.
+switches to `MODE_MANUAL`, and only `RESUME_AUTONOMOUS` (move code 19) switches
+back. Without this arbitration, exploration overwrites every remote command a
+few milliseconds after it arrives; without the way back, the first command
+ever sent strands the rover in manual until it is power-cycled.
 
 **Sensor error sentinels are checked against the library, not guessed.**
 `measureDistanceCm()` returns **-1** on timeout, not 0. Testing for `== 0` (as

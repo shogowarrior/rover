@@ -155,6 +155,15 @@ void Rover::update() {
 
 void Rover::command(MoveCode move, int speed, int durationMs) {
   lastCommandMs = millis();
+
+  // The only command that gives control back. setMode() stops the motors and
+  // resets the scan cycle, so exploration restarts from fresh readings rather
+  // than from whatever the rover last saw before a human took over.
+  if (move == RESUME_AUTONOMOUS) {
+    setMode(MODE_AUTONOMOUS);
+    return;
+  }
+
   setMode(MODE_MANUAL);
   applyMove(move, speed, durationMs);
 }
