@@ -1,58 +1,367 @@
-<!DOCTYPE HTML>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
-  <title>Joy</title>
+  <title>Rover control</title>
   <meta charset="utf-8">
-  <meta name="description" content="Joystick">
-  <meta name="author" content="Baba Bhutti">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
   <style>
-    * {
-      box-sizing: border-box;
+    /* Bench-instrument palette. Charcoal housing rather than black, one teal
+       "sensor healthy" signal, amber for closing distance, and a red reserved
+       exclusively for stop and danger -- if red appears anywhere else it stops
+       meaning anything. */
+    :root {
+      --case: #1c1e21;
+      --panel: #26292d;
+      --rule: #383c42;
+      --readout: #e8e4dc;
+      --dim: #7d858e;
+      --live: #4db8a8;
+      --warn: #e8a33d;
+      --stop: #d94f43;
+
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
 
     body {
-      margin: 0px;
-      padding: 0px;
-      font-family: monospace;
+      margin: 0;
+      background: var(--case);
+      color: var(--readout);
+      font-family: var(--sans);
+      -webkit-user-select: none;
+      user-select: none;
+      overscroll-behavior: none;
     }
 
-    .row {
-      display: inline-flex;
-      clear: both;
+    /* Silkscreen labels, as printed on bench equipment. */
+    .label {
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--dim);
     }
 
-    .columnLateral {
-      float: left;
-      width: 15%;
-      min-width: 300px;
+    .shell {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 100%;
     }
 
-    .columnCetral {
-      float: left;
-      width: 70%;
-      min-width: 300px;
+    /* --- status bar ------------------------------------------------------ */
+
+    .bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--rule);
     }
 
-    #joystick {
-      border: 1px solid #FF0000;
+    .wordmark {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+    }
+
+    .link {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-left: auto;
+    }
+
+    .lamp {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--stop);
+      flex: none;
+    }
+
+    [data-link="up"] .lamp { background: var(--live); }
+    [data-link="stale"] .lamp { background: var(--warn); }
+
+    #host {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--readout);
+      background: var(--case);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      padding: 6px 9px;
+      width: 19ch;
+      min-width: 0;
+    }
+
+    #host:focus-visible, button:focus-visible {
+      outline: 2px solid var(--live);
+      outline-offset: 2px;
+    }
+
+    /* --- the scan fan: this page's one loud element ---------------------- */
+
+    .scan {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 14px 14px 6px;
+    }
+
+    .scan svg { display: block; width: 100%; height: auto; }
+
+    /* Readings glide over the telemetry interval rather than snapping, so the
+       eye tracks a distance changing instead of a number replacing itself. */
+    .wedge {
+      transition: d 480ms linear, fill 480ms linear, opacity 480ms linear;
+    }
+
+    .ring {
+      fill: none;
+      stroke: var(--rule);
+      stroke-width: 1;
+    }
+
+    .ring.safe {
+      stroke: var(--stop);
+      stroke-dasharray: 3 4;
+      opacity: 0.6;
+    }
+
+    .safe-tick { fill: var(--stop); opacity: 0.75; }
+
+    .reading {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 600;
+      fill: var(--readout);
+      text-anchor: middle;
+    }
+
+    .tick {
+      font-family: var(--sans);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      fill: var(--dim);
+      text-anchor: middle;
+    }
+
+    /* Must follow .tick: same specificity, so declaration order decides. */
+    .range-tick { text-anchor: end; }
+
+    [data-link="down"] .scan, [data-link="stale"] .scan { opacity: 0.45; }
+
+    /* --- controls -------------------------------------------------------- */
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .pad {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 14px;
+    }
+
+    .pad > .label { display: block; margin-bottom: 10px; }
+
+    #stick { width: 100%; max-width: 230px; aspect-ratio: 1; margin: 0 auto; }
+
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+
+    .spin { display: flex; gap: 10px; }
+
+    button {
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--readout);
+      background: var(--case);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      padding: 13px 10px;
+      flex: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:hover { border-color: var(--dim); }
+
+    /* No transition on press: a control that moves a robot must feel
+       instantaneous, not eased. */
+    button:active, button[data-held="yes"] {
+      background: var(--live);
+      border-color: var(--live);
+      color: var(--case);
+    }
+
+    button[aria-pressed="true"] {
+      background: var(--live);
+      border-color: var(--live);
+      color: var(--case);
+    }
+
+    #stop {
+      background: var(--stop);
+      border-color: var(--stop);
+      color: #fff;
+      font-size: 15px;
+      letter-spacing: 0.2em;
+      padding: 18px;
+    }
+
+    #stop:active { background: #f06459; border-color: #f06459; color: #fff; }
+
+    .speed { display: flex; align-items: center; gap: 12px; }
+
+    input[type="range"] { flex: 1; accent-color: var(--live); }
+
+    .readouts {
+      display: flex;
+      gap: 22px;
+      flex-wrap: wrap;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+      margin-top: auto;
+    }
+
+    .cell { display: flex; flex-direction: column; gap: 3px; }
+
+    .cell output {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    #note {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--dim);
+      min-height: 1.5em;
+    }
+
+    #note[data-tone="bad"] { color: var(--warn); }
+
+    @media (max-width: 620px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .wedge { transition: none; }
     }
   </style>
-  <script src="joy.js"></script>
 </head>
 
-<body>
-  <!-- Example of two JoyStick integrated in the page structure -->
-  <div class="row">
-    <div class="columnLateral">
-      <div id="joy1Div" style="width:200px;height:200px;margin:50px"></div>
-      Posizione X:<input id="joy1PosizioneX" type="text" /><br />
-      Posizione Y:<input id="joy1PosizioneY" type="text" /><br />
-      Direzione:<input id="joy1Direzione" type="text" /><br />
-      X :<input id="joy1X" type="text" /></br>
-      Y :<input id="joy1Y" type="text" />
-    </div>
-    <script src="webjoy.js"></script>
+<body data-link="down">
+  <main class="shell">
+
+    <header class="bar">
+      <span class="wordmark">ROVER</span>
+      <div class="link">
+        <span class="lamp" aria-hidden="true"></span>
+        <span class="label" id="linkState">No link</span>
+        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false">
+        <button id="connect" style="flex:none">Connect</button>
+      </div>
+    </header>
+
+    <!-- The rover perceives the world as three ultrasonic returns taken at
+         servo angles 20, 90 and 160 degrees. Drawing them at those angles,
+         rather than as a neutral left/front/right row, is the whole point:
+         the panel shows what the machine actually sees. -->
+    <section class="scan" aria-label="Ultrasonic scan">
+      <svg viewBox="0 0 420 200" role="img" aria-labelledby="scanDesc">
+        <title id="scanDesc">Live ultrasonic scan at three servo angles</title>
+
+        <!-- Range rings. The 30 cm ring is SAFE_DISTANCE from src/common.h:
+             any wedge that stops short of it is an obstacle the firmware will
+             act on, which makes the threshold legible spatially instead of
+             only through colour. -->
+        <path class="ring" d="M39.3 167.0 A172 172 0 0 1 380.7 167.0" />
+        <path class="ring" d="M111.7 175.9 A99 99 0 0 1 308.3 175.9" />
+        <path class="ring safe" d="M162.5 182.2 A47.9 47.9 0 0 1 257.5 182.2" />
+
+        <!-- Parked in the dead arc between the front and left wedges (103-147
+             degrees), the one span no reading ever draws into. -->
+        <text class="tick range-tick" x="158" y="110">100</text>
+        <text class="tick range-tick safe-tick" x="188" y="152">30 SAFE</text>
+
+        <path class="wedge" id="wedgeLeft" d="" fill="var(--dim)" />
+        <path class="wedge" id="wedgeFront" d="" fill="var(--dim)" />
+        <path class="wedge" id="wedgeRight" d="" fill="var(--dim)" />
+
+        <circle cx="210" cy="188" r="4" fill="var(--dim)" />
+
+        <text class="reading" id="readLeft" x="74" y="150">—</text>
+        <text class="reading" id="readFront" x="210" y="34">—</text>
+        <text class="reading" id="readRight" x="346" y="150">—</text>
+
+        <text class="tick" x="74" y="166">20°</text>
+        <text class="tick" x="210" y="50">90°</text>
+        <text class="tick" x="346" y="166">160°</text>
+      </svg>
+    </section>
+
+    <section class="controls">
+      <div class="pad">
+        <span class="label">Translate</span>
+        <div id="stick"></div>
+      </div>
+
+      <div class="stack">
+        <div class="pad">
+          <span class="label">Rotate</span>
+          <div class="spin">
+            <button id="ccw" aria-label="Rotate counter-clockwise">&#8634; Left</button>
+            <button id="cw" aria-label="Rotate clockwise">Right &#8635;</button>
+          </div>
+        </div>
+
+        <div class="pad">
+          <span class="label" id="speedLabel">Speed</span>
+          <div class="speed">
+            <input type="range" id="speed" min="0" max="255" step="8" value="64"
+                   aria-labelledby="speedLabel">
+            <output id="speedOut" style="font-family:var(--mono);font-weight:600">64</output>
+          </div>
+        </div>
+
+        <button id="auto" aria-pressed="false">Autonomous</button>
+        <button id="stop">Stop</button>
+      </div>
+    </section>
+
+    <section class="readouts">
+      <div class="cell"><span class="label">Mode</span><output id="mode">—</output></div>
+      <div class="cell"><span class="label">Move</span><output id="move">—</output></div>
+      <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
+    </section>
+
+    <p id="note"></p>
+  </main>
+
+  <script src="joy.js"></script>
+  <script src="control.js"></script>
 </body>
 
 </html>

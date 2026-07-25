@@ -38,7 +38,7 @@ under `src/`. Do not disable it.
 | `test/` | Host-side unit tests for `Kinematics` |
 | `client/drive.py` | Interactive control + telemetry over WebSocket |
 | `client/ws.py` | Telemetry listener only |
-| `extras/joystick/` | Browser joystick UI — **not wired to the rover** |
+| `extras/joystick/` | Browser control panel. Open `joystick.html` directly — see below |
 | `docs/`, `images/` | Wiring, BOM, pinouts |
 
 `src/config.h` holds the live WiFi SSID and password. A `PreToolUse` hook
@@ -84,6 +84,20 @@ every missed reading was read as an obstacle against the sensor. Normalisation
 lives in `kinematics::normalizeDistance`: negative means the echo never came
 back, which for an ultrasonic means nothing is within range, so it maps to
 `DISTANCE_FAR_CM`. Zero is a real reading and is left alone.
+
+## The browser control panel
+
+`extras/joystick/joystick.html` opens directly from disk — the rover cannot
+serve it. `partition.csv` gives the whole flash to `nvs`, `otadata` and two OTA
+app slots, leaving no SPIFFS/LittleFS partition for web assets. Adding one
+means repartitioning, which needs a USB erase and breaks OTA, so the panel is
+a local file that connects out to `ws://<rover>:81`.
+
+The address field accepts `host` or `host:port`. The panel holds a command by
+re-sending it every 200 ms, which is what keeps the firmware's 1.5 s deadman
+fed; releasing the stick, blurring the window, or hiding the tab all send
+`STOP`. If you change `REPEAT_MS` in `control.js`, it must stay well under
+`MANUAL_COMMAND_TIMEOUT_MS`.
 
 ## Pins
 

@@ -5,3 +5,6 @@
 
 # WiFi SSID and password for this specific device.
 config.h
+
+# Playwright MCP scratch output
+.playwright-mcp
