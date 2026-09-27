@@ -5,18 +5,27 @@
     python3 client/drive.py --host rover.local
     python3 client/drive.py --listen        # telemetry only, no control
 
-The rover starts in autonomous mode. The first command sent takes control and
-holds it -- press `t` to hand it back.
+After power-on the rover explores on its own. After any other reset -- an OTA
+flash, a crash, the watchdog, a brownout -- it starts in manual and waits,
+stopped; losing WiFi drops it to manual too. Any command takes control, a stop
+included. Press `t` to hand control back and let the rover explore.
 
-Commands carry a short duration and the firmware releases the motors when it
-expires, so holding a key (and letting the terminal auto-repeat) is what keeps
-the rover moving. It also runs a deadman: if nothing arrives for ~1.5 s it
-stops on its own, which is what protects you if this client dies mid-move.
+Every command carries a duration and the firmware releases the motors when it
+runs out, so holding a key (and letting the terminal auto-repeat) is what keeps
+the rover moving. The firmware also caps each command at 1.5 s, whatever
+duration it asks for, and that cap is the deadman: if this client dies
+mid-move, the rover stops within 1.5 s.
+
+Quitting (x, Ctrl-C, Ctrl-D) stops the rover if this session is driving it,
+and leaves an exploring rover exploring: a STOP is a command like any other,
+and would take control away from exploration. --listen sends nothing, so it
+can watch while something else drives, and closing it does not stop the rover.
 """
 
 import argparse
 import asyncio
 import json
+import os
 import sys
 import termios
 import tty
@@ -24,7 +33,8 @@ from contextlib import contextmanager
 
 import websockets
 
-# These integers are the wire protocol. They must match src/MoveCodes.h.
+# These integers are the wire protocol. They must match src/MoveCodes.h;
+# tools/check_protocol.py checks that they do.
 STOP = 0
 MOVE_FORWARD = 1
 MOVE_BACKWARD = 2
@@ -37,9 +47,18 @@ RESUME_AUTONOMOUS = 19
 DEFAULT_HOST = "192.168.0.115"
 DEFAULT_PORT = 81
 
-# Shorter than the firmware's 1.5 s deadman, so a released key coasts to a stop
-# rather than running on.
+# How long each command drives for. The firmware caps every command at 1.5 s
+# and that cap is its deadman; this is shorter, so a released key coasts to a
+# stop within 0.4 s rather than running on. Once auto-repeat is going, a held
+# key re-sends well inside it -- but a terminal waits a while before its first
+# repeat, and that wait can outlast 0.4 s, so the first moment of a held key
+# may stutter.
 MOVE_DURATION_MS = 400
+
+# The firmware reports a bearing that heard no echo -- nothing within the
+# sonar's range -- as this distance (kinematics::DISTANCE_FAR_CM).
+DISTANCE_FAR_CM = 999
+NO_ECHO = "no echo"
 
 KEYS = {
     "w": (MOVE_FORWARD, "forward"),
@@ -52,17 +71,58 @@ KEYS = {
     "t": (RESUME_AUTONOMOUS, "autonomous"),
 }
 
+END_OF_INPUT = ""  # queued in place of a key when stdin reaches end of file
+
+# x, Ctrl-C, Ctrl-D, and stdin closing. Ctrl-C arrives here as a key rather
+# than as SIGINT because raw_terminal() turns the terminal's signal keys off.
+QUIT_KEYS = ("x", "\x03", "\x04", END_OF_INPUT)
+
+# Telemetry field for each bearing, left to right as the rover sees them.
+BEARINGS = (
+    ("L", "distanceLeft"),
+    ("FL", "distanceFrontLeft"),
+    ("F", "distanceFront"),
+    ("FR", "distanceFrontRight"),
+    ("R", "distanceRight"),
+)
+
+# Telemetry names a move as src/MoveCodes.h does, and a name as long as
+# ROTATE_COUNTERCLOCKWISE pushes a row past 80 columns. Rows use these shorter
+# words for every move this client, the browser panel and exploration make;
+# any other move (a pivot) is shown as sent, and widens its row.
+MOVE_WORDS = {
+    "STOP": "stop",
+    "MOVE_FORWARD": "forward",
+    "MOVE_BACKWARD": "backward",
+    "MOVE_LEFT": "strafe left",
+    "MOVE_RIGHT": "strafe right",
+    "MOVE_DIAGONAL45": "forward-right",
+    "MOVE_DIAGONAL135": "forward-left",
+    "MOVE_DIAGONAL225": "backward-left",
+    "MOVE_DIAGONAL315": "backward-right",
+    "ROTATE_CLOCKWISE": "rotate cw",
+    "ROTATE_COUNTERCLOCKWISE": "rotate ccw",
+}
+
+# Telemetry rows between repeats of the column headings: about a screenful on
+# a 24-row terminal, so a heading stays in view as the rows scroll past.
+HEADER_EVERY = 20
+
 HELP = """\
   w/s   forward / backward        q/e  rotate ccw / cw
   a/d   strafe left / right       spc  stop
   -/+   speed down / up           t    hand back to autonomous
   ?     this help                 x    quit
+
+  Telemetry is a table, a row per frame: the mode (and the phase while the
+  rover explores), the move (or why exploration halted), the distance in cm
+  on each bearing from left to right, and the board's temperature.
 """
 
 
 @contextmanager
 def raw_terminal():
-    """Put stdin in raw mode so single keypresses arrive without Enter."""
+    """Put stdin in cbreak mode so single keypresses arrive without Enter."""
     if not sys.stdin.isatty():
         yield False
         return
@@ -70,71 +130,154 @@ def raw_terminal():
     saved = termios.tcgetattr(fd)
     try:
         tty.setcbreak(fd)
+        # Turn the signal keys off as well, so Ctrl-C reaches transmit() as
+        # the byte \x03 and quits the way `x` does, stopping the rover first.
+        # As SIGINT it interrupted whatever the event loop was doing, no STOP
+        # was sent, and the rover stopped only because the firmware noticed
+        # the socket close. Ctrl-Z and Ctrl-\ lose their meaning here too.
+        attrs = termios.tcgetattr(fd)
+        attrs[tty.LFLAG] &= ~termios.ISIG
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
         yield True
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
 
 def out(line: str) -> None:
-    # Raw mode does not translate \n, so carriage returns must be explicit.
-    sys.stdout.write(line + "\r\n")
-    sys.stdout.flush()
+    # A bare \n is enough. cbreak mode, unlike raw mode, leaves the terminal's
+    # output processing on, so the terminal turns \n into \r\n itself; a \r
+    # of our own would only end up in the file when stdout is redirected.
+    try:
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+    except OSError:
+        # The terminal has gone (EIO after a hangup). Carry on regardless: a
+        # failed print must not abort the quit path before its STOP is sent.
+        pass
 
 
 async def receive(ws) -> None:
-    """Print telemetry frames until the link closes."""
+    """Print telemetry as a table, a row per frame, until the link closes."""
+    rows = 0
     try:
         async for message in ws:
-            try:
-                data = json.loads(message)
-            except json.JSONDecodeError:
-                out(f"  {message}")
-                continue
-            out(
-                "  mode={mode:<10} move={move:<14} "
-                "L={distanceLeft:>6} F={distanceFront:>6} R={distanceRight:>6}  "
-                "{temperature}C".format(
-                    mode=data.get("mode", "?"),
-                    move=data.get("move", "?"),
-                    distanceLeft=_fmt(data.get("distanceLeft")),
-                    distanceFront=_fmt(data.get("distanceFront")),
-                    distanceRight=_fmt(data.get("distanceRight")),
-                    temperature=_fmt(data.get("temperature")),
-                )
-            )
+            if rows % HEADER_EVERY == 0:
+                out(HEADER)
+            out(describe(message))
+            rows += 1
     except websockets.ConnectionClosed:
-        out("connection closed by rover")
+        pass  # closed without a clean handshake; reported below all the same
+    out("connection to the rover closed")
 
 
-def _fmt(value) -> str:
-    if value is None:
-        return "-"
-    if isinstance(value, float):
-        return f"{value:.1f}"
-    return str(value)
+def describe(message) -> str:
+    """One telemetry frame as one row of the table under HEADER, for example
+
+      STATE          MOVE                  L      FL       F      FR       R  TEMP
+      AUTO CRUISE    forward             120      85      40 no echo       8  52.2C
+      AUTO HALTED    boxed in             12      15       9      14      11  52.2C
+      MANUAL         rotate ccw           30      45 no echo      45      30  53.5C
+
+    The phase follows the mode only while the rover explores. Exploration
+    stops the wheels when it halts, so a halted rover's move is always a stop,
+    and the reason it halted takes the move's place. The distances show as "-"
+    until every bearing has been measured once.
+    """
+    try:
+        data = json.loads(message)
+    except ValueError:  # not JSON, or a binary frame that is not even text
+        data = None
+    if not isinstance(data, dict):
+        return f"  {message}"
+
+    state = _text(data.get("mode"))
+    if state == "AUTONOMOUS":
+        state = "AUTO"  # in full, it takes columns the distances need
+    phase = data.get("phase")
+    if phase is not None:
+        state += f" {phase}"
+
+    halt = data.get("halt")
+    move = _text(data.get("move"))
+    move = _text(halt) if halt else MOVE_WORDS.get(move, move)
+
+    temperature = data.get("temperature")
+    return _row(
+        state,
+        move,
+        [_distance(data.get(key)) for _, key in BEARINGS],
+        f"{temperature:.1f}C" if isinstance(temperature, (int, float)) else "-",
+    )
+
+
+def _row(state: str, move: str, readings: list, temperature: str) -> str:
+    # Fixed widths keep each value under its heading as its neighbours change.
+    # They fit the longest common value in each column -- "AUTO SIDESTEP",
+    # "backward-right", "no echo" -- and still keep the row to 79 columns: on
+    # an 80-column terminal a wider row wraps, and every frame takes two lines.
+    ranges = " ".join(reading.rjust(len(NO_ECHO)) for reading in readings)
+    return f"  {state:<13}  {move:<14}  {ranges}  {temperature}"
+
+
+HEADER = _row("STATE", "MOVE", [label for label, _ in BEARINGS], "TEMP")
+
+
+def _distance(value) -> str:
+    if isinstance(value, (int, float)):
+        return NO_ECHO if value >= DISTANCE_FAR_CM else f"{value:.0f}"
+    return _text(value)
+
+
+def _text(value) -> str:
+    return "-" if value is None else str(value)
 
 
 async def transmit(ws) -> None:
     """Translate keypresses into commands until the operator quits."""
     loop = asyncio.get_running_loop()
+    fd = sys.stdin.fileno()
     keys: asyncio.Queue = asyncio.Queue()
 
     def on_stdin() -> None:
-        char = sys.stdin.read(1)
-        if char:
+        # os.read, not sys.stdin.read(1). The text wrapper pulls every byte
+        # waiting on the fd into its own buffer and returns one character; the
+        # rest sat there, invisible to add_reader because the fd was now
+        # empty, until the next keystroke. A space typed after a burst of
+        # auto-repeated moves -- a STOP -- waited for another key to be sent.
+        try:
+            data = os.read(fd, 64)
+        except OSError:  # EIO: the terminal has hung up
+            data = b""
+        if not data:
+            # At end of file the fd stays readable forever; stop watching it.
+            loop.remove_reader(fd)
+            keys.put_nowait(END_OF_INPUT)
+            return
+        # Every key this client acts on is ASCII, and no byte of a multi-byte
+        # UTF-8 character is, so decoding byte for byte cannot turn one into
+        # a command.
+        for char in data.decode("latin-1"):
             keys.put_nowait(char)
 
-    loop.add_reader(sys.stdin.fileno(), on_stdin)
+    loop.add_reader(fd, on_stdin)
     speed = 64
+    # Whether this session may have the rover moving: set by a motion command,
+    # cleared by space (stop) and `t` (autonomous). Quitting sends STOP only
+    # while it is set, because a STOP would also knock an exploring rover out
+    # of autonomous mode.
+    driving = False
 
     try:
         while True:
             key = await keys.get()
 
-            if key in ("x", "\x03", "\x04"):  # x, Ctrl-C, Ctrl-D
-                # Never walk away leaving the rover under power.
-                await send(ws, STOP, 0)
-                out("stopped, disconnecting")
+            if key in QUIT_KEYS:
+                if driving:
+                    # Never walk away leaving the rover under power.
+                    await send(ws, STOP, 0)
+                    out("stopped, disconnecting")
+                else:
+                    out("disconnecting")
                 return
 
             if key == "?":
@@ -157,15 +300,32 @@ async def transmit(ws) -> None:
 
             move, label = entry
             await send(ws, move, 0 if move == STOP else speed)
+            driving = move not in (STOP, RESUME_AUTONOMOUS)
             out(f"-> {label}")
     finally:
-        loop.remove_reader(sys.stdin.fileno())
+        loop.remove_reader(fd)
 
 
 async def send(ws, move: int, speed: int) -> None:
     await ws.send(
         json.dumps({"move": move, "speed": speed, "duration": MOVE_DURATION_MS})
     )
+
+
+async def session(ws) -> None:
+    """Run the keyboard and the telemetry side by side until either ends."""
+    receiver = asyncio.create_task(receive(ws))
+    sender = asyncio.create_task(transmit(ws))
+    try:
+        # Waiting on the keyboard alone left a session whose link had closed
+        # -- an OTA flash reboots the rover -- looking alive until the next
+        # key died with ConnectionClosed.
+        done, _ = await asyncio.wait({receiver, sender}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        receiver.cancel()
+        sender.cancel()
+    for task in done:
+        task.result()  # re-raise whatever ended it abnormally
 
 
 async def main(host: str, port: int, listen_only: bool) -> int:
@@ -186,19 +346,24 @@ async def main(host: str, port: int, listen_only: bool) -> int:
                     await receive(ws)
                     return 0
 
-                receiver = asyncio.create_task(receive(ws))
-                try:
-                    await transmit(ws)
-                finally:
-                    receiver.cancel()
+                await session(ws)
             return 0
-    except OSError as exc:
-        out(f"could not reach {uri}: {exc}")
+    except websockets.ConnectionClosed:
+        # A key was being sent as the link went down.
+        out("connection to the rover closed")
+        return 0
+    except (OSError, asyncio.TimeoutError) as exc:
+        # asyncio.TimeoutError is the library's open timeout: nothing answered
+        # at that address. It is an OSError only from Python 3.11, and before
+        # that a powered-off rover ended this client with a traceback.
+        out(f"could not reach {uri}: {str(exc) or 'timed out'}")
         return 1
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(

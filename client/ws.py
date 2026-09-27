@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal telemetry listener -- prints whatever the rover broadcasts.
 
-    python3 client/ws.py [host]
+    python3 client/ws.py [host [port]]
 
 For anything interactive use client/drive.py, which can also send commands.
 """
@@ -12,11 +12,11 @@ import sys
 import websockets
 
 DEFAULT_HOST = "192.168.0.115"
-PORT = 81
+DEFAULT_PORT = 81
 
 
-async def listen(host: str) -> None:
-    uri = f"ws://{host}:{PORT}"
+async def listen(host: str, port: int) -> None:
+    uri = f"ws://{host}:{port}"
     async with websockets.connect(uri) as websocket:
         print(f"Connected to {uri}")
         try:
@@ -28,9 +28,10 @@ async def listen(host: str) -> None:
 
 if __name__ == "__main__":
     host = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_HOST
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_PORT
     try:
         # asyncio.run() replaces get_event_loop().run_until_complete(), which is
         # deprecated and raises on Python 3.12+ when no loop is already running.
-        asyncio.run(listen(host))
+        asyncio.run(listen(host, port))
     except KeyboardInterrupt:
         pass

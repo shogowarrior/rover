@@ -94,6 +94,7 @@
 
     [data-link="up"] .lamp { background: var(--live); }
     [data-link="stale"] .lamp { background: var(--warn); }
+    [data-link="connecting"] .lamp { background: var(--dim); }
 
     #host {
       font-family: var(--mono);
@@ -135,20 +136,25 @@
       stroke-width: 1;
     }
 
-    .ring.safe {
+    .ring.stop {
       stroke: var(--stop);
       stroke-dasharray: 3 4;
       opacity: 0.6;
     }
 
-    .safe-tick { fill: var(--stop); opacity: 0.75; }
+    .ring.go {
+      stroke: var(--warn);
+      stroke-dasharray: 3 4;
+      opacity: 0.45;
+    }
 
+    /* No text-anchor here: control.js sets it per label, and a CSS rule would
+       override the attribute. */
     .reading {
       font-family: var(--mono);
       font-size: 15px;
       font-weight: 600;
       fill: var(--readout);
-      text-anchor: middle;
     }
 
     .tick {
@@ -157,13 +163,13 @@
       font-weight: 600;
       letter-spacing: 0.12em;
       fill: var(--dim);
-      text-anchor: middle;
     }
 
-    /* Must follow .tick: same specificity, so declaration order decides. */
-    .range-tick { text-anchor: end; }
+    /* The ring labels take their ring's colour. */
+    .tick.stop { fill: var(--stop); opacity: 0.75; }
+    .tick.go { fill: var(--warn); opacity: 0.75; }
 
-    [data-link="down"] .scan, [data-link="stale"] .scan { opacity: 0.45; }
+    body:not([data-link="up"]) .scan { opacity: 0.45; }
 
     /* --- controls -------------------------------------------------------- */
 
@@ -253,6 +259,11 @@
       font-weight: 600;
     }
 
+    /* .cell's display: flex would otherwise override the hidden attribute. */
+    .cell[hidden] { display: none; }
+
+    #phase[data-tone="warn"] { color: var(--warn); }
+
     #note {
       font-size: 12px;
       line-height: 1.5;
@@ -285,40 +296,18 @@
       </div>
     </header>
 
-    <!-- The rover perceives the world as three ultrasonic returns taken at
-         servo angles 20, 90 and 160 degrees. Drawing them at those angles,
-         rather than as a neutral left/front/right row, is the whole point:
-         the panel shows what the machine actually sees. -->
+    <!-- The rover perceives the world as five ultrasonic returns, taken
+         straight ahead and at 35 and 70 degrees to either side. Drawing them
+         at those bearings, rather than as a neutral row of numbers, is the
+         whole point: the panel shows what the machine actually sees.
+
+         control.js draws the fan -- range rings at the firmware's STOP and GO
+         distances, at 100 cm and at full reach, and a wedge and a reading per
+         bearing -- from the constants it mirrors, so nothing here is a
+         hand-computed arc that could drift from them. -->
     <section class="scan" aria-label="Ultrasonic scan">
-      <svg viewBox="0 0 420 200" role="img" aria-labelledby="scanDesc">
-        <title id="scanDesc">Live ultrasonic scan at three servo angles</title>
-
-        <!-- Range rings. The 30 cm ring is SAFE_DISTANCE from src/common.h:
-             any wedge that stops short of it is an obstacle the firmware will
-             act on, which makes the threshold legible spatially instead of
-             only through colour. -->
-        <path class="ring" d="M39.3 167.0 A172 172 0 0 1 380.7 167.0" />
-        <path class="ring" d="M111.7 175.9 A99 99 0 0 1 308.3 175.9" />
-        <path class="ring safe" d="M162.5 182.2 A47.9 47.9 0 0 1 257.5 182.2" />
-
-        <!-- Parked in the dead arc between the front and left wedges (103-147
-             degrees), the one span no reading ever draws into. -->
-        <text class="tick range-tick" x="158" y="110">100</text>
-        <text class="tick range-tick safe-tick" x="188" y="152">30 SAFE</text>
-
-        <path class="wedge" id="wedgeLeft" d="" fill="var(--dim)" />
-        <path class="wedge" id="wedgeFront" d="" fill="var(--dim)" />
-        <path class="wedge" id="wedgeRight" d="" fill="var(--dim)" />
-
-        <circle cx="210" cy="188" r="4" fill="var(--dim)" />
-
-        <text class="reading" id="readLeft" x="74" y="150">—</text>
-        <text class="reading" id="readFront" x="210" y="34">—</text>
-        <text class="reading" id="readRight" x="346" y="150">—</text>
-
-        <text class="tick" x="74" y="166">20°</text>
-        <text class="tick" x="210" y="50">90°</text>
-        <text class="tick" x="346" y="166">160°</text>
+      <svg id="scan" role="img" aria-labelledby="scanDesc">
+        <title id="scanDesc">Live ultrasonic scan at five bearings</title>
       </svg>
     </section>
 
@@ -354,10 +343,14 @@
     <section class="readouts">
       <div class="cell"><span class="label">Mode</span><output id="mode">—</output></div>
       <div class="cell"><span class="label">Move</span><output id="move">—</output></div>
+      <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
+      <div class="cell" id="phaseCell" hidden>
+        <span class="label">Phase</span><output id="phase">—</output>
+      </div>
       <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
     </section>
 
-    <p id="note"></p>
+    <p id="note" aria-live="polite"></p>
   </main>
 
   <script src="joy.js"></script>
