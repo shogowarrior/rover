@@ -1,0 +1,148 @@
+# rover
+
+A four-wheel mecanum rover on an ESP32. Switched on, it explores a room by
+itself, sweeping an ultrasonic sensor across the way ahead and turning toward
+open space. Take over at any time from a browser, a terminal or a PS3
+controller, and hand control back with one button.
+
+![The chassis](images/mechanical/chassis-size.jpeg)
+
+- **Autonomous exploration.** It measures five bearings, cruises while the
+  path is clear, turns toward the more open side when it is not, and halts
+  if it finds itself boxed in or its sensor hears nothing for three sweeps in
+  a row.
+- **Browser panel.** A joystick, a speed slider and a live fan of the five
+  distances, in a page you open straight from disk.
+- **Keyboard client.** Drive and watch telemetry from a terminal.
+- **PS3 controller** over Bluetooth, optional.
+- **Fails safe.** Every command expires within 1.5 s, losing the driver or
+  the WiFi stops the wheels, and the board can be reflashed over WiFi.
+
+It is a Wemos D1 R32 (ESP32) with an Adafruit Motor Shield V2, four TT gear
+motors on 60 mm mecanum wheels, a two-deck aluminium chassis and a 3S 18650
+pack. [docs/BOM.md](docs/BOM.md) has the full list.
+
+## Quick start
+
+You need [PlatformIO](https://platformio.org/); the commands below use its
+default install path, `~/.platformio/penv/bin/pio`.
+
+1. **WiFi settings.** `cp src/config.example.h src/config.h` and fill in your
+   network. `src/config.h` is gitignored; keep it that way. By default the
+   rover takes the static address 192.168.0.115 (set in `src/Network.cpp`,
+   and as `upload_port` for `car_ota` in `platformio.ini`). Set
+   `WIFI_IS_STATIC_IP` to `false` to use DHCP; the rover also answers as
+   `rover.local`.
+2. **Build.**
+   ```
+   ~/.platformio/penv/bin/pio run -e car_wire
+   ```
+3. **Flash over USB the first time**, with the rover on a stand (it starts
+   exploring as soon as it boots), and watch it join the network:
+   ```
+   ~/.platformio/penv/bin/pio run -e car_wire -t upload
+   ~/.platformio/penv/bin/pio device monitor -e car_wire
+   ```
+4. **After that, flash over WiFi:**
+   ```
+   ~/.platformio/penv/bin/pio run -e car_ota -t upload
+   ```
+   `car_ota` uploads to 192.168.0.115, without the gamepad. With DHCP, change
+   its `upload_port` in `platformio.ini` (`rover.local` works); with the PS3
+   pad, keep flashing `car_wire_gamepad` over USB.
+5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
+   from disk (the rover cannot serve it), enter the rover's address and press
+   Connect. Or, from a terminal:
+   ```
+   pip install websockets
+   python3 client/drive.py                   # or --host rover.local
+   python3 client/drive.py --listen          # watch without driving
+   ```
+
+For the PS3 controller, build `car_wire_gamepad` instead and set the pad's
+paired address in `src/Features.h`.
+
+## Controls
+
+Any command, a stop included, takes control from exploration; the Autonomous
+button, `t` or START hands it back. While you hold a control the client
+re-sends it; let go and the rover stops within half a second.
+
+| | Browser panel | Keyboard (`drive.py`) | PS3 pad |
+|---|---|---|---|
+| Move | Joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
+| Rotate | Hold the Left or Right button | `q` `e` | L2, R2 |
+| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50 |
+| Stop | Stop | space | Let go of the stick |
+| Back to autonomous | Autonomous | `t` | START |
+
+After a power-on the rover explores. After any other reset (an OTA flash, a
+crash, the watchdog) it starts in manual and waits, and it drops to manual
+if it loses WiFi.
+
+## How it works
+
+```mermaid
+flowchart LR
+  panel[Browser panel] -- "WebSocket :81" --> RC[RemoteControl]
+  drive[drive.py] -- "WebSocket :81" --> RC
+  pad[PS3 pad] -- Bluetooth --> GP[Gamepad]
+  RC --> R[Rover]
+  GP --> R
+  NW["Network: WiFi, OTA"] -- "link lost" --> R
+  R --> EX[Explorer]
+  R -- Motors --> DT["DriveTrain: Motor Shield V2"]
+  EX -- RangeScanner --> SC["Scanner: servo and sonar"]
+```
+
+`Rover` decides who is in control, drives the wheels through the one path
+that clamps every input, and releases them when each command's deadline
+passes. `Explorer` is the autonomy, a state machine that sweeps, cruises,
+turns, backs off, sidesteps or halts. Both are plain C++ that reach the
+hardware only through two small interfaces, so they are tested on your
+computer rather than on the robot. The adapters around them (`DriveTrain`,
+`Scanner`, `Network`, `RemoteControl`, `Gamepad`) only translate. The
+WebSocket format is in `src/Protocol.h`, and [AGENTS.md](AGENTS.md) explains
+the design and the rules it keeps.
+
+## Testing
+
+```
+~/.platformio/penv/bin/pio test -e native     # unit tests on the host, no board needed
+python3 tools/check_protocol.py               # the clients agree with the firmware
+```
+
+CI runs both of these and builds every board environment on each pull request
+and each push to `main`. What no test can know (which motor is on which
+terminal, which way the servo turns) is covered by
+[docs/bench-checklist.md](docs/bench-checklist.md).
+
+## Safety
+
+- **Bench-test first.** None of the wiring has been verified. Work through
+  the bench checklist with the wheels off the ground before the rover drives
+  on the floor, and keep it on a stand whenever you flash it.
+- **It moves on power-up.** Switching it on starts exploration straight away,
+  and so does a USB flash, which resets the board the same way. An OTA flash
+  or a crash comes back in manual.
+- **Motor voltage.** PWM duty is a fraction of the pack voltage, and
+  `MOTOR_SPEED_LIMIT` in `src/Tuning.h` is still 255, so at full speed a full
+  3S pack drives the 3-6 V TT motors at about twice their rating. Cap it
+  (about 120) or give the motors a 6 V supply; see the bench checklist and
+  the roadmap.
+- **Boot hazard.** The scanner's echo wire sits on GPIO12, a strapping pin
+  that can stop the board booting. The fix is a wire; see the bench
+  checklist.
+- **No authentication.** Anyone on your WiFi can drive the rover, and can
+  flash it unless you set an OTA password in `src/config.h`
+  (`src/config.example.h` shows how). Keep it on a network you trust.
+
+## Documentation
+
+- [docs/bench-checklist.md](docs/bench-checklist.md): verifying the wiring, safely
+- [docs/mecanum.md](docs/mecanum.md): which way each wheel turns for every move
+- [docs/ROADMAP.md](docs/ROADMAP.md): what would make it drive and navigate better
+- [docs/BOM.md](docs/BOM.md): parts list
+- [docs/Readme.md](docs/Readme.md): motor shield terminals, board pinout, chassis
+- [docs/pinouts.md](docs/pinouts.md) and [docs/extra.md](docs/extra.md): reference pinouts and an older wiring
+- [AGENTS.md](AGENTS.md): architecture, invariants and conventions, for contributors and coding agents
