@@ -164,17 +164,58 @@ void test_advanced_l1_pivots(void) {
   TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, motors->lastPattern->move);
 }
 
-// The scheme is shared: a change made elsewhere (the panel) applies to a stick
-// already held, at once, as a change of direction.
-void test_scheme_change_redirects_a_held_stick(void) {
+// The scheme is shared, so it can change under a held stick -- from the
+// panel, or anyone's panel. That must never turn the move under the
+// operator's thumb into a different one: the pad stops, and drives again only
+// from a fresh push.
+void test_scheme_change_stops_a_held_stick_until_released(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   GamepadReport held = pad(-100, 100, 0, 0, 0);  // down and left
   held.controls.r1 = true;
   uint32_t now = hold(held, 0, 100);
   TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL225, motors->lastPattern->move);  // NORMAL: R1 ignored
+  const int drivesBefore = motors->driveCalls;
+
   scheme = kinematics::SCHEME_ADVANCED;
-  hold(held, now, 20);
+  now = hold(held, now, 1000);  // still held, well past the refresh
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(drivesBefore, motors->driveCalls);
+
+  now = hold(pad(0, 0, 0, 0, 0), now, 20);  // released...
+  hold(held, now, 20);                       // ...and pushed again
+  TEST_ASSERT_TRUE(motors->driving);
   TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_LEFT, motors->lastPattern->move);
+}
+
+// The pad's own SELECT follows the same rule.
+void test_select_mid_hold_stops_until_released(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  GamepadReport held = pad(100, -100, 0, 0, 0);  // up and right
+  held.controls.l1 = true;
+  uint32_t now = hold(held, 0, 100);
+  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL45, motors->lastPattern->move);
+  GamepadReport select = held;
+  select.lastReportMs = now;
+  select.selectPressed = true;
+  session->update(select, now);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, scheme);
+  TEST_ASSERT_FALSE(motors->driving);
+  now = hold(held, now + 10, 500);
+  TEST_ASSERT_FALSE(motors->driving);
+  now = hold(pad(0, 0, 0, 0, 0), now, 20);
+  hold(held, now, 20);
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, motors->lastPattern->move);
+}
+
+// A scheme change with the pad at rest sends nothing at all: an exploring
+// rover keeps exploring.
+void test_scheme_change_at_rest_sends_nothing(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = hold(pad(0, 0, 0, 0, 0), 0, 100);
+  scheme = kinematics::SCHEME_ADVANCED;
+  hold(pad(0, 0, 0, 0, 0), now, 500);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
 
 int main(int, char**) {
@@ -189,6 +230,8 @@ int main(int, char**) {
   RUN_TEST(test_speed_changes_are_rate_limited);
   RUN_TEST(test_select_toggles_the_scheme_without_taking_control);
   RUN_TEST(test_advanced_l1_pivots);
-  RUN_TEST(test_scheme_change_redirects_a_held_stick);
+  RUN_TEST(test_scheme_change_stops_a_held_stick_until_released);
+  RUN_TEST(test_select_mid_hold_stops_until_released);
+  RUN_TEST(test_scheme_change_at_rest_sends_nothing);
   return UNITY_END();
 }

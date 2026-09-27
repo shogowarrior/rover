@@ -33,13 +33,14 @@ class Gamepad {
   void update(uint32_t now);
 
  private:
-  void showScheme(bool padPresent);
+  void showScheme(bool padPresent, uint32_t now);
 
   kinematics::ControlScheme& scheme;
   GamepadSession session;
   bool started = false;
   // The scheme the pad's LEDs show; -1 when unknown (no pad, or a new one).
   int shownScheme = -1;
+  uint32_t lastLedWriteMs = 0;
 };
 
 #endif

@@ -102,6 +102,11 @@ panel's toggle change it until the next reset, and telemetry reports it as
 | Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways on the panel |
 | Gamepad LEDs | Player 1 | Player 2 |
 
+A scheme change never redirects a held stick: whatever a controller was
+driving stops, and it drives again only from a fresh push. The scheme is
+shared, so otherwise a toggle on one controller would turn the diagonal
+under another operator's thumb into a pivot.
+
 In a pivot family the stick's quadrant picks the move by its name: up and
 right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
 left `PIVOT_LEFT_BACKWARD` (`PIVOT_SIDEWAYS_BACKWARD_LEFT`), and a push

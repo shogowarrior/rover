@@ -28,8 +28,11 @@ struct GamepadReport {
 //     a disconnect), and whatever it was driving stops.
 //   * START hands control back to autonomous exploration.
 //   * SELECT toggles the rover's control scheme (kinematics::ControlScheme),
-//     the one the panel shows too. It sends no command of its own: a held
-//     stick just carries on under the new scheme.
+//     the one the panel shows too.
+//   * A scheme change never redirects a held stick. Whatever the pad was
+//     driving stops, and the stick must come back to centre before it drives
+//     again. The scheme is shared, so without this a toggle on anyone's panel
+//     would turn the diagonal under this operator's thumb into a pivot.
 class GamepadSession {
  public:
   GamepadSession(Rover& rover, kinematics::ControlScheme& scheme);
@@ -39,7 +42,9 @@ class GamepadSession {
  private:
   Rover& rover;
   kinematics::ControlScheme& scheme;
-  bool driving = false;  // the last thing sent was a motion
+  kinematics::ControlScheme schemeInUse;  // what the pad last drove under
+  bool driving = false;                   // the last thing sent was a motion
+  bool awaitingRelease = false;           // stopped by a scheme change
   kinematics::DriveRequest lastSent = {STOP, 0};
   uint32_t lastSentMs = 0;
 };

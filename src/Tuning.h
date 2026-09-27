@@ -62,6 +62,10 @@ constexpr uint32_t GAMEPAD_SILENCE_MS = 500;
 // direction goes at once); each costs a four-motor rewrite. STICK_SEND_MS in
 // extras/joystick/control.js is the panel's copy of the same rule.
 constexpr uint32_t GAMEPAD_SPEED_CHANGE_MS = 100;
+// The pad's player LEDs, which show the control scheme, are rewritten at most
+// this often. Each write is a Bluetooth send from the loop task, and the
+// scheme can be flipped by any WebSocket client as fast as it can send.
+constexpr uint32_t GAMEPAD_LED_MIN_INTERVAL_MS = 250;
 
 // --- Network ---------------------------------------------------------------
 

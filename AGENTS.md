@@ -307,6 +307,9 @@ ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
 quadrant pick a pivot, holding R1 a pivot sideways; the panel has the same
 choice as a selector. SELECT toggles the scheme, the panel's toggle sends the
 `scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED).
+Any client may change the scheme, so a change never redirects a held stick:
+the pad stops what it was driving and waits for the stick to come back to
+centre, so a toggle elsewhere can only ever stop it.
 `kinematics::moveForStick` maps the stick for the pad; the panel carries a
 copy, and both are tested against `test/vectors/stick_moves.json`.
 [docs/mecanum.md](docs/mecanum.md) has the table, and warns that the pivot
