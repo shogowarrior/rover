@@ -8,3 +8,9 @@ config.h
 
 # Playwright MCP scratch output
 .playwright-mcp
+
+# Serena MCP tool cache
+.serena/
+
+# Python bytecode, written when a client module is imported
+__pycache__/

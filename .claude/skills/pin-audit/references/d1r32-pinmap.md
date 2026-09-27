@@ -70,23 +70,33 @@ Preferring 34/35 for ECHO lines frees the strapping and SPI pins for outputs.
 
 ## Currently claimed in this project
 
+Every assignment lives in `namespace pins` in `src/Pins.h`.
+
 | GPIO | Symbol | Role |
 |------|--------|------|
-| 21, 22 | (library) | I2C — Adafruit MotorShield V2 |
-| 27 | `SERVO_PIN` | Servo signal (output) |
-| 14 | `TRIG_PIN_1` | Rotating sensor trigger (output) |
-| 12 | `ECHO_PIN_1` | Rotating sensor echo — **on a strapping pin, see above** |
-| 18 | `TRIG_PIN_2` | Bottom sensor trigger (output, shares header SCK) |
-| 19 | `ECHO_PIN_2` | Bottom sensor echo (shares header MISO) |
+| 21, 22 | (library) | I2C — Adafruit MotorShield V2, on the `Wire` defaults |
+| 27 | `pins::SERVO` | Scanner servo signal (output) |
+| 14 | `pins::SCAN_TRIG` | Scanner sonar trigger (output) |
+| 12 | `pins::SCAN_ECHO` | Scanner sonar echo — **on a strapping pin, see above** |
+| 18 | `pins::BOTTOM_TRIG` | Second sonar trigger (output, shares header SCK) |
+| 19 | `pins::BOTTOM_ECHO` | Second sonar echo (shares header MISO) |
 
-`ECHO_PIN_1` on GPIO12 is a known, unfixed boot hazard. GPIO34 (A3) is the
-recommended replacement — input-only, no strapping role. It is left as-is
+The second sonar is wired and powered, but where it points is undocumented, so
+the firmware does not read it yet. The HCSR04 library still sets both of its
+pin modes at construction, so its TRIG line is driven low rather than left
+floating.
+
+`pins::MOTOR_TERMINAL` is not a GPIO: it maps each wheel to a Motor Shield
+terminal (M1..M4), and all four motors are driven over I2C.
+
+`pins::SCAN_ECHO` on GPIO12 is a known, unfixed boot hazard. GPIO34 (A3) is
+the recommended replacement — input-only, no strapping role. It is left as-is
 because moving it means moving a wire on the robot, which is the operator's
 decision. Flag it, do not change it.
 
 GPIO18/19 double as the header's SCK/MISO. That is fine while nothing uses SPI
 — the motor shield is I2C — but it forecloses adding an SPI peripheral later.
-GPIO35 (A2) is the natural home for `ECHO_PIN_2` if SPI is ever needed.
+GPIO35 (A2) is the natural home for `pins::BOTTOM_ECHO` if SPI is ever needed.
 
 ## 5 V tolerance
 

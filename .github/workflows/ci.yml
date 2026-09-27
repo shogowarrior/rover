@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes to the repository, so no step -- or third-party action --
+# gets a token that could.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Unit tests (host)
@@ -14,15 +19,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # The Python clients and the browser panel carry their own copies of the
+      # move codes, port, distance thresholds and command timing. A drifted
+      # copy fails quietly on the robot, so fail here instead.
+      - name: Check clients against the wire protocol
+        run: python tools/check_protocol.py
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
           path: ~/.platformio
           key: pio-native-${{ hashFiles('platformio.ini') }}
+      # Pinned like the platform and libraries in platformio.ini, so a new
+      # PlatformIO release cannot change the build under an unchanged commit.
       - name: Install PlatformIO
-        run: pip install --upgrade platformio
-      # Kinematics has no Arduino dependencies, so this needs no toolchain and
-      # no config.h -- build_src_filter keeps the rest of src/ out.
+        run: pip install platformio==6.1.19
+      # The host-tested modules have no Arduino dependencies, so this needs no
+      # toolchain and no config.h -- build_src_filter keeps the rest of src/ out.
       - name: Run tests
         run: pio test -e native
 
@@ -40,10 +52,15 @@ jobs:
           path: ~/.platformio
           key: pio-esp32-${{ hashFiles('platformio.ini') }}
       - name: Install PlatformIO
-        run: pip install --upgrade platformio
-      # src/config.h is gitignored because it holds real WiFi credentials.
-      # The template compiles identically, which is all a build check needs.
+        run: pip install platformio==6.1.19
+      # src/config.h is gitignored because it holds real WiFi credentials, and
+      # only src/Network.cpp includes it. The template compiles identically,
+      # which is all a build check needs.
       - name: Provide placeholder credentials
         run: cp src/config.example.h src/config.h
-      - name: Build both environments
+      - name: Build the default environments (car_wire, car_ota)
         run: pio run
+      # Opt-in, so not a default environment. Built here so the gamepad path
+      # keeps compiling while it is switched off.
+      - name: Build with the gamepad compiled in
+        run: pio run -e car_wire_gamepad
