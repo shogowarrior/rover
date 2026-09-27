@@ -437,16 +437,35 @@ void test_halted_rover_resumes_when_the_way_opens(void) {
 }
 
 // A dead or unplugged sensor returns -1 everywhere, which reads as open space.
-// The old code drove forward into the first wall; now it halts.
-void test_silent_sensor_halts(void) {
+// The old code drove forward into the first wall; now it never drives forward
+// on silence, only turns in place to look again, and then halts.
+void test_silent_sensor_halts_without_ever_driving_forward(void) {
   Harness h;
   h.scanner.setAll(-1.0f);
-  h.run(20000);
+  h.run(40000);
   TEST_ASSERT_EQUAL_INT(Explorer::HALTED, h.explorer.phase());
   TEST_ASSERT_EQUAL_STRING("sensor silent", h.explorer.haltReason());
-  const size_t forwardsSoFar = h.count(MOVE_FORWARD);
-  h.run(20000);
-  TEST_ASSERT_EQUAL_INT(forwardsSoFar, h.count(MOVE_FORWARD));  // and stays halted
+  TEST_ASSERT_EQUAL_INT(0, h.count(MOVE_FORWARD));
+  TEST_ASSERT_EQUAL_INT(0, h.count(MOVE_BACKWARD));
+  TEST_ASSERT_EQUAL_INT(0, h.count(MOVE_LEFT) + h.count(MOVE_RIGHT));
+}
+
+// One silent sweep is not a fault -- a big room can be out of range -- but it
+// is not a reason to drive either. Once an echo comes back, exploring resumes.
+void test_echo_after_silence_resumes_exploring(void) {
+  Harness h;
+  h.scanner.setAll(-1.0f);
+  bool heard = false;
+  h.onMotion = [&](const Explorer::Motion& m) {
+    if (isRotation(m.move) && !heard) {
+      heard = true;
+      h.scanner.setAll(200.0f);  // turned toward a wall in range
+    }
+  };
+  h.run(10000);
+  TEST_ASSERT_TRUE(heard);
+  TEST_ASSERT_TRUE(h.count(MOVE_FORWARD) > 0);
+  TEST_ASSERT_NOT_EQUAL(Explorer::HALTED, h.explorer.phase());
 }
 
 void test_phase_names(void) {
@@ -483,7 +502,8 @@ int main(int, char**) {
   RUN_TEST(test_reverses_only_over_ground_just_driven);
   RUN_TEST(test_boxed_in_halts_and_never_drives_blind);
   RUN_TEST(test_halted_rover_resumes_when_the_way_opens);
-  RUN_TEST(test_silent_sensor_halts);
+  RUN_TEST(test_silent_sensor_halts_without_ever_driving_forward);
+  RUN_TEST(test_echo_after_silence_resumes_exploring);
   RUN_TEST(test_phase_names);
   return UNITY_END();
 }

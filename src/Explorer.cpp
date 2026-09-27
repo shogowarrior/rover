@@ -52,7 +52,10 @@ void Explorer::reset(uint32_t now) {
   reverseBudgetMs = 0;
   cruiseEndedByCap = false;
   waitForClearPath = false;
+  sidestepPending = false;
   haltWhy = nullptr;
+  // strafeSign is kept: it describes the wiring, which a mode change does
+  // not alter.
   startSweep(now);
 }
 
@@ -139,6 +142,14 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // at an angle. Hearing nothing sweep after sweep is what a disconnected or
   // dead sensor looks like, and every no-echo reads as open space.
   if (silentSweeps >= params.silentSweepsToHalt) return halt(now, HALT_SENSOR_SILENT);
+
+  // A sweep that heard nothing at all says nothing about the way ahead, so
+  // it is never grounds to drive forward. Turn a little in place and look
+  // again; a working sensor soon finds a wall, and a dead one halts above.
+  if (!sweepHeardEcho) {
+    cruiseEndedByCap = false;
+    return startTurn(now, wanderDirection(), params.wanderSteps, false);
+  }
 
   if (!pathBlocked(params.goCm)) {
     waitForClearPath = false;

@@ -90,8 +90,15 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
     return;
   }
 
-  motors.drive(*pattern, static_cast<uint8_t>(speed));
+  // Clients hold a move by repeating it (the panel every 200 ms, exploration
+  // on every clear ping). The wheels are already doing it, so only the
+  // deadline moves: rewriting all four motors is ~7 ms of I2C each time.
+  // release() above always writes -- stopping is never skipped.
+  const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed;
+  if (!alreadyDoingIt) motors.drive(*pattern, static_cast<uint8_t>(speed));
+
   currentMove = move;
+  currentSpeed = speed;
   moving = true;
   moveDeadline = now + static_cast<uint32_t>(durationMs);
 }

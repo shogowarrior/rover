@@ -57,7 +57,7 @@ constexpr uint32_t GAMEPAD_SILENCE_MS = 500;
 // --- Network ---------------------------------------------------------------
 
 constexpr uint32_t SERIAL_BAUD = 115200;
-constexpr uint16_t WEBSOCKET_PORT = 81;        // PORT in control.js, drive.py, ws.py
+constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in control.js, DEFAULT_PORT in drive.py and ws.py
 constexpr uint32_t TELEMETRY_INTERVAL_MS = 500;
 constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup() only
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;

@@ -30,8 +30,10 @@
 //             only over ground just driven forward: nothing watches behind.
 //   SIDESTEP  Strafe away from a flank that is too close to rotate beside.
 //   HALTED    Stop and retry every few seconds when a full circle of turning
-//             finds no way out, or the sonar hears nothing at all (the
-//             signature of a dead sensor). It never drives blind.
+//             finds no way out, or three sweeps in a row hear nothing at all
+//             (the signature of a dead sensor). A sweep that heard nothing is
+//             never grounds to drive forward: the rover only turns in place
+//             to look again.
 
 struct ExploreParams {
   // Distances are measured from the sensor. Hysteresis: a cruise stops at

@@ -80,6 +80,26 @@ void test_deadline_survives_the_millis_rollover(void) {
   TEST_ASSERT_FALSE(motors->driving);
 }
 
+// A held move is a stream of identical commands. Each one extends the
+// deadline; only a change rewrites the motors.
+void test_repeated_command_extends_the_deadline_without_rewriting_motors(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(MOVE_FORWARD, 100, 400, 0);
+  rover->command(MOVE_FORWARD, 100, 400, 200);
+  rover->command(MOVE_FORWARD, 100, 400, 400);
+  TEST_ASSERT_EQUAL_INT(1, motors->driveCalls);
+  rover->update(799);
+  TEST_ASSERT_TRUE(motors->driving);
+  rover->update(800);
+  TEST_ASSERT_FALSE(motors->driving);
+
+  rover->command(MOVE_FORWARD, 100, 400, 900);
+  rover->command(MOVE_FORWARD, 120, 400, 1000);  // new speed
+  rover->command(MOVE_LEFT, 120, 400, 1100);     // new move
+  TEST_ASSERT_EQUAL_INT(4, motors->driveCalls);
+  TEST_ASSERT_EQUAL_UINT8(120, motors->lastSpeed);
+}
+
 // --- clamping at the boundary ------------------------------------------------
 
 void test_speed_is_clamped(void) {
@@ -226,6 +246,7 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_command_drives_until_its_deadline);
   RUN_TEST(test_deadline_survives_the_millis_rollover);
+  RUN_TEST(test_repeated_command_extends_the_deadline_without_rewriting_motors);
   RUN_TEST(test_speed_is_clamped);
   RUN_TEST(test_long_duration_stops_at_the_deadman_cap);
   RUN_TEST(test_zero_speed_or_duration_releases);

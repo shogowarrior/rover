@@ -73,6 +73,7 @@ class Rover {
 
   Mode currentMode = MODE_AUTONOMOUS;
   MoveCode currentMove = STOP;
+  int currentSpeed = 0;
   bool moving = false;
   uint32_t moveDeadline = 0;  // meaningful only while moving
 };
