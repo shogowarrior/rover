@@ -13,6 +13,12 @@ void tearDown(void) {}
 
 namespace {
 
+protocol::Message message(const char* json) {
+  JsonDocument doc;
+  TEST_ASSERT_FALSE(deserializeJson(doc, json));
+  return protocol::readMessage(doc.as<JsonVariantConst>());
+}
+
 protocol::Command parse(const char* json) {
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, json));
@@ -59,7 +65,7 @@ void test_wrongly_typed_fields_default_to_stopping(void) {
 
 void test_telemetry_carries_every_key_clients_read(void) {
   char out[384];
-  const size_t length = protocol::writeTelemetry(sampleStatus(), 41.5f, out, sizeof(out));
+  const size_t length = protocol::writeTelemetry(sampleStatus(), kinematics::SCHEME_ADVANCED, 41.5f, out, sizeof(out));
   TEST_ASSERT_TRUE(length > 0);
 
   JsonDocument doc;
@@ -68,6 +74,7 @@ void test_telemetry_carries_every_key_clients_read(void) {
   TEST_ASSERT_EQUAL_STRING("MOVE_FORWARD", doc["move"]);
   TEST_ASSERT_TRUE(doc["moving"].as<bool>());
   TEST_ASSERT_TRUE(doc["motorsReady"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("ADVANCED", doc["scheme"]);
   TEST_ASSERT_EQUAL_FLOAT(41.5f, doc["temperature"].as<float>());
   TEST_ASSERT_EQUAL_STRING("CRUISE", doc["phase"]);
   TEST_ASSERT_FALSE(doc["halt"].is<const char*>());
@@ -85,7 +92,7 @@ void test_distances_are_omitted_until_scanned(void) {
   status.mode = Rover::MODE_MANUAL;
   status.phase = nullptr;
   char out[384];
-  const size_t length = protocol::writeTelemetry(status, 40.0f, out, sizeof(out));
+  const size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
   TEST_ASSERT_EQUAL_STRING("MANUAL", doc["mode"]);
@@ -98,16 +105,44 @@ void test_halt_reason_is_reported(void) {
   status.phase = "HALTED";
   status.haltReason = "boxed in";
   char out[384];
-  const size_t length = protocol::writeTelemetry(status, 40.0f, out, sizeof(out));
+  const size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
   TEST_ASSERT_EQUAL_STRING("boxed in", doc["halt"]);
 }
 
+void test_scheme_message_sets_the_scheme(void) {
+  protocol::Message m = message("{\"scheme\":\"ADVANCED\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SCHEME, m.kind);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, m.scheme);
+  m = message("{\"scheme\":\"NORMAL\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SCHEME, m.kind);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, m.scheme);
+}
+
+// An unknown scheme changes nothing -- and in particular does not become the
+// STOP a malformed drive command would, which would take control.
+void test_unknown_scheme_is_ignored(void) {
+  TEST_ASSERT_EQUAL_INT(protocol::Message::IGNORE, message("{\"scheme\":\"TURBO\"}").kind);
+  TEST_ASSERT_EQUAL_INT(protocol::Message::IGNORE, message("{\"scheme\":\"advanced\"}").kind);
+}
+
+// Anything else is a drive command, with the usual stop-on-garbage defaults,
+// including a scheme that is not a string.
+void test_other_messages_drive(void) {
+  protocol::Message m = message("{\"move\":1,\"speed\":90,\"duration\":300}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, m.command.move);
+  TEST_ASSERT_EQUAL_INT(90, m.command.speed);
+  m = message("{\"scheme\":1}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
+}
+
 // Truncated JSON would reach every client as garbage. Better to send nothing.
 void test_too_small_a_buffer_writes_nothing(void) {
   char out[16];
-  TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(sampleStatus(), 40.0f, out, sizeof(out)));
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(sampleStatus(), kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out)));
 }
 
 int main(int, char**) {
@@ -119,5 +154,8 @@ int main(int, char**) {
   RUN_TEST(test_distances_are_omitted_until_scanned);
   RUN_TEST(test_halt_reason_is_reported);
   RUN_TEST(test_too_small_a_buffer_writes_nothing);
+  RUN_TEST(test_scheme_message_sets_the_scheme);
+  RUN_TEST(test_unknown_scheme_is_ignored);
+  RUN_TEST(test_other_messages_drive);
   return UNITY_END();
 }

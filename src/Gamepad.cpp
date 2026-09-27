@@ -6,7 +6,8 @@
 #include "Timing.h"
 #include "Tuning.h"
 
-Gamepad::Gamepad(Rover& rover) : session(rover) {}
+Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme)
+    : scheme(scheme), session(rover, scheme) {}
 
 #if ROVER_ENABLE_GAMEPAD
 #include <Ps3Controller.h>
@@ -28,7 +29,10 @@ void onReport() {
   mailbox.controls.ly = Ps3.data.analog.stick.ly;
   mailbox.controls.l2 = Ps3.data.analog.button.l2;
   mailbox.controls.r2 = Ps3.data.analog.button.r2;
+  mailbox.controls.l1 = Ps3.data.button.l1;
+  mailbox.controls.r1 = Ps3.data.button.r1;
   if (Ps3.event.button_down.start) mailbox.startPressed = true;
+  if (Ps3.event.button_down.select) mailbox.selectPressed = true;
   mailbox.lastReportMs = now;
   mailbox.hasReport = true;
   portEXIT_CRITICAL(&mailboxLock);
@@ -57,9 +61,25 @@ void Gamepad::update(uint32_t now) {
   }
   report = mailbox;
   mailbox.startPressed = false;  // consumed
+  mailbox.selectPressed = false;
   portEXIT_CRITICAL(&mailboxLock);
 
   session.update(report, now);
+  showScheme(report.hasReport);
+}
+
+// Light the player LED for the current scheme whenever it differs from what
+// the pad shows: after SELECT, after the panel changes the scheme, and on a
+// pad that has just (re)appeared, which the library sets to player 1 on
+// connecting. Sent from the loop task, as the library's own examples do.
+void Gamepad::showScheme(bool padPresent) {
+  if (!padPresent) {
+    shownScheme = -1;
+    return;
+  }
+  if (shownScheme == scheme) return;
+  Ps3.setPlayer(scheme == kinematics::SCHEME_ADVANCED ? 2 : 1);
+  shownScheme = scheme;
 }
 
 #else  // gamepad support not compiled in
@@ -67,5 +87,7 @@ void Gamepad::update(uint32_t now) {
 void Gamepad::begin(const char*) {}
 
 void Gamepad::update(uint32_t) {}
+
+void Gamepad::showScheme(bool) {}
 
 #endif

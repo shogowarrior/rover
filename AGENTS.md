@@ -63,22 +63,23 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
 | `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
-| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START. Pure |
+| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT. Pure |
 | `src/Timing.h` | `timing::reached()` and `timing::since()`: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
 | `src/Pins.h` | Every GPIO and motor terminal. A value here is a wire |
-| `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC |
+| `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC, the default control scheme |
 | `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, and the WiFi-loss failsafe |
 | `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands in, telemetry out, driver tracking, heartbeat |
-| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
+| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
 | `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
 | `test/fakes/` | Fake `Motors` and `RangeScanner` for the host tests |
+| `test/vectors/` | Cases shared by the firmware's tests and the panel's (stick to move) |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Telemetry listener only |
@@ -256,6 +257,10 @@ reference; in short:
   malformed command stops the rover. Frames over 256 bytes and invalid JSON are
   ignored. Move codes are in `src/MoveCodes.h`: 0 `STOP` to 18
   `ROTATE_COUNTERCLOCKWISE`, and 19 `RESUME_AUTONOMOUS`.
+- **Client to rover, configuration:** `{"scheme": "NORMAL" | "ADVANCED"}`
+  (no `move`) sets the control scheme below. It is not a command: it neither
+  takes control nor stops anything, so a client may send it while the rover
+  explores. An unknown scheme name is ignored.
 - **Rover to clients,** every 500 ms: `mode` (`AUTONOMOUS` or `MANUAL`),
   `move` (`STOP` whenever the wheels are idle), `moving`, `temperature` (the
   ESP32's own, in C), `motorsReady` (always sent; `false` when the motor
@@ -263,7 +268,8 @@ reference; in short:
   says), `phase` (only while autonomous), `halt` (only when halted), and
   `distanceLeft`, `distanceFrontLeft`, `distanceFront`, `distanceFrontRight`,
   `distanceRight` in cm once every bearing has been measured (999 means no
-  echo). Distances stay live in manual mode too.
+  echo). Distances stay live in manual mode too. `scheme` (`NORMAL` or
+  `ADVANCED`) is always sent.
 
 ## The browser control panel
 
@@ -293,6 +299,18 @@ most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms). Letting go sends one STOP, never
 a stream, so a resting pad cannot keep forcing manual while the rover
 explores; a pad silent for `GAMEPAD_SILENCE_MS` counts as let go. START sends
 `RESUME_AUTONOMOUS`.
+
+**Control schemes.** The rover holds one scheme for every controller
+(`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),
+so the pad and the panel always drive the same way. NORMAL is the above.
+ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
+quadrant pick a pivot, holding R1 a pivot sideways; the panel has the same
+choice as a selector. SELECT toggles the scheme, the panel's toggle sends the
+`scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED).
+`kinematics::moveForStick` maps the stick for the pad; the panel carries a
+copy, and both are tested against `test/vectors/stick_moves.json`.
+[docs/mecanum.md](docs/mecanum.md) has the table, and warns that the pivot
+rows are not bench-verified yet.
 
 ## Pins
 

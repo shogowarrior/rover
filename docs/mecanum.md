@@ -82,5 +82,31 @@ particular need a look on the bench:
   push, only a turning couple, so the rover should spin rather than swing
   sideways as 13 and 14 do.
 
-The panel, the keyboard client, the gamepad and autonomous exploration never
-send codes 9 to 16, so these rows only matter to a client that asks for them.
+Autonomous exploration and the keyboard client never send codes 9 to 16, and
+neither do the panel and the gamepad under the NORMAL control scheme. Check
+these rows on the bench before switching to ADVANCED (below).
+
+## Control schemes
+
+The rover holds one control scheme for every controller, so the gamepad and
+the panel always drive the same way. It starts as `DEFAULT_CONTROL_SCHEME` in
+[`src/Features.h`](../src/Features.h); the gamepad's SELECT button and the
+panel's toggle change it until the next reset, and telemetry reports it as
+`scheme`.
+
+| | NORMAL | ADVANCED |
+|---|---|---|
+| Stick | Eight-way translation (codes 1 to 8) | The same, unless a family is picked |
+| Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
+| Pivot (9 to 12) | -- | Hold L1, or pick Pivot on the panel |
+| Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways on the panel |
+| Gamepad LEDs | Player 1 | Player 2 |
+
+In a pivot family the stick's quadrant picks the move by its name: up and
+right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
+left `PIVOT_LEFT_BACKWARD` (`PIVOT_SIDEWAYS_BACKWARD_LEFT`), and a push
+exactly along an axis counts as right and forward. So if the bench shows a
+row's wheels do not match its name, fix the row in `MovePatterns.cpp` and the
+stick follows. `kinematics::moveForStick` does the mapping for the gamepad,
+the panel carries a copy, and both are tested against
+[`test/vectors/stick_moves.json`](../test/vectors/stick_moves.json).

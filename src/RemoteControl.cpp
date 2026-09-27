@@ -27,7 +27,8 @@ constexpr int NO_CLIENT = -1;
 
 }  // namespace
 
-RemoteControl::RemoteControl(Rover& rover) : rover(rover), server(tuning::WEBSOCKET_PORT) {}
+RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme)
+    : rover(rover), scheme(scheme), server(tuning::WEBSOCKET_PORT) {}
 
 void RemoteControl::begin() {
   if (started) return;
@@ -91,13 +92,25 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
     return;
   }
 
-  const protocol::Command command = protocol::readCommand(input.as<JsonVariantConst>());
-  driver = client;
-  rover.command(command.move, command.speed, command.durationMs, millis());
+  const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
+  switch (message.kind) {
+    case protocol::Message::DRIVE:
+      driver = client;
+      rover.command(message.command.move, message.command.speed, message.command.durationMs,
+                    millis());
+      break;
+    case protocol::Message::SET_SCHEME:
+      scheme = message.scheme;  // takes no control: an exploring rover explores on
+      Serial.printf("[%u] Control scheme %s\n", client, protocol::schemeName(scheme));
+      break;
+    case protocol::Message::IGNORE:
+      Serial.printf("[%u] Ignored an unknown control scheme\n", client);
+      break;
+  }
 }
 
 void RemoteControl::broadcastTelemetry() {
   char frame[384];
-  const size_t length = protocol::writeTelemetry(rover.status(), temperatureRead(), frame, sizeof(frame));
+  const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), frame, sizeof(frame));
   if (length > 0) server.broadcastTXT(frame, length);
 }

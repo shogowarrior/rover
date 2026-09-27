@@ -18,9 +18,11 @@ namespace {
 DriveTrain driveTrain;
 Scanner scanner;
 Rover rover(driveTrain, scanner);
-RemoteControl remote(rover);
+// One control scheme for every controller, so the gamepad and the panel agree.
+kinematics::ControlScheme controlScheme = features::DEFAULT_CONTROL_SCHEME;
+RemoteControl remote(rover, controlScheme);
 Network network(rover, remote);
-Gamepad gamepad(rover);
+Gamepad gamepad(rover, controlScheme);
 
 // Exploring straight after power-on is the point of the rover. Any other
 // reset -- an OTA flash, a crash, the watchdog, a brownout from a stalled

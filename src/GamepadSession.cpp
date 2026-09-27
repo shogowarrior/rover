@@ -3,9 +3,14 @@
 #include "Timing.h"
 #include "Tuning.h"
 
-GamepadSession::GamepadSession(Rover& rover) : rover(rover) {}
+GamepadSession::GamepadSession(Rover& rover, kinematics::ControlScheme& scheme)
+    : rover(rover), scheme(scheme) {}
 
 void GamepadSession::update(const GamepadReport& report, uint32_t now) {
+  if (report.selectPressed) {
+    scheme = scheme == kinematics::SCHEME_ADVANCED ? kinematics::SCHEME_NORMAL
+                                                   : kinematics::SCHEME_ADVANCED;
+  }
   if (report.startPressed) {
     rover.command(RESUME_AUTONOMOUS, 0, 0, now);
     driving = false;
@@ -17,7 +22,7 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
       report.hasReport && timing::since(now, report.lastReportMs) < tuning::GAMEPAD_SILENCE_MS;
   const kinematics::DriveRequest wanted =
       fresh ? kinematics::translateGamepad(report.controls, tuning::GAMEPAD_DEADZONE,
-                                           tuning::GAMEPAD_MAX_SPEED)
+                                           tuning::GAMEPAD_MAX_SPEED, scheme)
             : kinematics::DriveRequest{STOP, 0};
 
   if (wanted.move == STOP) {

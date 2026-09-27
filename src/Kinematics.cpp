@@ -51,8 +51,23 @@ int stickSpeed(int x, int y, int maxSpeed) {
   return clampInt(speed, 0, maxSpeed);
 }
 
-MoveCode moveForStick(int x, int yUp) {
-  // Sector boundaries sit halfway between the eight headings.
+MoveCode moveForStick(int x, int yUp, StickFamily family) {
+  // A pivot family has four motions, one per quadrant. Axis-aligned pushes
+  // (x or yUp exactly 0) count as right and forward.
+  const bool right = x >= 0;
+  const bool forward = yUp >= 0;
+  switch (family) {
+    case FAMILY_PIVOT:
+      if (forward) return right ? PIVOT_RIGHT_FORWARD : PIVOT_LEFT_FORWARD;
+      return right ? PIVOT_RIGHT_BACKWARD : PIVOT_LEFT_BACKWARD;
+    case FAMILY_PIVOT_SIDEWAYS:
+      if (forward) return right ? PIVOT_SIDEWAYS_FORWARD_RIGHT : PIVOT_SIDEWAYS_FORWARD_LEFT;
+      return right ? PIVOT_SIDEWAYS_BACKWARD_RIGHT : PIVOT_SIDEWAYS_BACKWARD_LEFT;
+    case FAMILY_TRANSLATE:
+      break;
+  }
+
+  // Translation: sector boundaries sit halfway between the eight headings.
   const float angle = stickAngleDeg(x, yUp);
   if (angle >= 337.5f || angle < 22.5f) return MOVE_RIGHT;
   if (angle < 67.5f) return MOVE_DIAGONAL45;
@@ -64,14 +79,23 @@ MoveCode moveForStick(int x, int yUp) {
   return MOVE_DIAGONAL315;
 }
 
-DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed) {
+StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme) {
+  if (scheme != SCHEME_ADVANCED) return FAMILY_TRANSLATE;
+  if (pad.l1) return FAMILY_PIVOT;
+  if (pad.r1) return FAMILY_PIVOT_SIDEWAYS;
+  return FAMILY_TRANSLATE;
+}
+
+DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,
+                              ControlScheme scheme) {
   // The stick wins over the triggers when both are deflected. The rover can
   // only execute one move at a time, and an earlier version that collected
   // several into an array simply ran them back to back, so the last one won
   // after the others had each briefly twitched the wheels.
   if (abs(pad.lx) > deadzone || abs(pad.ly) > deadzone) {
     const int yUp = -pad.ly;  // the PS3 reports "pushed up" as negative
-    return {moveForStick(pad.lx, yUp), stickSpeed(pad.lx, yUp, maxSpeed)};
+    const MoveCode move = moveForStick(pad.lx, yUp, gamepadFamily(pad, scheme));
+    return {move, stickSpeed(pad.lx, yUp, maxSpeed)};
   }
   if (pad.l2 > deadzone) return {ROTATE_COUNTERCLOCKWISE, stickSpeed(pad.l2, 0, maxSpeed / 2)};
   if (pad.r2 > deadzone) return {ROTATE_CLOCKWISE, stickSpeed(pad.r2, 0, maxSpeed / 2)};

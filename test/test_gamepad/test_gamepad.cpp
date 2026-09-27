@@ -14,11 +14,12 @@ namespace {
 FakeMotors* motors;
 FakeScanner* scanner;
 Rover* rover;
+kinematics::ControlScheme scheme;
 GamepadSession* session;
 
 GamepadReport pad(int lx, int ly, int l2, int r2, uint32_t reportedAt) {
   GamepadReport report;
-  report.controls = {lx, ly, l2, r2};
+  report.controls = {lx, ly, l2, r2, false, false};
   report.hasReport = true;
   report.lastReportMs = reportedAt;
   return report;
@@ -43,7 +44,8 @@ void setUp(void) {
   motors = new FakeMotors();
   scanner = new FakeScanner();
   rover = new Rover(*motors, *scanner);
-  session = new GamepadSession(*rover);
+  scheme = kinematics::SCHEME_NORMAL;
+  session = new GamepadSession(*rover, scheme);
 }
 
 void tearDown(void) {
@@ -133,6 +135,48 @@ void test_speed_changes_are_rate_limited(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, motors->lastPattern->move);  // new direction: at once
 }
 
+GamepadReport pressSelect(uint32_t now) {
+  GamepadReport report = pad(0, 0, 0, 0, now);
+  report.selectPressed = true;
+  return report;
+}
+
+// SELECT flips the scheme both ways, and by itself neither moves the rover
+// nor takes control from exploration.
+void test_select_toggles_the_scheme_without_taking_control(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  session->update(pressSelect(0), 0);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, scheme);
+  session->update(pressSelect(10), 10);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
+}
+
+// Under ADVANCED, holding L1 turns the stick into the pivots.
+void test_advanced_l1_pivots(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  session->update(pressSelect(0), 0);
+  GamepadReport pivot = pad(100, -100, 0, 0, 0);  // up and right
+  pivot.controls.l1 = true;
+  hold(pivot, 10, 100);
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, motors->lastPattern->move);
+}
+
+// The scheme is shared: a change made elsewhere (the panel) applies to a stick
+// already held, at once, as a change of direction.
+void test_scheme_change_redirects_a_held_stick(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  GamepadReport held = pad(-100, 100, 0, 0, 0);  // down and left
+  held.controls.r1 = true;
+  uint32_t now = hold(held, 0, 100);
+  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL225, motors->lastPattern->move);  // NORMAL: R1 ignored
+  scheme = kinematics::SCHEME_ADVANCED;
+  hold(held, now, 20);
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_LEFT, motors->lastPattern->move);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_resting_pad_leaves_exploration_alone);
@@ -143,5 +187,8 @@ int main(int, char**) {
   RUN_TEST(test_no_report_yet_sends_nothing);
   RUN_TEST(test_start_hands_control_back_to_exploration);
   RUN_TEST(test_speed_changes_are_rate_limited);
+  RUN_TEST(test_select_toggles_the_scheme_without_taking_control);
+  RUN_TEST(test_advanced_l1_pivots);
+  RUN_TEST(test_scheme_change_redirects_a_held_stick);
   return UNITY_END();
 }

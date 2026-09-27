@@ -4,13 +4,16 @@
 #include <WebSocketsServer.h>
 #include <stdint.h>
 
+#include "Kinematics.h"
 #include "Rover.h"
 
 // The WebSocket link: drive commands in, telemetry out (Protocol.h has the
 // format). Network starts it once WiFi is up and calls update() every loop.
+// `scheme` is the rover's one control scheme, shared with the gamepad: a
+// client may change it, and telemetry reports it.
 class RemoteControl {
  public:
-  explicit RemoteControl(Rover& rover);
+  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme);
 
   // Start serving. Safe to call again after a WiFi reconnect.
   void begin();
@@ -24,6 +27,7 @@ class RemoteControl {
   void broadcastTelemetry();
 
   Rover& rover;
+  kinematics::ControlScheme& scheme;
   WebSocketsServer server;
   bool started = false;
   uint32_t lastBroadcastMs = 0;

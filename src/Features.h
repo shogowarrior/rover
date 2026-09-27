@@ -1,6 +1,8 @@
 #ifndef FEATURES_H
 #define FEATURES_H
 
+#include "Kinematics.h"
+
 // Optional parts of the firmware, switched here instead of by commenting code
 // out. Every path keeps compiling in CI whichever way these are set.
 
@@ -32,6 +34,12 @@ constexpr char PS3_HOST_MAC[] = "94:b9:7e:c7:af:12";
 // up in manual mode, so an OTA-flashed or recovering rover never drives off
 // on its own. A client's "Autonomous" button resumes exploring.
 constexpr bool AUTONOMOUS_AT_POWER_ON = true;
+
+// The control scheme at boot, for the gamepad and the panel alike: NORMAL
+// (eight-way stick and rotate) or ADVANCED (adds the eight pivots; see
+// kinematics::ControlScheme). PS3 SELECT and the panel's toggle change it
+// until the next reset.
+constexpr kinematics::ControlScheme DEFAULT_CONTROL_SCHEME = kinematics::SCHEME_NORMAL;
 
 }  // namespace features
 

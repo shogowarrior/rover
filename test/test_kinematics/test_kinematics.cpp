@@ -1,6 +1,10 @@
+#include <ArduinoJson.h>
+#include <stdio.h>
+#include <string.h>
 #include <unity.h>
 
 #include "Kinematics.h"
+#include "MovePatterns.h"
 #include "Tuning.h"
 
 // Host-side tests for the parts of the firmware that do not touch hardware.
@@ -124,8 +128,13 @@ void test_sideways_push_is_stable_against_axis_noise(void) {
 
 namespace {
 DriveRequest pad(int lx, int ly, int l2, int r2) {
-  const GamepadState state = {lx, ly, l2, r2};
+  const GamepadState state = {lx, ly, l2, r2, false, false};
   return translateGamepad(state, 20, 50);
+}
+
+DriveRequest advancedPad(int lx, int ly, bool l1, bool r1) {
+  const GamepadState state = {lx, ly, 0, 0, l1, r1};
+  return translateGamepad(state, 20, 50, SCHEME_ADVANCED);
 }
 }  // namespace
 
@@ -160,6 +169,84 @@ void test_gamepad_stick_beats_triggers(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, pad(0, -128, 255, 255).move);
 }
 
+// --- control schemes -------------------------------------------------------
+
+void test_pivot_family_picks_by_quadrant(void) {
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, moveForStick(60, 60, FAMILY_PIVOT));
+  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_FORWARD, moveForStick(-60, 60, FAMILY_PIVOT));
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_BACKWARD, moveForStick(60, -60, FAMILY_PIVOT));
+  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_BACKWARD, moveForStick(-60, -60, FAMILY_PIVOT));
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_FORWARD_RIGHT, moveForStick(60, 60, FAMILY_PIVOT_SIDEWAYS));
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_FORWARD_LEFT, moveForStick(-60, 60, FAMILY_PIVOT_SIDEWAYS));
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_RIGHT, moveForStick(60, -60, FAMILY_PIVOT_SIDEWAYS));
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_LEFT, moveForStick(-60, -60, FAMILY_PIVOT_SIDEWAYS));
+}
+
+// NORMAL ignores the shoulder buttons: L1 held by habit must not turn a
+// strafe into a pivot.
+void test_normal_scheme_ignores_shoulder_buttons(void) {
+  const GamepadState held = {127, 0, 0, 0, true, true};
+  TEST_ASSERT_EQUAL_INT(FAMILY_TRANSLATE, gamepadFamily(held, SCHEME_NORMAL));
+  TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, translateGamepad(held, 20, 50, SCHEME_NORMAL).move);
+}
+
+void test_advanced_scheme_shoulders_pick_the_pivots(void) {
+  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL45, advancedPad(100, -100, false, false).move);
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, advancedPad(100, -100, true, false).move);
+  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_LEFT, advancedPad(-100, 100, false, true).move);
+  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_FORWARD, advancedPad(-100, -100, true, true).move);  // L1 wins
+}
+
+// A shoulder button alone, stick centred, is not a motion.
+void test_advanced_shoulder_without_stick_is_stop(void) {
+  TEST_ASSERT_EQUAL_INT(STOP, advancedPad(0, 0, true, false).move);
+  TEST_ASSERT_EQUAL_INT(STOP, advancedPad(10, -10, false, true).move);
+}
+
+// The pivots keep the stick's speed mapping: a full push is full speed.
+void test_advanced_pivot_speed_follows_the_stick(void) {
+  TEST_ASSERT_EQUAL_INT(50, advancedPad(0, -127, true, false).speed);
+  TEST_ASSERT_EQUAL_INT(25, advancedPad(0, -64, true, false).speed);
+}
+
+namespace {
+
+StickFamily familyNamed(const char* name) {
+  if (strcmp(name, "PIVOT") == 0) return FAMILY_PIVOT;
+  if (strcmp(name, "PIVOT_SIDEWAYS") == 0) return FAMILY_PIVOT_SIDEWAYS;
+  TEST_ASSERT_EQUAL_STRING("TRANSLATE", name);
+  return FAMILY_TRANSLATE;
+}
+
+// The test runner starts in the project directory.
+bool loadVectors(JsonDocument& doc) {
+  FILE* file = fopen("test/vectors/stick_moves.json", "rb");
+  if (file == nullptr) return false;
+  static char text[8192];
+  const size_t length = fread(text, 1, sizeof(text), file);
+  fclose(file);
+  if (length == sizeof(text)) return false;  // outgrew the buffer
+  return !deserializeJson(doc, text, length);
+}
+
+}  // namespace
+
+// The panel's mecanum.js is tested against the same file, so the stick on
+// screen and the stick on the pad pick the same move for the same push.
+void test_stick_matches_the_shared_vectors(void) {
+  JsonDocument doc;
+  TEST_ASSERT_TRUE_MESSAGE(loadVectors(doc), "test/vectors/stick_moves.json");
+  JsonArrayConst cases = doc["cases"].as<JsonArrayConst>();
+  TEST_ASSERT_TRUE(cases.size() >= 20);
+  for (JsonObjectConst c : cases) {
+    char label[96];
+    snprintf(label, sizeof(label), "x=%d yUp=%d %s", c["x"].as<int>(), c["yUp"].as<int>(),
+             c["family"].as<const char*>());
+    const MoveCode move = moveForStick(c["x"], c["yUp"], familyNamed(c["family"]));
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(c["move"].as<const char*>(), moveName(move), label);
+  }
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
 
@@ -188,6 +275,13 @@ int main(int, char**) {
   RUN_TEST(test_gamepad_inside_deadzone_is_stop);
   RUN_TEST(test_gamepad_triggers_rotate_at_half_speed);
   RUN_TEST(test_gamepad_stick_beats_triggers);
+
+  RUN_TEST(test_pivot_family_picks_by_quadrant);
+  RUN_TEST(test_normal_scheme_ignores_shoulder_buttons);
+  RUN_TEST(test_advanced_scheme_shoulders_pick_the_pivots);
+  RUN_TEST(test_advanced_shoulder_without_stick_is_stop);
+  RUN_TEST(test_advanced_pivot_speed_follows_the_stick);
+  RUN_TEST(test_stick_matches_the_shared_vectors);
 
   return UNITY_END();
 }

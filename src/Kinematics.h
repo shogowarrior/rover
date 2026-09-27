@@ -54,19 +54,39 @@ float stickAngleDeg(int x, int yUp);
 // overshooting on diagonals.
 int stickSpeed(int x, int y, int maxSpeed);
 
-// The mecanum move for a deflected stick: eight 45-degree sectors, so the
-// rover translates in the direction pushed without turning. The same mapping
-// as moveForAngle() in extras/joystick/control.js. The caller rejects a
+// How a controller's stick and buttons map onto the 18 mecanum motions. The
+// rover holds one scheme for every controller (the default is in Features.h;
+// PS3 SELECT and the panel's toggle change it), so the gamepad and the panel
+// always agree.
+//   NORMAL    the everyday ten: the stick translates in eight directions,
+//             L2/R2 (the panel's rotate buttons) rotate.
+//   ADVANCED  all eighteen: as NORMAL, plus the pivots. Hold L1 (or pick
+//             "Pivot" on the panel) and the stick's quadrant picks a pivot
+//             turn; hold R1 ("Pivot sideways") for a pivot about an axle.
+enum ControlScheme { SCHEME_NORMAL, SCHEME_ADVANCED };
+
+// Which family of motions a stick deflection selects.
+enum StickFamily { FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS };
+
+// The mecanum move for a deflected stick. TRANSLATE: eight 45-degree sectors,
+// so the rover moves in the direction pushed without turning. PIVOT and
+// PIVOT_SIDEWAYS: the quadrant picks one of four pivots (up-right is
+// ..._RIGHT_FORWARD / ..._FORWARD_RIGHT, down-left ..._LEFT_BACKWARD /
+// ..._BACKWARD_LEFT). extras/joystick/mecanum.js is the panel's copy, and
+// both are tested against test/vectors/stick_moves.json. The caller rejects a
 // centred stick first: this always returns a motion.
-MoveCode moveForStick(int x, int yUp);
+MoveCode moveForStick(int x, int yUp, StickFamily family = FAMILY_TRANSLATE);
 
 // One reading of the PS3 controls the rover uses, in the controller's own
-// convention: axes -128..127 with ly NEGATIVE when pushed up; triggers 0..255.
+// convention: axes -128..127 with ly NEGATIVE when pushed up; triggers 0..255;
+// shoulder buttons held or not.
 struct GamepadState {
   int lx;
   int ly;
   int l2;
   int r2;
+  bool l1;
+  bool r1;
 };
 
 struct DriveRequest {
@@ -74,11 +94,16 @@ struct DriveRequest {
   int speed;
 };
 
-// What the gamepad is asking for. The left stick translates (all eight
-// directions); with the stick centred, L2 rotates left (counter-clockwise)
-// and R2 rotates right, at half speed. Returns {STOP, 0} when nothing is
-// deflected past the deadzone.
-DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed);
+// The family the gamepad's shoulder buttons select under `scheme`: L1 pivots,
+// R1 pivots sideways, and neither (or the NORMAL scheme) translates.
+StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme);
+
+// What the gamepad is asking for. The left stick moves within the family the
+// shoulder buttons select (see ControlScheme); with the stick centred, L2
+// rotates left (counter-clockwise) and R2 right, at half speed. Returns
+// {STOP, 0} when nothing is deflected past the deadzone.
+DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,
+                              ControlScheme scheme = SCHEME_NORMAL);
 
 }  // namespace kinematics
 
