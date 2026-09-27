@@ -1,0 +1,102 @@
+/**
+ * Every value the panel shares with the firmware: the wire protocol's move
+ * codes and scheme names, the port, the distances the scan fan is drawn at,
+ * and the command timing the firmware's deadman depends on.
+ *
+ * The wire format itself is in src/Protocol.h. The panel is a set of classic
+ * scripts that share one global scope (see app.js), so the constants below
+ * are globals for every script loaded after this one.
+ */
+
+// tools/check_protocol.py compares each `const NAME = <number>;` line in this
+// file with its source in src/ and fails CI when one drifts, so keep that
+// exact form.
+
+// Move codes: the wire protocol. Source: src/MoveCodes.h. All twenty are
+// here, the pivots (9 to 16) included, and check_protocol.py fails if one is
+// missing.
+const STOP = 0;
+const MOVE_FORWARD = 1;
+const MOVE_BACKWARD = 2;
+const MOVE_RIGHT = 3;
+const MOVE_LEFT = 4;
+const MOVE_DIAGONAL45 = 5;
+const MOVE_DIAGONAL135 = 6;
+const MOVE_DIAGONAL225 = 7;
+const MOVE_DIAGONAL315 = 8;
+const PIVOT_RIGHT_FORWARD = 9;
+const PIVOT_RIGHT_BACKWARD = 10;
+const PIVOT_LEFT_FORWARD = 11;
+const PIVOT_LEFT_BACKWARD = 12;
+const PIVOT_SIDEWAYS_FORWARD_RIGHT = 13;
+const PIVOT_SIDEWAYS_FORWARD_LEFT = 14;
+const PIVOT_SIDEWAYS_BACKWARD_RIGHT = 15;
+const PIVOT_SIDEWAYS_BACKWARD_LEFT = 16;
+const ROTATE_CLOCKWISE = 17;
+const ROTATE_COUNTERCLOCKWISE = 18;
+const RESUME_AUTONOMOUS = 19;
+
+// The control schemes, as protocol::schemeName() in src/Protocol.cpp spells
+// them. A client changes the rover's scheme by sending {"scheme": <name>}
+// with no "move", and telemetry reports it under "scheme". The firmware
+// matches the name exactly and ignores one it does not know, so a misspelt
+// copy would fail silently; check_protocol.py compares these with
+// schemeName().
+const SCHEME_NORMAL = "NORMAL";
+const SCHEME_ADVANCED = "ADVANCED";
+
+// kinematics::MOTOR_SPEED_MAX in src/Kinematics.h: the motor driver takes a
+// byte, so no command asks for more.
+const SPEED_MAX = 255;
+
+// tuning::WEBSOCKET_PORT in src/Tuning.h. The address field also accepts
+// "host:port", so the panel can be pointed at a stand-in during development.
+const PORT = 81;
+
+// tuning::EXPLORE_STOP_CM and tuning::EXPLORE_GO_CM in src/Tuning.h.
+// Exploration ends a cruise when something in its path is within STOP_CM and
+// starts one only when the way is clear beyond GO_CM. The scan fan is ringed
+// and coloured at the same two distances.
+const STOP_CM = 25;
+const GO_CM = 40;
+
+// kinematics::DISTANCE_FAR_CM in src/Kinematics.h: what the rover reports
+// when no echo came back. It is the absence of a measurement, not a distance.
+const FAR_CM = 999;
+
+/* --- command timing ------------------------------------------------------ */
+
+// Every command asks for MOVE_DURATION_MS of motion and a held input is re-sent
+// REPEAT_MS after the last send, so each move is refreshed well before it
+// expires, and letting go coasts to a stop within 400 ms instead of running
+// on. There is no separate deadman timer: the firmware caps any one command at
+// 1.5 s (tuning::COMMAND_DURATION_MAX_MS), and that cap is the deadman for
+// every client. If this page dies mid-drive, its last 400 ms move simply runs
+// out. The gamepad re-sends as often (tuning::GAMEPAD_REFRESH_MS).
+const MOVE_DURATION_MS = 400;
+const REPEAT_MS = 200;
+
+// A dragged stick reports every animation frame. A new direction goes out at
+// once; the same direction at a new speed no sooner than this after the last
+// send, with the repeat carrying the latest speed otherwise. Each speed change
+// costs the rover a rewrite of all four motors over I2C (~7 ms of the loop
+// that also runs the sonar and this WebSocket), so one per frame would be
+// felt. An unchanged repeat usually only moves the deadline: the firmware
+// rewrites a held move just once per tuning::MOTOR_REFRESH_MS (500 ms), to
+// repair a write the bus lost. The gamepad follows the same rule with
+// tuning::GAMEPAD_SPEED_CHANGE_MS in src/Tuning.h; keep the two equal.
+const STICK_SEND_MS = 100;
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    STOP, MOVE_FORWARD, MOVE_BACKWARD, MOVE_RIGHT, MOVE_LEFT,
+    MOVE_DIAGONAL45, MOVE_DIAGONAL135, MOVE_DIAGONAL225, MOVE_DIAGONAL315,
+    PIVOT_RIGHT_FORWARD, PIVOT_RIGHT_BACKWARD, PIVOT_LEFT_FORWARD, PIVOT_LEFT_BACKWARD,
+    PIVOT_SIDEWAYS_FORWARD_RIGHT, PIVOT_SIDEWAYS_FORWARD_LEFT,
+    PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT,
+    ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS,
+    SCHEME_NORMAL, SCHEME_ADVANCED,
+    SPEED_MAX, PORT, STOP_CM, GO_CM, FAR_CM,
+    MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,
+  };
+}

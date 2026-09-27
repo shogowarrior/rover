@@ -15,7 +15,10 @@
 #   * a host-tested module, a header they share, anything under test/, or
 #     platformio.ini: also run the host tests, `pio test -e native`;
 #   * a file tools/check_protocol.py reads -- a client, or a firmware file a
-#     client mirrors -- or the checker itself: run it (milliseconds).
+#     client mirrors -- or the checker itself: run it (milliseconds);
+#   * anything under extras/joystick/ (the browser panel), or the stick vectors
+#     under test/vectors/ its tests share with the firmware's: run the panel's
+#     tests, `node --test extras/joystick/test/` (about a second).
 #
 # The host-tested list below mirrors build_src_filter in [env:native] plus the
 # headers those modules include, and the protocol list mirrors the files
@@ -83,6 +86,8 @@ else
   esac
 fi
 
+# A case pattern's * matches "/" too, so extras/joystick/*.js is every panel
+# script at any depth: js/, test/, and joy.js.
 protocol=no
 case "$file" in
   client/*.py | extras/joystick/*.js | tools/check_protocol.py | \
@@ -92,9 +97,16 @@ case "$file" in
     ;;
 esac
 
+# The browser panel's own tests: anything in the panel (its page, styles,
+# scripts and tests), or the stick vectors its mecanum.js is tested against.
+panel=no
+case "$file" in
+  extras/joystick/* | test/vectors/*) panel=yes ;;
+esac
+
 case "$file" in
   *.cpp | *.h | *.ino | platformio.ini) ;;
-  *) [ "$protocol" = yes ] || exit 0 ;;
+  *) [ "$protocol" = yes ] || [ "$panel" = yes ] || exit 0 ;;
 esac
 
 build=no
@@ -147,6 +159,24 @@ if [ "$protocol" = yes ]; then
   out=$(python3 tools/check_protocol.py 2>&1) ||
     fail "Protocol check (tools/check_protocol.py) FAILED" "$out" '.'
   printf '%s\n' "$out"
+fi
+
+# Next, as it takes a second or so. The panel's harness runs the real page
+# against a fake DOM; a failed check prints its message indented under the
+# test's name. Stack frames and the assertion's own fields are dropped: the
+# messages already say what differed.
+if [ "$panel" = yes ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Panel tests skipped after editing $file: node is not on PATH, so" >&2
+    echo "nothing has run extras/joystick/test/. Install Node.js." >&2
+    exit 2
+  fi
+  out=$(node --test extras/joystick/test/ 2>&1) ||
+    fail "Panel tests (node --test extras/joystick/test/) FAILED" \
+      "$(printf '%s\n' "$out" |
+        grep -vE '^[[:space:]]*(at |generatedMessage:|code:|actual:|expected:|operator:|[-+] |[{}]$)')" \
+      '^✖|check\(s\) failed|^    [^ ]|Error|^ℹ (tests|fail) '
+  printf '%s\n' "$out" | grep -E 'checks passed|^ℹ (tests|fail) '
 fi
 
 [ "$build" = yes ] || [ "$tests" = yes ] || exit 0

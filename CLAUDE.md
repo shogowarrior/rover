@@ -24,16 +24,21 @@ either.
     `GamepadSession`, `Protocol`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
     `Hardware.h`, anything under `test/`, or `platformio.ini`: also
     `pio test -e native`;
-  - a client, a firmware file a client mirrors, or the checker itself:
-    `tools/check_protocol.py`.
+  - a client (any `.js` file under `extras/joystick/`, at any depth,
+    included), a firmware file a client mirrors, or the checker itself:
+    `tools/check_protocol.py`;
+  - anything under `extras/joystick/` (the panel's page, styles, scripts and
+    tests), or under `test/vectors/`, whose stick cases the panel's tests
+    share with the firmware's: `node --test extras/joystick/test/` (about a
+    second).
 
   It builds the checkout the edited file is in, against
   `src/config.example.h` where that checkout has no `src/config.h`, as CI
   does. A failure is handed back so the break is fixed at once; this project
   has no other feedback loop. It fires only for the Edit and Write tools:
   change firmware, test and client files with those, or run the build, the
-  host tests and the protocol check yourself after any change made through
-  Bash (sed, a heredoc, a script).
+  host tests, the protocol check and the panel tests yourself after any
+  change made through Bash (sed, a heredoc, a script).
 - **PreToolUse, `.claude/hooks/guard-secrets.sh`.** Runs before every tool
   call, built in or MCP (Serena, the browser panes, the terminal panel), and
   blocks one that would touch `src/config.h`:

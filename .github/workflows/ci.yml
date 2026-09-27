@@ -25,13 +25,24 @@ jobs:
       # quietly on the robot, so fail here instead.
       - name: Check clients against the wire protocol
         run: python tools/check_protocol.py
+      # The panel's scripts run in a browser, and their tests in Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       # The checker reads the clients with regular expressions and never runs
-      # them, so a syntax error in one passes it. Parse each for real (Node is
-      # preinstalled on the runner).
+      # them, so a syntax error in one passes it. Parse each for real: every
+      # script the panel loads (joy.js included) and its tests.
       - name: Parse the clients
         run: |
           python -m py_compile client/drive.py client/ws.py tools/check_protocol.py
-          node --check extras/joystick/control.js
+          for script in extras/joystick/joy.js extras/joystick/js/*.js extras/joystick/test/*.js; do
+            node --check "$script"
+          done
+      # The browser panel against a fake DOM, WebSocket and clock: what it
+      # sends for every press, release, blur and link loss, and its copy of
+      # the stick mapping against test/vectors/stick_moves.json.
+      - name: Panel tests
+        run: node --test extras/joystick/test/
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:

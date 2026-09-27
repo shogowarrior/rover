@@ -22,8 +22,9 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 - **Never change a pin assignment unprompted.** See [Pins](#pins).
 - There is no runtime feedback loop: a mistake is invisible until the board
   is flashed. Build after every firmware change, run the host tests after
-  every change to the pure modules, and run `tools/check_protocol.py` after
-  changing a client or a value a client mirrors.
+  every change to the pure modules, run `tools/check_protocol.py` after
+  changing a client or a value a client mirrors, and run the panel's tests
+  after changing the browser panel.
 
 ## Commands
 
@@ -34,6 +35,7 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 ~/.platformio/penv/bin/pio run -e car_wire_gamepad     # build with the PS3 gamepad compiled in
 ~/.platformio/penv/bin/pio test -e native              # host-side unit tests, no board needed
 python3 tools/check_protocol.py                        # the clients' copies of the protocol match src/
+node --test extras/joystick/test/                      # the browser panel against a fake DOM, no rover needed
 ```
 
 Building a board environment needs `src/config.h`. In a fresh clone the
@@ -84,7 +86,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Telemetry listener only |
 | `client/rover.ipynb` | Notebook experiments over the same link |
-| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below) |
+| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
 | `partition.csv` | Two OTA app slots and no filesystem |
 | `docs/`, `images/` | Wiring, BOM, pinouts, the mecanum table, bench checklist, roadmap |
@@ -280,12 +282,23 @@ means repartitioning, which needs a USB erase and breaks OTA, so the panel is a
 local file that connects out to `ws://<rover>:81` (the address field takes
 `host` or `host:port`).
 
+Chrome refuses module scripts from `file://`, so the panel is classic
+`<script src>` files loaded in order, sharing one global scope: no modules, no
+bundler, no packages. It reads like the firmware: small classes in `js/`
+(`Link` the WebSocket, `Driver` the controls and what to send, `ScanView`,
+`Readouts`, `Tabs`), every value mirrored from `src/` in `js/protocol.js`, and
+`js/app.js` as the composition root that builds and wires them. `joy.js` is a
+vendored third-party joystick: leave it unmodified. `test/` runs the real page
+in Node against a fake DOM, WebSocket and clock.
+
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
-`control.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
+`js/protocol.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
 `COMMAND_DURATION_MAX_MS`. A new direction goes out at once, a new speed in the
 same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
 below). Letting go, blurring the window or hiding the tab stops what the panel
-is driving and leaves an exploring rover alone.
+is driving and leaves an exploring rover alone. Its Drive and Program tabs
+switch only what is shown: switching sends nothing, and the scan, the readouts
+and the Stop and Autonomous buttons stay on screen on both.
 
 ## The gamepad
 

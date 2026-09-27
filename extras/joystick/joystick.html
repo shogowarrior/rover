@@ -6,299 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
-  <style>
-    /* Bench-instrument palette. Charcoal housing rather than black, one teal
-       "sensor healthy" signal, amber for closing distance, and a red reserved
-       exclusively for stop and danger -- if red appears anywhere else it stops
-       meaning anything. */
-    :root {
-      --case: #1c1e21;
-      --panel: #26292d;
-      --rule: #383c42;
-      --readout: #e8e4dc;
-      --dim: #7d858e;
-      --live: #4db8a8;
-      --warn: #e8a33d;
-      --stop: #d94f43;
-
-      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-      --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-    }
-
-    * { box-sizing: border-box; }
-
-    html, body { height: 100%; }
-
-    body {
-      margin: 0;
-      background: var(--case);
-      color: var(--readout);
-      font-family: var(--sans);
-      -webkit-user-select: none;
-      user-select: none;
-      overscroll-behavior: none;
-    }
-
-    /* Silkscreen labels, as printed on bench equipment. */
-    .label {
-      font-family: var(--sans);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--dim);
-    }
-
-    .shell {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      min-height: 100%;
-    }
-
-    /* --- status bar ------------------------------------------------------ */
-
-    .bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--rule);
-    }
-
-    .wordmark {
-      font-family: var(--mono);
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0.22em;
-    }
-
-    .link {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      margin-left: auto;
-    }
-
-    .lamp {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--stop);
-      flex: none;
-    }
-
-    [data-link="up"] .lamp { background: var(--live); }
-    [data-link="stale"] .lamp { background: var(--warn); }
-    [data-link="connecting"] .lamp { background: var(--dim); }
-
-    /* A fault the rover reports about itself. Amber, not red: nothing is
-       moving that should stop, the rover simply cannot move. */
-    .fault {
-      margin: 0;
-      padding: 10px 12px;
-      background: var(--panel);
-      border: 1px solid var(--warn);
-      border-left-width: 4px;
-      border-radius: 3px;
-      color: var(--readout);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .fault strong { color: var(--warn); }
-
-    .fault[hidden] { display: none; }
-
-    #host {
-      font-family: var(--mono);
-      font-size: 13px;
-      color: var(--readout);
-      background: var(--case);
-      border: 1px solid var(--rule);
-      border-radius: 3px;
-      padding: 6px 9px;
-      width: 19ch;
-      min-width: 0;
-    }
-
-    #host:focus-visible, button:focus-visible {
-      outline: 2px solid var(--live);
-      outline-offset: 2px;
-    }
-
-    /* --- the scan fan: this page's one loud element ---------------------- */
-
-    .scan {
-      background: var(--panel);
-      border: 1px solid var(--rule);
-      border-radius: 4px;
-      padding: 14px 14px 6px;
-    }
-
-    .scan svg { display: block; width: 100%; height: auto; }
-
-    /* Readings glide over the telemetry interval rather than snapping, so the
-       eye tracks a distance changing instead of a number replacing itself. */
-    .wedge {
-      transition: d 480ms linear, fill 480ms linear, opacity 480ms linear;
-    }
-
-    .ring {
-      fill: none;
-      stroke: var(--rule);
-      stroke-width: 1;
-    }
-
-    .ring.stop {
-      stroke: var(--stop);
-      stroke-dasharray: 3 4;
-      opacity: 0.6;
-    }
-
-    .ring.go {
-      stroke: var(--warn);
-      stroke-dasharray: 3 4;
-      opacity: 0.45;
-    }
-
-    /* No text-anchor here: control.js sets it per label, and a CSS rule would
-       override the attribute. */
-    .reading {
-      font-family: var(--mono);
-      font-size: 15px;
-      font-weight: 600;
-      fill: var(--readout);
-    }
-
-    .tick {
-      font-family: var(--sans);
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      fill: var(--dim);
-    }
-
-    /* The ring labels take their ring's colour. */
-    .tick.stop { fill: var(--stop); opacity: 0.75; }
-    .tick.go { fill: var(--warn); opacity: 0.75; }
-
-    body:not([data-link="up"]) .scan { opacity: 0.45; }
-
-    /* --- controls -------------------------------------------------------- */
-
-    .controls {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 14px;
-      align-items: start;
-    }
-
-    .pad {
-      background: var(--panel);
-      border: 1px solid var(--rule);
-      border-radius: 4px;
-      padding: 14px;
-    }
-
-    .pad > .label { display: block; margin-bottom: 10px; }
-
-    #stick { width: 100%; max-width: 230px; aspect-ratio: 1; margin: 0 auto; }
-
-    .stack { display: flex; flex-direction: column; gap: 14px; }
-
-    .spin { display: flex; gap: 10px; }
-
-    button {
-      font-family: var(--sans);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--readout);
-      background: var(--case);
-      border: 1px solid var(--rule);
-      border-radius: 3px;
-      padding: 13px 10px;
-      flex: 1;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-
-    button:hover { border-color: var(--dim); }
-
-    /* No transition on press: a control that moves a robot must feel
-       instantaneous, not eased. */
-    button:active, button[data-held="yes"] {
-      background: var(--live);
-      border-color: var(--live);
-      color: var(--case);
-    }
-
-    button[aria-pressed="true"] {
-      background: var(--live);
-      border-color: var(--live);
-      color: var(--case);
-    }
-
-    #stop {
-      background: var(--stop);
-      border-color: var(--stop);
-      color: #fff;
-      font-size: 15px;
-      letter-spacing: 0.2em;
-      padding: 18px;
-    }
-
-    #stop:active { background: #f06459; border-color: #f06459; color: #fff; }
-
-    .speed { display: flex; align-items: center; gap: 12px; }
-
-    input[type="range"] { flex: 1; accent-color: var(--live); }
-
-    .readouts {
-      display: flex;
-      gap: 22px;
-      flex-wrap: wrap;
-      padding-top: 12px;
-      border-top: 1px solid var(--rule);
-      margin-top: auto;
-    }
-
-    .cell { display: flex; flex-direction: column; gap: 3px; }
-
-    .cell output {
-      font-family: var(--mono);
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    /* .cell's display: flex would otherwise override the hidden attribute. */
-    .cell[hidden] { display: none; }
-
-    #phase[data-tone="warn"] { color: var(--warn); }
-
-    #note {
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--dim);
-      min-height: 1.5em;
-    }
-
-    #note[data-tone="bad"] { color: var(--warn); }
-
-    @media (max-width: 620px) {
-      .controls { grid-template-columns: 1fr; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .wedge { transition: none; }
-    }
-  </style>
+  <link rel="stylesheet" href="css/panel.css">
 </head>
 
 <body data-link="down">
@@ -306,6 +14,8 @@
 
     <header class="bar">
       <span class="wordmark">ROVER</span>
+      <!-- The control scheme's toggle goes here. -->
+      <div id="schemeSlot"></div>
       <div class="link">
         <span class="lamp" aria-hidden="true"></span>
         <span class="label" id="linkState">No link</span>
@@ -314,7 +24,16 @@
       </div>
     </header>
 
-    <!-- Shown while telemetry says "motorsReady": false. control.js hides it
+    <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in step.
+         The Drive tab is the one shown until the scripts run: joy.js sizes
+         the stick from its container once, and needs it laid out. -->
+    <div class="tabs" role="tablist" aria-label="Controls">
+      <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
+      <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
+              tabindex="-1">Program</button>
+    </div>
+
+    <!-- Shown while telemetry says "motorsReady": false. readouts.js hides it
          again when the rover says true, says nothing, or the link goes.
          It says what a reset does because a power-on or EN reset starts
          exploration: once the shield answers, the wheels turn straight away,
@@ -331,20 +50,22 @@
          at those bearings, rather than as a neutral row of numbers, is the
          whole point: the panel shows what the machine actually sees.
 
-         control.js draws the fan -- range rings at the firmware's STOP and GO
+         scan.js draws the fan -- range rings at the firmware's STOP and GO
          distances, at 100 cm and at full reach, and a wedge and a reading per
-         bearing -- from the constants it mirrors, so nothing here is a
-         hand-computed arc that could drift from them. -->
+         bearing -- from the constants protocol.js mirrors, so nothing here is
+         a hand-computed arc that could drift from them. -->
     <section class="scan" aria-label="Ultrasonic scan">
       <svg id="scan" role="img" aria-labelledby="scanDesc">
         <title id="scanDesc">Live ultrasonic scan at five bearings</title>
       </svg>
     </section>
 
-    <section class="controls">
+    <section class="controls" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
       <div class="pad">
         <span class="label">Translate</span>
         <div id="stick"></div>
+        <!-- The stick family's selector goes here. -->
+        <div id="familySlot"></div>
       </div>
 
       <div class="stack">
@@ -364,11 +85,11 @@
             <output id="speedOut" style="font-family:var(--mono);font-weight:600">64</output>
           </div>
         </div>
-
-        <button id="auto" aria-pressed="false"
-                title="Let the rover explore. If exploration has halted, it looks again.">Autonomous</button>
-        <button id="stop">Stop</button>
       </div>
+    </section>
+
+    <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" hidden>
+      <p class="placeholder">Block programs for the rover will be built here.</p>
     </section>
 
     <section class="readouts">
@@ -382,10 +103,33 @@
     </section>
 
     <p id="note" aria-live="polite"></p>
+
+    <!-- Outside the tabs, last, and stuck to the bottom of the screen: Stop
+         is in reach whatever tab is showing and wherever the page is
+         scrolled. -->
+    <div class="actions">
+      <button id="auto" aria-pressed="false"
+              title="Let the rover explore. If exploration has halted, it looks again.">Autonomous</button>
+      <button id="stop">Stop</button>
+    </div>
   </main>
 
+  <!-- Classic scripts, run in this order and sharing one global scope:
+       Chrome refuses module scripts from file://, where this page is opened.
+       See js/app.js. -->
   <script src="joy.js"></script>
-  <script src="control.js"></script>
+  <script src="js/support.js"></script>
+  <script src="js/protocol.js"></script>
+  <script src="js/mecanum.js"></script>
+
+  <script src="js/link.js"></script>
+  <script src="js/scan.js"></script>
+  <script src="js/readouts.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/tabs.js"></script>
+
+  <!-- The composition root, after every part it builds. -->
+  <script src="js/app.js"></script>
 </body>
 
 </html>
