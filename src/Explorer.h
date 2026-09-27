@@ -20,8 +20,9 @@
 //   CRUISE    If the way ahead is clear, drive forward on a short lease that
 //             only a clear ping renews, while the servo keeps looking ahead
 //             and slightly to each side. Anything in the rover's path, an echo
-//             that vanishes as the rover closes on it, or a front reading that
-//             stops shrinking (wheels stuck below the beam) ends the cruise.
+//             that vanishes as the rover closes on it, a front reading that
+//             stops changing (wheels stuck below the beam), or a run of looks
+//             that hear nothing at all ends the cruise.
 //   TURN      If the way is blocked, rotate toward the more open side in short
 //             steps, measuring after each, and keep turning that way until the
 //             front is clear. Committing to one direction is what stops the
@@ -36,9 +37,10 @@
 //             to look again.
 
 struct ExploreParams {
-  // Distances are measured from the sensor. Hysteresis: a cruise stops at
-  // stopCm but only starts beyond goCm, so a reading hovering near one
-  // threshold cannot flip the rover between cruising and turning.
+  // Distances are measured from the sensor. Hysteresis on the front bearing:
+  // a cruise stops at stopCm but only starts beyond goCm, so a reading
+  // hovering near one threshold cannot flip the rover between cruising and
+  // turning.
   float stopCm = tuning::EXPLORE_STOP_CM;
   float goCm = tuning::EXPLORE_GO_CM;
   float minTurnClearCm = 8;      // closer than this ahead: back off before rotating
@@ -47,12 +49,12 @@ struct ExploreParams {
   float sideMarginCm = 4;        // a flank within halfWidth + this: veer away
   float rotateClearanceCm = 16;  // rotating in place swings the corners ~15 cm out
 
-  // Sweep bearings are 0, +-inner and +-outer degrees from straight ahead
+  // Sweep angles are 0, +-inner and +-outer degrees from straight ahead
   // (positive is the rover's left). Cruise looks at 0, +weave, 0, -weave.
   int sweepOuterDeg = 70;
   int sweepInnerDeg = 35;
   int weaveDeg = 25;
-  // servo degrees = 90 + servoDegPerBearing x bearing. -1 means servo 20
+  // servo degrees = 90 + servoDegPerBearing x angle. -1 means servo 20
   // points left and 160 right, as the scanner is mounted today. If a hand at
   // the rover's left moves "distanceRight" on the panel, make this +1.
   int servoDegPerBearing = -1;
@@ -62,6 +64,7 @@ struct ExploreParams {
 
   int cruiseLeaseMs = 400;       // forward runs this long unless a clear ping renews it
   int cruiseMaxMs = 2500;        // then stop and sweep anyway, and wander a little
+  int silentCruiseLooks = 4;     // looks in a row with no echo (one weave) end a cruise
   int wanderSteps = 2;           // turn steps after a cruise ends that way
   int turnStepMs = 200;          // one rotation step; its angle is never assumed
   int turnSettleMs = 120;        // let the chassis stop before measuring
@@ -70,7 +73,7 @@ struct ExploreParams {
   int backoffMaxMs = 300;
   int sidestepMs = 250;
   int maxSidesteps = 2;          // in a row, without a cruise between
-  int stuckWindowMs = 1000;      // a front echo that has not closed by
+  int stuckWindowMs = 1000;      // a front echo that has not changed by
   float stuckProgressCm = 3;     //   this much in this long means stuck
   int stuckTurnSteps = 4;        // minimum escape turn, times consecutive stucks
   float suspectNearCm = 60;      // an echo this close that vanishes within
@@ -95,7 +98,8 @@ class Explorer {
 
   explicit Explorer(RangeScanner& scanner, const ExploreParams& params = ExploreParams());
 
-  // Start over from a fresh sweep, forgetting turn commitments and history.
+  // Start over from a fresh sweep, forgetting everything this stretch of
+  // exploring had learned (turn commitments, counters, a halt).
   void reset(uint32_t now);
 
   // One non-blocking step of exploration. `motorsIdle` is true once the last
@@ -108,15 +112,81 @@ class Explorer {
 
   Phase phase() const { return currentPhase; }
   const char* phaseName() const;
-  const char* haltReason() const { return currentPhase == HALTED ? haltWhy : nullptr; }
+  const char* haltReason() const { return currentPhase == HALTED ? episode.haltWhy : nullptr; }
 
   // True once every bearing has been measured at least once.
   bool hasScan() const;
   // Latest distance at a bearing, normalised (no echo = DISTANCE_FAR_CM).
-  float distanceCm(Bearing bearing) const { return scanCm[bearing]; }
+  float distanceCm(Bearing bearing) const { return scan.cm[bearing]; }
 
  private:
   enum TurnStage { ROTATING, SETTLING, LOOKING };
+
+  // Where the servo points and when the sonar may next ping. Describes the
+  // hardware, so it survives reset().
+  struct Sonar {
+    int servoDeg = -1;  // last commanded, -1 until the first aim
+    int lookDeg = 0;    // rover-frame angle the next ping measures
+    uint32_t readyAt = 0;
+    uint32_t lastPingAt = 0;
+    bool hasPinged = false;
+  };
+
+  // The latest reading at each bearing. Survives reset(), so the telemetry
+  // never goes blank on a mode change.
+  struct Scan {
+    float cm[BEARING_COUNT];
+    bool measured[BEARING_COUNT];
+    int step = 0;
+    bool leftToRight = false;  // flipped before every sweep
+    bool heardEcho = false;    // anything at all, this sweep
+  };
+
+  // A sidestep awaiting its check by the next sweep.
+  struct SidestepCheck {
+    bool pending = false;
+    Bearing from = LEFT;  // the tight flank it stepped away from
+    float fromBefore = 0;
+    float otherBefore = 0;
+  };
+
+  // What one stretch of exploring has learned. reset() replaces it whole.
+  struct Episode {
+    int committedDirection = 0;  // 0 none, +1 left (counter-clockwise), -1 right
+    int turnStepsCommitted = 0;  // avoidance steps since the rover last drove
+    int escapeSteps = 0;         // minimum turn after a stuck backoff
+    int consecutiveStucks = 0;
+    int sidesteps = 0;           // in a row, without a cruise between
+    int silentSweeps = 0;        // in a row
+    int32_t reverseBudgetMs = 0; // forward driving since the heading last changed
+    bool cruiseEndedByCap = false;
+    int sideStopDeg = 0;         // weave angle whose echo ended the last cruise, 0 if none
+    bool waitForClearPath = false;
+    const char* haltWhy = nullptr;
+    SidestepCheck sidestep;
+  };
+
+  // One cruise. startCruise() replaces it whole.
+  struct Cruise {
+    uint32_t start = 0;
+    int weaveStep = 0;
+    int silentLooks = 0;
+    float lastFrontEchoCm = -1;  // -1: none yet
+    uint32_t lastFrontEchoAt = 0;
+    bool hasStuckReference = false;
+    float stuckReferenceCm = 0;
+    uint32_t stuckReferenceAt = 0;
+  };
+
+  // One turn. startTurn() replaces it whole.
+  struct Turn {
+    TurnStage stage = ROTATING;
+    int direction = 0;  // +1 counter-clockwise (left), -1 clockwise (right)
+    int steps = 0;
+    int minSteps = 0;
+    bool untilClear = false;
+    int clearLooks = 0;
+  };
 
   // Phase transitions. Each returns the motion that goes with entering it.
   Motion startSweep(uint32_t now);
@@ -130,32 +200,32 @@ class Explorer {
   Motion halt(uint32_t now, const char* reason);
   Motion retryAfterHalt(uint32_t now);
   Motion rotateStep(uint32_t now);
+  Motion endCruise(uint32_t now);
 
   // Per-phase steps.
   Motion stepSweep(uint32_t now, bool decideWhenDone);
   Motion stepCruise(uint32_t now);
   Motion stepTurn(uint32_t now, bool motorsIdle);
-  void finishCruise(uint32_t now);
 
   // Looking and measuring.
-  void aim(uint32_t now, int bearingDeg);
+  void aim(uint32_t now, int angleDeg);
   bool readyToPing(uint32_t now) const;
   float ping(uint32_t now);
   void record(Bearing bearing, float rawCm);
   Bearing sweepBearing(int step) const;
-  int bearingDeg(Bearing bearing) const;
+  int angleOf(Bearing bearing) const;
 
   // Reading the scan.
-  bool inPath(int bearingDeg, float cm, float limitCm) const;
+  bool inPath(int angleDeg, float cm, float limitCm) const;
   bool pathBlocked(float limitCm) const;
   float lateralCm(Bearing bearing) const;
+  bool roomToRotate() const;
   int chooseTurnDirection();
   int veerDirection() const;
   int sidestepDirection() const;
   void checkSidestepWentAway();
   bool echoVanished(uint32_t now) const;
-  bool notClosing(float frontCm, uint32_t now);
-  int takeEscapeSteps();
+  bool notChanging(float frontCm, uint32_t now);
   int alternateDirection();
   int wanderDirection();
 
@@ -165,64 +235,23 @@ class Explorer {
   Phase currentPhase = SWEEP;
   uint32_t phaseUntil = 0;
 
-  // The servo and the sonar.
-  int servoDeg = -1;  // last commanded, -1 until the first aim
-  int lookBearing = 0;
-  uint32_t servoReadyAt = 0;
-  uint32_t lastPingAt = 0;
-  bool hasPinged = false;
+  Sonar sonar;
+  Scan scan;
+  Episode episode;
+  Cruise cruise;
+  Turn turn;
 
-  // The scan.
-  float scanCm[BEARING_COUNT];
-  bool measured[BEARING_COUNT];
-  int sweepStep = 0;
-  bool sweepLeftToRight = false;  // flipped before every sweep
-  bool sweepHeardEcho = false;
-  int silentSweeps = 0;
-
-  // Cruising.
-  uint32_t cruiseStart = 0;
-  int weaveStep = 0;
-  bool cruiseEndedByCap = false;
-  float lastFrontEchoCm = -1;  // -1: none this cruise
-  uint32_t lastFrontEchoAt = 0;
-  bool hasStuckReference = false;
-  float stuckReferenceCm = 0;
-  uint32_t stuckReferenceAt = 0;
-  int32_t reverseBudgetMs = 0;  // forward driving since the heading last changed
-
-  // Turning. Direction: +1 counter-clockwise (left), -1 clockwise (right).
-  TurnStage turnStage = ROTATING;
-  int turnDirection = 0;
-  int committedDirection = 0;  // 0: none
-  bool preferLeft = true;      // tie-breaker, alternates
-  int stepsThisTurn = 0;
-  int minTurnSteps = 0;
-  bool turnUntilClear = false;
-  int turnStepsCommitted = 0;  // avoidance steps since the commitment began
-  int clearLooks = 0;
-  int escapeSteps = 0;         // minimum for the next avoidance turn
-  int consecutiveStucks = 0;
-  int sidesteps = 0;
-  uint32_t wanderSeed = 1;
-
-  // Sidestepping learns its direction. Whether MOVE_LEFT carries the rover
-  // toward what the scanner calls left depends on how the servo and the
-  // wheels are wired, neither of which is verified, and strafing the wrong
-  // way pins the rover against the very wall it meant to leave. So each
-  // sidestep is checked by the next sweep: if the flank it stepped away from
-  // came closer and the other side opened up, the direction flips. A second
-  // contradiction switches sidestepping off.
+  // Learned about the robot itself, so kept across reset(). Whether MOVE_LEFT
+  // carries the rover toward what the scanner calls left depends on how the
+  // servo and the wheels are wired, neither of which is verified, and
+  // strafing the wrong way pins the rover against the very wall it meant to
+  // leave. So each sidestep is checked by the next sweep: if the flank it
+  // stepped away from came closer and the other side opened up, strafeSign
+  // flips. A second contradiction switches sidestepping off.
   int strafeSign = +1;
   int strafeContradictions = 0;
-  bool sidestepPending = false;  // the next sweep checks the last sidestep
-  Bearing sidestepFrom = LEFT;   // the tight flank it stepped away from
-  float sidestepFromBefore = 0;
-  float sidestepOtherBefore = 0;
-
-  // Halting.
-  const char* haltWhy = nullptr;
-  bool waitForClearPath = false;
+  bool preferLeft = true;  // tie-breaker, alternates
+  uint32_t wanderSeed = 1;
 };
 
 #endif

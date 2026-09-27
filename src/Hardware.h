@@ -20,6 +20,9 @@ class Motors {
   virtual void drive(const MovePattern& pattern, uint8_t speed) = 0;
   // Let all four wheels free-wheel.
   virtual void release() = 0;
+  // False when the motor driver did not answer at boot, so drive() does
+  // nothing. Reported in telemetry.
+  virtual bool ready() const = 0;
 
  protected:
   ~Motors() {}

@@ -28,6 +28,7 @@ Rover::Status sampleStatus() {
   status.haltReason = nullptr;
   status.hasScan = true;
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) status.scanCm[i] = 100.0f + i;
+  status.motorsReady = true;
   return status;
 }
 
@@ -66,6 +67,7 @@ void test_telemetry_carries_every_key_clients_read(void) {
   TEST_ASSERT_EQUAL_STRING("AUTONOMOUS", doc["mode"]);
   TEST_ASSERT_EQUAL_STRING("MOVE_FORWARD", doc["move"]);
   TEST_ASSERT_TRUE(doc["moving"].as<bool>());
+  TEST_ASSERT_TRUE(doc["motorsReady"].as<bool>());
   TEST_ASSERT_EQUAL_FLOAT(41.5f, doc["temperature"].as<float>());
   TEST_ASSERT_EQUAL_STRING("CRUISE", doc["phase"]);
   TEST_ASSERT_FALSE(doc["halt"].is<const char*>());

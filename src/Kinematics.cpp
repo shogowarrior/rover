@@ -12,8 +12,6 @@ static_assert(tuning::MOTOR_SPEED_LIMIT <= MOTOR_SPEED_MAX,
 
 namespace {
 
-constexpr float PI_F = 3.14159265358979323846f;
-
 int clampInt(int value, int lo, int hi) {
   if (value < lo) return lo;
   if (value > hi) return hi;

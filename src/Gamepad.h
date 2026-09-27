@@ -3,14 +3,16 @@
 
 #include <stdint.h>
 
-#include "Kinematics.h"
+#include "GamepadSession.h"
 #include "Rover.h"
 
 // PS3 gamepad input, compiled in only when ROVER_ENABLE_GAMEPAD is set (see
 // Features.h). Without it, begin() and update() do nothing.
 //
-// The left stick translates in all eight directions, L2 and R2 rotate left
-// and right, and START hands control back to autonomous exploration.
+// The left stick translates in all eight directions, L2 rotates left
+// (counter-clockwise) and R2 right, and START hands control back to
+// autonomous exploration. GamepadSession holds those rules; this class only
+// carries the controls across from the Bluetooth task.
 //
 // The PS3 library reports on its Bluetooth task (core 0), while the rest of
 // the firmware runs on the loop task (core 1). Its callback therefore only
@@ -24,17 +26,12 @@ class Gamepad {
   // Pair with the controller. `hostMac` is the address stored in the pad.
   void begin(const char* hostMac);
 
-  // Call every loop. Forwards the controls to the rover: a held stick is
-  // re-sent every tuning::GAMEPAD_REFRESH_MS so the rover keeps moving, a
-  // release sends one STOP, and a pad that goes silent stops what it drove.
+  // Call every loop: hands the latest controls to the session.
   void update(uint32_t now);
 
  private:
-  Rover& rover;
+  GamepadSession session;
   bool started = false;
-  bool driving = false;  // the last thing sent was a motion
-  kinematics::DriveRequest lastSent = {STOP, 0};
-  uint32_t lastSentMs = 0;
 };
 
 #endif

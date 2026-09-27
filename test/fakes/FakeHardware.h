@@ -24,6 +24,10 @@ class FakeMotors final : public Motors {
     releaseCalls++;
   }
 
+  bool ready() const override { return isReady; }
+
+  bool isReady = true;
+
   const MovePattern* lastPattern = nullptr;
   uint8_t lastSpeed = 0;
   bool driving = false;

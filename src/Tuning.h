@@ -27,6 +27,11 @@ constexpr int MOTOR_SPEED_LIMIT = 255;
 // this window, whatever duration it asked for.
 constexpr int COMMAND_DURATION_MAX_MS = 1500;
 
+// A held move is rewritten to the motors at least this often, even though the
+// wheels are already doing it, to repair a lost I2C write. Well above the
+// panel's 200 ms repeat, so most repeats cost no bus traffic.
+constexpr uint32_t MOTOR_REFRESH_MS = 500;
+
 // Duration of a command that names none: WebSocket JSON without "duration",
 // and every gamepad command.
 constexpr int DEFAULT_MOVE_DURATION_MS = 750;
@@ -53,6 +58,10 @@ constexpr uint32_t GAMEPAD_REFRESH_MS = 200;
 // The pad reports continuously while connected. This long without a report
 // means it is gone, and whatever it was driving stops.
 constexpr uint32_t GAMEPAD_SILENCE_MS = 500;
+// A new speed in the same direction is sent at most this often (a new
+// direction goes at once); each costs a four-motor rewrite. STICK_SEND_MS in
+// extras/joystick/control.js is the panel's copy of the same rule.
+constexpr uint32_t GAMEPAD_SPEED_CHANGE_MS = 100;
 
 // --- Network ---------------------------------------------------------------
 

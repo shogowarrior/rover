@@ -4,7 +4,7 @@
 #include "Rover.h"
 #include "Tuning.h"
 
-// The invariants CLAUDE.md lists, as tests: motors released by deadline,
+// The invariants AGENTS.md lists, as tests: motors released by deadline,
 // external input clamped, autonomous and manual never both drive, and every
 // way of losing control ends with the motors released.
 
@@ -209,7 +209,7 @@ void test_stop_keeps_the_mode(void) {
 void test_losing_the_link_stops_exploration(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   uint32_t now = runUntilCruising(0);
-  rover->onLinkLost(now);
+  rover->standDown(now);
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
   const int drivesSoFar = motors->driveCalls;
@@ -242,6 +242,56 @@ void test_status_has_no_scan_until_every_bearing_is_measured(void) {
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) TEST_ASSERT_EQUAL_FLOAT(123.0f, status.scanCm[i]);
 }
 
+// In manual mode setMode() is a no-op, so only standDown's own release()
+// stops a rover a person is driving when the WiFi drops.
+void test_losing_the_link_while_driven_releases_at_once(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(MOVE_FORWARD, 100, 1500, 0);
+  rover->standDown(10);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+}
+
+// An operator pressing Autonomous on a rover that halted "boxed in" is saying
+// the way is open. Before, a resume while already autonomous did nothing, so
+// only unplugging it recovered the explorer.
+void test_resume_restarts_a_halted_explorer(void) {
+  scanner->setAll(10.0f);  // boxed in
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = runFor(0, 40000);
+  TEST_ASSERT_EQUAL_STRING("HALTED", rover->status().phase);
+  scanner->setAll(200.0f);
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("SWEEP", rover->status().phase);
+  runUntilCruising(now);
+}
+
+// A resume while exploring normally must not restart anything.
+void test_resume_while_exploring_changes_nothing(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  const uint32_t now = runUntilCruising(0);
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_STRING("CRUISE", rover->status().phase);
+}
+
+// The library does not report a lost I2C write, so a held move is rewritten
+// every MOTOR_REFRESH_MS even though nothing changed.
+void test_held_move_is_rewritten_periodically(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  for (uint32_t t = 0; t < tuning::MOTOR_REFRESH_MS; t += 200) rover->command(MOVE_FORWARD, 100, 400, t);
+  TEST_ASSERT_EQUAL_INT(1, motors->driveCalls);
+  rover->command(MOVE_FORWARD, 100, 400, tuning::MOTOR_REFRESH_MS);
+  TEST_ASSERT_EQUAL_INT(2, motors->driveCalls);
+}
+
+void test_status_reports_a_missing_motor_driver(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  TEST_ASSERT_TRUE(rover->status().motorsReady);
+  motors->isReady = false;
+  TEST_ASSERT_FALSE(rover->status().motorsReady);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_command_drives_until_its_deadline);
@@ -258,6 +308,11 @@ int main(int, char**) {
   RUN_TEST(test_resume_autonomous_hands_control_back);
   RUN_TEST(test_stop_keeps_the_mode);
   RUN_TEST(test_losing_the_link_stops_exploration);
+  RUN_TEST(test_losing_the_link_while_driven_releases_at_once);
+  RUN_TEST(test_resume_restarts_a_halted_explorer);
+  RUN_TEST(test_resume_while_exploring_changes_nothing);
+  RUN_TEST(test_held_move_is_rewritten_periodically);
+  RUN_TEST(test_status_reports_a_missing_motor_driver);
   RUN_TEST(test_status_reports_what_the_wheels_are_doing);
   RUN_TEST(test_status_has_no_scan_until_every_bearing_is_measured);
   return UNITY_END();

@@ -12,7 +12,7 @@ enum WheelDirection { WHEEL_FREE, WHEEL_FORWARD, WHEEL_BACKWARD };
 
 // Wheel order used by every pattern and by DriveTrain, which maps each wheel
 // to its motor-shield terminal (pins::MOTOR_TERMINAL).
-enum Wheel { FRONT_LEFT, FRONT_RIGHT, REAR_RIGHT, REAR_LEFT, WHEEL_COUNT };
+enum Wheel { WHEEL_FRONT_LEFT, WHEEL_FRONT_RIGHT, WHEEL_REAR_RIGHT, WHEEL_REAR_LEFT, WHEEL_COUNT };
 
 struct MovePattern {
   MoveCode move;

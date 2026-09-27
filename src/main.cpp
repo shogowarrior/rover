@@ -11,7 +11,8 @@
 #include "Tuning.h"
 
 // The whole object graph, in one place. Everything is allocated statically and
-// wired by reference; nothing else in the firmware is global.
+// wired by reference. The only other global is the gamepad's callback mailbox
+// in Gamepad.cpp, which Ps3.attach()'s plain function pointer forces.
 namespace {
 
 DriveTrain driveTrain;
@@ -42,7 +43,9 @@ void setup() {
   network.begin();
 
   // From here on nothing may block. The watchdog resets the board if one pass
-  // of loop() ever takes longer than 5 s, and the reset releases the motors.
+  // of loop() ever takes longer than 5 s; the rebooted setup() releases the
+  // motors in driveTrain.begin(). The shield's PWM chip is not reset with the
+  // ESP32, so the wheels run on through the reboot (about half a second).
   enableLoopWDT();
 }
 

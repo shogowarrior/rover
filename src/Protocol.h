@@ -13,12 +13,14 @@
 // client/rover.ipynb and extras/joystick/control.js.
 //
 //   client -> rover   {"move": <MoveCode>, "speed": 0..255, "duration": ms}
-//   rover -> clients  {"mode", "move", "moving", "temperature", "phase"?,
-//                      "halt"?, "distanceLeft"?, "distanceFrontLeft"?,
+//   rover -> clients  {"mode", "move", "moving", "temperature", "motorsReady",
+//                      "phase"?, "halt"?, "distanceLeft"?, "distanceFrontLeft"?,
 //                      "distanceFront"?, "distanceFrontRight"?, "distanceRight"?}
 //
 // "phase" and "halt" appear only while exploring; the distances appear once
 // every bearing has been measured. A distance of 999 means no echo.
+// "motorsReady" is false when the motor shield did not answer at boot, which
+// otherwise looks like a rover that reports moves but never moves.
 namespace protocol {
 
 struct Command {

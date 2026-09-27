@@ -23,6 +23,7 @@ size_t writeTelemetry(const Rover::Status& status, float temperatureC, char* out
   doc["move"] = moveName(status.move);
   doc["moving"] = status.moving;
   doc["temperature"] = temperatureC;
+  doc["motorsReady"] = status.motorsReady;
   if (status.phase != nullptr) doc["phase"] = status.phase;
   if (status.haltReason != nullptr) doc["halt"] = status.haltReason;
 

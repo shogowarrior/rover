@@ -14,6 +14,8 @@
 
 namespace kinematics {
 
+constexpr float PI_F = 3.14159265358979323846f;
+
 // A joystick axis reports -128..127. The magnitude of two axes therefore
 // reaches ~180 on a perfect diagonal, which is why speed mapping clamps
 // magnitude before scaling -- otherwise a diagonal push returns 1.41x the
@@ -27,9 +29,10 @@ constexpr int MOTOR_SPEED_MAX = 255;
 // HCSR04 2.0.0's measureDistanceCm() returns -1 for every failed measurement:
 // no echo within range (~400 cm), an echo deflected away by an angled surface,
 // and a dead or unplugged sensor alike. It never returns 0. For avoidance a
-// missing echo is read as "nothing within range", so it normalises to "far";
-// Explorer separately halts when a whole sweep hears nothing, which is how a
-// dead sensor shows up. See normalizeDistance.
+// missing echo is read as "nothing within range", so it normalises to "far".
+// Explorer never drives forward on a sweep that heard nothing, and halts after
+// ExploreParams::silentSweepsToHalt of them in a row, which is how a dead
+// sensor shows up. See normalizeDistance.
 constexpr float DISTANCE_FAR_CM = 999.0f;
 
 // Clamp a speed from an untrusted source into what the motors may be given

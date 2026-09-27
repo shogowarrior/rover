@@ -35,6 +35,7 @@ class Rover {
     const char* haltReason;  // why exploration is halted, else nullptr
     bool hasScan;            // false until every bearing has been measured
     float scanCm[Explorer::BEARING_COUNT];
+    bool motorsReady;        // false when the motor driver did not answer at boot
   };
 
   Rover(Motors& motors, RangeScanner& scanner);
@@ -48,17 +49,19 @@ class Rover {
 
   // A command from any external source, straight off the wire: `move` is the
   // raw integer and is validated here. Switches to MODE_MANUAL, except for
-  // RESUME_AUTONOMOUS, which switches back. An unknown code stops the rover.
+  // RESUME_AUTONOMOUS, which switches back -- or, already exploring, restarts
+  // a halted explorer. An unknown code stops the rover.
   void command(int move, int speed, int durationMs, uint32_t now);
 
-  // Release the motors, keeping the mode: a client disconnected or an OTA
-  // flash is starting. In autonomous mode exploration carries on.
+  // Release the motors, keeping the mode: the client driving the rover
+  // disconnected. In autonomous mode exploration carries on.
   void stop();
 
-  // The network link is gone, so no STOP can arrive any more: release the
-  // motors and drop to manual. RESUME_AUTONOMOUS restores exploration once a
-  // client can reach the rover again.
-  void onLinkLost(uint32_t now);
+  // Release the motors and drop to manual: no STOP could reach the rover any
+  // more (the WiFi link dropped), or its firmware is being replaced (an OTA
+  // flash started, which leaves it still whether the upload succeeds or not).
+  // RESUME_AUTONOMOUS restores exploration once a client can reach it again.
+  void standDown(uint32_t now);
 
   Mode mode() const { return currentMode; }
   Status status() const;
@@ -75,7 +78,8 @@ class Rover {
   MoveCode currentMove = STOP;
   int currentSpeed = 0;
   bool moving = false;
-  uint32_t moveDeadline = 0;  // meaningful only while moving
+  uint32_t moveDeadline = 0;     // meaningful only while moving
+  uint32_t lastMotorWriteAt = 0; // meaningful only while moving
 };
 
 #endif

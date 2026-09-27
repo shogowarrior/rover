@@ -2,14 +2,10 @@
 
 #include "Kinematics.h"
 #include "MovePatterns.h"
+#include "Timing.h"
 #include "Tuning.h"
 
-namespace {
-
-// Wrap-safe: millis() rolls over every ~49.7 days.
-bool reached(uint32_t now, uint32_t deadline) { return static_cast<int32_t>(now - deadline) >= 0; }
-
-}  // namespace
+using timing::reached;
 
 Rover::Rover(Motors& motors, RangeScanner& scanner) : motors(motors), explorer(scanner) {}
 
@@ -33,8 +29,16 @@ void Rover::update(uint32_t now) {
 void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   // The only command that gives control back. setMode() stops the motors and
   // restarts exploration from a fresh sweep, not from whatever the rover last
-  // saw before a human took over.
+  // saw before a human took over. Already exploring, it restarts an explorer
+  // that halted: the operator is saying the way is open now.
   if (move == RESUME_AUTONOMOUS) {
+    if (currentMode == MODE_AUTONOMOUS) {
+      if (explorer.phase() == Explorer::HALTED) {
+        release();
+        explorer.reset(now);
+      }
+      return;
+    }
     setMode(MODE_AUTONOMOUS, now);
     return;
   }
@@ -51,7 +55,7 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
 
 void Rover::stop() { release(); }
 
-void Rover::onLinkLost(uint32_t now) {
+void Rover::standDown(uint32_t now) {
   release();
   setMode(MODE_MANUAL, now);
 }
@@ -68,6 +72,7 @@ Rover::Status Rover::status() const {
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) {
     status.scanCm[i] = explorer.distanceCm(static_cast<Explorer::Bearing>(i));
   }
+  status.motorsReady = motors.ready();
   return status;
 }
 
@@ -91,11 +96,17 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   }
 
   // Clients hold a move by repeating it (the panel every 200 ms, exploration
-  // on every clear ping). The wheels are already doing it, so only the
-  // deadline moves: rewriting all four motors is ~7 ms of I2C each time.
-  // release() above always writes -- stopping is never skipped.
-  const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed;
-  if (!alreadyDoingIt) motors.drive(*pattern, static_cast<uint8_t>(speed));
+  // on every clear ping). The wheels are already doing it, so usually only
+  // the deadline moves: rewriting all four motors is ~7 ms of I2C each time.
+  // Every MOTOR_REFRESH_MS the pattern is written again anyway, so a write the
+  // bus lost -- the library does not report one -- is repaired while the
+  // rover moves. release() above always writes: stopping is never skipped.
+  const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed &&
+                              !reached(now, lastMotorWriteAt + tuning::MOTOR_REFRESH_MS);
+  if (!alreadyDoingIt) {
+    motors.drive(*pattern, static_cast<uint8_t>(speed));
+    lastMotorWriteAt = now;
+  }
 
   currentMove = move;
   currentSpeed = speed;

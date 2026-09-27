@@ -4,21 +4,22 @@
 #include <stdlib.h>
 
 #include "Kinematics.h"
+#include "Timing.h"
+
+using timing::reached;
+using timing::since;
 
 namespace {
-
-constexpr float PI_F = 3.14159265358979323846f;
 
 const char* const HALT_BOXED_IN = "boxed in";
 const char* const HALT_SENSOR_SILENT = "sensor silent";
 
-// Wrap-safe time arithmetic for 32-bit millisecond clocks.
-bool reached(uint32_t now, uint32_t deadline) { return static_cast<int32_t>(now - deadline) >= 0; }
-int32_t elapsed(uint32_t now, uint32_t since) { return static_cast<int32_t>(now - since); }
-
 bool isEcho(float cm) { return cm < kinematics::DISTANCE_FAR_CM; }
 
-float radians(int degrees) { return degrees * PI_F / 180.0f; }
+float radians(int degrees) { return degrees * kinematics::PI_F / 180.0f; }
+
+// True once `ms` (an ExploreParams duration) has passed since `start`.
+bool lasted(uint32_t now, uint32_t start, int ms) { return since(now, start) >= static_cast<uint32_t>(ms); }
 
 Explorer::Motion motion(MoveCode move, int durationMs) {
   Explorer::Motion m;
@@ -37,25 +38,13 @@ Explorer::Motion noMotion() { return Explorer::Motion(); }
 Explorer::Explorer(RangeScanner& scanner, const ExploreParams& params)
     : scanner(scanner), params(params) {
   for (int i = 0; i < BEARING_COUNT; i++) {
-    scanCm[i] = kinematics::DISTANCE_FAR_CM;
-    measured[i] = false;
+    scan.cm[i] = kinematics::DISTANCE_FAR_CM;
+    scan.measured[i] = false;
   }
 }
 
 void Explorer::reset(uint32_t now) {
-  committedDirection = 0;
-  turnStepsCommitted = 0;
-  escapeSteps = 0;
-  consecutiveStucks = 0;
-  sidesteps = 0;
-  silentSweeps = 0;
-  reverseBudgetMs = 0;
-  cruiseEndedByCap = false;
-  waitForClearPath = false;
-  sidestepPending = false;
-  haltWhy = nullptr;
-  // strafeSign is kept: it describes the wiring, which a mode change does
-  // not alter.
+  episode = Episode();
   startSweep(now);
 }
 
@@ -67,9 +56,12 @@ Explorer::Motion Explorer::update(uint32_t now, bool motorsIdle) {
       return stepCruise(now);
     case TURN:
       return stepTurn(now, motorsIdle);
-    case BACKOFF:
+    case BACKOFF: {
       if (!motorsIdle || !reached(now, phaseUntil)) return noMotion();
-      return startTurn(now, committedDirection, takeEscapeSteps(), true);
+      const int steps = episode.escapeSteps;  // used up by this one turn
+      episode.escapeSteps = 0;
+      return startTurn(now, episode.committedDirection, steps, true);
+    }
     case SIDESTEP:
       if (!motorsIdle || !reached(now, phaseUntil)) return noMotion();
       return startSweep(now);
@@ -98,7 +90,7 @@ const char* Explorer::phaseName() const {
 
 bool Explorer::hasScan() const {
   for (int i = 0; i < BEARING_COUNT; i++) {
-    if (!measured[i]) return false;
+    if (!scan.measured[i]) return false;
   }
   return true;
 }
@@ -111,23 +103,23 @@ Explorer::Motion Explorer::startSweep(uint32_t now) {
   currentPhase = SWEEP;
   // Back and forth rather than always left to right: the servo never has to
   // swing across the whole arc before the first reading of a sweep.
-  sweepLeftToRight = !sweepLeftToRight;
-  sweepStep = 0;
-  sweepHeardEcho = false;
-  aim(now, bearingDeg(sweepBearing(0)));
+  scan.leftToRight = !scan.leftToRight;
+  scan.step = 0;
+  scan.heardEcho = false;
+  aim(now, angleOf(sweepBearing(0)));
   return stopMotion();
 }
 
 Explorer::Motion Explorer::stepSweep(uint32_t now, bool decideWhenDone) {
   if (!readyToPing(now)) return noMotion();
 
-  record(sweepBearing(sweepStep), ping(now));
-  if (++sweepStep < BEARING_COUNT) {
-    aim(now, bearingDeg(sweepBearing(sweepStep)));
+  record(sweepBearing(scan.step), ping(now));
+  if (++scan.step < BEARING_COUNT) {
+    aim(now, angleOf(sweepBearing(scan.step)));
     return noMotion();
   }
 
-  silentSweeps = sweepHeardEcho ? 0 : silentSweeps + 1;
+  episode.silentSweeps = scan.heardEcho ? 0 : episode.silentSweeps + 1;
   if (!decideWhenDone) {
     startSweep(now);
     return noMotion();
@@ -136,43 +128,57 @@ Explorer::Motion Explorer::stepSweep(uint32_t now, bool decideWhenDone) {
 }
 
 Explorer::Motion Explorer::decide(uint32_t now) {
-  if (sidestepPending) checkSidestepWentAway();
+  if (episode.sidestep.pending) checkSidestepWentAway();
 
   // A working sonar hears something in a room -- a wall, a chair, the floor
   // at an angle. Hearing nothing sweep after sweep is what a disconnected or
   // dead sensor looks like, and every no-echo reads as open space.
-  if (silentSweeps >= params.silentSweepsToHalt) return halt(now, HALT_SENSOR_SILENT);
+  if (episode.silentSweeps >= params.silentSweepsToHalt) return halt(now, HALT_SENSOR_SILENT);
 
   // A sweep that heard nothing at all says nothing about the way ahead, so
   // it is never grounds to drive forward. Turn a little in place and look
   // again; a working sensor soon finds a wall, and a dead one halts above.
-  if (!sweepHeardEcho) {
-    cruiseEndedByCap = false;
+  if (!scan.heardEcho) {
+    episode.cruiseEndedByCap = false;
     return startTurn(now, wanderDirection(), params.wanderSteps, false);
   }
 
+  const int sideStop = episode.sideStopDeg;
+  episode.sideStopDeg = 0;
+
   if (!pathBlocked(params.goCm)) {
-    waitForClearPath = false;
-    if (cruiseEndedByCap && params.wanderSteps > 0) {
-      // Nothing stopped the last cruise. Turn a little anyway: it spreads
-      // coverage, and bounds how long the rover can push against something
-      // the sonar cannot see.
-      cruiseEndedByCap = false;
-      return turnOrSidestep(now, wanderDirection(), params.wanderSteps, false);
+    episode.waitForClearPath = false;
+    // The small turns below are optional, so they are skipped where rotating
+    // would swing a corner into a wall: in a corridor the rover drives on.
+    if (roomToRotate()) {
+      if (sideStop != 0) {
+        // The last cruise ended on something the weave saw off to one side,
+        // at an angle this sweep does not measure. Turn one step away from it
+        // rather than drive straight back into it.
+        return turnOrSidestep(now, sideStop > 0 ? -1 : +1, 1, false);
+      }
+      if (episode.cruiseEndedByCap && params.wanderSteps > 0) {
+        // Nothing stopped the last cruise. Turn a little anyway: it spreads
+        // coverage, and bounds how long the rover can push against something
+        // the sonar cannot see.
+        episode.cruiseEndedByCap = false;
+        return turnOrSidestep(now, wanderDirection(), params.wanderSteps, false);
+      }
+      const int veer = veerDirection();
+      if (veer != 0) return turnOrSidestep(now, veer, 1, false);
     }
-    const int veer = veerDirection();
-    if (veer != 0) return turnOrSidestep(now, veer, 1, false);
-    sidesteps = 0;
+    episode.cruiseEndedByCap = false;
+    episode.sidesteps = 0;
     return startCruise(now);
   }
 
-  cruiseEndedByCap = false;
+  episode.cruiseEndedByCap = false;
   // After turning a full circle without finding a way out, only a path that
   // opens by itself resumes exploring; the rover does not spin again.
-  if (waitForClearPath) return halt(now, HALT_BOXED_IN);
-  if (committedDirection == 0) committedDirection = chooseTurnDirection();
-  if (scanCm[FRONT] < params.minTurnClearCm && reverseBudgetMs > 0) return startBackoff(now);
-  return turnOrSidestep(now, committedDirection, takeEscapeSteps(), true);
+  if (episode.waitForClearPath) return halt(now, HALT_BOXED_IN);
+  if (episode.committedDirection == 0) episode.committedDirection = chooseTurnDirection();
+  if (scan.cm[FRONT] < params.minTurnClearCm && episode.reverseBudgetMs > 0) return startBackoff(now);
+  return turnOrSidestep(now, episode.committedDirection, 0, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,79 +187,86 @@ Explorer::Motion Explorer::decide(uint32_t now) {
 
 Explorer::Motion Explorer::startCruise(uint32_t now) {
   currentPhase = CRUISE;
-  cruiseStart = now;
-  weaveStep = 0;
+  cruise = Cruise();
+  cruise.start = now;
   aim(now, 0);
 
-  const float front = scanCm[FRONT];
-  lastFrontEchoCm = isEcho(front) ? front : -1;
-  lastFrontEchoAt = now;
-  hasStuckReference = isEcho(front);
-  stuckReferenceCm = front;
-  stuckReferenceAt = now;
-
+  const float front = scan.cm[FRONT];
+  if (isEcho(front)) {
+    cruise.lastFrontEchoCm = front;
+    cruise.lastFrontEchoAt = now;
+    cruise.hasStuckReference = true;
+    cruise.stuckReferenceCm = front;
+    cruise.stuckReferenceAt = now;
+  }
   return motion(MOVE_FORWARD, params.cruiseLeaseMs);
 }
 
 Explorer::Motion Explorer::stepCruise(uint32_t now) {
-  if (elapsed(now, cruiseStart) >= params.cruiseMaxMs) {
-    cruiseEndedByCap = true;
-    finishCruise(now);
-    return startSweep(now);
+  if (lasted(now, cruise.start, params.cruiseMaxMs)) {
+    episode.cruiseEndedByCap = true;
+    return endCruise(now);
   }
   if (!readyToPing(now)) return noMotion();
 
-  const int bearing = lookBearing;
+  const int angle = sonar.lookDeg;
   const float raw = ping(now);
   const float cm = kinematics::normalizeDistance(raw);
 
-  if (bearing == 0) {
-    scanCm[FRONT] = cm;
+  // Looks that hear nothing at all never renew the lease for long: a sensor
+  // that dies mid-cruise stops the rover within one weave, and the silent
+  // sweeps that follow halt it.
+  cruise.silentLooks = isEcho(cm) ? 0 : cruise.silentLooks + 1;
+  if (cruise.silentLooks >= params.silentCruiseLooks) return endCruise(now);
+
+  if (angle == 0) {
+    scan.cm[FRONT] = cm;
     // An obstacle does not vanish as the rover closes on it. A near echo
     // that turns into silence was deflected away, not left behind.
-    if (!isEcho(cm) && echoVanished(now)) {
-      finishCruise(now);
-      return startSweep(now);
-    }
+    if (!isEcho(cm) && echoVanished(now)) return endCruise(now);
     if (isEcho(cm)) {
-      if (notClosing(cm, now)) return escapeStuck(now);
-      lastFrontEchoCm = cm;
-      lastFrontEchoAt = now;
+      if (notChanging(cm, now)) return escapeStuck(now);
+      cruise.lastFrontEchoCm = cm;
+      cruise.lastFrontEchoAt = now;
     }
   }
 
-  if (inPath(bearing, cm, params.stopCm)) {
-    finishCruise(now);
-    return startSweep(now);
+  if (inPath(angle, cm, params.stopCm)) {
+    episode.sideStopDeg = angle;
+    return endCruise(now);
   }
 
   const int weave[4] = {0, params.weaveDeg, 0, -params.weaveDeg};
-  weaveStep = (weaveStep + 1) % 4;
-  aim(now, weave[weaveStep]);
+  cruise.weaveStep = (cruise.weaveStep + 1) % 4;
+  aim(now, weave[cruise.weaveStep]);
   return motion(MOVE_FORWARD, params.cruiseLeaseMs);  // a clear look renews the lease
 }
 
-void Explorer::finishCruise(uint32_t now) {
-  const int32_t ran = elapsed(now, cruiseStart);
-  reverseBudgetMs += ran;
-  if (ran >= params.commitReleaseMs) {
-    // A real stretch of open floor: the corner is behind the rover now.
-    committedDirection = 0;
-    turnStepsCommitted = 0;
-    consecutiveStucks = 0;
+// The rover drove: remember how far, for reversing, then look again.
+Explorer::Motion Explorer::endCruise(uint32_t now) {
+  const uint32_t ran = since(now, cruise.start);
+  episode.reverseBudgetMs += static_cast<int32_t>(ran);
+  // Any drive means the last avoidance turn found a way out: the full-circle
+  // count starts over. Only a long one forgets the turn direction too.
+  episode.turnStepsCommitted = 0;
+  if (ran >= static_cast<uint32_t>(params.commitReleaseMs)) {
+    episode.committedDirection = 0;
+    episode.consecutiveStucks = 0;
   }
+  return startSweep(now);
 }
 
 Explorer::Motion Explorer::escapeStuck(uint32_t now) {
-  // The sonar says clear but the rover is not getting closer: something
-  // below the beam is holding it. Back off and turn well clear, further each
-  // time in a row. Not finishCruise(): time spent pushing against something
-  // is not open floor, so it must not release the turn direction or reset
-  // the count -- that made the rover ping-pong at a wide low obstacle.
-  reverseBudgetMs += elapsed(now, cruiseStart);
-  if (consecutiveStucks < 4) consecutiveStucks++;
-  escapeSteps = params.stuckTurnSteps * consecutiveStucks;
-  if (committedDirection == 0) committedDirection = alternateDirection();
+  // The sonar says clear but nothing ahead is changing: something below the
+  // beam is holding the rover. Back off and turn well clear, further each
+  // time in a row. Not endCruise(): time spent pushing against something is
+  // not open floor, so it must not release the turn direction or reset the
+  // counts -- that made the rover ping-pong at a wide low obstacle. Only the
+  // driving before the stuck window counts as ground to reverse over.
+  episode.reverseBudgetMs += static_cast<int32_t>(since(cruise.stuckReferenceAt, cruise.start));
+  if (episode.consecutiveStucks < 4) episode.consecutiveStucks++;
+  episode.escapeSteps = params.stuckTurnSteps * episode.consecutiveStucks;
+  if (episode.committedDirection == 0) episode.committedDirection = alternateDirection();
   return startBackoff(now);
 }
 
@@ -270,59 +283,59 @@ Explorer::Motion Explorer::turnOrSidestep(uint32_t now, int direction, int minSt
 
 Explorer::Motion Explorer::startTurn(uint32_t now, int direction, int minSteps, bool untilClear) {
   currentPhase = TURN;
-  turnDirection = direction != 0 ? direction : alternateDirection();
-  stepsThisTurn = 0;
-  minTurnSteps = minSteps;
-  turnUntilClear = untilClear;
-  reverseBudgetMs = 0;  // the heading changes: the ground behind is unknown
+  turn = Turn();
+  turn.direction = direction != 0 ? direction : alternateDirection();
+  turn.minSteps = minSteps;
+  turn.untilClear = untilClear;
+  episode.reverseBudgetMs = 0;  // the heading changes: the ground behind is unknown
   return rotateStep(now);
 }
 
 Explorer::Motion Explorer::rotateStep(uint32_t now) {
-  if (turnUntilClear && ++turnStepsCommitted > params.maxTurnSteps) {
-    waitForClearPath = true;
+  if (turn.untilClear && ++episode.turnStepsCommitted > params.maxTurnSteps) {
+    episode.waitForClearPath = true;
     return halt(now, HALT_BOXED_IN);
   }
-  stepsThisTurn++;
-  clearLooks = 0;
-  turnStage = ROTATING;
+  turn.steps++;
+  turn.clearLooks = 0;
+  turn.stage = ROTATING;
   phaseUntil = now + params.turnStepMs;
   aim(now, 0);
-  return motion(turnDirection > 0 ? ROTATE_COUNTERCLOCKWISE : ROTATE_CLOCKWISE,
-                params.turnStepMs);
+  return motion(turn.direction > 0 ? ROTATE_COUNTERCLOCKWISE : ROTATE_CLOCKWISE, params.turnStepMs);
 }
 
 Explorer::Motion Explorer::stepTurn(uint32_t now, bool motorsIdle) {
-  if (turnStage == ROTATING) {
+  if (turn.stage == ROTATING) {
     if (motorsIdle && reached(now, phaseUntil)) {
-      turnStage = SETTLING;
+      turn.stage = SETTLING;
       phaseUntil = now + params.turnSettleMs;
     }
     return noMotion();
   }
-  if (turnStage == SETTLING) {
+  if (turn.stage == SETTLING) {
     if (!reached(now, phaseUntil)) return noMotion();
-    turnStage = LOOKING;
+    turn.stage = LOOKING;
   }
   if (!readyToPing(now)) return noMotion();
 
   const float front = kinematics::normalizeDistance(ping(now));
-  scanCm[FRONT] = front;
+  scan.cm[FRONT] = front;
 
-  if (stepsThisTurn < minTurnSteps) return rotateStep(now);
-  if (!turnUntilClear) return startSweep(now);
+  if (turn.steps < turn.minSteps) return rotateStep(now);
+  if (!turn.untilClear) return startSweep(now);
   if (front <= params.goCm) return rotateStep(now);
   // Clear ahead. Look once more to be sure, then sweep the whole way ahead
   // before moving: the front beam alone misses what is off to either side.
-  if (++clearLooks < 2) return noMotion();
+  if (++turn.clearLooks < 2) return noMotion();
   return startSweep(now);
 }
 
 Explorer::Motion Explorer::startBackoff(uint32_t now) {
   // Nothing watches behind the rover, so it only ever reverses over ground it
   // has just driven forward across, and never far.
-  const int32_t ms = reverseBudgetMs < params.backoffMaxMs ? reverseBudgetMs : params.backoffMaxMs;
-  reverseBudgetMs -= ms;
+  const int32_t budget = episode.reverseBudgetMs;
+  const int32_t ms = budget < params.backoffMaxMs ? budget : params.backoffMaxMs;
+  episode.reverseBudgetMs -= ms;
   currentPhase = BACKOFF;
   phaseUntil = now + static_cast<uint32_t>(ms);
   return ms > 0 ? motion(MOVE_BACKWARD, static_cast<int>(ms)) : stopMotion();
@@ -331,45 +344,45 @@ Explorer::Motion Explorer::startBackoff(uint32_t now) {
 Explorer::Motion Explorer::startSidestep(uint32_t now, int direction) {
   currentPhase = SIDESTEP;
   phaseUntil = now + params.sidestepMs;
-  sidesteps++;
-  reverseBudgetMs = 0;
+  episode.sidesteps++;
+  episode.reverseBudgetMs = 0;
 
-  sidestepFrom = direction > 0 ? RIGHT : LEFT;
-  sidestepFromBefore = lateralCm(sidestepFrom);
-  sidestepOtherBefore = lateralCm(sidestepFrom == LEFT ? RIGHT : LEFT);
-  sidestepPending = true;
+  SidestepCheck& check = episode.sidestep;
+  check.from = direction > 0 ? RIGHT : LEFT;
+  check.fromBefore = lateralCm(check.from);
+  check.otherBefore = lateralCm(check.from == LEFT ? RIGHT : LEFT);
+  check.pending = true;
 
   return motion(direction * strafeSign > 0 ? MOVE_LEFT : MOVE_RIGHT, params.sidestepMs);
 }
 
 void Explorer::checkSidestepWentAway() {
-  sidestepPending = false;
-  const Bearing other = sidestepFrom == LEFT ? RIGHT : LEFT;
+  SidestepCheck& check = episode.sidestep;
+  check.pending = false;
+  const Bearing other = check.from == LEFT ? RIGHT : LEFT;
   // Only real echoes say anything about where the rover went.
-  if (!isEcho(scanCm[sidestepFrom]) || !isEcho(scanCm[other])) return;
+  if (!isEcho(scan.cm[check.from]) || !isEcho(scan.cm[other])) return;
 
-  const float fromChange = lateralCm(sidestepFrom) - sidestepFromBefore;
-  const float otherChange = lateralCm(other) - sidestepOtherBefore;
+  const float fromChange = lateralCm(check.from) - check.fromBefore;
+  const float otherChange = lateralCm(other) - check.otherBefore;
   // Both flanks moved the wrong way. A rover pinned against the wall moves
   // neither, so being stuck is never mistaken for a mirrored mapping.
   if (fromChange < -1.0f && otherChange > 1.0f) {
-    if (++strafeContradictions == 1) {
-      strafeSign = -strafeSign;
-    }
+    if (++strafeContradictions == 1) strafeSign = -strafeSign;
   }
 }
 
 Explorer::Motion Explorer::halt(uint32_t now, const char* reason) {
   currentPhase = HALTED;
-  haltWhy = reason;
+  episode.haltWhy = reason;
   phaseUntil = now + params.haltRetryMs;
   aim(now, 0);
   return stopMotion();
 }
 
 Explorer::Motion Explorer::retryAfterHalt(uint32_t now) {
-  committedDirection = 0;
-  turnStepsCommitted = 0;
+  episode.committedDirection = 0;
+  episode.turnStepsCommitted = 0;
   return startSweep(now);
 }
 
@@ -377,45 +390,46 @@ Explorer::Motion Explorer::retryAfterHalt(uint32_t now) {
 // Looking and measuring
 // ---------------------------------------------------------------------------
 
-void Explorer::aim(uint32_t now, int bearing) {
-  int deg = 90 + params.servoDegPerBearing * bearing;
-  if (deg < 0) deg = 0;
-  if (deg > 180) deg = 180;
+void Explorer::aim(uint32_t now, int angleDeg) {
+  int target = 90 + params.servoDegPerBearing * angleDeg;
+  if (target < 0) target = 0;
+  if (target > 180) target = 180;
 
   // Settle time grows with how far the servo swings; the first aim assumes
   // the worst case because nothing is known about where it points.
-  const int travel = servoDeg < 0 ? 180 : abs(deg - servoDeg);
-  if (deg != servoDeg) {
-    scanner.aim(deg);
-    servoDeg = deg;
+  const int travel = sonar.servoDeg < 0 ? 180 : abs(target - sonar.servoDeg);
+  if (target != sonar.servoDeg) {
+    scanner.aim(target);
+    sonar.servoDeg = target;
   }
-  servoReadyAt = now + params.servoBaseMs + static_cast<uint32_t>(params.servoMsPerDeg * travel);
-  lookBearing = bearing;
+  sonar.readyAt = now + params.servoBaseMs + static_cast<uint32_t>(params.servoMsPerDeg * travel);
+  sonar.lookDeg = angleDeg;
 }
 
 bool Explorer::readyToPing(uint32_t now) const {
-  if (!reached(now, servoReadyAt)) return false;
-  return !hasPinged || elapsed(now, lastPingAt) >= params.pingIntervalMs;
+  if (!reached(now, sonar.readyAt)) return false;
+  return !sonar.hasPinged || lasted(now, sonar.lastPingAt, params.pingIntervalMs);
 }
 
 float Explorer::ping(uint32_t now) {
   const float raw = scanner.measureCm();
-  lastPingAt = now;
-  hasPinged = true;
+  sonar.lastPingAt = now;
+  sonar.hasPinged = true;
   return raw;
 }
 
 void Explorer::record(Bearing bearing, float rawCm) {
-  scanCm[bearing] = kinematics::normalizeDistance(rawCm);
-  measured[bearing] = true;
-  if (rawCm >= 0.0f) sweepHeardEcho = true;
+  scan.cm[bearing] = kinematics::normalizeDistance(rawCm);
+  scan.measured[bearing] = true;
+  if (rawCm >= 0.0f) scan.heardEcho = true;
 }
 
 Explorer::Bearing Explorer::sweepBearing(int step) const {
-  return static_cast<Bearing>(sweepLeftToRight ? step : BEARING_COUNT - 1 - step);
+  return static_cast<Bearing>(scan.leftToRight ? step : BEARING_COUNT - 1 - step);
 }
 
-int Explorer::bearingDeg(Bearing bearing) const {
+// The rover-frame angle each sweep bearing measures, degrees, positive left.
+int Explorer::angleOf(Bearing bearing) const {
   switch (bearing) {
     case LEFT: return params.sweepOuterDeg;
     case FRONT_LEFT: return params.sweepInnerDeg;
@@ -431,36 +445,46 @@ int Explorer::bearingDeg(Bearing bearing) const {
 // Reading the scan
 // ---------------------------------------------------------------------------
 
-// Is a return at this bearing inside the rover's forward path, and nearer
-// than the limit? Testing the path rather than the ray is what lets the rover
+// Is a return at this angle inside the rover's forward path, and nearer than
+// the limit? Testing the path rather than the ray is what lets the rover
 // enter a corridor whose walls are close at the sides but not in its way.
-bool Explorer::inPath(int bearing, float cm, float limitCm) const {
-  const float forward = cm * cosf(radians(bearing));
-  const float lateral = fabsf(cm * sinf(radians(bearing)));
+bool Explorer::inPath(int angleDeg, float cm, float limitCm) const {
+  const float forward = cm * cosf(radians(angleDeg));
+  const float lateral = fabsf(cm * sinf(radians(angleDeg)));
   return lateral <= params.halfWidthCm + params.pathMarginCm && forward <= limitCm;
 }
 
 bool Explorer::pathBlocked(float limitCm) const {
-  return scanCm[FRONT] <= limitCm ||
-         inPath(bearingDeg(FRONT_LEFT), scanCm[FRONT_LEFT], limitCm) ||
-         inPath(bearingDeg(FRONT_RIGHT), scanCm[FRONT_RIGHT], limitCm);
+  return scan.cm[FRONT] <= limitCm ||
+         inPath(angleOf(FRONT_LEFT), scan.cm[FRONT_LEFT], limitCm) ||
+         inPath(angleOf(FRONT_RIGHT), scan.cm[FRONT_RIGHT], limitCm);
 }
 
 float Explorer::lateralCm(Bearing bearing) const {
-  return fabsf(scanCm[bearing] * sinf(radians(bearingDeg(bearing))));
+  return fabsf(scan.cm[bearing] * sinf(radians(angleOf(bearing))));
+}
+
+// Room to rotate in place: both flanks clear of the corners' swing, or one
+// tight flank a sidestep can clear first.
+bool Explorer::roomToRotate() const {
+  const bool flanksClear = lateralCm(LEFT) >= params.rotateClearanceCm &&
+                           lateralCm(RIGHT) >= params.rotateClearanceCm;
+  return flanksClear || sidestepDirection() != 0;
 }
 
 // +1 to turn left, -1 to turn right: whichever side has more open space.
 // Distances are capped so one far reading cannot outvote a nearer wall.
 int Explorer::chooseTurnDirection() {
   const float cap = 150.0f;
-  const float left = fminf(scanCm[LEFT], cap) + fminf(scanCm[FRONT_LEFT], cap);
-  const float right = fminf(scanCm[RIGHT], cap) + fminf(scanCm[FRONT_RIGHT], cap);
+  const float left = fminf(scan.cm[LEFT], cap) + fminf(scan.cm[FRONT_LEFT], cap);
+  const float right = fminf(scan.cm[RIGHT], cap) + fminf(scan.cm[FRONT_RIGHT], cap);
   if (fabsf(left - right) < 5.0f) return alternateDirection();
   return left > right ? +1 : -1;
 }
 
-// Front clear but converging on a wall at one side: one small turn away.
+// Front clear but converging on a wall at one side: step away from it. A flank
+// this close is too close to rotate beside, so in practice this is a sidestep
+// (turnOrSidestep), taken only when the other side has room for it.
 int Explorer::veerDirection() const {
   const float close = params.halfWidthCm + params.sideMarginCm;
   const bool closeLeft = lateralCm(LEFT) <= close;
@@ -472,7 +496,7 @@ int Explorer::veerDirection() const {
 // A flank too close to rotate beside, with room on the other side: strafe
 // away first (+1 left, -1 right). Mecanum wheels can; a tank-steer rover could not.
 int Explorer::sidestepDirection() const {
-  if (sidesteps >= params.maxSidesteps || strafeContradictions >= 2) return 0;
+  if (episode.sidesteps >= params.maxSidesteps || strafeContradictions >= 2) return 0;
   const bool tightLeft = lateralCm(LEFT) < params.rotateClearanceCm;
   const bool tightRight = lateralCm(RIGHT) < params.rotateClearanceCm;
   if (tightLeft == tightRight) return 0;
@@ -482,29 +506,27 @@ int Explorer::sidestepDirection() const {
 }
 
 bool Explorer::echoVanished(uint32_t now) const {
-  return lastFrontEchoCm >= 0.0f && lastFrontEchoCm < params.suspectNearCm &&
-         elapsed(now, lastFrontEchoAt) < params.suspectWindowMs;
+  return cruise.lastFrontEchoCm >= 0.0f && cruise.lastFrontEchoCm < params.suspectNearCm &&
+         !lasted(now, cruise.lastFrontEchoAt, params.suspectWindowMs);
 }
 
-bool Explorer::notClosing(float frontCm, uint32_t now) {
-  if (!hasStuckReference) {
-    hasStuckReference = true;
-    stuckReferenceCm = frontCm;
-    stuckReferenceAt = now;
+// Stuck: a front echo that has not changed, either way, over a whole window
+// of driving. Closing is progress; so is a reading that grew because the beam
+// moved on to something farther (a chair leg passing out of the cone). Only
+// a reading that stays put means the wheels are held.
+bool Explorer::notChanging(float frontCm, uint32_t now) {
+  if (!cruise.hasStuckReference) {
+    cruise.hasStuckReference = true;
+    cruise.stuckReferenceCm = frontCm;
+    cruise.stuckReferenceAt = now;
     return false;
   }
-  if (elapsed(now, stuckReferenceAt) < params.stuckWindowMs) return false;
-  const bool stuck = stuckReferenceCm - frontCm < params.stuckProgressCm;
-  stuckReferenceCm = frontCm;
-  stuckReferenceAt = now;
-  return stuck;
-}
-
-// The minimum length of the next avoidance turn, used up by that turn.
-int Explorer::takeEscapeSteps() {
-  const int steps = escapeSteps;
-  escapeSteps = 0;
-  return steps;
+  if (!lasted(now, cruise.stuckReferenceAt, params.stuckWindowMs)) return false;
+  // Stuck: keep the reference, whose time escapeStuck() needs.
+  if (fabsf(cruise.stuckReferenceCm - frontCm) < params.stuckProgressCm) return true;
+  cruise.stuckReferenceCm = frontCm;
+  cruise.stuckReferenceAt = now;
+  return false;
 }
 
 int Explorer::alternateDirection() {

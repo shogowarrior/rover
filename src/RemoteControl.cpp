@@ -1,6 +1,7 @@
 #include "RemoteControl.h"
 
 #include "Protocol.h"
+#include "Timing.h"
 #include "Tuning.h"
 
 namespace {
@@ -42,7 +43,7 @@ void RemoteControl::begin() {
 void RemoteControl::update(uint32_t now) {
   server.loop();
 
-  if (static_cast<int32_t>(now - lastBroadcastMs) < static_cast<int32_t>(tuning::TELEMETRY_INTERVAL_MS)) return;
+  if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
   lastBroadcastMs = now;
   if (server.connectedClients() > 0) broadcastTelemetry();
 }

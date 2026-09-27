@@ -23,10 +23,12 @@ constexpr bool GAMEPAD = ROVER_ENABLE_GAMEPAD != 0;
 // DHCP reservations and MAC filters then see a different device.
 constexpr char PS3_HOST_MAC[] = "94:b9:7e:c7:af:12";
 
-// Start exploring as soon as the rover is switched on (or reset with the EN
-// button). Any other reset -- an OTA flash, a crash, the watchdog, a brownout
-// -- comes up in manual mode, so a freshly flashed or recovering rover never
-// drives off on its own. A client's "Autonomous" button resumes exploring.
+// Start exploring as soon as the rover is switched on. The ESP32 reports an EN
+// reset -- the button, a USB upload, often the serial monitor opening -- as a
+// power-on, so those explore too: flash over USB with the rover on a stand.
+// Any other reset -- an OTA flash, a crash, the watchdog, a brownout -- comes
+// up in manual mode, so an OTA-flashed or recovering rover never drives off
+// on its own. A client's "Autonomous" button resumes exploring.
 constexpr bool AUTONOMOUS_AT_POWER_ON = true;
 
 }  // namespace features

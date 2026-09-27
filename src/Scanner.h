@@ -21,7 +21,8 @@ class Scanner : public RangeScanner {
   void aim(int servoDeg) override;
 
   // Busy-waits for the echo: up to ~29 ms at the library's 400 cm range. This
-  // bounded wait is the longest pause anything on the loop takes.
+  // is the only routine busy-wait on the loop (a WebSocket handshake and an
+  // OTA upload block longer; see AGENTS.md).
   float measureCm() override;
 
   // The second HC-SR04. Wired and powered, but where it points is

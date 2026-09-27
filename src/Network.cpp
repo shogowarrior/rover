@@ -4,6 +4,7 @@
 #include <WiFi.h>
 
 #include "Features.h"
+#include "Timing.h"
 #include "Tuning.h"
 #include "config.h"  // WiFi credentials: gitignored, template in config.example.h
 
@@ -41,10 +42,10 @@ void Network::update(uint32_t now) {
     // where nobody can stop it.
     online = false;
     Serial.println("WiFi lost.");
-    rover.onLinkLost(now);
+    rover.standDown(now);
   }
 
-  if (static_cast<int32_t>(now - lastReconnectMs) < static_cast<int32_t>(tuning::WIFI_RECONNECT_INTERVAL_MS)) return;
+  if (timing::since(now, lastReconnectMs) < tuning::WIFI_RECONNECT_INTERVAL_MS) return;
   lastReconnectMs = now;
   WiFi.reconnect();
 }
@@ -109,8 +110,10 @@ void Network::configureOta() {
   ArduinoOTA
       .onStart([this]() {
         // A firmware write must not race the motors, and it blocks loop()
-        // for the whole upload, so keep the loop watchdog fed.
-        rover.stop();
+        // for the whole upload, so keep the loop watchdog fed. Standing down
+        // (manual, stopped) rather than just stopping means a failed upload
+        // leaves the rover still, as a successful one's reboot does.
+        rover.standDown(millis());
         feedLoopWDT();
         Serial.println("Starting Flash upgrade...");
       })
