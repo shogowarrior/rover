@@ -20,10 +20,18 @@ jobs:
         with:
           python-version: '3.12'
       # The Python clients and the browser panel carry their own copies of the
-      # move codes, port, distance thresholds and command timing. A drifted
-      # copy fails quietly on the robot, so fail here instead.
+      # move codes, port, distance thresholds, command timing, stick rate and
+      # scan angles, and read telemetry by key name. A drifted copy fails
+      # quietly on the robot, so fail here instead.
       - name: Check clients against the wire protocol
         run: python tools/check_protocol.py
+      # The checker reads the clients with regular expressions and never runs
+      # them, so a syntax error in one passes it. Parse each for real (Node is
+      # preinstalled on the runner).
+      - name: Parse the clients
+        run: |
+          python -m py_compile client/drive.py client/ws.py tools/check_protocol.py
+          node --check extras/joystick/control.js
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:

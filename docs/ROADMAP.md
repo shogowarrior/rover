@@ -21,6 +21,11 @@ $35-40) and raise `EXPLORE_SPEED` and `GAMEPAD_MAX_SPEED` to suit. The
 regulator also keeps speed constant as the pack drains. See section 8 of the
 [bench checklist](bench-checklist.md).
 
+**Suppress motor noise.** A 100 nF ceramic capacitor across each TT motor's
+terminals and a bulk capacitor at the shield's motor supply, a few cents of
+parts against resets and corrupted I2C writes. Same section of the bench
+checklist.
+
 **Measure the battery.** A 100 kOhm / 22 kOhm divider from the pack turns
 12.6 V into 2.3 V, safely inside the ADC's range. It must go to an ADC1 pin,
 because ADC2 does not work while WiFi is on, and to one that is free on this
@@ -115,9 +120,32 @@ input pins, which this board is short of.
 
 **A front guard at bumper height.** The servo sonar sits on the top deck, so
 low obstacles pass under its beam. Today Explorer notices only after a second
-of pushing without the front echo getting closer, and not at all if there is
-no echo ahead to measure against, in which case the 2.5 s cruise limit ends
-the push. One fixed VL53L1X low on the front covers that gap.
+of pushing with the front echo unchanged, and not at all if there is no echo
+ahead to measure against, in which case four silent looks in a row or the
+2.5 s cruise limit end the push. One fixed VL53L1X low on the front covers
+that gap.
+
+**Plan the I2C bus before adding to it.** The shield's PCA9685 answers at
+0x60 and at its all-call address 0x70, which the Adafruit library enables.
+For the parts above and the usual add-ons:
+
+| Part | Address | Note |
+|---|---|---|
+| Motor Shield V2 (PCA9685) | 0x60, all-call 0x70 | 0x60 from the address jumpers; all-call 0x70 is the PCA9685's default, and the Adafruit library enables it (MODE1 0xA1) |
+| TCA9548A multiplexer | 0x70 by default | Collides with the all-call: strap it to 0x71 or above |
+| VL53L1X | 0x29, every one | Hold the others in reset through XSHUT at boot and re-address each in turn: one GPIO per sensor |
+| INA219 current sensor | 0x40 | Free here: the shield is at 0x60, not the PCA9685's usual 0x40 |
+| MPU-6050 | 0x68 | |
+| BNO085 | 0x4A or 0x4B | Or off the bus entirely in UART-RVC mode, as recommended above |
+
+The ESP32 is a 3.3 V part, so a 5 V I2C part needs a BSS138-based shifter or
+a PCA9306, never a TXB-series auto-direction shifter (TXB0104, TXB0108),
+which misbehaves with the bus's pull-ups. The HC-SR04 echo lines only go one
+way, so a resistor divider is enough for them. The bus runs at the default
+100 kHz, where rewriting all four motors takes about 7 ms of the loop; at
+400 kHz (`Wire.setClock(400000)` after the shield starts) it would take about
+2 ms, once the shield's pull-ups have been checked on the bench: their value,
+and that they pull to 3.3 V.
 
 ## Later: map and plan
 

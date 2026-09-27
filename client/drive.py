@@ -7,8 +7,10 @@
 
 After power-on the rover explores on its own. After any other reset -- an OTA
 flash, a crash, the watchdog, a brownout -- it starts in manual and waits,
-stopped; losing WiFi drops it to manual too. Any command takes control, a stop
-included. Press `t` to hand control back and let the rover explore.
+stopped; losing WiFi, or the start of an OTA flash, drops it to manual too.
+Any command takes control, a stop included. Press `t` to hand control back and
+let the rover explore; if exploration has halted (boxed in, sensor silent),
+`t` makes it look again.
 
 Every command carries a duration and the firmware releases the motors when it
 runs out, so holding a key (and letting the terminal auto-repeat) is what keeps
@@ -16,10 +18,16 @@ the rover moving. The firmware also caps each command at 1.5 s, whatever
 duration it asks for, and that cap is the deadman: if this client dies
 mid-move, the rover stops within 1.5 s.
 
-Quitting (x, Ctrl-C, Ctrl-D) stops the rover if this session is driving it,
-and leaves an exploring rover exploring: a STOP is a command like any other,
-and would take control away from exploration. --listen sends nothing, so it
-can watch while something else drives, and closing it does not stop the rover.
+Quitting (x, Ctrl-C, Ctrl-D) stops the rover if a move this session sent may
+still be running, and otherwise sends nothing, so an exploring rover goes on
+exploring: a STOP is a command like any other, and would take control away
+from exploration. --listen sends nothing, so it can watch while something else
+drives, and closing it does not stop the rover.
+
+Reading single keys needs termios, which Windows lacks. There, and whenever
+stdin is not a terminal, this client only listens. termios is imported only
+where keys are read, so client/rover.ipynb can import this module's constants
+on any platform.
 """
 
 import argparse
@@ -27,8 +35,6 @@ import asyncio
 import json
 import os
 import sys
-import termios
-import tty
 from contextlib import contextmanager
 
 import websockets
@@ -55,10 +61,33 @@ DEFAULT_PORT = 81
 # may stutter.
 MOVE_DURATION_MS = 400
 
+# A command can reach the rover later than it left: WiFi retries, or the
+# ESP32's modem sleep (on whenever the gamepad is compiled in) holding a
+# frame for a few hundred milliseconds. Quitting treats a move as possibly
+# still running for this long past its own duration. Generous on purpose:
+# erring long costs at most one STOP to a rover someone handed back to
+# exploration within the last second; erring short walks away from wheels
+# this session set turning.
+ARRIVAL_SLACK_S = 0.5
+
 # The firmware reports a bearing that heard no echo -- nothing within the
 # sonar's range -- as this distance (kinematics::DISTANCE_FAR_CM).
 DISTANCE_FAR_CM = 999
 NO_ECHO = "no echo"
+
+# Shown in place of the move while telemetry says "motorsReady": false: the
+# motor shield did not answer when the rover booted, so no move reaches the
+# wheels, whatever the move column would say. Older firmware sends no
+# motorsReady at all, and that is not the same as false. The warning says what
+# a reset does because the operator reading it has been watching a rover that
+# could not move, likely with hands on its wiring: a power-on or EN reset
+# starts exploration, so once the shield answers the wheels turn at once.
+NO_MOTORS = "NO MOTORS"
+NO_MOTORS_WARNING = """\
+  NO MOTORS: the motor shield did not answer when the rover booted, so the
+  wheels cannot move. Check its I2C wiring and power, then reset the rover
+  with its wheels off the ground: after a power-on or the EN button it
+  starts exploring."""
 
 KEYS = {
     "w": (MOVE_FORWARD, "forward"),
@@ -115,15 +144,30 @@ HELP = """\
   ?     this help                 x    quit
 
   Telemetry is a table, a row per frame: the mode (and the phase while the
-  rover explores), the move (or why exploration halted), the distance in cm
-  on each bearing from left to right, and the board's temperature.
+  rover explores), the move (or why exploration halted; t makes it look
+  again), the distance in cm on each bearing from left to right, and the
+  board's temperature. NO MOTORS in place of the move means the motor
+  shield did not answer at boot, and the wheels cannot move.
 """
 
 
 @contextmanager
 def raw_terminal():
-    """Put stdin in cbreak mode so single keypresses arrive without Enter."""
+    """Put stdin in cbreak mode so single keypresses arrive without Enter.
+
+    Yields False, changing nothing, when there are no single keys to read:
+    stdin is not a terminal, or the platform has no termios (Windows).
+    """
     if not sys.stdin.isatty():
+        yield False
+        return
+    try:
+        # POSIX only. Imported here, not at the top, because the notebook
+        # imports this module for its constants: a top-level import stopped
+        # it on Windows with ModuleNotFoundError before it did anything.
+        import termios
+        import tty
+    except ImportError:
         yield False
         return
     fd = sys.stdin.fileno()
@@ -159,8 +203,17 @@ def out(line: str) -> None:
 async def receive(ws) -> None:
     """Print telemetry as a table, a row per frame, until the link closes."""
     rows = 0
+    warned = False  # NO_MOTORS_WARNING printed since motorsReady last read true
     try:
         async for message in ws:
+            # Every row says NO MOTORS while the shield is missing; this says
+            # once what that means and what to do about it.
+            ready = motors_ready(_frame(message))
+            if ready is False and not warned:
+                out(NO_MOTORS_WARNING)
+            if ready is not None:
+                warned = not ready
+
             if rows % HEADER_EVERY == 0:
                 out(HEADER)
             out(describe(message))
@@ -170,6 +223,23 @@ async def receive(ws) -> None:
     out("connection to the rover closed")
 
 
+def _frame(message):
+    """A telemetry frame as a dict, or None if it is not a JSON object."""
+    try:
+        data = json.loads(message)
+    except ValueError:  # not JSON, or a binary frame that is not even text
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def motors_ready(data):
+    """True or False as a frame from _frame() says in "motorsReady"; None when
+    it says nothing, as firmware from before the key existed does. Unknown
+    must not read as a missing shield."""
+    ready = data.get("motorsReady") if data else None
+    return ready if isinstance(ready, bool) else None
+
+
 def describe(message) -> str:
     """One telemetry frame as one row of the table under HEADER, for example
 
@@ -177,17 +247,17 @@ def describe(message) -> str:
       AUTO CRUISE    forward             120      85      40 no echo       8  52.2C
       AUTO HALTED    boxed in             12      15       9      14      11  52.2C
       MANUAL         rotate ccw           30      45 no echo      45      30  53.5C
+      MANUAL         NO MOTORS            30      45 no echo      45      30  53.5C
 
     The phase follows the mode only while the rover explores. Exploration
     stops the wheels when it halts, so a halted rover's move is always a stop,
-    and the reason it halted takes the move's place. The distances show as "-"
-    until every bearing has been measured once.
+    and the reason it halted takes the move's place. NO MOTORS takes it in
+    turn while the motor shield is missing: no move reaches the wheels then,
+    and that is the first thing to fix. The distances show as "-" until every
+    bearing has been measured once.
     """
-    try:
-        data = json.loads(message)
-    except ValueError:  # not JSON, or a binary frame that is not even text
-        data = None
-    if not isinstance(data, dict):
+    data = _frame(message)
+    if data is None:
         return f"  {message}"
 
     state = _text(data.get("mode"))
@@ -200,6 +270,8 @@ def describe(message) -> str:
     halt = data.get("halt")
     move = _text(data.get("move"))
     move = _text(halt) if halt else MOVE_WORDS.get(move, move)
+    if motors_ready(data) is False:
+        move = NO_MOTORS
 
     temperature = data.get("temperature")
     return _row(
@@ -261,18 +333,20 @@ async def transmit(ws) -> None:
 
     loop.add_reader(fd, on_stdin)
     speed = 64
-    # Whether this session may have the rover moving: set by a motion command,
-    # cleared by space (stop) and `t` (autonomous). Quitting sends STOP only
-    # while it is set, because a STOP would also knock an exploring rover out
-    # of autonomous mode.
-    driving = False
+    # Until when (on the loop's clock) a move this session sent may still have
+    # the wheels turning: its duration, plus ARRIVAL_SLACK_S. Quitting sends
+    # STOP only before then, because a STOP would also knock an exploring
+    # rover out of autonomous mode. A flag set by any motion and never
+    # expiring sent that STOP long after the move had run out -- to a rover
+    # the panel or the gamepad had since handed back to exploration.
+    driving_until = 0.0
 
     try:
         while True:
             key = await keys.get()
 
             if key in QUIT_KEYS:
-                if driving:
+                if loop.time() < driving_until:
                     # Never walk away leaving the rover under power.
                     await send(ws, STOP, 0)
                     out("stopped, disconnecting")
@@ -299,8 +373,13 @@ async def transmit(ws) -> None:
                 continue
 
             move, label = entry
-            await send(ws, move, 0 if move == STOP else speed)
-            driving = move not in (STOP, RESUME_AUTONOMOUS)
+            sent_speed = 0 if move == STOP else speed
+            await send(ws, move, sent_speed)
+            # Stop, autonomous and a move at speed 0 all release the motors.
+            if move in (STOP, RESUME_AUTONOMOUS) or sent_speed == 0:
+                driving_until = 0.0
+            else:
+                driving_until = loop.time() + MOVE_DURATION_MS / 1000 + ARRIVAL_SLACK_S
             out(f"-> {label}")
     finally:
         loop.remove_reader(fd)
@@ -342,7 +421,8 @@ async def main(host: str, port: int, listen_only: bool) -> int:
             out(HELP)
             with raw_terminal() as interactive:
                 if not interactive:
-                    out("stdin is not a tty; falling back to listen-only")
+                    out("cannot read single keys here (stdin is not a terminal, "
+                        "or there is no termios); listening only")
                     await receive(ws)
                     return 0
 

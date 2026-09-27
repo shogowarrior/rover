@@ -2,20 +2,38 @@
 """Check that every client agrees with the firmware on the wire protocol.
 
 The firmware defines the protocol once, in src/, but the Python clients and
-the browser panel each carry their own copies of its numbers: the move codes,
-the WebSocket port, the distances the panel colours its scan fan with, the
-distance telemetry sends for a bearing with no echo, and the timing that
-keeps a held command alive. Nothing at build time notices
-when a copy drifts, and a drifted copy fails quietly -- a key that sends the
-wrong motion, a panel that shows a clear path where the rover sees an
-obstacle, a held stick that stutters. This script is that check; CI runs it.
+the browser panel each carry their own copies of parts of it. This checks:
+
+  * the move codes (src/MoveCodes.h) in drive.py and the panel;
+  * the WebSocket port, in all three clients;
+  * the distances the panel colours its scan fan with, and the distance
+    telemetry sends for a bearing with no echo;
+  * the command timing: no client asks for more than the firmware's cap,
+    and the panel re-sends a held move before the last one runs out;
+  * the panel's limit on how often a dragged stick changes speed, which is
+    the gamepad's rule too (GAMEPAD_SPEED_CHANGE_MS);
+  * the angle the panel draws each scan wedge at, against the bearing the
+    firmware measures that distance at (ExploreParams, Explorer::angleOf);
+  * the names of the telemetry keys the panel and drive.py read, and of the
+    command fields they send, against those src/Protocol.cpp writes and
+    reads.
+
+Nothing at build time notices when a copy drifts, and a drifted copy fails
+quietly -- a key that sends the wrong motion, a panel that shows a clear path
+where the rover sees an obstacle, a held stick that stutters, a readout that
+shows a dash forever because a key was renamed. This script is that check;
+CI runs it, and so does the build hook after an edit to any file it reads.
 
     python3 tools/check_protocol.py
 
 It exits non-zero, naming the file and both values, on any mismatch. It also
-fails when a constant it looks for is missing, so that renaming one cannot
+fails when something it looks for is missing, so that renaming one cannot
 quietly switch its check off: if a client renames a constant, update the
 tables below to match.
+
+Not covered: client/rover.ipynb (an experiment, which imports its numbers
+from drive.py), and the default host address, which is per-network
+configuration every client lets the operator override.
 
 Standard library only; the files are parsed with regular expressions.
 """
@@ -31,6 +49,9 @@ ROOT = Path(__file__).resolve().parent.parent
 MOVE_CODES_H = "src/MoveCodes.h"
 TUNING_H = "src/Tuning.h"
 KINEMATICS_H = "src/Kinematics.h"
+PROTOCOL_CPP = "src/Protocol.cpp"
+EXPLORER_H = "src/Explorer.h"
+EXPLORER_CPP = "src/Explorer.cpp"
 DRIVE_PY = "client/drive.py"
 WS_PY = "client/ws.py"
 PANEL_JS = "extras/joystick/control.js"
@@ -72,7 +93,48 @@ MIRRORS = [
      "the client would connect to a port nothing listens on"),
     (WS_PY, ("PORT", "DEFAULT_PORT"), TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
+    (PANEL_JS, "STICK_SEND_MS", TUNING_H, "GAMEPAD_SPEED_CHANGE_MS",
+     "a dragged stick changes speed at most this often from the panel as from the gamepad; "
+     "each change costs the rover a four-motor rewrite"),
 ]
+
+# Where each client reads telemetry keys and writes command fields, once its
+# comments are removed (a comment that mentions data.foo is not a read):
+#   reads     patterns for a telemetry key read off the frame, which both
+#             clients hold in a variable named `data`;
+#   bearings  the table of scan keys the client shows, and a key in it;
+#   command   the object literal every command is sent as, and a field in it.
+KEY_READERS = {
+    PANEL_JS: {
+        "reads": [
+            re.compile(r"(?<![\w.$])data\.([A-Za-z_$][\w$]*)"),
+            re.compile(r"(?<![\w.$])data\[\s*[\"'](\w+)[\"']\s*\]"),
+        ],
+        "bearings": (re.compile(r"^\s*const\s+BEARINGS\s*=\s*\[(.*?)\];", re.M | re.S),
+                     re.compile(r"\bkey:\s*[\"'](\w+)[\"']")),
+        # socket.send(JSON.stringify({ move, speed, duration: MOVE_DURATION_MS }))
+        "command": (re.compile(r"\bJSON\.stringify\(\s*\{(.*?)\}\s*\)", re.S),
+                    re.compile(r"(?:^|,)\s*[\"']?([A-Za-z_$][\w$]*)[\"']?\s*(?=:|,|$)")),
+    },
+    DRIVE_PY: {
+        "reads": [
+            re.compile(r"(?<![\w.])data\.get\(\s*[\"'](\w+)[\"']"),
+            re.compile(r"(?<![\w.])data\[\s*[\"'](\w+)[\"']\s*\]"),
+        ],
+        "bearings": (re.compile(r"^BEARINGS\s*=\s*\((.*?)^\)", re.M | re.S),
+                     re.compile(r"\(\s*[\"'][^\"']*[\"']\s*,\s*[\"'](\w+)[\"']\s*\)")),
+        # json.dumps({"move": move, "speed": speed, "duration": MOVE_DURATION_MS})
+        "command": (re.compile(r"\bjson\.dumps\(\s*\{(.*?)\}\s*\)", re.S),
+                    re.compile(r"[\"'](\w+)[\"']\s*:")),
+    },
+}
+
+# Comments in each client language: whole-line and trailing ones, the latter
+# only after whitespace, so the // in "ws://" and the # in f"{x:#x}" survive.
+CLIENT_COMMENTS = {
+    ".js": (re.compile(r"/\*.*?\*/", re.S), re.compile(r"(?:^|(?<=\s))//[^\n]*", re.M)),
+    ".py": (re.compile(r"(?:^|(?<=\s))#[^\n]*", re.M),),
+}
 
 
 class Checker:
@@ -98,11 +160,25 @@ class Checker:
             except FileNotFoundError:
                 self.problem(f"{relpath}: file not found")
                 text = None
-            if text is not None and relpath.endswith(".h"):
+            if text is not None and relpath.endswith((".h", ".cpp")):
                 text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
                 text = re.sub(r"//[^\n]*", "", text)
             self._texts[relpath] = text
         return self._texts[relpath]
+
+    def code(self, relpath: str) -> str | None:
+        """A client's contents with its comments removed; None if missing.
+
+        text() keeps client comments, because the constant patterns are
+        anchored at the start of a line and a comment never matches them. The
+        key patterns are not anchored, so they read this instead.
+        """
+        text = self.text(relpath)
+        if text is None:
+            return None
+        for comment in CLIENT_COMMENTS[Path(relpath).suffix]:
+            text = comment.sub("", text)
+        return text
 
     def constant(self, relpath: str, names: str | tuple[str, ...]) -> tuple[str, float] | None:
         """(name, value) of the first of `names` defined in the file, or None."""
@@ -239,6 +315,116 @@ class Checker:
                 f"{show(duration[1])}; a held stick's command would expire before it is re-sent"
             )
 
+    def firmware_keys(self) -> tuple[set[str], dict[str, str], set[str]]:
+        """What src/Protocol.cpp puts on the wire and takes off it.
+
+        Returns the telemetry keys writeTelemetry() sets, the scan keys among
+        them with the Explorer bearing each one carries, and the command
+        fields readCommand() reads. keys() and bearings() both ask; problem()
+        reports anything missing once.
+        """
+        text = self.text(PROTOCOL_CPP)
+        if text is None:
+            return set(), {}, set()
+        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', text))
+        scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', text))
+        read = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]', text))
+        if not sent:
+            self.problem(f'{PROTOCOL_CPP}: no telemetry keys found (doc["key"] = ...). '
+                         f"If writeTelemetry() changed shape, update tools/check_protocol.py.")
+        if not scan:
+            self.problem(f'{PROTOCOL_CPP}: no scan distances found (doc["key"] = status.scanCm[Explorer::BEARING]). '
+                         f"If writeTelemetry() changed shape, update tools/check_protocol.py.")
+        if not read:
+            self.problem(f'{PROTOCOL_CPP}: no command fields found (json["field"]). '
+                         f"If readCommand() changed shape, update tools/check_protocol.py.")
+        return sent, scan, read
+
+    def keys(self) -> int:
+        """Every telemetry key a client reads is one the firmware sends, and
+        every command field it sends is one the firmware reads.
+
+        A renamed key fails quietly on both sides: the panel shows a dash
+        forever, and a command field the firmware does not read falls back to
+        its default (STOP, speed 0, or 750 ms).
+        """
+        sent, _, read = self.firmware_keys()
+        if not sent or not read:
+            return 0
+        for client, where in KEY_READERS.items():
+            text = self.code(client)
+            if text is None:
+                continue
+
+            reads = {key for pattern in where["reads"] for key in pattern.findall(text)}
+            block, key = where["bearings"]
+            table = block.search(text)
+            reads.update(key.findall(table.group(1)) if table else ())
+            if not table:
+                self.problem(f"{client}: no BEARINGS table of scan keys found; if it moved, update tools/check_protocol.py")
+            if not reads:
+                self.problem(f"{client}: no telemetry reads found (data.key or data[\"key\"]); "
+                             f"if the client now spells them differently, update tools/check_protocol.py")
+            for name in sorted(reads - sent):
+                self.problem(f'{client}: reads telemetry key "{name}", which {PROTOCOL_CPP} never sends')
+
+            literal, field = where["command"]
+            commands = literal.findall(text)
+            if not commands:
+                self.problem(f"{client}: no command object found to check; if the client now builds commands "
+                             f"differently, update tools/check_protocol.py")
+            for body in commands:
+                for name in sorted(set(field.findall(body)) - read):
+                    self.problem(f'{client}: sends command field "{name}", which {PROTOCOL_CPP} never reads')
+        return len(sent)
+
+    def bearings(self) -> None:
+        """The panel draws each scan wedge at the angle its distance is
+        measured at: the key's Explorer bearing (src/Protocol.cpp), that
+        bearing's angle (Explorer::angleOf), and ExploreParams' sweep angles.
+        Retuning a sweep angle otherwise leaves the panel drawing wedges where
+        the rover no longer looks."""
+        _, scan, _ = self.firmware_keys()
+        params_text = self.text(EXPLORER_H)
+        explorer = self.text(EXPLORER_CPP)
+        panel = self.code(PANEL_JS)
+        if not scan or params_text is None or explorer is None or panel is None:
+            return
+
+        params = {name: int(value) for name, value in re.findall(r"\bint\s+(sweep\w*Deg)\s*=\s*(-?\d+)\s*;", params_text)}
+        body = re.search(r"\bExplorer::angleOf\s*\([^)]*\)\s*const\s*\{(.*?)\n\}", explorer, re.S)
+        cases = re.findall(r"\bcase\s+(\w+)\s*:\s*return\s+(-?)\s*(?:params\.(\w+)|(\d+))\s*;", body.group(1)) if body else []
+        angles: dict[str, int] = {}
+        for bearing, minus, param, literal in cases:
+            if param and param not in params:
+                self.problem(f"{EXPLORER_CPP}: angleOf() returns params.{param}, which is not an int in {EXPLORER_H}")
+                continue
+            angle = params[param] if param else int(literal)
+            angles[bearing] = -angle if minus else angle
+        if not angles:
+            self.problem(f"{EXPLORER_CPP}: cannot read Explorer::angleOf() (case BEARING: return [-]params.x;); "
+                         f"if it changed shape, update tools/check_protocol.py")
+            return
+
+        table = KEY_READERS[PANEL_JS]["bearings"][0].search(panel)
+        drawn = dict(re.findall(r"\bkey:\s*[\"'](\w+)[\"'][^}]*?\bbearing:\s*(-?\d+)", table.group(1))) if table else {}
+        if not drawn:
+            return  # keys() has reported the missing table
+        for name, bearing in sorted(scan.items()):
+            if bearing not in angles:
+                self.problem(
+                    f"{EXPLORER_CPP}: cannot read the angle of {bearing}, which {PROTOCOL_CPP} sends as {name}, in "
+                    f"Explorer::angleOf() (expected `case {bearing}: return [-]params.x;`); if it changed shape, "
+                    f"update tools/check_protocol.py"
+                )
+            elif name not in drawn:
+                self.problem(f"{PANEL_JS}: BEARINGS has no wedge for {name}, which telemetry sends")
+            elif int(drawn[name]) != angles[bearing]:
+                self.problem(
+                    f"{PANEL_JS}: BEARINGS draws {name} at {drawn[name]} degrees, but the rover measures it at "
+                    f"{angles[bearing]} ({bearing} in Explorer::angleOf, ExploreParams in {EXPLORER_H})"
+                )
+
 
 def show(value: float) -> str:
     """25.0 -> "25", 0.5 -> "0.5": numbers as the source files write them."""
@@ -250,6 +436,8 @@ def main() -> int:
     code_count = checker.move_codes()
     checker.mirrors()
     checker.timing()
+    key_count = checker.keys()
+    checker.bearings()
 
     for problem in checker.problems:
         print(problem, file=sys.stderr)
@@ -258,8 +446,9 @@ def main() -> int:
         return 1
 
     print(
-        f"check_protocol: OK -- {code_count} move codes, the port, the panel's thresholds, the no-echo distance and "
-        f"the command timing agree across {DRIVE_PY}, {WS_PY} and {PANEL_JS}"
+        f"check_protocol: OK -- {code_count} move codes, the port, the panel's thresholds and scan angles, the "
+        f"no-echo distance, the command timing and stick rate, and the names of {key_count} telemetry keys and "
+        f"the command fields agree across {DRIVE_PY}, {WS_PY} and {PANEL_JS}"
     )
     return 0
 

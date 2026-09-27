@@ -48,8 +48,10 @@ default install path, `~/.platformio/penv/bin/pio`.
    ~/.platformio/penv/bin/pio run -e car_ota -t upload
    ```
    `car_ota` uploads to 192.168.0.115, without the gamepad. With DHCP, change
-   its `upload_port` in `platformio.ini` (`rover.local` works); with the PS3
-   pad, keep flashing `car_wire_gamepad` over USB.
+   its `upload_port` in `platformio.ini` (`rover.local` works). With the PS3
+   pad, set `ROVER_ENABLE_GAMEPAD` to 1 in `src/Features.h` first, which turns
+   it on for every environment, or the update removes the pad. With an OTA
+   password, see `src/config.example.h`.
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. Or, from a terminal:
@@ -65,20 +67,21 @@ paired address in `src/Features.h`.
 ## Controls
 
 Any command, a stop included, takes control from exploration; the Autonomous
-button, `t` or START hands it back. While you hold a control the client
-re-sends it; let go and the rover stops within half a second.
+button, `t` or START hands it back, and also restarts exploration that has
+halted. While you hold a control the client re-sends it; let go and the rover
+stops within half a second.
 
 | | Browser panel | Keyboard (`drive.py`) | PS3 pad |
 |---|---|---|---|
 | Move | Joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
-| Rotate | Hold the Left or Right button | `q` `e` | L2, R2 |
-| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50 |
+| Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
+| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50 (triggers 25) |
 | Stop | Stop | space | Let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
 
 After a power-on the rover explores. After any other reset (an OTA flash, a
 crash, the watchdog) it starts in manual and waits, and it drops to manual
-if it loses WiFi.
+if it loses WiFi or an OTA flash starts.
 
 ## How it works
 
@@ -87,9 +90,10 @@ flowchart LR
   panel[Browser panel] -- "WebSocket :81" --> RC[RemoteControl]
   drive[drive.py] -- "WebSocket :81" --> RC
   pad[PS3 pad] -- Bluetooth --> GP[Gamepad]
+  GP --> GS[GamepadSession]
   RC --> R[Rover]
-  GP --> R
-  NW["Network: WiFi, OTA"] -- "link lost" --> R
+  GS --> R
+  NW["Network: WiFi, OTA"] -- "link lost, OTA start" --> R
   R --> EX[Explorer]
   R -- Motors --> DT["DriveTrain: Motor Shield V2"]
   EX -- RangeScanner --> SC["Scanner: servo and sonar"]
@@ -98,10 +102,11 @@ flowchart LR
 `Rover` decides who is in control, drives the wheels through the one path
 that clamps every input, and releases them when each command's deadline
 passes. `Explorer` is the autonomy, a state machine that sweeps, cruises,
-turns, backs off, sidesteps or halts. Both are plain C++ that reach the
-hardware only through two small interfaces, so they are tested on your
-computer rather than on the robot. The adapters around them (`DriveTrain`,
-`Scanner`, `Network`, `RemoteControl`, `Gamepad`) only translate. The
+turns, backs off, sidesteps or halts. `GamepadSession` holds the pad's rules.
+All three are plain C++ that reach the hardware only through two small
+interfaces, so they are tested on your computer rather than on the robot. The
+adapters around them (`DriveTrain`, `Scanner`, `Network`, `RemoteControl`,
+`Gamepad`) only translate. The
 WebSocket format is in `src/Protocol.h`, and [AGENTS.md](AGENTS.md) explains
 the design and the rules it keeps.
 
@@ -130,6 +135,10 @@ terminal, which way the servo turns) is covered by
   3S pack drives the 3-6 V TT motors at about twice their rating. Cap it
   (about 120) or give the motors a 6 V supply; see the bench checklist and
   the roadmap.
+- **A reset does not stop the wheels by itself.** The shield keeps driving
+  them through an ESP32 reset until the rebooted firmware releases them,
+  about half a second, and for as long as the board fails to boot. Keep a
+  way to cut the motor power within reach.
 - **Boot hazard.** The scanner's echo wire sits on GPIO12, a strapping pin
   that can stop the board booting. The fix is a wire; see the bench
   checklist.

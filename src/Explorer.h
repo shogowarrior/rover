@@ -51,6 +51,8 @@ struct ExploreParams {
 
   // Sweep angles are 0, +-inner and +-outer degrees from straight ahead
   // (positive is the rover's left). Cruise looks at 0, +weave, 0, -weave.
+  // The panel's scan fan (extras/joystick) and drive.py's labels are drawn at
+  // the sweep angles; tools/check_protocol.py checks those copies.
   int sweepOuterDeg = 70;
   int sweepInnerDeg = 35;
   int weaveDeg = 25;

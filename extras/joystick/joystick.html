@@ -96,6 +96,24 @@
     [data-link="stale"] .lamp { background: var(--warn); }
     [data-link="connecting"] .lamp { background: var(--dim); }
 
+    /* A fault the rover reports about itself. Amber, not red: nothing is
+       moving that should stop, the rover simply cannot move. */
+    .fault {
+      margin: 0;
+      padding: 10px 12px;
+      background: var(--panel);
+      border: 1px solid var(--warn);
+      border-left-width: 4px;
+      border-radius: 3px;
+      color: var(--readout);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .fault strong { color: var(--warn); }
+
+    .fault[hidden] { display: none; }
+
     #host {
       font-family: var(--mono);
       font-size: 13px;
@@ -296,6 +314,18 @@
       </div>
     </header>
 
+    <!-- Shown while telemetry says "motorsReady": false. control.js hides it
+         again when the rover says true, says nothing, or the link goes.
+         It says what a reset does because a power-on or EN reset starts
+         exploration: once the shield answers, the wheels turn straight away,
+         likely with the operator's hands still on the wiring. -->
+    <p class="fault" id="motorsFault" role="alert" hidden>
+      <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
+      It did not answer when the rover booted. Check its I2C wiring and power,
+      then reset the rover with its wheels off the ground: after a power-on or
+      the EN button it starts exploring.
+    </p>
+
     <!-- The rover perceives the world as five ultrasonic returns, taken
          straight ahead and at 35 and 70 degrees to either side. Drawing them
          at those bearings, rather than as a neutral row of numbers, is the
@@ -335,7 +365,8 @@
           </div>
         </div>
 
-        <button id="auto" aria-pressed="false">Autonomous</button>
+        <button id="auto" aria-pressed="false"
+                title="Let the rover explore. If exploration has halted, it looks again.">Autonomous</button>
         <button id="stop">Stop</button>
       </div>
     </section>

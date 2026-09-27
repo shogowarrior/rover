@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Edit|Write|NotebookEdit|Bash|Grep|mcp__terminal__run_in_terminal",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/build-check.sh",
-            "timeout": 180
+            "timeout": 300
           }
         ]
       }
@@ -32,12 +32,14 @@
       "Bash(~/.platformio/penv/bin/pio run -e car_wire_gamepad)",
       "Bash(~/.platformio/penv/bin/pio test -e native)",
       "Bash(~/.platformio/penv/bin/pio check:*)",
+      "Bash(python3 tools/check_protocol.py)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)"
     ],
     "deny": [
-      "Read(./src/config.h)"
+      "Read(./src/config.h)",
+      "Edit(./src/config.h)"
     ]
   }
 }

@@ -46,7 +46,8 @@ coasts.
 | 18 | `ROTATE_COUNTERCLOCKWISE` | Rotate left on the spot | Backward | Forward | Backward | Forward |
 
 Code 19, `RESUME_AUTONOMOUS`, is not a motion: it hands control back to
-autonomous exploration and has no row.
+autonomous exploration (or restarts exploration that has halted) and has no
+row.
 
 The diagonal codes are named by the stick angle that produces them, measured
 counter-clockwise from "right" (the panel and the gamepad map the stick the

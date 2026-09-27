@@ -22,7 +22,9 @@ has to repeat it.
    ```
    Expect `Wireless connected: <address>` and `OTA and WebSocket services up.`
    If you see `Motor shield not found on I2C (0x60); motors disabled.`, stop
-   and reseat or power the shield: nothing below will work.
+   and reseat or power the shield: nothing below will work. Telemetry says
+   the same with `"motorsReady": false`, so you can check it without the
+   serial monitor.
 3. Connect the keyboard client and press **space**. That takes control
    (each telemetry line starts `MANUAL`) and stops the wheels:
    ```
@@ -119,13 +121,33 @@ the distances stay live.
    further. A 3.3 V sonar such as the RCWL-1601 avoids the problem (see the
    [roadmap](ROADMAP.md)).
 2. **GPIO12.** The scanner's ECHO is on GPIO12 (D8 on the silkscreen), a
-   strapping pin: held high at reset, it stops the board booting. On the
-   stand, power-cycle ten times and check it boots every time (serial output,
-   or telemetry returning). An occasional dead boot is this.
-3. **Fix, whenever the wiring is next open:** move that ECHO wire (through its
-   divider) to GPIO34, labelled A3, which is input-only with no strapping
-   role, and change `pins::SCAN_ECHO` to 34 in `src/Pins.h` in the same
-   change. Flash over USB, then repeat section 3. Run `/pin-audit`.
+   strapping pin: held high at reset, it sets the flash supply to 1.8 V and
+   the board does not boot. Power-on (EN included) and RTC-watchdog resets
+   sample it, and so does a supply sag deep enough to become a power-on
+   reset. The reset after a crash, the loop watchdog or the brownout detector
+   (a software reset in this build) does not.
+   On the stand, power-cycle ten times and check it boots every time (serial
+   output, or telemetry returning). An occasional dead boot is this.
+3. **Fix, whenever the wiring is next open.** Each option is the operator's
+   call:
+   - **(a) Move the echo to GPIO34 (preferred).** Move that ECHO wire,
+     through its divider, to GPIO34, labelled A3, which is input-only with no
+     strapping role, and change `pins::SCAN_ECHO` to 34 in `src/Pins.h` in the
+     same change. Flash over USB, then repeat section 3. Run `/pin-audit`.
+   - **(b) A 10 kOhm pull-down on GPIO12** helps only while the echo line
+     idles low. It cannot overpower an echo the sensor drives high mid-ping,
+     and a divider's resistor to ground already does the same job.
+   - **(c) Burn the flash-voltage eFuse:**
+     `espefuse.py --port <port> set_flash_voltage 3.3V` fixes the flash
+     supply at 3.3 V, so GPIO12 is ignored at boot. Valid only for a module
+     whose flash runs at 3.3 V, as the ESP32-WROOM-32's does. It is
+     permanent: an eFuse cannot be unburned.
+   - **(d) Recovery, if it will not boot:** disconnect the wire from GPIO12,
+     jumper GPIO0 to GND and power-cycle. The D1 R32 has no BOOT button:
+     GPIO0 is the first pin of the power header, above 5V, and the shield
+     may need lifting to reach it. The ROM bootloader then waits for
+     esptool, and a USB flash works again. Remove the jumper afterwards, or
+     every reset stops in the bootloader.
 
 ## 5. The second HC-SR04
 
@@ -148,35 +170,49 @@ pad (set with SixaxisPairTool or sixaxispairer). Pairing changes the board's
 MAC address, WiFi included, so DHCP reservations may need updating. Watch
 with `python3 client/drive.py --listen`; a listener never stops the rover.
 
+`car_ota` builds without the pad, so an OTA update removes it and gives the
+board its own MAC address back. On a gamepad rover, set
+`ROVER_ENABLE_GAMEPAD` to 1 in `src/Features.h` before flashing over WiFi;
+every environment then has the pad.
+
 On the stand:
 
 - Left stick **up** drives forward (all four wheels forward, telemetry
   `MOVE_FORWARD`); stick right strafes right.
 - **L2** rotates left (`ROTATE_COUNTERCLOCKWISE`), **R2** rotates right.
-- Releasing the stick stops the wheels. **START** switches to autonomous.
+  Earlier firmware had them the other way round.
+- Holding the stick keeps the wheels turning; releasing it stops them.
+  **START** switches to autonomous, or restarts exploration that has halted.
 - Switching the pad off while holding the stick stops the wheels within half
   a second.
 
 If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`
 ([src/Kinematics.cpp](../src/Kinematics.cpp)); fix it there together with its
-test in `test/test_kinematics`.
+test in `test/test_kinematics`. The timing rules (re-sending, silence, START)
+are in `GamepadSession`, tested in `test/test_gamepad`.
 
 ## 7. Reset behaviour
 
 With the rover on the stand, running and connected:
 
-1. Flash over WiFi: `~/.platformio/penv/bin/pio run -e car_ota -t upload`.
+1. Flash over WiFi: `~/.platformio/penv/bin/pio run -e car_ota -t upload`
+   (on a gamepad rover, read section 6 first). The wheels stop as the upload
+   starts, and the rover drops to manual even if the upload then fails.
    After it reboots, telemetry must show `MANUAL` and the wheels must stay
    still. Any reset other than a power-on (OTA, crash, watchdog, brownout)
    starts in manual.
 2. Press EN or power-cycle: the mode is `AUTONOMOUS` and the wheels turn. A
    USB flash resets the board through EN too, so it also comes up exploring.
+   Press EN while the wheels turn: they keep turning while you hold it and
+   for about half a second after, because the shield's PWM chip is not reset
+   with the ESP32 and only the rebooted firmware releases them. If they never
+   stop, the board did not boot: cut the motor power and see section 4.
 3. If the rover explores after an OTA flash, look at `startupMode()` in
    [src/main.cpp](../src/main.cpp) and `AUTONOMOUS_AT_POWER_ON` in
    `src/Features.h`.
 
-## 8. Motor voltage
+## 8. Motor voltage and noise
 
 PWM duty is a fraction of the pack voltage. The 3S pack gives 11.1 to 12.6 V;
 TT motors are rated about 3 to 6 V. At PWM 255 they see about twice their
@@ -194,6 +230,16 @@ Measure the pack at the shield's motor power terminal, then pick one:
   255. The same duty then gives about half the voltage, so raise
   `EXPLORE_SPEED` (64) and `GAMEPAD_MAX_SPEED` (50) by about two times, or
   the rover will barely move.
+
+**Motor noise.** Brushed motors spark at their commutators, and that noise
+resets ESP32s and corrupts I2C. Solder a 100 nF ceramic capacitor across each
+TT motor's two terminals, at the motor, and fit a bulk electrolytic (for
+example 470 uF, rated 25 V or more) across the shield's motor power terminal.
+Suspect noise when the board resets as motors start or reverse, when
+telemetry shows `"motorsReady": false` after a reset, or when a wheel does
+not do what telemetry says. The firmware rewrites a held move every 500 ms
+(`tuning::MOTOR_REFRESH_MS`) to repair a lost I2C write; that is a patch,
+not a cure.
 
 ## 9. Failsafes, end to end
 

@@ -8,6 +8,8 @@
 // 40 KB of RAM, shares the radio with WiFi (adding command latency), and
 // pairing changes the board's MAC address (see PS3_HOST_MAC). Build the
 // car_wire_gamepad environment, or pass -DROVER_ENABLE_GAMEPAD=1, to use it.
+// car_ota has no gamepad variant: on a rover with a pad, set the default below
+// to 1, or an OTA update removes the pad (and restores the board's own MAC).
 #ifndef ROVER_ENABLE_GAMEPAD
 #define ROVER_ENABLE_GAMEPAD 0
 #endif

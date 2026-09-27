@@ -21,8 +21,11 @@
 
 // Optional: require a password for OTA flashing. Without one, anything on the
 // network can flash the rover. Define ONE of these; the hash keeps the
-// plaintext out of the firmware image (`printf '%s' 'secret' | md5`). Then add
-// `upload_flags = --auth=secret` to [env:car_ota] in platformio.ini.
+// plaintext out of the firmware image (`printf '%s' 'secret' | md5`). Then
+// pass the password to each OTA upload from your shell:
+//   PLATFORMIO_UPLOAD_FLAGS=--auth=secret pio run -e car_ota -t upload
+// Never write it into platformio.ini: git tracks that file, and publishing
+// the password undoes keeping this one out of git.
 // #define OTA_PASSWORD_HASH "5ebe2294ecd0e0f08eab7690d2a6ee69"
 // #define OTA_PASSWORD "secret"
 

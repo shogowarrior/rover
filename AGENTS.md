@@ -21,8 +21,9 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 - **Never read `src/config.h`** by any means. See [config.h](#srcconfigh).
 - **Never change a pin assignment unprompted.** See [Pins](#pins).
 - There is no runtime feedback loop: a mistake is invisible until the board
-  is flashed. Build after every firmware change, and run the host tests after
-  every change to the pure modules.
+  is flashed. Build after every firmware change, run the host tests after
+  every change to the pure modules, and run `tools/check_protocol.py` after
+  changing a client or a value a client mirrors.
 
 ## Commands
 
@@ -32,7 +33,7 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 ~/.platformio/penv/bin/pio run -e car_wire             # build the firmware (~8 s warm)
 ~/.platformio/penv/bin/pio run -e car_wire_gamepad     # build with the PS3 gamepad compiled in
 ~/.platformio/penv/bin/pio test -e native              # host-side unit tests, no board needed
-python3 tools/check_protocol.py                        # clients' copies of move codes, port, thresholds match src/
+python3 tools/check_protocol.py                        # the clients' copies of the protocol match src/
 ```
 
 Building a board environment needs `src/config.h`. In a fresh clone the
@@ -43,7 +44,9 @@ need it.
 Flashing, for the operator only: `pio run -e car_wire -t upload` over USB
 (always works, and is required after any change that could break WiFi or the
 loop), `pio run -e car_ota -t upload` over WiFi to a rover already running good
-firmware.
+firmware. `car_ota` builds without the gamepad, so on a gamepad rover an OTA
+update removes the pad unless `ROVER_ENABLE_GAMEPAD` defaults to 1 in
+`src/Features.h`, which turns it on for every environment.
 
 The serial console, `pio device monitor -e car_wire` (with the exception
 decoder), is operator-only too. Opening it can reset the board through EN,
@@ -60,19 +63,21 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
 | `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
+| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START. Pure |
+| `src/Timing.h` | `timing::reached()` and `timing::since()`: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
 | `src/Pins.h` | Every GPIO and motor terminal. A value here is a wire |
 | `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC |
-| `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2 |
+| `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, and the WiFi-loss failsafe |
 | `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands in, telemetry out, driver tracking, heartbeat |
-| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth, compiled in only with `ROVER_ENABLE_GAMEPAD` |
+| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
-| `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, protocol |
+| `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
 | `test/fakes/` | Fake `Motors` and `RangeScanner` for the host tests |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
@@ -91,21 +96,21 @@ like flashing, with the rover on a stand. It also never exits on its own.
 
 ```
   RemoteControl (WebSocket :81, Protocol) --+ commands
-  Gamepad (PS3, optional) ------------------+-----------> Rover --Motors--------> DriveTrain
-  Network (WiFi, OTA) ----------------------+ link lost,    |   (MovePatterns)   (Motor Shield V2)
-                                              OTA start     |
-                                                         Explorer --RangeScanner--> Scanner
+  Gamepad (PS3) -> GamepadSession ----------+-----------> Rover --Motors--------> DriveTrain
+  Network (WiFi, OTA) ----------------------+ standDown:    |   (MovePatterns)   (Motor Shield V2)
+                                              link lost,    |
+                                              OTA start  Explorer --RangeScanner--> Scanner
                                                                                    (servo, HC-SR04s)
 ```
 
 `Network` also starts `RemoteControl` once WiFi is up and serves it each loop.
 
-**The pure core** is `Rover`, `Explorer`, `MovePatterns`, `Protocol` and
-`Kinematics`. None of it calls Arduino: time arrives as a `now` argument, and
-the hardware is reached only through the interfaces in `Hardware.h`. That is
-what lets `pio test -e native` test mode arbitration, move deadlines, clamping,
-the whole of autonomy and the wire format on the host, compiled as gnu++11 like
-the board.
+**The pure core** is `Rover`, `Explorer`, `GamepadSession`, `MovePatterns`,
+`Protocol` and `Kinematics`, with `Timing.h`. None of it calls Arduino: time
+arrives as a `now` argument, and the hardware is reached only through the
+interfaces in `Hardware.h`. That is what lets `pio test -e native` test mode
+arbitration, move deadlines, clamping, the whole of autonomy, the gamepad's
+rules and the wire format on the host, compiled as gnu++11 like the board.
 
 **The adapters** are `DriveTrain`, `Scanner`, `Network`, `RemoteControl` and
 `Gamepad`. They only translate between the core and a library, and they are not
@@ -125,17 +130,26 @@ included*, and the board cannot be recovered over the air. Timing is state
 compared against `millis()` (move deadlines, Explorer's phases), never a sleep.
 The only routine busy-wait is the sonar ping in `Scanner::measureCm()`,
 bounded at about 30 ms and spaced at least 70 ms apart. A WebSocket handshake
-can still hold the loop for up to 2 s, and no move deadline is serviced
-meanwhile: `WEBSOCKETS_TCP_TIMEOUT=2` in `platformio.ini` bounds it, where the
-library's default let one stray byte freeze the loop for 83 minutes. The loop
-watchdog, enabled at the end of `setup()`, resets the board (and so releases
-the motors) if one pass ever takes 5 s; OTA feeds it while flashing. The only
-`delay()` is the bounded WiFi connect in `setup()`.
+can still stall the loop, and no move deadline is serviced meanwhile:
+`WEBSOCKETS_TCP_TIMEOUT=2` in `platformio.ini` makes a header read give up
+after 2 s of silence, where the library's default let one stray byte freeze
+the loop for 83 minutes. That is 2 s per character and per half-open client,
+so a peer that trickles bytes, or several stalled at once, can hold one pass
+far longer. The real bound is the loop watchdog, enabled at the end of
+`setup()`: it resets the board if one pass ever takes 5 s (OTA feeds it while
+flashing). The reset alone does not stop the wheels. The shield's PCA9685 is
+not reset with the ESP32 and keeps its last PWM, so the wheels run on through
+the reboot (about half a second) until `DriveTrain::begin()` releases them
+(it tries even when the shield's probe fails), and indefinitely if the board
+never boots that far. The only `delay()` calls are in `setup()`: the bounded
+WiFi connect and the shield probe's retries.
 
 **Motors are released by deadline, not by waiting.** `Rover::drive()` sets the
-wheels and records `moveDeadline` (a repeat of the move already running only
-moves the deadline); `Rover::update()`, every loop, releases them once it
-passes. There are no per-move tasks or timers: an earlier design
+wheels and records `moveDeadline`; `Rover::update()`, every loop, releases them
+once it passes. A repeat of the move already running only moves the deadline,
+except that the pattern is rewritten every `tuning::MOTOR_REFRESH_MS` (500 ms)
+to repair an I2C write the bus lost, which the library never reports. A
+release always writes. There are no per-move tasks or timers: an earlier design
 spawned four FreeRTOS tasks per move, which raced on shared motor parameters
 and could exhaust the heap under a fast client.
 
@@ -156,18 +170,22 @@ Any client's repeat interval must stay well inside the cap.
 **Loss of control stops the rover.** Each of these ends with the motors
 released:
 
-- The *driver*, the WebSocket client that last sent a command, disconnects. A
-  telemetry-only listener coming and going does not stop anything.
+- The *driver*, the WebSocket client that last sent a command, disconnects:
+  `Rover::stop()` releases the wheels and keeps the mode. A telemetry-only
+  listener coming and going does not stop anything.
 - A client stops answering the heartbeat: the server pings every client each
   second and drops one that misses two pongs, which counts as a disconnect.
   This also keeps a vanished client's full send buffer from blocking the loop.
-- WiFi drops: `Rover::onLinkLost()` stops and switches to manual, because no
+- WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
-- An OTA flash starts.
-- The gamepad goes silent for `GAMEPAD_SILENCE_MS`.
+- An OTA flash starts: `standDown()` too, so an upload that fails also leaves
+  the rover stopped in manual, as a successful one's reboot does.
+- The gamepad goes silent for `GAMEPAD_SILENCE_MS` (500 ms). A report that old
+  never reads as fresh again, however long the silence.
 - Any reset other than a power-on (OTA, crash, watchdog, brownout) starts in
-  manual (`startupMode()` in `main.cpp`), so a recovering rover stays put. The
-  EN button, and so a USB flash, resets like a power-on and starts exploring.
+  manual (`startupMode()` in `main.cpp`), so a recovering rover stays put once
+  `DriveTrain::begin()` has released the wheels (see above). The EN button,
+  and so a USB flash, resets like a power-on and starts exploring.
 
 If you add a new way to lose the link, add its failsafe in the same change.
 
@@ -176,9 +194,11 @@ If you add a new way to lose the link, add its failsafe in the same change.
 `MODE_MANUAL` it runs `Explorer::survey()`, which keeps sweeping and measuring
 but never moves. Any command, STOP included, switches to manual; only
 `RESUME_AUTONOMOUS` (code 19) switches back, restarting exploration from a
-fresh sweep. Without the arbitration, exploration overwrote every remote
-command milliseconds after it arrived; without the way back, the first command
-ever sent stranded the rover in manual until a power cycle. Because STOP takes
+fresh sweep. Sent while already exploring, it restarts an explorer that has
+halted (clearing `boxed in` or `sensor silent`) and otherwise does nothing.
+Without the arbitration, exploration overwrote every remote command
+milliseconds after it arrived; without the way back, the first command ever
+sent stranded the rover in manual until a power cycle. Because STOP takes
 control, a client must not send one just because it lost focus or is quitting
 while the rover explores: stop only what it is driving itself.
 
@@ -191,15 +211,17 @@ nothing in range); zero is a real reading. A dead or unplugged sensor also
 reads -1 everywhere, and that normalises to open space -- so a sweep that
 heard no echo at any bearing is never grounds to drive forward: Explorer only
 turns in place to look again, and halts with `sensor silent` after three such
-sweeps in a row. Keep it that way: an absent echo alone must never justify
-motion.
+sweeps in a row. A sensor that dies mid-cruise ends the cruise once four looks
+in a row hear nothing. Keep it that way: an absent echo alone must never
+justify motion.
 
 **The gamepad's Bluetooth callback only fills a mailbox.** The PS3 library
 calls back on the Bluetooth task (core 0); everything else runs on the loop
 task (core 1). The callback copies the controls under a spinlock and touches
-nothing else; `Gamepad::update()`, on the loop task, is the only thing that
-talks to `Rover`. Keep motor state and the I2C bus single-threaded: no calls
-into `Rover` from callbacks, interrupts or other tasks.
+nothing else; `Gamepad::update()`, on the loop task, takes a copy and hands it
+to `GamepadSession`, the only thing that talks to `Rover`. Keep motor state and
+the I2C bus single-threaded: no calls into `Rover` from callbacks, interrupts
+or other tasks.
 
 ## How autonomy works
 
@@ -215,11 +237,11 @@ drives at `EXPLORE_SPEED` (64).
 | Phase | What happens |
 |-------|--------------|
 | `SWEEP` | Stand still and measure all five bearings, sweeping back and forth |
-| `CRUISE` | Drive forward on a 400 ms lease that only a clear ping renews, the servo weaving ahead and to each side. Ends on an obstacle in the path, a near echo that vanishes (deflected, not gone), a front reading that stops shrinking (stuck below the beam), or after 2.5 s |
-| `TURN` | Rotate toward the more open side in short steps, measuring after each, and keep that direction until the front is clear twice |
-| `BACKOFF` | Reverse briefly, and only over ground just driven forward: nothing watches behind |
-| `SIDESTEP` | Strafe away from a flank too close to rotate beside. The strafe direction is learned, since the wiring is unverified |
-| `HALTED` | Stopped: `boxed in` after a full circle finds no way out (it resumes only when the way opens by itself), or `sensor silent` after three sweeps hear nothing. Retries every 5 s |
+| `CRUISE` | Drive forward on a 400 ms lease that only a clear ping renews, the servo weaving 0, +25, 0, -25 degrees. Ends on an obstacle in the path, a near echo that vanishes (deflected, not gone), a front echo that has not changed by 3 cm either way in 1 s (stuck below the beam: back off, then turn well clear), four looks in a row that hear nothing (a sensor dying mid-cruise), or after 2.5 s |
+| `TURN` | Rotate toward the more open side in short steps, measuring after each, and keep that direction until the front is clear twice. Also one step away from what a weave look stopped on, and a small wander after a cruise that ran its 2.5 s; these optional turns are skipped where rotating would swing a corner into a wall |
+| `BACKOFF` | Reverse briefly, and only over ground just driven forward: nothing watches behind. After a stuck cruise, only the driving before it got stuck counts |
+| `SIDESTEP` | Strafe away from a flank too close to rotate beside, when the other side has room: instead of a turn, or when the path is clear but one flank is close. At most two in a row. The strafe direction is learned, since the wiring is unverified |
+| `HALTED` | Stopped: `boxed in` when more than a full circle of turning, counted since the rover last drove clear, finds no way out (it then resumes only when the way opens by itself); or `sensor silent` after three sweeps in a row hear nothing. Retries every 5 s; `RESUME_AUTONOMOUS` restarts it at once |
 
 The shared thresholds are in `Tuning.h`; the finer ones are `ExploreParams`
 in `Explorer.h`.
@@ -236,10 +258,12 @@ reference; in short:
   `ROTATE_COUNTERCLOCKWISE`, and 19 `RESUME_AUTONOMOUS`.
 - **Rover to clients,** every 500 ms: `mode` (`AUTONOMOUS` or `MANUAL`),
   `move` (`STOP` whenever the wheels are idle), `moving`, `temperature` (the
-  ESP32's own, in C), `phase` (only while autonomous), `halt` (only when
-  halted), and `distanceLeft`, `distanceFrontLeft`, `distanceFront`,
-  `distanceFrontRight`, `distanceRight` in cm once every bearing has been
-  measured (999 means no echo). Distances stay live in manual mode too.
+  ESP32's own, in C), `motorsReady` (always sent; `false` when the motor
+  shield did not answer at boot, so no move reaches the wheels whatever `move`
+  says), `phase` (only while autonomous), `halt` (only when halted), and
+  `distanceLeft`, `distanceFrontLeft`, `distanceFront`, `distanceFrontRight`,
+  `distanceRight` in cm once every bearing has been measured (999 means no
+  echo). Distances stay live in manual mode too.
 
 ## The browser control panel
 
@@ -252,8 +276,23 @@ local file that connects out to `ws://<rover>:81` (the address field takes
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `control.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
-`COMMAND_DURATION_MAX_MS`. Letting go, blurring the window or hiding the tab
-stops what the panel is driving and leaves an exploring rover alone.
+`COMMAND_DURATION_MAX_MS`. A new direction goes out at once, a new speed in the
+same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
+below). Letting go, blurring the window or hiding the tab stops what the panel
+is driving and leaves an exploring rover alone.
+
+## The gamepad
+
+`GamepadSession` turns the pad's reports into commands; `test/test_gamepad`
+checks its rules. The left stick picks one of eight moves and wins over the
+triggers; L2 rotates left (counter-clockwise) and R2 right, matching the
+panel's Left button and `drive.py`'s `q` (earlier firmware had the triggers
+the other way round). A held stick is re-sent every `GAMEPAD_REFRESH_MS`
+(200 ms); a new direction goes at once, a new speed in the same direction at
+most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms). Letting go sends one STOP, never
+a stream, so a resting pad cannot keep forcing manual while the rover
+explores; a pad silent for `GAMEPAD_SILENCE_MS` counts as let go. START sends
+`RESUME_AUTONOMOUS`.
 
 ## Pins
 
@@ -268,9 +307,10 @@ report it and let the operator decide.
 Open hazard: the scanner's ECHO (`pins::SCAN_ECHO`) is on GPIO12, a strapping
 pin. Held high at reset it switches the flash supply to 1.8 V and the board
 does not boot, intermittently. The fix is a wire (to GPIO34) plus the constant,
-in one change, which is the operator's call. Both ECHO lines also carry 5 V and
-need a divider or level shifter. `MOTOR_TERMINAL` disagrees with the table in
-`docs/Readme.md`. The bench checklist covers all three.
+in one change, which is the operator's call. Both ECHO lines also carry 5 V
+and need a divider or level shifter. `MOTOR_TERMINAL` disagrees with the table
+in `docs/Readme.md`. The bench checklist covers all three, along with the
+alternatives for GPIO12 and how to recover a board that will not boot.
 
 ## src/config.h
 
@@ -284,7 +324,9 @@ reads it. The build products under `.pio/build/` (`firmware.elf`,
 with `strings`, `xxd` or similar either. `src/config.example.h` has the same
 shape with placeholder values, and that is everything you need. Only
 `src/Network.cpp` includes it. A new setting that belongs there must be added
-to `config.example.h` too, because CI builds against the template.
+to `config.example.h` too, because CI builds against the template. Never write
+an OTA password into `platformio.ini`, which git tracks: `config.example.h`
+shows how the operator passes one to an upload instead.
 
 ## Conventions
 
@@ -307,8 +349,10 @@ to `config.example.h` too, because CI builds against the template.
   capacity, and passing one by value deep-copies it. Take `JsonVariantConst`
   for read-only parameters, and read fields with `|` so a missing or mistyped
   key gets a safe default.
-- `millis()` wraps every 49.7 days. Compare times as
-  `static_cast<int32_t>(now - deadline) >= 0`, never `now >= deadline`.
+- `millis()` wraps every 49.7 days. Compare times only through `src/Timing.h`:
+  `timing::reached(now, deadline)` for a deadline in the future (signed),
+  `timing::since(now, then)` for an age (unsigned, so it stays right for any
+  age up to 49.7 days). Never `now >= deadline`.
 - Library and platform versions are pinned exactly in `platformio.ini`. Bump
   one at a time and re-run everything.
 - Comments explain why, and often name the bug a line prevents.

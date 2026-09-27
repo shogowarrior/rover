@@ -25,9 +25,11 @@ on the board; the two differ (D8 is GPIO12). Every assignment is in
 
 The HC-SR04 drives its ECHO line to 5 V and the ESP32 is not 5 V tolerant, so
 each ECHO line needs a resistor divider or a level shifter channel, with the
-sensor on the 5 V (HV) side and the ESP32 pin on the 3.3 V (LV) side. Whether
-the rover has either is not yet recorded; section 4 of
-[bench-checklist.md](bench-checklist.md) covers it.
+sensor on the 5 V (HV) side and the ESP32 pin on the 3.3 V (LV) side. ECHO
+only goes one way, so a divider is enough. Whether the rover has either is
+not yet recorded; section 4 of [bench-checklist.md](bench-checklist.md)
+covers it. For I2C parts, see the address and level-shifting plan in the
+[roadmap](ROADMAP.md).
 
 ## Chassis actual
 

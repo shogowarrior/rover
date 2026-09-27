@@ -64,7 +64,10 @@ const REPEAT_MS = 200;
 // send, with the repeat carrying the latest speed otherwise. Each speed change
 // costs the rover a rewrite of all four motors over I2C (~7 ms of the loop
 // that also runs the sonar and this WebSocket), so one per frame would be
-// felt. (An unchanged command costs nothing: the firmware skips the rewrite.)
+// felt. An unchanged repeat usually only moves the deadline: the firmware
+// rewrites a held move just once per tuning::MOTOR_REFRESH_MS (500 ms), to
+// repair a write the bus lost. The gamepad follows the same rule with
+// tuning::GAMEPAD_SPEED_CHANGE_MS in src/Tuning.h; keep the two equal.
 const STICK_SEND_MS = 100;
 
 // Telemetry arrives every 500 ms. Miss several and the link is not trustworthy
@@ -89,6 +92,7 @@ const ui = {
   phase: $("phase"),
   temp: $("temp"),
   note: $("note"),
+  motorsFault: $("motorsFault"),
   auto: $("auto"),
   stop: $("stop"),
   cw: $("cw"),
@@ -216,6 +220,7 @@ function connect() {
     // Nothing can reach the rover now, so stop repeating. The firmware stops
     // the wheels itself when the client driving it disconnects.
     standDown();
+    showMotorsReady(undefined);
     setLink("down");
     note(
       opened
@@ -234,6 +239,7 @@ function dropSocket() {
   standDown();
   socket = null; // before close(): its 'close' event is now stale and ignored
   clearTimeout(staleTimer);
+  showMotorsReady(undefined);
   ws.close();
 }
 
@@ -423,9 +429,14 @@ function svg(tag, attributes, text) {
 function buildScan() {
   ui.scan.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
 
-  // Any wedge that stops short of the red STOP ring is an obstacle exploration
-  // will act on, which makes the threshold legible spatially rather than only
-  // through colour. Labels hang below the rover's baseline, where no wedge can
+  // A wedge that stops short of the red STOP ring has a return within STOP_CM
+  // along that ray, which makes the threshold legible spatially rather than
+  // only through colour. Exploration stops only for returns in its path:
+  // straight ahead, or a front-diagonal return close enough to the centreline
+  // to meet the chassis. A side return never stops a cruise; one within a few
+  // centimetres of the chassis makes it sidestep away. So a red L or R wedge
+  // along a corridor wall, with the rover cruising on, is expected, not a
+  // missed obstacle. Labels hang below the rover's baseline, where no wedge can
   // reach, under one foot of their ring: STOP and GO on opposite sides, since
   // their rings are too close together to label on the same one. The outer
   // ring is full reach and needs no label.
@@ -496,7 +507,9 @@ function render(raw) {
   } catch {
     return;
   }
-  if (!data || typeof data !== "object") return;
+  // Telemetry is always a JSON object. An array is an object to typeof, and
+  // read as one it blanked every wedge and cleared the motor warning.
+  if (!data || typeof data !== "object" || Array.isArray(data)) return;
 
   for (const b of BEARINGS) showDistance(b, data[b.key]);
 
@@ -518,6 +531,17 @@ function render(raw) {
   if (typeof data.temperature === "number") {
     ui.temp.textContent = `${data.temperature.toFixed(1)}°C`;
   }
+  showMotorsReady(data.motorsReady);
+}
+
+// "motorsReady": false means the motor shield did not answer when the rover
+// booted. Every command is then accepted and reported -- the Move readout
+// says MOVE_FORWARD -- while the wheels never turn, which looks like a
+// software fault. Only an explicit false raises the warning: firmware from
+// before the key existed sends none, and that says nothing about the motors.
+// The warning belongs to the link it came over, so losing that link clears it.
+function showMotorsReady(ready) {
+  ui.motorsFault.hidden = ready !== false;
 }
 
 /* --- wiring -------------------------------------------------------------- */

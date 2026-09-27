@@ -24,6 +24,7 @@ marked *unverified* is a best reading that nobody has confirmed on the robot.
 | 18650 Li-ion cell | 3 | In series (3S): 11.1 V nominal, 12.6 V full | photo: `images/bms/top.jpeg` |
 | 3S BMS with cell holder | 1 | Balancing and protection board: 40 A continuous, 12.6 V charge, 2.5 V per cell cut-off | photo: `images/bms/specs.jpeg` |
 | Echo level shifting | 2 | A divider or level shifter channel per HC-SR04 ECHO line (5 V to 3.3 V). Needed; whether it is fitted is *unverified* | photo: `images/electronics/level shifter/` |
+| Motor noise capacitors | 4 + 1 | 100 nF ceramic across each TT motor's terminals, and a bulk electrolytic at the shield's motor supply. Recommended; whether any are fitted is *unverified* | [bench-checklist.md](bench-checklist.md), section 8 |
 
 The TT motors are rated for about half the pack voltage. At full PWM they see
 roughly twice their rating; see `MOTOR_SPEED_LIMIT` in

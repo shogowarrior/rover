@@ -11,25 +11,52 @@ under `.claude/`.
 Both are wired in `.claude/settings.json`. Do not disable or work around
 either.
 
-- **PostToolUse, `.claude/hooks/build-check.sh`.** After an Edit or Write to
-  a `.cpp`, `.h` or `.ino` file or `platformio.ini` inside the project, it
-  builds `car_wire` (about 8 s warm), except for files under `test/`. After a
-  change to a host-tested module (`Kinematics`, `MovePatterns`, `Explorer`,
-  `Rover`, `Protocol`), `MoveCodes.h`, `Tuning.h`, `Hardware.h`, anything
-  under `test/` or `platformio.ini`, it also runs `pio test -e native`. A
-  failure is handed back so the break is fixed at once; this project has no
-  other feedback loop. It fires only for the Edit and Write tools: change
-  firmware and test files with those, or run the build and the host tests
-  yourself after any change made through Bash (sed, a heredoc, a script).
-- **PreToolUse, `.claude/hooks/guard-secrets.sh`.** Blocks any tool call that
-  would touch `src/config.h`: a file path naming it (compared case-insensitively
-  after normalising the path), a Grep glob that could select it, or a Bash
-  command that names it. `settings.json` also denies `Read(./src/config.h)`.
-  The Bash check is a tripwire, not a sandbox: it cannot see a wildcard that
-  only expands to the file at run time. The rule in AGENTS.md is what
-  actually protects the file. Because the check reads the command text, a
-  commit message that mentions the file must go through a file
-  (`git commit -F <file>`).
+- **PostToolUse, `.claude/hooks/build-check.sh`.** After an Edit or Write
+  inside the project (or one of its git worktrees), it runs what that file
+  can break:
+  - a `.cpp`, `.h` or `.ino` file outside `test/`, or `platformio.ini`: build
+    `car_wire` (about 8 s warm);
+  - the gamepad adapter, a header its Bluetooth-only code reads
+    (`Features.h`, `GamepadSession.h`, `Kinematics.h`, `Tuning.h`,
+    `Timing.h`), or `platformio.ini`: also build `car_wire_gamepad`, because
+    `car_wire` compiles that code out;
+  - a host-tested module (`Kinematics`, `MovePatterns`, `Explorer`, `Rover`,
+    `GamepadSession`, `Protocol`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
+    `Hardware.h`, anything under `test/`, or `platformio.ini`: also
+    `pio test -e native`;
+  - a client, a firmware file a client mirrors, or the checker itself:
+    `tools/check_protocol.py`.
+
+  It builds the checkout the edited file is in, against
+  `src/config.example.h` where that checkout has no `src/config.h`, as CI
+  does. A failure is handed back so the break is fixed at once; this project
+  has no other feedback loop. It fires only for the Edit and Write tools:
+  change firmware, test and client files with those, or run the build, the
+  host tests and the protocol check yourself after any change made through
+  Bash (sed, a heredoc, a script).
+- **PreToolUse, `.claude/hooks/guard-secrets.sh`.** Runs before every tool
+  call, built in or MCP (Serena, the browser panes, the terminal panel), and
+  blocks one that would touch `src/config.h`:
+  - any string in the call's input that is a path to the file, in this
+    checkout or another, compared case-insensitively after normalising it
+    (`file://` URLs included);
+  - a Grep glob that could select it, because an explicit glob overrides
+    `.gitignore`;
+  - a Bash or terminal-panel command that names it or a wildcard matching
+    it, has a word the shell would expand to it (`cat src/*.h`), runs a
+    recursive grep, or an `rg` that ignores `.gitignore` or picks files with
+    `--glob`, over `src/` or a directory above it, or feeds a listing of
+    `src/` or a directory above it to a reader (`find src | xargs grep`);
+  - a command that dumps a firmware build product (`strings`, `xxd`,
+    `objdump -s`...) or reads one whole (`cat`, `head`, `base64`...): the
+    firmware embeds the same strings.
+
+  `settings.json` also denies `Read` and `Edit` of `./src/config.h`. The
+  command check is a tripwire, not a sandbox: it cannot see what a variable,
+  a script or an alias expands to at run time. The rule in AGENTS.md is what
+  actually protects the file, from every tool. Because the check reads the
+  command text, a commit message that mentions the file must go through a
+  file (`git commit -F <file>`).
 
 ## Skills
 
@@ -58,7 +85,12 @@ pin, before calling the change done.
 
 `.claude/settings.json` lets a fixed set of commands run without a prompt:
 building (`pio run` bare or with `-e car_wire`, `-e car_ota` or
-`-e car_wire_gamepad`), `pio test -e native`, `pio check`, and read-only git
-(`status`, `diff`, `log`). The build rules are exact commands, not prefixes,
-so anything with `-t upload` always asks. Uploading is never approved in
-advance: it happens when the operator runs `/flash`.
+`-e car_wire_gamepad`), `pio test -e native`, `pio check`,
+`python3 tools/check_protocol.py`, and read-only git (`status`, `diff`,
+`log`). The build rules are exact commands, not prefixes, so in the default
+permission mode anything with `-t upload` asks, and so does the serial
+monitor, inside `/flash` too: its frontmatter pre-approves only the builds,
+listing the USB port and pinging the OTA host. Auto and bypass modes do not
+prompt, which is why `/flash` stops and asks the operator itself before
+uploading. Uploading is never approved in advance: it happens when the
+operator runs `/flash`.
