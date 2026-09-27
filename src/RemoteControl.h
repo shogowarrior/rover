@@ -1,0 +1,36 @@
+#ifndef REMOTE_CONTROL_H
+#define REMOTE_CONTROL_H
+
+#include <WebSocketsServer.h>
+#include <stdint.h>
+
+#include "Rover.h"
+
+// The WebSocket link: drive commands in, telemetry out (Protocol.h has the
+// format). Network starts it once WiFi is up and calls update() every loop.
+class RemoteControl {
+ public:
+  explicit RemoteControl(Rover& rover);
+
+  // Start serving. Safe to call again after a WiFi reconnect.
+  void begin();
+
+  // Serve clients and broadcast telemetry. Call every loop while online.
+  void update(uint32_t now);
+
+ private:
+  void onEvent(uint8_t client, WStype_t type, uint8_t* payload, size_t length);
+  void onCommand(uint8_t client, const uint8_t* payload, size_t length);
+  void broadcastTelemetry();
+
+  Rover& rover;
+  WebSocketsServer server;
+  bool started = false;
+  uint32_t lastBroadcastMs = 0;
+
+  // The client whose commands are driving. Losing it is losing control, so
+  // it stops the rover; a telemetry-only listener coming and going does not.
+  int driver = -1;
+};
+
+#endif

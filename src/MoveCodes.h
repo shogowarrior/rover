@@ -2,11 +2,12 @@
 #define MOVE_CODES_H
 
 // Move codes are part of the WebSocket wire protocol. Clients in client/ and
-// extras/joystick/ send these numeric values. Append new codes; never
+// extras/joystick/ send these numeric values, and tools/check_protocol.py fails
+// CI when their copies drift. Append new codes above MOVE_CODE_COUNT; never
 // renumber existing ones.
 //
-// This header is deliberately free of Arduino dependencies so that Kinematics
-// and its host-side tests can use it.
+// This header is deliberately free of Arduino dependencies so that the pure
+// modules and their host-side tests can use it.
 
 enum MoveCode {
   STOP = 0,
@@ -33,6 +34,13 @@ enum MoveCode {
   // other command takes away. Without this, the first command a client sends
   // pins the rover in manual mode until it is power-cycled.
   RESUME_AUTONOMOUS = 19,
+
+  MOVE_CODE_COUNT  // not a code: one past the last valid value
 };
+
+// True when `raw`, straight off the network, names a move code. Check this
+// before casting: converting an out-of-range int to MoveCode is undefined
+// behaviour, and the unknown-code-means-stop rule must not depend on it.
+constexpr bool isMoveCode(int raw) { return raw >= STOP && raw < MOVE_CODE_COUNT; }
 
 #endif
