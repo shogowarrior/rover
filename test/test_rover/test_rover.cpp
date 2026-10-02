@@ -381,6 +381,33 @@ void test_a_lost_obstacle_stop_is_written_again(void) {
   TEST_ASSERT_FALSE(motors->driving);
 }
 
+// An OTA upload blocks loop() from its start until the reboot, so update()
+// never made the stand-down's second write: a lost release left the wheels
+// running through the whole upload. The upload's progress callback makes it
+// through servicePendingRelease(), which must do that and nothing else -- no
+// sonar ping or servo move in the middle of a flash write, and no new motion.
+void test_a_lost_stop_is_written_again_without_the_loop(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(MOVE_FORWARD, 100, 500, 0);
+  motors->releasesToLose = 1;
+  rover->standDown(100);
+  TEST_ASSERT_TRUE(motors->driving);  // lost on the bus
+  const int pings = scanner->pings;
+  const size_t aims = scanner->aims.size();
+  const int drives = motors->driveCalls;
+  rover->servicePendingRelease(100 + tuning::MOTOR_REFRESH_MS - 1);
+  TEST_ASSERT_TRUE(motors->driving);
+  rover->servicePendingRelease(100 + tuning::MOTOR_REFRESH_MS);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(pings, scanner->pings);
+  TEST_ASSERT_EQUAL_UINT32(aims, scanner->aims.size());
+  TEST_ASSERT_EQUAL_INT(drives, motors->driveCalls);
+  // Once, as from update(): the rest of the upload writes nothing more.
+  const int releases = motors->releaseCalls;
+  rover->servicePendingRelease(100 + 2 * tuning::MOTOR_REFRESH_MS);
+  TEST_ASSERT_EQUAL_INT(releases, motors->releaseCalls);
+}
+
 // Once, not forever: an idle rover costs no I2C.
 void test_a_stop_is_written_twice_and_no_more(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
@@ -437,6 +464,7 @@ int main(int, char**) {
   RUN_TEST(test_held_move_is_rewritten_periodically);
   RUN_TEST(test_a_lost_stop_is_written_again);
   RUN_TEST(test_a_lost_obstacle_stop_is_written_again);
+  RUN_TEST(test_a_lost_stop_is_written_again_without_the_loop);
   RUN_TEST(test_a_stop_is_written_twice_and_no_more);
   RUN_TEST(test_a_new_move_cancels_the_second_write);
   RUN_TEST(test_status_reports_a_missing_motor_driver);

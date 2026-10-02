@@ -157,7 +157,9 @@ release always writes, and one that ends motion is written once more
 `MOTOR_REFRESH_MS` later. A stop has no next command to repair it: one lost
 burst left the wheels driving while telemetry said STOP, through the deadman
 and into the obstacle a cruise had stopped for. A new move cancels that second
-write, and an idle rover writes nothing. There are no per-move tasks or
+write, and an idle rover writes nothing. `Rover::servicePendingRelease()`
+makes it, from `update()` and, while an OTA upload blocks the loop, from the
+upload's progress callback. There are no per-move tasks or
 timers: an earlier design spawned four FreeRTOS tasks per move, which raced on
 shared motor parameters and could exhaust the heap under a fast client.
 
@@ -190,7 +192,10 @@ released:
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
 - An OTA flash starts: `standDown()` too, so an upload that fails also leaves
-  the rover stopped in manual, as a successful one's reboot does.
+  the rover stopped in manual, as a successful one's reboot does. The upload
+  blocks the loop until it ends, so the stop's second write comes from its
+  progress callback, which runs only while data arrives: flash over WiFi
+  with the rover still or on the stand.
 - The gamepad goes silent for `GAMEPAD_SILENCE_MS` (500 ms). A report that old
   never reads as fresh again, however long the silence.
 - Any reset other than a power-on (OTA, crash, watchdog, brownout) starts in

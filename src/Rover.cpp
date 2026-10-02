@@ -17,11 +17,7 @@ void Rover::begin(Mode initialMode, uint32_t now) {
 
 void Rover::update(uint32_t now) {
   if (moving && reached(now, moveDeadline)) release(now);
-
-  if (releasePending && reached(now, releasedAt + tuning::MOTOR_REFRESH_MS)) {
-    releasePending = false;
-    motors.release();
-  }
+  servicePendingRelease(now);
 
   if (currentMode == MODE_AUTONOMOUS) {
     const Explorer::Motion motion = explorer.update(now, !moving);
@@ -63,6 +59,12 @@ void Rover::stop(uint32_t now) { release(now); }
 void Rover::standDown(uint32_t now) {
   release(now);
   setMode(MODE_MANUAL, now);
+}
+
+void Rover::servicePendingRelease(uint32_t now) {
+  if (!releasePending || !reached(now, releasedAt + tuning::MOTOR_REFRESH_MS)) return;
+  releasePending = false;
+  motors.release();
 }
 
 Rover::Status Rover::status() const {
@@ -127,8 +129,8 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
 // repair it. When the release burst was lost, the wheels drove on with
 // telemetry saying STOP: past the deadman, and into the obstacle a cruise had
 // stopped for. So a release that ends motion is written once more,
-// MOTOR_REFRESH_MS later, from update(). Once, not forever: an idle rover
-// costs no I2C.
+// MOTOR_REFRESH_MS later, by servicePendingRelease(). Once, not forever: an
+// idle rover costs no I2C.
 void Rover::release(uint32_t now) {
   motors.release();
   if (moving) {

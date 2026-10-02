@@ -117,8 +117,13 @@ void Network::configureOta() {
         feedLoopWDT();
         Serial.println("Starting Flash upgrade...");
       })
-      .onProgress([](unsigned int progress, unsigned int total) {
+      .onProgress([this](unsigned int progress, unsigned int total) {
         feedLoopWDT();
+        // The stand-down's second write would wait for the loop, which this
+        // upload blocks until it ends: a lost release would leave the wheels
+        // running for the whole upload. Called after every chunk, it writes
+        // at most once, and only the release.
+        rover.servicePendingRelease(millis());
         if (total == 0) return;
         Serial.printf("Progress: %u%%\n", static_cast<unsigned>(static_cast<uint64_t>(progress) * 100 / total));
       })

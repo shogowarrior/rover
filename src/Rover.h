@@ -17,7 +17,7 @@
 //   * Motors are released by deadline. drive() records when a move ends and
 //     update() releases the motors once it passes. Nothing waits. A release
 //     that ended motion is written once more MOTOR_REFRESH_MS later, because
-//     a lost stop has no next command to repair it.
+//     a lost stop has no next command to repair it (servicePendingRelease()).
 //   * External input is clamped here, in drive(), the one path every source
 //     (WebSocket, gamepad, Explorer) reaches the motors through. Durations are
 //     capped at tuning::COMMAND_DURATION_MAX_MS, which makes that cap the
@@ -64,6 +64,14 @@ class Rover {
   // flash started, which leaves it still whether the upload succeeds or not).
   // RESUME_AUTONOMOUS restores exploration once a client can reach it again.
   void standDown(uint32_t now);
+
+  // Make the second write of a stop that ended motion once it is due (see
+  // release()), and nothing else: no exploring, no sonar, no new motion.
+  // update() calls it every loop. An OTA upload blocks the loop from its
+  // start until the reboot, so Network also calls it from the upload's
+  // progress callback: without that, a lost stand-down release left the
+  // wheels running through the whole upload.
+  void servicePendingRelease(uint32_t now);
 
   Mode mode() const { return currentMode; }
   Status status() const;
