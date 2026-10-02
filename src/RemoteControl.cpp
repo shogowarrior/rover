@@ -18,7 +18,9 @@ constexpr size_t MAX_COMMAND_BYTES = 256;
 // buffer fills every telemetry broadcast to it blocks loop() for seconds --
 // move deadlines, STOP commands and OTA all stall with it. Dropping it within
 // ~2 s keeps its queue short of that. The pong timeout must stay below the
-// ping interval, or a fresh ping resets the timer before it can expire.
+// ping interval, or a fresh ping resets the timer before it can expire. The
+// misses are counted per slot, and HeartbeatServer clears them on every
+// disconnect so a slot's next client gets the full allowance.
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
@@ -64,6 +66,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
 
     case WStype_DISCONNECTED:
       Serial.printf("[%u] Disconnected\n", client);
+      server.forgetMissedPongs(client);  // the slot's next client starts afresh
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
         // stopping leaves the rover driving on its last instruction.

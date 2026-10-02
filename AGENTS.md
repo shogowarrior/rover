@@ -184,6 +184,9 @@ released:
 - A client stops answering the heartbeat: the server pings every client each
   second and drops one that misses two pongs, which counts as a disconnect.
   This also keeps a vanished client's full send buffer from blocking the loop.
+  Every disconnect clears the slot's missed pongs (`HeartbeatServer`): the
+  library left them to the slot's next client, so a phone reconnecting after
+  a drop was dropped again at its first late pong.
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
 - An OTA flash starts: `standDown()` too, so an upload that fails also leaves
