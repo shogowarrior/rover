@@ -952,6 +952,77 @@ void test_backing_out_of_a_dead_end_stops_where_the_drive_began(void) {
   TEST_ASSERT_EQUAL_UINT32(drove, reversed);
 }
 
+// A sweep that hears nothing while the rover backs out of a dead end says
+// nothing about the way out. It used to set off the silent sweep's wander
+// turn, in the passage just measured too narrow to rotate in, and that turn
+// threw away the ground left to reverse over, so the rover went on turning
+// there. Reversing on it would be motion justified by silence alone. So the
+// rover stands and looks again: one bad sweep only pauses the backing out,
+// and a sensor that has died for good halts it where it stands.
+void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
+  const bool sensorDiesForGood[2] = {false, true};
+  for (bool diesForGood : sensorDiesForGood) {
+    Harness h;
+    narrowCorridor(h.scanner);
+    h.scanner.setArc(70, 110, 60.0f);  // the dead end
+    h.closingCmPerS = 25.0f;
+    h.closeFromDeg = 70;
+    h.closeToDeg = 110;
+    int backoffs = 0;
+    int silentFrom = -1;  // the motion that started the silent sweep
+    bool restored = false;
+    float world[181];
+    h.onMotion = [&](const Explorer::Motion& m) {
+      if (silentFrom >= 0 && !diesForGood && !restored) {
+        restored = true;  // the sweep after the silent one hears the passage again
+        for (int deg = 0; deg <= 180; deg++) h.scanner.range[deg] = world[deg];
+      }
+      if (m.move == MOVE_BACKWARD) {
+        backoffs++;
+        h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);
+      } else if (m.move == STOP && backoffs == 1 && silentFrom < 0) {
+        // The sweep after the first step back hears nothing at any bearing.
+        silentFrom = static_cast<int>(h.motions.size()) - 1;
+        for (int deg = 0; deg <= 180; deg++) world[deg] = h.scanner.range[deg];
+        h.scanner.setAll(-1.0f);
+      }
+    };
+    h.run(15000);
+    TEST_ASSERT_TRUE(silentFrom > 0);
+
+    if (diesForGood) {
+      // Not a turn, a reverse or a step forward on silence: it halts where it is.
+      for (size_t i = silentFrom; i < h.motions.size(); i++) TEST_ASSERT_EQUAL_INT(STOP, h.motions[i].move);
+      TEST_ASSERT_EQUAL_INT(Explorer::HALTED, h.explorer.phase());
+      TEST_ASSERT_EQUAL_STRING("sensor silent", h.explorer.haltReason());
+      continue;
+    }
+
+    // The silent sweep cost nothing: it still reverses over all the ground it
+    // drove in by, and only then turns, as with no silence at all.
+    TEST_ASSERT_TRUE(restored);
+    const int firstForward = h.indexOf(MOVE_FORWARD);
+    TEST_ASSERT_TRUE(firstForward >= 0);
+    const int cruiseEnd = h.indexOf(STOP, firstForward);
+    TEST_ASSERT_TRUE(cruiseEnd > firstForward);
+    const uint32_t drove = h.motionTimes[cruiseEnd] - h.motionTimes[firstForward];
+    int firstRotation = -1;
+    for (size_t i = 0; i < h.motions.size(); i++) {
+      if (isRotation(h.motions[i].move)) {
+        firstRotation = static_cast<int>(i);
+        break;
+      }
+    }
+    TEST_ASSERT_TRUE(firstRotation > silentFrom);
+    uint32_t reversed = 0;
+    for (int i = cruiseEnd; i < firstRotation; i++) {
+      TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
+      if (h.motions[i].move == MOVE_BACKWARD) reversed += static_cast<uint32_t>(h.motions[i].durationMs);
+    }
+    TEST_ASSERT_EQUAL_UINT32(drove, reversed);
+  }
+}
+
 // --- halting -----------------------------------------------------------------
 
 void test_boxed_in_halts_and_never_drives_blind(void) {
@@ -1114,6 +1185,7 @@ int main(int, char**) {
   RUN_TEST(test_reset_forgets_the_ground_behind);
   RUN_TEST(test_dead_end_too_narrow_to_rotate_in_is_backed_out_of);
   RUN_TEST(test_backing_out_of_a_dead_end_stops_where_the_drive_began);
+  RUN_TEST(test_silent_sweep_while_backing_out_looks_again_in_place);
   // halting
   RUN_TEST(test_boxed_in_halts_and_never_drives_blind);
   RUN_TEST(test_halted_rover_resumes_when_the_way_opens);

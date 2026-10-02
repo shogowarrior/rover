@@ -37,7 +37,8 @@
 //             finds no way out, or three sweeps in a row hear nothing at all
 //             (the signature of a dead sensor). A sweep that heard nothing is
 //             never grounds to drive forward: the rover only turns in place
-//             to look again.
+//             to look again -- or, backing out of a dead end where it may not
+//             turn, stands still to look again.
 
 struct ExploreParams {
   // Distances are measured from the sensor. Hysteresis on the rover's path:

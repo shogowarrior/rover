@@ -149,7 +149,15 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // A sweep that heard nothing at all says nothing about the way ahead, so
   // it is never grounds to drive forward. Turn a little in place and look
   // again; a working sensor soon finds a wall, and a dead one halts above.
-  if (!scan.heardEcho) return startTurn(now, wanderDirection(), params.wanderSteps, false);
+  // Backing out of a dead end, the rover is where it may not turn: that
+  // wander swung the corners into the walls, and the turn dropped the ground
+  // left to reverse over, so it went on turning there. Reversing on silence
+  // would be motion justified by an absent echo alone. So it stands and
+  // looks again, still backing out; the count above halts a dead sensor.
+  if (!scan.heardEcho) {
+    if (episode.backingOut) return startSweep(now);
+    return startTurn(now, wanderDirection(), params.wanderSteps, false);
+  }
 
   // Still backing out of a dead end (the blocked path, below). This comes
   // before the path check: backed off far enough, the way back in looks
