@@ -47,7 +47,7 @@ class RoverBlocks {
   static DRIVES = Object.freeze(["rover_drive_for", "rover_drive_until"]);
 
   // The block colours, one per toolbox category. Mid-tones that hold white
-  // text and still read on the panel's charcoal. Red is the panel's stop red,
+  // text and still read on the panel's near-black. Red is the panel's stop red,
   // and only the stop block wears it: anywhere else it would stop meaning
   // anything.
   static PALETTE = Object.freeze({
@@ -58,7 +58,7 @@ class RoverBlocks {
     math: "#3a915d",
     variables: "#b8508a",
     output: "#66758a",
-    stop: "#d94f43",
+    stop: "#d93a33",
   });
 
   // The motions in the order the motion menu lists them: the eight
@@ -563,7 +563,7 @@ class RoverBlocks {
       const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
       return value || fallback;
     };
-    const ink = token("--readout", "#e8e4dc");
+    const ink = token("--readout", "#f1f3f6");
     const style = (colour) => ({
       colourPrimary: colour,
       colourSecondary: RoverBlocks.#mix(colour, "#ffffff", 0.25),
@@ -586,18 +586,18 @@ class RoverBlocks {
       },
       categoryStyles: Object.fromEntries(Object.entries(P).map(([key, colour]) => [`${key}_category`, { colour }])),
       componentStyles: {
-        workspaceBackgroundColour: token("--case", "#1c1e21"),
-        toolboxBackgroundColour: token("--panel", "#26292d"),
+        workspaceBackgroundColour: token("--case", "#0b0d11"),
+        toolboxBackgroundColour: token("--panel", "#151920"),
         toolboxForegroundColour: ink,
-        flyoutBackgroundColour: "#2a2e33",
+        flyoutBackgroundColour: token("--raised", "#1f242c"),
         flyoutForegroundColour: ink,
         flyoutOpacity: 1,
-        scrollbarColour: token("--dim", "#7d858e"),
+        scrollbarColour: token("--dim", "#9aa4b1"),
         scrollbarOpacity: 0.35,
         insertionMarkerColour: "#ffffff",
         insertionMarkerOpacity: 0.25,
-        markerColour: token("--live", "#4db8a8"),
-        cursorColour: token("--live", "#4db8a8"),
+        markerColour: token("--live", "#3ddc97"),
+        cursorColour: token("--live", "#3ddc97"),
       },
       fontStyle: { family: token("--sans", "system-ui, sans-serif"), weight: "600", size: 12 },
       startHats: false,
@@ -781,7 +781,7 @@ class BlockEditor {
       trashcan: true,
       horizontalLayout: narrow,
       toolboxPosition: "start",
-      grid: { spacing: 24, length: 2, colour: "#34383e", snap: true },
+      grid: { spacing: 24, length: 2, colour: "#2b323c", snap: true },
       zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },
       maxTrashcanContents: 16,

@@ -1,89 +1,104 @@
 /* The simulator's view (js/simview.js). It fills #simSlot, a box the Program
    tab sizes (css/program.css): a column beside the editor on a wide screen,
-   280 px tall under it on a phone. So the room takes whatever height is left
-   after one row of controls and two lines of status (three, in a narrow view
-   with a message to show), and the rest folds into a panel.
+   a box under it otherwise. So the room takes whatever height is left after
+   the controls and two lines of status (three, in a narrow view with a
+   message to show), and the rest folds into a panel.
 
-   The palette is the panel's (css/panel.css): teal for live, amber for
+   The palette is the panel's (css/panel.css): green for live, amber for
    closing distance, red only for stop and danger -- here, a ray inside
    STOP_CM and a bump. A backward wheel takes the one colour the panel uses
    nowhere else, so it never reads as a warning. */
 
 .sim {
-  --sim-floor: #202327;
-  --sim-grid: rgba(232, 228, 220, 0.045);
-  --sim-grid-major: rgba(232, 228, 220, 0.09);
-  --sim-wall: #8b939c;
-  --sim-box: #34383e;
-  --sim-box-edge: #5a616a;
-  --sim-plate: #3a3f46;
-  --sim-plate-edge: #d6d1c8;
+  --sim-floor: var(--raised);
+  --sim-grid: rgb(241 243 246 / 0.045);
+  --sim-grid-major: rgb(241 243 246 / 0.09);
+  --sim-halo: rgb(241 243 246 / 0.05);
+  --sim-deck: rgb(241 243 246 / 0.2);
+  --sim-wall: var(--dim);
+  --sim-box: var(--raised-hi);
+  --sim-box-edge: var(--faint);
+  --sim-plate: #3a424e;
+  --sim-plate-edge: var(--readout);
   --sim-fwd: var(--live);
   --sim-back: #a594f9;
-  --sim-free: #5a616a;
+  --sim-free: var(--faint);
+  /* The bar's buttons: a full touch target in the one-column layout, where
+     the view is on a phone; smaller beside the editor, under a mouse. */
+  --sim-tool: var(--tap);
+  --sim-bar-h: var(--sim-tool);
 
   position: relative;
   container: sim / size;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--s-2);
   width: 100%;
   height: 100%;
   /* The slot sets the height; this is only a floor, should it not. */
   min-height: 280px;
-  padding: 8px;
+  padding: var(--s-2);
   min-width: 0;
+}
+
+@media (min-width: 1100px) and (min-height: 600px) {
+  .sim { --sim-tool: 32px; }
 }
 
 /* --- controls --------------------------------------------------------- */
 
 .sim-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: var(--s-1);
   flex: none;
 }
 
 .sim-room {
   flex: 1 1 90px;
   min-width: 0;
-  font-family: var(--sans);
-  font-size: 12px;
+  height: var(--sim-tool);
+  padding: 0 var(--s-2);
+  font: inherit;
+  font-size: var(--t-sm);
   color: var(--readout);
-  background: var(--case);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 6px 6px;
+  background: var(--raised);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
   text-overflow: ellipsis;
 }
 
 .sim-room option { background: var(--panel); color: var(--readout); }
 
-.sim-room:focus-visible,
-.sim-rover:focus-visible,
-.sim-more button:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
+/* Too narrow for the room's name beside the buttons: it takes a row of its
+   own above them. (A container query styles only what is inside .sim, so
+   the panel that opens under the bar learns the bar's height here.) */
+@container sim (max-width: 360px) {
+  .sim-room { flex-basis: 100%; }
+  .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
+}
 
-.sim-speed { flex: none; }
+.sim-speed { flex: none; border-radius: var(--r-sm); }
 
 .sim-speed button {
   flex: none;
-  min-width: 28px;
-  padding: 6px 5px;
+  min-width: var(--sim-tool);
+  min-height: calc(var(--sim-tool) - 2px);
+  padding: 0 var(--s-1);
   font-family: var(--mono);
-  letter-spacing: 0;
-  text-transform: none;
+  font-size: var(--t-sm);
+  border-radius: var(--r-sm);
 }
 
 .sim-tool {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--sim-tool);
+  min-height: 0;
+  height: var(--sim-tool);
   padding: 0;
   color: var(--dim);
-  background: var(--case);
+  border-radius: var(--r-sm);
 }
 
 .sim-tool:hover { color: var(--readout); }
@@ -91,17 +106,16 @@
 .sim-tool[aria-pressed="true"],
 .sim-tool[aria-expanded="true"] {
   color: var(--readout);
-  border-color: var(--dim);
-  box-shadow: inset 0 -2px 0 var(--live);
-  background: var(--rule);
+  background: var(--raised-hi);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* Paused is a state worth seeing from across the room. */
 .sim-pause[aria-pressed="true"] { color: var(--warn); }
 
 .sim-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
@@ -115,10 +129,10 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   background: var(--case);
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  overflow: hidden;
+  border-radius: var(--r-md);
 }
 
 .sim-map {
@@ -182,13 +196,13 @@
   stroke-width: 1.6;
 }
 
-.sim-bump circle { fill: rgba(217, 79, 67, 0.2); }
+.sim-bump circle { fill: var(--stop-soft); }
 
 /* The rover. */
 .sim-rover { cursor: grab; outline: none; }
 .sim-rover[data-dragging] { cursor: grabbing; }
 .sim-grip { fill: transparent; }
-.sim-halo { fill: rgba(232, 228, 220, 0.05); }
+.sim-halo { fill: var(--sim-halo); }
 
 .sim-plate {
   fill: var(--sim-plate);
@@ -198,7 +212,7 @@
 
 .sim-deck {
   fill: none;
-  stroke: rgba(232, 228, 220, 0.2);
+  stroke: var(--sim-deck);
   stroke-width: 1;
 }
 
@@ -212,7 +226,7 @@
 .sim-nose { fill: var(--readout); }
 
 .sim-sensor {
-  fill: #2a2e33;
+  fill: var(--raised);
   stroke: var(--readout);
   stroke-width: 1;
 }
@@ -249,24 +263,21 @@
 /* Over the room, in the margin kept clear around it (SimView.PAD). */
 .sim-badge {
   position: absolute;
-  top: 5px;
-  left: 8px;
-  right: 8px;
+  top: var(--s-1);
+  left: var(--s-2);
+  right: var(--s-2);
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--s-2);
   overflow: hidden;
   white-space: nowrap;
-  font-size: 10.5px;
+  font-size: var(--t-xs);
   color: var(--dim);
   pointer-events: none;
 }
 
 .sim-badge strong {
-  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: var(--warn);
 }
 
@@ -274,13 +285,13 @@
 
 .sim-scale {
   position: absolute;
-  left: 8px;
-  bottom: 3px;
+  left: var(--s-2);
+  bottom: var(--s-0);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--t-xs);
   color: var(--dim);
   pointer-events: none;
 }
@@ -297,7 +308,7 @@
 .sim-foot {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--s-2);
   flex: none;
   min-height: 34px;
 }
@@ -318,25 +329,25 @@
 .sim-motion {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--s-0);
   min-width: 0;
   flex: 1 1 auto;
 }
 
 .sim-move {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--t-sm);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sim-move[data-stalled="yes"] { color: var(--stop); }
+.sim-move[data-stalled="yes"] { color: var(--stop-ink); }
 
 .sim-twist,
 .sim-said {
-  font-size: 11px;
+  font-size: var(--t-xs);
   color: var(--dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -347,7 +358,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--s-0);
   flex: 0 1 auto;
   min-width: 0;
   text-align: right;
@@ -355,8 +366,9 @@
 
 .sim-clock {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--t-sm);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--readout);
 }
 
@@ -369,7 +381,7 @@
   text-overflow: ellipsis;
 }
 
-.sim-log[data-tone="bump"] { color: var(--stop); }
+.sim-log[data-tone="bump"] { color: var(--stop-ink); }
 
 /* A narrow view (a phone, or the column beside the editor) gives each its
    own line: sharing one, the motion and the latest message were both cut
@@ -384,8 +396,8 @@
       "inset move clock"
       "inset twist twist"
       ". log log";
-    column-gap: 9px;
-    row-gap: 2px;
+    column-gap: var(--s-2);
+    row-gap: var(--s-0);
   }
 
   .sim-motion,
@@ -418,7 +430,7 @@
 .sim-key {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--s-1);
 }
 
 /* Under the status, only when the view is tall enough to spare it. */
@@ -432,17 +444,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 10px;
-  font-size: 10.5px;
+  gap: var(--s-1) var(--s-3);
+  font-size: var(--t-xs);
   color: var(--dim);
 }
 
-.sim-key-row .label { min-width: 6.2ch; font-size: 10px; }
+.sim-key-row .label { min-width: 6.2ch; font-size: var(--t-xs); }
 
 .sim-key-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s-1);
   white-space: nowrap;
 }
 
@@ -451,7 +463,7 @@
 .sim-swatch.wheel {
   width: 5px;
   height: 10px;
-  border-radius: 1.5px;
+  border-radius: var(--r-xs);
   border: 1px solid;
 }
 
@@ -474,19 +486,19 @@
 .sim-more {
   position: absolute;
   z-index: 2;
-  top: 46px;
-  right: 8px;
-  left: 8px;
-  max-height: calc(100% - 54px);
+  top: calc(var(--s-2) + var(--sim-bar-h) + var(--s-1));
+  right: var(--s-2);
+  left: var(--s-2);
+  max-height: calc(100% - var(--sim-bar-h) - 2 * var(--s-3));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--s-3);
+  padding: var(--s-3);
   background: var(--panel);
-  border: 1px solid var(--dim);
-  border-radius: 6px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 28px var(--shade);
 }
 
 .sim-more[hidden] { display: none; }
@@ -495,37 +507,36 @@
   .sim-more { left: auto; width: 340px; }
 }
 
-.sim-toggles { display: flex; gap: 6px; }
+.sim-toggles { display: flex; gap: var(--s-2); }
 
 .sim-switch {
   flex: none;
-  padding: 7px 10px;
-  font-size: 11px;
+  min-height: var(--sim-tool);
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
   color: var(--dim);
+  border-radius: var(--r-sm);
 }
 
 .sim-switch[aria-pressed="true"] {
   color: var(--readout);
-  background: var(--rule);
-  border-color: var(--dim);
-  box-shadow: inset 0 -2px 0 var(--live);
+  background: var(--raised-hi);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
-
-.sim-switch:active { color: var(--case); }
 
 /* The label over the slider and its value: a phone has no width to spare. */
 .sim-drag {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px 10px;
+  gap: var(--s-1) var(--s-3);
 }
 
 .sim-drag .label { grid-column: 1 / -1; }
 
 .sim-value {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--t-sm);
   font-weight: 600;
   min-width: 3.5ch;
   text-align: right;
@@ -533,7 +544,7 @@
 
 .sim-about {
   margin: 0;
-  font-size: 11.5px;
+  font-size: var(--t-sm);
   line-height: 1.5;
   color: var(--dim);
 }

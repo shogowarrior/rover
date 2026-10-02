@@ -1,30 +1,11 @@
 /* The Program tab: its toolbar, the block editor and the simulator's place
    beside it, the console under them, and the dark dress for Blockly's own
    parts. joystick.html links this after panel.css, whose tokens it uses;
-   programtab.js and blocks.js set the attributes it keys on. */
+   programtab.js and blocks.js set the attributes it keys on.
 
-/* --- the page's width ------------------------------------------------------ */
-
-/* The editor wants width. From 900 px the page is wider on both tabs, and
-   the Drive tab keeps its own controls and the scan fan to the column they
-   were drawn for (900 px, less the shell's padding), centred. When only the
-   Program tab widened the page, the header, the tabs and the Stop bar moved
-   and resized on every switch, and one spot on the bar was Stop on one tab
-   and Autonomous on the other. */
-@media (min-width: 900px) {
-  .shell { max-width: 1180px; }
-  #driveTab,
-  .shell:has(> #driveTab:not([hidden])) .scan {
-    width: 100%;
-    max-width: 868px;
-    margin-inline: auto;
-  }
-}
-
-/* With the Program tab showing, the scan fan, drawn at full width, would push
-   the workspace below the fold: it becomes a strip. It still shows the
-   rover's readings while a program runs. */
-.shell:has(> #programTab:not([hidden])) .scan svg { max-height: 150px; }
+   The tab sits where the Drive tab does (panel.css): above the Stop bar on
+   a phone, scrolling with the page; in the left pane on a wide screen,
+   scrolling inside it, beside the rail. */
 
 /* --- the Program tab's name, while a program drives the rover -------------- */
 
@@ -32,19 +13,24 @@
    tab, where nothing else says so, shows it too. */
 .tabs [role="tab"][data-running="yes"]::after {
   content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 8px;
-  vertical-align: 1px;
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--live);
-  box-shadow: 0 0 0 3px rgb(77 184 168 / 0.22);
+  box-shadow: 0 0 0 3px var(--live-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
-/* An id outranks panel.css's [role="tabpanel"][hidden]. */
-#programTab { display: flex; flex-direction: column; gap: 10px; }
+/* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar
+   follows the tab's own width, which the layout sets, not the window's. */
+#programTab {
+  container: program / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
 #programTab[hidden] { display: none; }
 
 /* --- the toolbar ----------------------------------------------------------- */
@@ -52,97 +38,93 @@
 .programBar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   flex-wrap: wrap;
 }
 
 .programBar .grow { flex: 1; }
 
-.programBar button {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 13px;
-  font-size: 11px;
-  border-radius: 6px;
-}
+.programBar button { flex: none; }
 
-.programBar button:disabled {
+.programBar button:disabled,
+#programExamples:disabled {
   color: var(--dim);
   opacity: 0.5;
   cursor: default;
 }
 
-.programBar button:disabled:hover { border-color: var(--rule); }
+.programBar button:disabled:hover { background: var(--raised); }
 
-.programBar .icon { width: 14px; height: 14px; flex: none; fill: currentColor; }
+.programBar .icon { width: 16px; height: 16px; }
 
-.programBar .tool .icon {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* Run and Stop program draw filled shapes. */
+.programBar .run .icon,
+.programBar .halt .icon {
+  fill: currentColor;
+  stroke: none;
 }
 
 /* Run is the one filled button: the thing to press. */
 .programBar .run {
-  background: var(--live);
-  border-color: var(--live);
-  color: var(--case);
-  padding-left: 11px;
-  padding-right: 15px;
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
-.programBar .run:hover { background: #5fcab9; border-color: #5fcab9; }
+.programBar .run:hover { background: var(--accent); filter: brightness(1.1); }
 
 .programBar .run:disabled {
-  background: none;
-  border-color: var(--rule);
   color: var(--dim);
+  background: var(--raised);
+  filter: none;
 }
 
 /* It stops a program, so it says so in the stop red, but outlined: the
-   panel's filled red Stop, below, is the one that stops the rover. */
-.programBar .halt:not(:disabled) { color: #f07a6f; border-color: rgb(217 79 67 / 0.6); }
-.programBar .halt:not(:disabled):hover { border-color: var(--stop); }
+   panel's filled red Stop is the one that stops the rover. */
+.programBar .halt:not(:disabled) {
+  color: var(--stop-ink);
+  border-color: var(--stop);
+  background: var(--stop-soft);
+}
 
-.programBar .segmented { border-radius: 6px; }
 .programBar .segmented[hidden] { display: none; }
-.programBar .segmented button { flex: none; padding: 6px 12px; border-radius: 4px; }
+
+.programBar .segmented button { flex: none; padding-inline: var(--s-4); }
 
 #programExamples {
   appearance: none;
   -webkit-appearance: none;
-  font-family: var(--sans);
-  font-size: 11px;
+  min-height: var(--tap);
+  padding: 0 var(--s-7) 0 var(--s-4);
+  font: inherit;
+  font-size: var(--t-md);
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--readout);
-  background: var(--case) no-repeat right 10px center / 10px 10px
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%237d858e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 9px 30px 9px 13px;
+  /* The caret: two half-squares meeting in a V, in the panel's colours. */
+  background:
+    linear-gradient(45deg, transparent 50%, var(--dim) 50%) right calc(var(--s-3) + 5px) center / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%) right var(--s-3) center / 5px 5px no-repeat,
+    var(--raised);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
   cursor: pointer;
 }
 
-#programExamples:hover { border-color: var(--dim); }
-#programExamples:disabled { color: var(--dim); opacity: 0.5; cursor: default; }
-#programExamples:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
-#programExamples option { background: var(--panel); color: var(--readout); text-transform: none; letter-spacing: 0; }
+#programExamples:hover { background-color: var(--raised-hi); }
+#programExamples option { background: var(--panel); color: var(--readout); }
+
+/* Too narrow for one row: the examples and the file tools take a second. */
+@container program (max-width: 900px) {
+  .programBar .grow { flex-basis: 100%; height: 0; }
+}
 
 /* A phone: the switch across the top, then Run and Stop, then the file
    tools, as icons. */
-@media (max-width: 600px) {
+@container program (max-width: 560px) {
   .programBar .segmented { flex: 1 1 100%; }
   .programBar .segmented button { flex: 1 1 0; }
-  .programBar .run { flex: 1; justify-content: center; }
-  .programBar .grow { flex-basis: 100%; height: 0; }
-  #programExamples { flex: 1; }
-  .programBar .tool { padding: 9px 11px; }
+  .programBar .run { flex: 1; }
+  #programExamples { flex: 1; min-width: 0; }
+  .programBar .tool { width: var(--tap); padding: 0; }
   .programBar .tool span {
     position: absolute;
     width: 1px;
@@ -155,26 +137,20 @@
 
 /* --- the stage: the editor, and the simulator's view ---------------------- */
 
-/* Side by side on a wide screen, the editor the wider; stacked on a phone.
-   #simSlot is the simulator's (sim.js): a definite box it fills with one
-   element of width and height 100%, in the stage's right-hand column at
-   --stage-h tall, or under the editor at 280 px on a narrow screen.
+/* Stacked on a phone and in the one-column layout; side by side, the editor
+   the wider, in the wide layout's left pane. #simSlot is the simulator's
+   (sim.js): a definite box it fills with one element of width and height
+   100%.
 
-   --stage-h leaves room under the stage for the state line and the sticky
-   Stop bar: about 370 px of page sit above the stage, and the state line
-   (48) and the bar (77) below it. Sized for the page alone, the editor's
-   bottom and trashcan sat under the bar, and the line saying what runs and
-   why it stopped was below the fold for the whole of a run. Under about
-   780 px of window the floor wins, and the page scrolls: below 280 px the
-   simulator's view no longer fits its own controls. */
+   Stacked, the editor is most of a phone's height and the view 360 px under
+   it: below about 300 px the view no longer fits its own controls, which
+   take two rows on a phone. */
 .programStage {
-  --stage-h: clamp(280px, calc(100vh - 500px), 640px);
+  --stage-h: clamp(360px, 62vh, 560px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(280px, 34%, 400px);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
 }
-
-.programStage[data-sim="no"] { grid-template-columns: minmax(0, 1fr); }
 
 .programEditor {
   position: relative;
@@ -182,10 +158,10 @@
      kept inside this box, they stay under the sticky Stop bar. */
   isolation: isolate;
   height: var(--stage-h);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
   overflow: hidden;
   background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
 }
 
 #programWorkspace { position: absolute; inset: 0; }
@@ -194,48 +170,52 @@
 
 #simSlot {
   position: relative;
-  height: var(--stage-h);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  height: 360px;
   overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+}
+
+/* Stacked, the view can fold away under its own heading. */
+.programSim .simToggle {
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: var(--s-2);
+  color: var(--dim);
   background: var(--panel);
 }
 
-/* Only on a phone, where the view sits under the editor and can fold away. */
-.simToggle { display: none; }
+/* A chevron: down to unfold, up to fold. */
+.simToggle::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(1px) rotate(-135deg);
+  transition: transform 150ms ease;
+}
 
-@media (max-width: 899px) {
-  .programStage { grid-template-columns: minmax(0, 1fr); }
-  .programEditor { height: clamp(360px, 62vh, 560px); }
-  #simSlot { height: 280px; }
+.simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
+.programSim[data-collapsed="yes"] #simSlot { display: none; }
 
-  .programSim .simToggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    font-size: 11px;
-    color: var(--dim);
-    background: none;
-    border-radius: 6px;
+/* The wide layout's left pane: the page no longer scrolls, the pane does,
+   and the stage fills what the toolbar and the console leave of it. About
+   330 px of the screen is the header, the toolbar, the console and the
+   margins; under about 630 px of window the floor wins and the pane
+   scrolls. */
+@media (min-width: 1100px) and (min-height: 600px) {
+  .programStage {
+    --stage-h: clamp(300px, calc(100vh - 330px), 720px);
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 36%, 400px);
   }
 
-  /* A chevron: down to unfold, up to fold. */
-  .simToggle::after {
-    content: "";
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: translateY(1px) rotate(-135deg);
-    transition: transform 150ms ease;
-  }
+  .programStage[data-sim="no"] { grid-template-columns: minmax(0, 1fr); }
 
-  .simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
-  .simToggle:active { color: var(--case); }
-  .programSim[data-collapsed="yes"] #simSlot { display: none; }
+  #simSlot { height: var(--stage-h); }
+
+  .simToggle { display: none; }
 }
 
 /* Over the workspace while it is empty. */
@@ -246,13 +226,13 @@
   transform: translate(-50%, -50%);
   margin: 0;
   max-width: 70%;
-  padding: 12px 16px;
+  padding: var(--s-3) var(--s-4);
   color: var(--dim);
-  font-size: 13px;
+  font-size: var(--t-md);
   line-height: 1.5;
   text-align: center;
   border: 1px dashed var(--rule);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   pointer-events: none;
 }
 
@@ -263,49 +243,45 @@
   .programHint { left: calc(50% + 60px); }
 }
 
-/* In the editor's place when Blockly could not load. */
+/* In the editor's place when Blockly could not load. Top-aligned: on a
+   phone the editor's box runs on under the Stop bar, and centred, only the
+   headline showed, and not that driving works without the editor. */
 .programOffline {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px;
+  justify-content: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-7) var(--s-6);
   text-align: center;
-  font-size: 13px;
+  font-size: var(--t-md);
   line-height: 1.5;
   color: var(--dim);
   background: radial-gradient(circle, var(--rule) 1px, transparent 1.5px) 0 0 / 24px 24px, var(--case);
 }
 
-.programOffline strong { color: var(--readout); font-size: 14px; }
+.programOffline strong { color: var(--readout); font-size: var(--t-lg); }
 .programOffline span { max-width: 42ch; }
 .programOffline[hidden] { display: none; }
-
-/* On a phone the editor's box runs down under the Stop bar: centred, only
-   the headline showed, and not that driving works without the editor. */
-@media (max-width: 899px) {
-  .programOffline { justify-content: flex-start; padding-top: 40px; }
-}
 
 /* --- the console ----------------------------------------------------------- */
 
 .programConsole {
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  background: #17191c;
   overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
 }
 
 .programState {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--s-3);
   margin: 0;
-  padding: 10px 14px;
-  font-size: 12px;
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--t-md);
   font-weight: 600;
   line-height: 1.4;
   border-bottom: 1px solid var(--rule);
@@ -325,7 +301,7 @@
 
 .programState[data-tone="running"]::before {
   background: var(--live);
-  box-shadow: 0 0 0 4px rgb(77 184 168 / 0.22);
+  box-shadow: 0 0 0 4px var(--live-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
@@ -336,27 +312,28 @@
 .programState[data-tone="stopped"],
 .programState[data-tone="failed"] { color: var(--warn); }
 
-@keyframes programPulse { to { box-shadow: 0 0 0 7px rgb(77 184 168 / 0); } }
+@keyframes programPulse { to { box-shadow: 0 0 0 7px transparent; } }
 
 .programLog {
   list-style: none;
   margin: 0;
-  padding: 8px 14px 10px;
-  min-height: 44px;
+  padding: var(--s-2) var(--s-4) var(--s-3);
+  min-height: var(--tap);
   max-height: 128px;
   overflow-y: auto;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--t-sm);
   line-height: 1.65;
   color: var(--dim);
+  background: var(--case);
   -webkit-user-select: text;
   user-select: text;
 }
 
 .programLog:empty::before { content: "What the program says appears here."; }
 
-.programLog li { display: flex; gap: 8px; }
-.programLog li::before { content: "·"; flex: none; color: var(--rule); }
+.programLog li { display: flex; gap: var(--s-2); }
+.programLog li::before { content: "·"; flex: none; color: var(--faint); }
 .programLog li[data-tone="say"] { color: var(--readout); }
 .programLog li[data-tone="say"]::before { content: "›"; color: var(--live); }
 .programLog li[data-tone="done"] { color: var(--live); }
@@ -375,12 +352,12 @@
 .blocklyMainBackground { stroke: none; }
 
 .blocklyToolbox {
-  padding: 10px 8px;
+  padding: var(--s-3) var(--s-2);
   border-right: 1px solid var(--rule);
 }
 
 .blocklyToolbox[layout="h"] {
-  padding: 6px 8px;
+  padding: var(--s-2);
   border-right: none;
   border-bottom: 1px solid var(--rule);
 }
@@ -399,16 +376,16 @@
   display: flex;
   align-items: center;
   height: auto;
-  margin: 0 0 3px;
-  padding: 7px 14px 7px 10px !important;
+  margin: 0 0 var(--s-1);
+  padding: var(--s-2) var(--s-4) var(--s-2) var(--s-3) !important;
   border: none !important;
-  border-radius: 999px;
+  border-radius: var(--r-full);
   background: transparent !important;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
 
-.roverCategory .blocklyTreeRowContentContainer { display: flex; align-items: center; gap: 9px; }
+.roverCategory .blocklyTreeRowContentContainer { display: flex; align-items: center; gap: var(--s-2); }
 
 /* The dot. Blockly's own icon (a sprite, and unclassed in a horizontal
    toolbox) gives way to it. */
@@ -425,26 +402,23 @@
 
 .roverCategory .blocklyToolboxCategoryLabel {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--t-sm);
   font-weight: 600;
-  letter-spacing: 0.02em;
   color: var(--readout);
 }
 
-.blocklyToolboxCategory.roverCategory:hover { background: rgb(255 255 255 / 0.06) !important; }
+.blocklyToolboxCategory.roverCategory:hover { background: var(--raised) !important; }
 
 .blocklyToolboxCategory.roverCategory.blocklyToolboxSelected {
   background: color-mix(in srgb, var(--dot) 26%, transparent) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dot) 55%, transparent);
 }
 
-.roverCategory.blocklyToolboxSelected .blocklyToolboxCategoryLabel { color: #fff; }
-
 /* Along the top on a phone: a row of pills that scrolls sideways. */
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--s-1);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -453,65 +427,64 @@
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategory.roverCategory {
   margin: 0;
-  padding: 6px 12px 6px 9px !important;
+  padding: var(--s-2) var(--s-3) !important;
   white-space: nowrap;
 }
 
-.blocklyFlyoutButton { fill: var(--rule); }
-.blocklyFlyoutButton:hover { fill: #4a5058; }
+.blocklyFlyoutButton { fill: var(--raised-hi); }
+.blocklyFlyoutButton:hover { fill: var(--faint); }
 .blocklyFlyoutButton .blocklyText { fill: var(--readout); }
 .blocklyFlyoutLabelText { fill: var(--dim); }
 
-/* A selected block is outlined in white; the running one glows teal, the
-   panel's "live" colour, whatever its own. */
-.blocklySelected > .blocklyPath { stroke: #fff; stroke-width: 2px; }
+/* A selected block is outlined in the text colour; the running one glows
+   green, the panel's "live", whatever its own. */
+.blocklySelected > .blocklyPath { stroke: var(--readout); stroke-width: 2px; }
 
 .blocklyHighlighted > .blocklyPath {
   stroke: var(--live);
   stroke-width: 3px;
-  filter: drop-shadow(0 0 6px rgb(77 184 168 / 0.85));
+  filter: drop-shadow(0 0 6px var(--live));
 }
 
 /* Menus: the context menu and dropdowns. */
 .blocklyWidgetDiv .blocklyMenu,
 .blocklyDropDownDiv .blocklyMenu {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--t-md);
 }
 
 .blocklyWidgetDiv .blocklyMenu {
-  background: #2a2e33;
+  padding: var(--s-1) 0;
+  background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgb(0 0 0 / 0.45);
-  padding: 4px 0;
+  border-radius: var(--r-sm);
+  box-shadow: 0 10px 28px var(--shade);
 }
 
 .blocklyDropDownDiv {
-  border-radius: 10px;
-  box-shadow: 0 10px 28px rgb(0 0 0 / 0.45);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 28px var(--shade);
 }
 
-.blocklyMenuItem { color: var(--readout); border-radius: 6px; }
-.blocklyDropDownDiv .blocklyMenuItem { color: #fff; }
+.blocklyMenuItem { color: var(--readout); border-radius: var(--r-sm); }
 .blocklyMenuItemDisabled { color: var(--dim) !important; }
-.blocklyWidgetDiv .blocklyMenuItemHighlight { background: rgb(255 255 255 / 0.08); }
+.blocklyWidgetDiv .blocklyMenuItemHighlight { background: var(--raised-hi); }
 
-.blocklyMenuSeparator { border-top-color: rgb(255 255 255 / 0.18); }
+.blocklyMenuSeparator { border-top-color: var(--rule); }
 
 .blocklyWidgetDiv .blocklyHtmlInput { font-family: var(--sans); font-weight: 600; }
 
 .blocklyTooltipDiv {
   max-width: 320px;
-  padding: 8px 11px;
+  padding: var(--s-2) var(--s-3);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--t-sm);
   line-height: 1.45;
   color: var(--readout);
-  background: #101214;
+  background: var(--case);
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  box-shadow: 0 8px 22px rgb(0 0 0 / 0.5);
+  border-radius: var(--r-sm);
+  box-shadow: 0 8px 22px var(--shade);
   opacity: 1 !important;
 }
 

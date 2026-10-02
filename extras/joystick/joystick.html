@@ -6,16 +6,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
+  <meta name="theme-color" content="#0b0d11">
   <link rel="stylesheet" href="css/panel.css">
   <link rel="stylesheet" href="css/program.css">
   <link rel="stylesheet" href="css/sim.css">
 </head>
 
 <body data-link="down">
+  <!-- The shell is a grid of the header, the open tab and the rail (the
+       scan, the readouts and Stop). On a phone they stack: the scan under
+       the header, the Drive tab as a dock under the thumbs, Stop at the foot
+       of the screen. On a wide screen the rail is a column on the right and
+       the open tab fills the left. css/panel.css lays both out. -->
   <main class="shell">
 
     <header class="bar">
-      <span class="wordmark">ROVER</span>
+      <span class="wordmark">Rover</span>
+
+      <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in
+           step. The Drive tab is the one shown until the scripts run: joy.js
+           sizes the stick from its container once, and needs it laid out. -->
+      <div class="tabs" role="tablist" aria-label="Controls">
+        <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
+        <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
+                tabindex="-1">Program</button>
+      </div>
+
       <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
            scheme.js builds the two segments, and keeps them disabled until a
            frame names a scheme: firmware from before schemes never does. -->
@@ -25,53 +41,42 @@
           <div class="segmented" id="schemeChoice"></div>
         </div>
       </div>
+
+      <!-- What the operator must know at a glance: whether the link is up,
+           and whether the rover is driving itself. The pills take their
+           colour from body[data-link], which link.js keeps, and from the
+           Autonomous button's aria-pressed, which readouts.js keeps. -->
+      <div class="status">
+        <span class="pill linkPill">
+          <span class="lamp" aria-hidden="true"></span>
+          <span id="linkState">No link</span>
+        </span>
+        <span class="pill modePill">
+          <span class="srOnly">Mode</span>
+          <output id="mode">—</output>
+        </span>
+      </div>
+
       <div class="link">
-        <span class="lamp" aria-hidden="true"></span>
-        <span class="label" id="linkState">No link</span>
         <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false">
-        <button id="connect" style="flex:none">Connect</button>
+        <button id="connect">Connect</button>
       </div>
     </header>
 
-    <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in step.
-         The Drive tab is the one shown until the scripts run: joy.js sizes
-         the stick from its container once, and needs it laid out. -->
-    <div class="tabs" role="tablist" aria-label="Controls">
-      <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
-      <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
-              tabindex="-1">Program</button>
-    </div>
+    <!-- The dock: the stick under the left thumb; the rotate buttons and the
+         speed under the right, with Stop below them on a phone. -->
+    <section class="dock" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
+      <!-- The stick family, offered under the ADVANCED scheme only. -->
+      <div id="familySlot">
+        <div class="family" id="family" role="group" aria-label="Stick family" hidden>
+          <div class="segmented" id="familyChoice"></div>
+          <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
+        </div>
+      </div>
 
-    <!-- Shown while telemetry says "motorsReady": false. readouts.js hides it
-         again when the rover says true, says nothing, or the link goes.
-         It says what a reset does because a power-on or EN reset starts
-         exploration: once the shield answers, the wheels turn straight away,
-         likely with the operator's hands still on the wiring. -->
-    <p class="fault" id="motorsFault" role="alert" hidden>
-      <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
-      It did not answer when the rover booted. Check its I2C wiring and power,
-      then reset the rover with its wheels off the ground: after a power-on or
-      the EN button it starts exploring.
-    </p>
-
-    <!-- The rover perceives the world as five ultrasonic returns, taken
-         straight ahead and at 35 and 70 degrees to either side. Drawing them
-         at those bearings, rather than as a neutral row of numbers, is the
-         whole point: the panel shows what the machine actually sees.
-
-         scan.js draws the fan -- range rings at the firmware's STOP and GO
-         distances, at 100 cm and at full reach, and a wedge and a reading per
-         bearing -- from the constants protocol.js mirrors, so nothing here is
-         a hand-computed arc that could drift from them. -->
-    <section class="scan" aria-label="Ultrasonic scan">
-      <svg id="scan" role="img" aria-labelledby="scanDesc">
-        <title id="scanDesc">Live ultrasonic scan at five bearings</title>
-      </svg>
-    </section>
-
-    <section class="controls" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
-      <div class="pad">
-        <!-- Names the stick family; family.js keeps it in step. -->
+      <div class="stickPad">
+        <!-- Names the stick family; family.js keeps it in step. Above the
+             stick, where the thumb on it does not hide it. -->
         <span class="label" id="stickLabel">Translate</span>
         <!-- The stick, and over it the move each quadrant sends under a pivot
              family. The two share one grid cell rather than being positioned:
@@ -81,32 +86,24 @@
           <div id="stick"></div>
           <div class="hints" id="stickHints" hidden></div>
         </div>
-        <!-- The stick family, offered under the ADVANCED scheme only. -->
-        <div id="familySlot">
-          <div class="family" id="family" role="group" aria-label="Stick family" hidden>
-            <div class="segmented" id="familyChoice"></div>
-            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
-          </div>
-        </div>
       </div>
 
-      <div class="stack">
-        <div class="pad">
-          <span class="label">Rotate</span>
-          <div class="spin">
-            <button id="ccw" aria-label="Rotate counter-clockwise">&#8634; Left</button>
-            <button id="cw" aria-label="Rotate clockwise">Right &#8635;</button>
-          </div>
-        </div>
+      <div class="spin" role="group" aria-label="Rotate">
+        <button id="ccw" aria-label="Rotate counter-clockwise">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
+          <span>Left</span>
+        </button>
+        <button id="cw" aria-label="Rotate clockwise">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
+          <span>Right</span>
+        </button>
+      </div>
 
-        <div class="pad">
-          <span class="label" id="speedLabel">Speed</span>
-          <div class="speed">
-            <input type="range" id="speed" min="0" max="255" step="8" value="64"
-                   aria-labelledby="speedLabel">
-            <output id="speedOut" style="font-family:var(--mono);font-weight:600">64</output>
-          </div>
-        </div>
+      <div class="speed">
+        <span class="label" id="speedLabel">Speed</span>
+        <output id="speedOut">64</output>
+        <input type="range" id="speed" min="0" max="255" step="8" value="64"
+               aria-labelledby="speedLabel">
       </div>
     </section>
 
@@ -122,9 +119,9 @@
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.1v9.8L12.8 8z"/></svg>
           <span id="programRunLabel">Run on rover</span>
         </button>
-        <!-- Named apart from the red Stop below: this one ends the program,
-             and sends STOP only if the program was driving; that one always
-             stops the rover, an exploring one too. -->
+        <!-- Named apart from the panel's red Stop: this one ends the
+             program, and sends STOP only if the program was driving; that
+             one always stops the rover, an exploring one too. -->
         <button type="button" class="halt" id="programStop" disabled
                 title="End the program. The rover stops if the program was driving it.">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
@@ -177,25 +174,67 @@
       </div>
     </section>
 
-    <section class="readouts">
-      <div class="cell"><span class="label">Mode</span><output id="mode">—</output></div>
-      <div class="cell"><span class="label">Move</span><output id="move">—</output></div>
-      <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
-      <div class="cell" id="phaseCell" hidden>
-        <span class="label">Phase</span><output id="phase">—</output>
+    <!-- The rail: what the rover reports, and Stop. The same on both tabs
+         and in the same place: a column beside the open tab on a wide
+         screen. On a phone its parts join the page around the open tab, the
+         scan above it and Stop at the foot of the screen. It comes after the
+         tabs so that Stop is the last control in the focus order, as it is
+         the last thing on a phone's screen. -->
+    <div class="rail">
+      <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
+           it again when the rover says true, says nothing, or the link goes.
+           It says what a reset does because a power-on or EN reset starts
+           exploration: once the shield answers, the wheels turn straight
+           away, likely with the operator's hands still on the wiring. -->
+      <p class="fault" id="motorsFault" role="alert" hidden>
+        <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
+        It did not answer when the rover booted. Check its I2C wiring and power,
+        then reset the rover with its wheels off the ground: after a power-on or
+        the EN button it starts exploring.
+      </p>
+
+      <!-- The rover perceives the world as five ultrasonic returns, taken
+           straight ahead and at 35 and 70 degrees to either side. Drawing
+           them at those bearings, rather than as a neutral row of numbers, is
+           the whole point: the panel shows what the machine actually sees.
+
+           scan.js draws the fan -- range rings at the firmware's STOP and GO
+           distances, at 100 cm and at full reach, and a wedge and a reading
+           per bearing -- from the constants protocol.js mirrors, so nothing
+           here is a hand-computed arc that could drift from them. -->
+      <section class="scan" aria-label="Ultrasonic scan">
+        <svg id="scan" role="img" aria-labelledby="scanDesc">
+          <title id="scanDesc">Live ultrasonic scan at five bearings</title>
+        </svg>
+      </section>
+
+      <!-- What link.js has to say, over the foot of the scan: how to
+           connect, and why the link went. Empty while all is well. -->
+      <p id="note" aria-live="polite"></p>
+
+      <section class="readouts">
+        <div class="cell"><span class="label">Move</span><output id="move">—</output></div>
+        <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
+        <div class="cell" id="phaseCell" hidden>
+          <span class="label">Phase</span><output id="phase">—</output>
+        </div>
+        <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
+      </section>
+
+      <!-- Outside the tabs, and at the foot of the screen: Stop is in reach
+           whatever tab is showing and wherever the page is scrolled, and
+           switching tabs does not move it. -->
+      <div class="actions">
+        <button id="auto" aria-pressed="false"
+                title="Let the rover explore. If exploration has halted, it looks again.">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
+          Autonomous
+        </button>
+        <button id="stop" title="Stop the rover now, whatever is driving it, even its own exploring.">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          Stop
+        </button>
       </div>
-      <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
-    </section>
-
-    <p id="note" aria-live="polite"></p>
-
-    <!-- Outside the tabs, last, and stuck to the bottom of the screen: Stop
-         is in reach whatever tab is showing and wherever the page is
-         scrolled. -->
-    <div class="actions">
-      <button id="auto" aria-pressed="false"
-              title="Let the rover explore. If exploration has halted, it looks again.">Autonomous</button>
-      <button id="stop" title="Stop the rover now, whatever is driving it, even its own exploring.">Stop</button>
     </div>
   </main>
 
