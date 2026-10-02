@@ -243,8 +243,9 @@ bool loadVectors(JsonDocument& doc) {
 
 }  // namespace
 
-// The panel's mecanum.js is tested against the same file, so the stick on
-// screen and the stick on the pad pick the same move for the same push.
+// The panel's copy, extras/joystick/js/mecanum.js, is tested against the same
+// file (extras/joystick/test/mecanum.test.js), so the stick on screen and the
+// stick on the pad pick the same move for the same push.
 void test_stick_matches_the_shared_vectors(void) {
   JsonDocument doc;
   TEST_ASSERT_TRUE_MESSAGE(loadVectors(doc), "test/vectors/stick_moves.json");

@@ -11,7 +11,7 @@
 //
 // ArduinoJson is header-only and builds on the host, so this is tested there
 // too (test/test_protocol). Clients: client/drive.py, client/ws.py,
-// client/rover.ipynb and extras/joystick/control.js.
+// client/rover.ipynb and the panel's extras/joystick/js/.
 //
 //   client -> rover   {"move": <MoveCode>, "speed": 0..255, "duration": ms}
 //                     {"scheme": "NORMAL" | "ADVANCED"}

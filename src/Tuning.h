@@ -44,7 +44,7 @@ constexpr int EXPLORE_SPEED = 64;
 // Exploration stops a cruise when something in the rover's path is this close
 // (sensor frame), and only starts one when the path is clear beyond GO. The
 // panel colours its scan fan with the same two numbers (STOP_CM / GO_CM in
-// extras/joystick/control.js).
+// extras/joystick/js/protocol.js).
 constexpr float EXPLORE_STOP_CM = 25.0f;
 constexpr float EXPLORE_GO_CM = 40.0f;
 
@@ -61,7 +61,7 @@ constexpr uint32_t GAMEPAD_REFRESH_MS = 200;
 constexpr uint32_t GAMEPAD_SILENCE_MS = 500;
 // A new speed in the same direction is sent at most this often (a new
 // direction goes at once); each costs a four-motor rewrite. STICK_SEND_MS in
-// extras/joystick/control.js is the panel's copy of the same rule.
+// extras/joystick/js/protocol.js is the panel's copy of the same rule.
 constexpr uint32_t GAMEPAD_SPEED_CHANGE_MS = 100;
 // The pad's player LEDs, which show the control scheme, are rewritten at most
 // this often. Each write is a Bluetooth send from the loop task, and the
@@ -71,7 +71,7 @@ constexpr uint32_t GAMEPAD_LED_MIN_INTERVAL_MS = 250;
 // --- Network ---------------------------------------------------------------
 
 constexpr uint32_t SERIAL_BAUD = 115200;
-constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in control.js, DEFAULT_PORT in drive.py and ws.py
+constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in the panel's js/protocol.js, DEFAULT_PORT in drive.py and ws.py
 constexpr uint32_t TELEMETRY_INTERVAL_MS = 500;
 constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup() only
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;

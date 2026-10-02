@@ -75,7 +75,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, and the WiFi-loss failsafe |
-| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands in, telemetry out, driver tracking, heartbeat |
+| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands and scheme changes in, telemetry out, driver tracking, heartbeat |
 | `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED write. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |

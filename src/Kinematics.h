@@ -9,8 +9,9 @@
 // point: this is part of the firmware that is compiled and tested on the host
 // (`pio test -e native`) instead of only on the board.
 //
-// Keep it that way. If a function in here needs millis(), a motor, or a Serial
-// print, it belongs in one of the hardware classes instead.
+// Keep it that way. If a function here seems to need millis(), a motor or
+// Serial, pass the value in or add an interface in Hardware.h, and keep the
+// logic here, where it is tested (see AGENTS.md, Architecture).
 
 namespace kinematics {
 
@@ -32,7 +33,9 @@ constexpr int MOTOR_SPEED_MAX = 255;
 // missing echo is read as "nothing within range", so it normalises to "far".
 // Explorer never drives forward on a sweep that heard nothing, and halts after
 // ExploreParams::silentSweepsToHalt of them in a row, which is how a dead
-// sensor shows up. See normalizeDistance.
+// sensor shows up. See normalizeDistance. Telemetry sends it as is: FAR_CM in
+// extras/joystick/js/protocol.js and DISTANCE_FAR_CM in client/drive.py are
+// copies, and tools/check_protocol.py checks them.
 constexpr float DISTANCE_FAR_CM = 999.0f;
 
 // Clamp a speed from an untrusted source into what the motors may be given
@@ -81,7 +84,7 @@ enum StickFamily { FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS };
 // so the rover moves in the direction pushed without turning. PIVOT and
 // PIVOT_SIDEWAYS: the quadrant picks one of four pivots (up-right is
 // ..._RIGHT_FORWARD / ..._FORWARD_RIGHT, down-left ..._LEFT_BACKWARD /
-// ..._BACKWARD_LEFT). extras/joystick/mecanum.js is the panel's copy, and
+// ..._BACKWARD_LEFT). extras/joystick/js/mecanum.js is the panel's copy, and
 // both are tested against test/vectors/stick_moves.json. The caller rejects a
 // centred stick first: this always returns a motion.
 MoveCode moveForStick(int x, int yUp, StickFamily family = FAMILY_TRANSLATE);
