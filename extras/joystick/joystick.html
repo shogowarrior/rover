@@ -7,6 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
   <link rel="stylesheet" href="css/panel.css">
+  <link rel="stylesheet" href="css/program.css">
+  <link rel="stylesheet" href="css/sim.css">
 </head>
 
 <body data-link="down">
@@ -14,8 +16,15 @@
 
     <header class="bar">
       <span class="wordmark">ROVER</span>
-      <!-- The control scheme's toggle goes here. -->
-      <div id="schemeSlot"></div>
+      <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
+           scheme.js builds the two segments, and keeps them disabled until a
+           frame names a scheme: firmware from before schemes never does. -->
+      <div id="schemeSlot">
+        <div class="scheme" id="scheme" role="group" aria-labelledby="schemeLabel">
+          <span class="label" id="schemeLabel">Scheme</span>
+          <div class="segmented" id="schemeChoice"></div>
+        </div>
+      </div>
       <div class="link">
         <span class="lamp" aria-hidden="true"></span>
         <span class="label" id="linkState">No link</span>
@@ -62,10 +71,23 @@
 
     <section class="controls" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
       <div class="pad">
-        <span class="label">Translate</span>
-        <div id="stick"></div>
-        <!-- The stick family's selector goes here. -->
-        <div id="familySlot"></div>
+        <!-- Names the stick family; family.js keeps it in step. -->
+        <span class="label" id="stickLabel">Translate</span>
+        <!-- The stick, and over it the move each quadrant sends under a pivot
+             family. The two share one grid cell rather than being positioned:
+             joy.js places a touch by its canvas's offsetParent, which a
+             positioned ancestor would change. -->
+        <div class="stickArea">
+          <div id="stick"></div>
+          <div class="hints" id="stickHints" hidden></div>
+        </div>
+        <!-- The stick family, offered under the ADVANCED scheme only. -->
+        <div id="familySlot">
+          <div class="family" id="family" role="group" aria-label="Stick family" hidden>
+            <div class="segmented" id="familyChoice"></div>
+            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
+          </div>
+        </div>
       </div>
 
       <div class="stack">
@@ -88,8 +110,71 @@
       </div>
     </section>
 
+    <!-- Block programs: built here, previewed on the simulator if the
+         operator likes, run on the rover. programtab.js runs the tab. The
+         block editor needs Blockly, which loads from cdn.jsdelivr.net; when
+         it cannot, the tab says so in the editor's place and everything else
+         works on. -->
     <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" hidden>
-      <p class="placeholder">Block programs for the rover will be built here.</p>
+      <div class="programBar" role="toolbar" aria-label="Program">
+        <div class="segmented" id="programTarget" role="group" aria-label="Run the program on"></div>
+        <button type="button" class="run" id="programRun" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.1v9.8L12.8 8z"/></svg>
+          <span id="programRunLabel">Run on rover</span>
+        </button>
+        <!-- Named apart from the red Stop below: this one ends the program,
+             and sends STOP only if the program was driving; that one always
+             stops the rover, an exploring one too. -->
+        <button type="button" class="halt" id="programStop" disabled
+                title="End the program. The rover stops if the program was driving it.">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
+          <span>Stop program</span>
+        </button>
+        <span class="grow"></span>
+        <select id="programExamples" aria-label="Load an example program" disabled>
+          <option value="">Examples</option>
+        </select>
+        <button type="button" class="tool" id="programExport" title="Save the program as rover-program.json" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13.5h10"/></svg>
+          <span>Export</span>
+        </button>
+        <button type="button" class="tool" id="programImport" title="Open a program saved with Export" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2M3 13.5h10"/></svg>
+          <span>Import</span>
+        </button>
+        <input type="file" id="programFile" accept=".json,application/json" hidden>
+        <button type="button" class="tool" id="programClear" title="Remove every block" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>
+          <span>Clear</span>
+        </button>
+      </div>
+
+      <!-- The editor, and beside it (below it, on a phone) the simulator's
+           view. #simSlot is the simulator's to fill: program.css gives it a
+           definite size, and nothing else is ever put in it. -->
+      <div class="programStage" id="programStage" data-sim="yes">
+        <div class="programEditor">
+          <div id="programWorkspace"></div>
+          <p class="programHint" id="programHint" hidden>Drag blocks in from the toolbox, or start from an example.</p>
+          <div class="programOffline" id="programOffline" hidden>
+            <strong>The block editor could not load.</strong>
+            <span>It loads Blockly from cdn.jsdelivr.net, so it needs the internet the first time.
+              Driving works without it.</span>
+          </div>
+        </div>
+        <div class="programSim" id="programSim">
+          <button type="button" class="simToggle" id="simToggle" aria-expanded="true"
+                  aria-controls="simSlot">Simulator</button>
+          <div id="simSlot"></div>
+        </div>
+      </div>
+
+      <!-- What is running and why it stopped, then everything the program
+           and the runner said. -->
+      <div class="programConsole">
+        <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
+        <ol class="programLog" id="programLog" aria-label="Program output"></ol>
+      </div>
     </section>
 
     <section class="readouts">
@@ -110,7 +195,7 @@
     <div class="actions">
       <button id="auto" aria-pressed="false"
               title="Let the rover explore. If exploration has halted, it looks again.">Autonomous</button>
-      <button id="stop">Stop</button>
+      <button id="stop" title="Stop the rover now, whatever is driving it, even its own exploring.">Stop</button>
     </div>
   </main>
 
@@ -126,7 +211,23 @@
   <script src="js/scan.js"></script>
   <script src="js/readouts.js"></script>
   <script src="js/drive.js"></script>
+  <script src="js/scheme.js"></script>
+  <script src="js/family.js"></script>
   <script src="js/tabs.js"></script>
+
+  <!-- The Program tab. Blockly is the page's one remote script, pinned and
+       checked against its hash. It is deferred: it runs after the page has
+       been parsed, so a slow or unreachable CDN never holds up driving, and
+       app.js builds the block editor only once it has run (or failed). -->
+  <script src="https://cdn.jsdelivr.net/npm/blockly@13.3.0/blockly.min.js" integrity="sha384-4Kv1r1k2t1Nx4aCrz2guWZY/uABIpOYzbdP6jumYusRZ0friDYW9iV1A06ULXjQm" crossorigin="anonymous" defer></script>
+  <script src="js/program.js"></script>
+  <script src="js/blocks.js"></script>
+  <script src="js/programtab.js"></script>
+
+  <!-- The simulator: a program's preview, drawn on the Program tab and sent
+       nowhere. Without these two, the tab offers only the rover. -->
+  <script src="js/sim.js"></script>
+  <script src="js/simview.js"></script>
 
   <!-- The composition root, after every part it builds. -->
   <script src="js/app.js"></script>

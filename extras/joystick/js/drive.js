@@ -38,6 +38,18 @@
  *       checks the rover's scheme: offering the pivot families only under
  *       ADVANCED is the caller's job.
  *
+ *   releaseStick()
+ *       Let go of the stick behind the operator's back: it drives again only
+ *       from a fresh primary press, however long the thumb stays down. What
+ *       the stick was driving stops -- one STOP, and only if the stick was
+ *       what this panel was sending. A held rotate button or a program
+ *       carries on, as when the operator lets go of the stick. For a change
+ *       of control scheme, which must never turn the move under the
+ *       operator's thumb into another (see app.js), and for a touch the
+ *       system takes away. Returns true when the stick was deflected: a
+ *       thumb on it has just lost what it was asking for, though joy.js
+ *       goes on drawing the knob under it.
+ *
  *   program(move, speed)
  *   endProgram()
  *       A third input, for a program runner. move is a motion code (1 to 18;
@@ -51,14 +63,21 @@
  *       below ends the program too, so a runner should listen to
  *       onStandDown and not assume its program is still held.
  *
- *   resumeAutonomous()
+ *   resumeAutonomous({ byProgram })
  *       What the Autonomous button does: forget every held input, stop
  *       repeating, and send RESUME_AUTONOMOUS.
  *
- *   stopRover()
+ *   stopRover({ byProgram })
  *       What the Stop button does: forget every held input and send STOP,
  *       whether or not this panel was driving. It is how to stop an
  *       exploring rover.
+ *
+ *       With byProgram true, a program's own "stop" or "start exploring"
+ *       block: the same frames go out, but neither event below is raised.
+ *       Nobody pressed anything, so nothing that waits for a press may take
+ *       one as answered (the stick's "press again" caption went back to the
+ *       family's name over a stick still let go of), and the program that
+ *       asked is not lost to it.
  *
  *   standDown(reason)
  *       The operator's attention or the link has gone: forget every held
@@ -75,14 +94,18 @@
  *       the stick (once armed, before joy.js reports a deflection), a press
  *       of a rotate button (after it has taken effect), and the Stop and
  *       Autonomous buttons (after they have acted). Never on a hover, a
- *       right-, middle- or ctrl-click, or a press on a button already held.
+ *       right-, middle- or ctrl-click, or a press on a button already held,
+ *       nor on a program's own stop or start exploring.
  *
  *   onStandDown(fn)
  *       fn(reason) after the driver stands down or halts, whether or not
  *       anything was held: "blur", "hidden" and "pagehide" (from app.js),
  *       "disconnect" and "linkLost" (the link went down), "stale"
  *       (linkStale), "stop" (stopRover) and "autonomous"
- *       (resumeAutonomous). Not on an ordinary release of a control.
+ *       (resumeAutonomous). Not on an ordinary release of a control, nor on
+ *       a program's own stop or start exploring.
+ *
+ *   Each on...(fn) returns a function that unsubscribes fn.
  *
  *   driving
  *       A copy of the {move, speed} this panel is sending, or null.
@@ -135,11 +158,11 @@ class Driver {
   }
 
   onManualInput(fn) {
-    this.#manualInputListeners.add(fn);
+    return this.#manualInputListeners.add(fn);
   }
 
   onStandDown(fn) {
-    this.#standDownListeners.add(fn);
+    return this.#standDownListeners.add(fn);
   }
 
   setFamily(family) {
@@ -148,6 +171,18 @@ class Driver {
     const stick = this.#held.stick;
     if (stick) stick.move = moveForStick(stick.x, stick.yUp, family);
     this.#steer();
+  }
+
+  // Disarming is what makes the release last: joy.js goes on reporting the
+  // thumb that is still down, and an armed stick would rebuild held.stick from
+  // the next report and drive again -- the very redirection this exists to
+  // stop.
+  releaseStick() {
+    const deflected = this.#held.stick !== null;
+    this.#held.stick = null;
+    this.#held.stickArmed = false;
+    this.#steer();
+    return deflected;
   }
 
   program(move, speed) {
@@ -165,21 +200,23 @@ class Driver {
     this.#steer();
   }
 
-  resumeAutonomous() {
+  resumeAutonomous({ byProgram = false } = {}) {
     // Stop repeating first: the next repeated move would take control straight
     // back. RESUME_AUTONOMOUS releases the motors itself.
     this.#releaseInputs();
     this.#stopRepeating();
     this.#send(RESUME_AUTONOMOUS, 0);
+    if (byProgram) return;
     this.#manualInputListeners.emit();
     this.#standDownListeners.emit("autonomous");
   }
 
   // Always sends STOP, driving or not: this is also how to stop an exploring
   // rover.
-  stopRover() {
+  stopRover({ byProgram = false } = {}) {
     this.#releaseInputs();
     this.#halt();
+    if (byProgram) return;
     this.#manualInputListeners.emit();
     this.#standDownListeners.emit("stop");
   }
@@ -332,9 +369,7 @@ class Driver {
       document.dispatchEvent(ended);
       // ...and release the stick here regardless, so stopping never depends on
       // joy.js's internals.
-      this.#held.stick = null;
-      this.#held.stickArmed = false;
-      this.#steer();
+      this.releaseStick();
     });
   }
 

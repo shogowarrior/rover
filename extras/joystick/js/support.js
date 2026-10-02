@@ -10,13 +10,20 @@
 class Listeners {
   #listeners = [];
 
+  // Returns a function that removes the listener again, for a listener that
+  // lives only as long as something else (a running program, one wait).
   add(listener) {
     if (typeof listener !== "function") throw new TypeError("a listener must be a function");
     this.#listeners.push(listener);
+    return () => {
+      const i = this.#listeners.indexOf(listener);
+      if (i >= 0) this.#listeners.splice(i, 1);
+    };
   }
 
   emit(...args) {
-    for (const listener of this.#listeners) {
+    // A copy: a listener may remove itself, or another, as it runs.
+    for (const listener of [...this.#listeners]) {
       try {
         listener(...args);
       } catch (err) {
@@ -49,3 +56,5 @@ const memory = Object.freeze({
     }
   },
 });
+
+if (typeof module !== "undefined") module.exports = { Listeners, memory };

@@ -19,8 +19,13 @@ the browser panel each carry their own copies of parts of it. This checks:
     command fields they send, against those src/Protocol.cpp writes and
     reads;
   * the control-scheme names the panel sends, against those
-    protocol::schemeName() gives (src/Protocol.cpp), and the most speed the
-    panel lets a command ask for.
+    protocol::schemeName() gives (src/Protocol.cpp), the most speed the
+    panel lets a command ask for, and the limit the firmware clamps that to
+    (MOTOR_SPEED_LIMIT), which the panel's simulator clamps a preview to;
+  * the panel's scheme message, against the field readMessage() takes a
+    scheme from (and never with a move, which would make it a command), and
+    the telemetry key the panel reads the scheme from, against the one
+    writeTelemetry() sends it under.
 
 The panel keeps every number and name it mirrors in
 extras/joystick/js/protocol.js. Its telemetry reads, its commands and its
@@ -41,8 +46,12 @@ quietly switch its check off: if a client renames a constant, update the
 tables below to match.
 
 Not covered: client/rover.ipynb (an experiment, which imports its numbers
-from drive.py), and the default host address, which is per-network
-configuration every client lets the operator override.
+from drive.py); the default host address, which is per-network
+configuration every client lets the operator override; and the panel's
+simulator's copies in extras/joystick/js/sim.js (the wheel table from
+src/MovePatterns.cpp, the sweep timing from ExploreParams, the telemetry
+interval and the telemetry keys it writes), which
+extras/joystick/test/sim.test.js checks instead, in CI too.
 
 Standard library only; the files are parsed with regular expressions.
 """
@@ -112,6 +121,9 @@ MIRRORS = [
      "each change costs the rover a four-motor rewrite"),
     (PANEL_PROTOCOL_JS, "SPEED_MAX", KINEMATICS_H, "MOTOR_SPEED_MAX",
      "the panel clamps a program's speed to this; the motor driver takes a byte"),
+    (PANEL_PROTOCOL_JS, "MOTOR_SPEED_LIMIT", TUNING_H, "MOTOR_SPEED_LIMIT",
+     "the simulator clamps a preview's speed to this, as Rover::drive() clamps the rover's; "
+     "otherwise a preview drives faster and farther than the rover"),
 ]
 
 # The panel's name for each control scheme (kinematics::ControlScheme) must be
@@ -531,6 +543,75 @@ class Checker:
                              f'names it "{name}" -- the rover ignores a scheme name it does not know')
         return len(names)
 
+    def scheme_wire(self) -> None:
+        """The panel changes the scheme as readMessage() expects, and reads it
+        from telemetry under the key writeTelemetry() sends it under.
+
+        readMessage() takes a scheme from one string field, and only from a
+        message with no move. Anything else is a drive command, defaults and
+        all: a scheme message under the wrong field name, or with a move
+        beside it, arrives as a STOP that takes control of an exploring rover
+        -- the one thing a scheme change must never do. A scheme the panel
+        reads under the wrong key leaves its toggle disabled for good.
+        """
+        protocol = self.text(PROTOCOL_CPP)
+        if protocol is None:
+            return
+        reader = re.search(r"\breadMessage\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
+        body = reader.group(1) if reader else ""
+        fields = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*is\s*<\s*const\s+char\s*\*\s*>\s*\(\s*\)', body))
+        absent = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*isNull\s*\(\s*\)', body))
+        writer = re.search(r"\bwriteTelemetry\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
+        keys = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*schemeName\s*\(', writer.group(1) if writer else ""))
+        if len(fields) != 1 or not absent:
+            self.problem(f'{PROTOCOL_CPP}: cannot read which field readMessage() takes a scheme from '
+                         f'(json["field"].is<const char*>() and json["move"].isNull()); '
+                         f"if it changed shape, update tools/check_protocol.py")
+            return
+        if len(keys) != 1:
+            self.problem(f'{PROTOCOL_CPP}: cannot read the telemetry key writeTelemetry() sends the scheme under '
+                         f'(doc["key"] = schemeName(...)); if it changed shape, update tools/check_protocol.py')
+            return
+        (field,), (key,) = fields, keys
+
+        where = KEY_READERS[PANEL_SCRIPTS]
+        literal, field_name = where["command"]
+        messages = 0
+        reads: set[str] = set()
+        for relpath in self.files(PANEL_SCRIPTS):
+            code = self.code(relpath)
+            if code is None:
+                continue
+            reads |= {name for pattern in where["reads"] for name in pattern.findall(code)}
+            for body in literal.findall(code):
+                sent = set(field_name.findall(body))
+                if sent & absent:
+                    if field in sent:
+                        self.problem(
+                            f'{relpath}: sends "{field}" with {", ".join(sorted(sent & absent))} in one message; '
+                            f"readMessage() in {PROTOCOL_CPP} reads that as a drive command, which takes control "
+                            f"and stops an exploring rover"
+                        )
+                    continue  # a drive command; keys() checks its fields
+                messages += 1
+                if field not in sent:
+                    self.problem(
+                        f'{relpath}: sends {{{", ".join(sorted(sent))}}} with no move, but readMessage() in '
+                        f'{PROTOCOL_CPP} takes a scheme only from "{field}"; the rover reads this as a drive '
+                        f"command with no move -- a STOP that takes control of an exploring rover"
+                    )
+                elif sent != {field}:
+                    self.problem(
+                        f'{relpath}: sends {", ".join(sorted(sent - {field}))} in its scheme message, which '
+                        f'readMessage() in {PROTOCOL_CPP} ignores there: send "{field}" alone'
+                    )
+        if not messages:
+            self.problem(f'{PANEL_SCRIPTS}: no scheme message found (send({{ {field}: ... }}) with no move); '
+                         f"if the panel now sends it differently, update tools/check_protocol.py")
+        if key not in reads:
+            self.problem(f'{PANEL_SCRIPTS}: never reads telemetry key "{key}", which writeTelemetry() in '
+                         f"{PROTOCOL_CPP} sends the scheme under; the panel's scheme toggle would stay disabled")
+
 
 def show(value: float) -> str:
     """25.0 -> "25", 0.5 -> "0.5": numbers as the source files write them."""
@@ -545,6 +626,7 @@ def main() -> int:
     key_count = checker.keys()
     checker.bearings()
     scheme_count = checker.schemes()
+    checker.scheme_wire()
 
     for problem in checker.problems:
         print(problem, file=sys.stderr)
@@ -554,8 +636,9 @@ def main() -> int:
 
     print(
         f"check_protocol: OK -- {code_count} move codes, the port, the panel's thresholds and scan angles, the "
-        f"no-echo distance, the speed limit, the command timing and stick rate, {scheme_count} scheme names, and "
-        f"the names of {key_count} telemetry keys and the command fields agree across {DRIVE_PY}, {WS_PY} and "
+        f"no-echo distance, the speed limit, the command timing and stick rate, {scheme_count} scheme names, the "
+        f"scheme message and its telemetry key, and the names of {key_count} telemetry keys and the command fields "
+        f"agree across {DRIVE_PY}, {WS_PY} and "
         f"{PANEL_SCRIPTS}"
     )
     return 0

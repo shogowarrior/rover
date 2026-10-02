@@ -125,9 +125,6 @@ body {
   outline-offset: 2px;
 }
 
-/* Empty until something fills them, and then no gap is kept for them. */
-#schemeSlot:empty, #familySlot:empty { display: none; }
-
 /* --- tabs ------------------------------------------------------------ */
 
 /* What the tabs switch is how the rover is driven. The scan, the readouts
@@ -290,16 +287,189 @@ button[aria-pressed="true"] {
 
 input[type="range"] { flex: 1; accent-color: var(--live); }
 
-.placeholder {
-  margin: 0;
-  padding: 18px 14px;
-  background: var(--panel);
-  border: 1px dashed var(--rule);
-  border-radius: 4px;
-  color: var(--dim);
-  font-size: 13px;
-  line-height: 1.5;
+/* --- control scheme and stick family --------------------------------- */
+
+/* A segmented control: one recessed track, the chosen segment raised and
+   underlined in teal, as the selected tab is. Not the Autonomous button's
+   teal fill: a layout is a setting, not something running. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
 }
+
+.segmented button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  background: none;
+  border: none;
+  border-radius: 2px;
+}
+
+.segmented button:hover { color: var(--readout); }
+
+.segmented button:active,
+.segmented button[aria-pressed="true"] {
+  background: var(--rule);
+  color: var(--readout);
+}
+
+.segmented button[aria-pressed="true"] { box-shadow: inset 0 -2px 0 var(--live); }
+
+.segmented button:disabled {
+  color: var(--dim);
+  background: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Asked for and not yet reported: outlined, never lit, so a request the
+   rover did not take cannot look applied. */
+.segmented button[data-pending="yes"] {
+  color: var(--live);
+  outline: 1px dashed var(--live);
+  outline-offset: -3px;
+  animation: pending 800ms ease-in-out infinite alternate;
+}
+
+@keyframes pending { to { opacity: 0.5; } }
+
+/* In the header, beside the wordmark: what layout every controller drives
+   with. */
+.scheme {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.scheme .segmented button { flex: none; padding: 6px 10px; }
+
+/* Unknown until telemetry names a scheme: nothing lit, the track dashed and
+   faded, like a readout with no reading. */
+.scheme[data-state="unknown"] .segmented {
+  border-style: dashed;
+  opacity: 0.55;
+}
+
+/* Stale: telemetry has stopped. The scheme last reported stays lit, but
+   faded as the scan is, and its segments are disabled: no telemetry could
+   confirm a request. */
+.scheme[data-state="stale"] .segmented { opacity: 0.55; }
+
+.scheme[data-state="stale"] .segmented button[aria-pressed="true"] {
+  background: var(--rule);
+  color: var(--readout);
+  box-shadow: inset 0 -2px 0 var(--live);
+}
+
+/* A scheme change let go of the stick under the operator's thumb: the
+   caption asks for a fresh press until the next one. */
+#stickLabel[data-tone="warn"] { color: var(--warn); }
+
+/* The stick and its quadrant hints share one grid cell, so the hints lie
+   over the stick without anything being positioned: joy.js places a touch
+   by its canvas's offsetParent, which a positioned ancestor would change. */
+.stickArea { display: grid; justify-items: center; }
+
+.stickArea > * { grid-area: 1 / 1; }
+
+/* The stick's own box, a label in each corner, clear of the stick's ring.
+   pointer-events: none, so every touch still lands on joy.js's canvas. */
+.hints {
+  width: 100%;
+  max-width: 230px;
+  aspect-ratio: 1;
+  display: grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  pointer-events: none;
+}
+
+.hints[hidden] { display: none; }
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--readout);
+}
+
+/* The families' icons are drawn (family.js), so every corner and segment
+   strokes alike whatever fonts the device has. */
+.hint .glyph, .family .glyph {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hint .glyph { color: var(--live); }
+
+.hint[data-corner="upLeft"] { align-self: start; justify-self: start; }
+.hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; }
+.hint[data-corner="downLeft"] { align-self: end; justify-self: start; }
+.hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; }
+
+.family {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.family[hidden] { display: none; }
+
+.family .segmented button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.family .glyph { width: 17px; height: 17px; }
+
+.family button[aria-pressed="true"] .glyph { color: var(--live); }
+
+/* Amber, as the motor warning is: a caution, not a stop. */
+.caveat {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.caveat::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  transform: translateY(-1px);
+}
+
+.caveat[hidden] { display: none; }
 
 /* --- Stop and Autonomous --------------------------------------------- */
 
@@ -357,4 +527,5 @@ input[type="range"] { flex: 1; accent-color: var(--live); }
 
 @media (prefers-reduced-motion: reduce) {
   .wedge { transition: none; }
+  .segmented button[data-pending="yes"] { animation: none; }
 }

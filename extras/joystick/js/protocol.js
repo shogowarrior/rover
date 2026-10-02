@@ -49,6 +49,14 @@ const SCHEME_ADVANCED = "ADVANCED";
 // byte, so no command asks for more.
 const SPEED_MAX = 255;
 
+// tuning::MOTOR_SPEED_LIMIT in src/Tuning.h: the most speed Rover::drive()
+// lets through, whatever a command asks. Equal to SPEED_MAX today, but the
+// operator may lower it (README, Safety). The panel's commands still ask up to
+// SPEED_MAX, and the firmware clamps them; the simulator clamps a preview here
+// as the firmware would, or the preview would drive faster and farther than
+// the rover.
+const MOTOR_SPEED_LIMIT = 255;
+
 // tuning::WEBSOCKET_PORT in src/Tuning.h. The address field also accepts
 // "host:port", so the panel can be pointed at a stand-in during development.
 const PORT = 81;
@@ -96,7 +104,7 @@ if (typeof module !== "undefined") {
     PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT,
     ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS,
     SCHEME_NORMAL, SCHEME_ADVANCED,
-    SPEED_MAX, PORT, STOP_CM, GO_CM, FAR_CM,
+    SPEED_MAX, MOTOR_SPEED_LIMIT, PORT, STOP_CM, GO_CM, FAR_CM,
     MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,
   };
 }

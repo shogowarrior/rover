@@ -9,7 +9,8 @@
  *   select(tab, { focus })  show tab's panel and hide the others.
  *   selected                the selected tab element.
  *   onChange(fn)            fn(tab, panel) after the operator (or select())
- *                           shows another tab.
+ *                           shows another tab. Returns a function that
+ *                           unsubscribes fn.
  *
  * A click selects a tab; with focus on the tablist, the arrow keys move to the
  * previous or next tab (wrapping round), Home and End to the first and last,
@@ -56,7 +57,7 @@ class Tabs {
   }
 
   onChange(fn) {
-    this.#listeners.add(fn);
+    return this.#listeners.add(fn);
   }
 
   select(tab, { focus = false } = {}) {

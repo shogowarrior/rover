@@ -82,11 +82,14 @@ class Node_ {
   hasAttribute(n) { return n in this.attributes; }
   removeAttribute(n) { delete this.attributes[n]; }
   appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter((c) => c !== this); this.parentNode = null; } }
   addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); }
   removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((g) => g !== f); }
   dispatchEvent(e) { return dispatch(this, e); }
   focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
   getContext() { return fakeContext(); }
+  // As in a browser, an element with no layout box has no rects.
+  getClientRects() { return this.rendered ? [{}] : []; }
 }
 
 function fakeContext() {
@@ -186,7 +189,12 @@ function makeWebSocketClass(clock, sockets) {
 // storage: "ok" (a working localStorage, `store` holds its contents), "null"
 // (the global is null) or "throws" (reading the global throws, as with site
 // data blocked). stored: what "ok" storage holds before the page loads.
-function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230 } = {}) {
+// frames: give the page requestAnimationFrame, a frame every frameMs (16) ms
+// of the clock, and a ResizeObserver whose callbacks page.resized() runs
+// (nothing here lays the page out to notice a change). Off by default, so
+// that no other test's clock runs the simulator's view. A large frameMs is a
+// throttled display: a pane out of view, where timers still run on time.
+function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16 } = {}) {
   const clock = makeClock();
   const sockets = [];
 
@@ -222,6 +230,8 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230 }
   const WebSocket = makeWebSocketClass(clock, sockets);
   const ctx = {
     document: doc, window: win, WebSocket, console, Event,
+    // A program run's waits are aborted through one (js/program.js).
+    AbortController,
     setTimeout: clock.setTimeout, clearTimeout: clock.clear, setInterval: clock.setInterval, clearInterval: clock.clear,
     performance: { now: clock.now },
     // As in a browser: report an error without throwing it. Collected, so a
@@ -229,6 +239,12 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230 }
     reportError: (err) => doc.__errors.push(err),
   };
   if (storage !== "throws") ctx.localStorage = localStorage;
+  const resizeCallbacks = [];
+  if (frames) {
+    ctx.requestAnimationFrame = (fn) => clock.setTimeout(() => fn(clock.now()), frameMs);
+    ctx.cancelAnimationFrame = clock.clear;
+    ctx.ResizeObserver = class { constructor(fn) { resizeCallbacks.push(fn); } observe() {} unobserve() {} disconnect() {} };
+  }
   vm.createContext(ctx);
   if (storage === "throws") {
     // As Chrome/Firefox with site data blocked: merely reading the global throws.
@@ -257,6 +273,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230 }
       return e;
     },
     errors: doc.__errors,
+    resized: () => resizeCallbacks.forEach((fn) => fn([])),
   };
   return page;
 }

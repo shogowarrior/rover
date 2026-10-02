@@ -69,32 +69,38 @@ function moveForStick(x, yUp, family = FAMILY_TRANSLATE) {
 // them (a readout, a selector, a block editor).
 //   name      the move code's name in src/MoveCodes.h, which is also what
 //             telemetry's "move" reports while it runs;
-//   label     a short name for people;
+//   label     a name for people;
+//   short     the fewest words that tell it apart from the other motions of
+//             its family, for a tight space such as a corner of the stick.
+//             They follow the move code's own word order, so they read as
+//             the Move readout does: Right fwd is PIVOT_RIGHT_FORWARD, Fwd
+//             right is PIVOT_SIDEWAYS_FORWARD_RIGHT;
 //   glyph     an arrow that suggests it;
 //   family    the stick family that reaches it, or null for the rotations,
 //             which have their own buttons;
 //   advanced  offered only under the ADVANCED scheme. These are the pivots,
-//             which docs/mecanum.md warns are not bench-verified: what a
-//             pivot really does depends on how a released gearbox coasts.
+//             which docs/mecanum.md warns are not bench-verified: how far one
+//             really swings depends on how the rollers slip and grip on the
+//             floor, which the simulator's ideal wheels leave out.
 const MOTIONS = Object.freeze([
-  { move: MOVE_FORWARD, name: "MOVE_FORWARD", label: "Forward", glyph: "↑", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_BACKWARD, name: "MOVE_BACKWARD", label: "Backward", glyph: "↓", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_RIGHT, name: "MOVE_RIGHT", label: "Strafe right", glyph: "→", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_LEFT, name: "MOVE_LEFT", label: "Strafe left", glyph: "←", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_DIAGONAL45, name: "MOVE_DIAGONAL45", label: "Diagonal forward-right", glyph: "↗", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_DIAGONAL135, name: "MOVE_DIAGONAL135", label: "Diagonal forward-left", glyph: "↖", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_DIAGONAL225, name: "MOVE_DIAGONAL225", label: "Diagonal backward-left", glyph: "↙", family: FAMILY_TRANSLATE, advanced: false },
-  { move: MOVE_DIAGONAL315, name: "MOVE_DIAGONAL315", label: "Diagonal backward-right", glyph: "↘", family: FAMILY_TRANSLATE, advanced: false },
-  { move: PIVOT_RIGHT_FORWARD, name: "PIVOT_RIGHT_FORWARD", label: "Pivot right, forward", glyph: "↱", family: FAMILY_PIVOT, advanced: true },
-  { move: PIVOT_RIGHT_BACKWARD, name: "PIVOT_RIGHT_BACKWARD", label: "Pivot right, backward", glyph: "↳", family: FAMILY_PIVOT, advanced: true },
-  { move: PIVOT_LEFT_FORWARD, name: "PIVOT_LEFT_FORWARD", label: "Pivot left, forward", glyph: "↰", family: FAMILY_PIVOT, advanced: true },
-  { move: PIVOT_LEFT_BACKWARD, name: "PIVOT_LEFT_BACKWARD", label: "Pivot left, backward", glyph: "↲", family: FAMILY_PIVOT, advanced: true },
-  { move: PIVOT_SIDEWAYS_FORWARD_RIGHT, name: "PIVOT_SIDEWAYS_FORWARD_RIGHT", label: "Pivot sideways, forward-right", glyph: "↷", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
-  { move: PIVOT_SIDEWAYS_FORWARD_LEFT, name: "PIVOT_SIDEWAYS_FORWARD_LEFT", label: "Pivot sideways, forward-left", glyph: "↶", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
-  { move: PIVOT_SIDEWAYS_BACKWARD_RIGHT, name: "PIVOT_SIDEWAYS_BACKWARD_RIGHT", label: "Pivot sideways, backward-right", glyph: "⤷", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
-  { move: PIVOT_SIDEWAYS_BACKWARD_LEFT, name: "PIVOT_SIDEWAYS_BACKWARD_LEFT", label: "Pivot sideways, backward-left", glyph: "⤶", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
-  { move: ROTATE_CLOCKWISE, name: "ROTATE_CLOCKWISE", label: "Rotate clockwise", glyph: "↻", family: null, advanced: false },
-  { move: ROTATE_COUNTERCLOCKWISE, name: "ROTATE_COUNTERCLOCKWISE", label: "Rotate counter-clockwise", glyph: "↺", family: null, advanced: false },
+  { move: MOVE_FORWARD, name: "MOVE_FORWARD", label: "Forward", short: "Fwd", glyph: "↑", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_BACKWARD, name: "MOVE_BACKWARD", label: "Backward", short: "Back", glyph: "↓", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_RIGHT, name: "MOVE_RIGHT", label: "Strafe right", short: "Right", glyph: "→", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_LEFT, name: "MOVE_LEFT", label: "Strafe left", short: "Left", glyph: "←", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_DIAGONAL45, name: "MOVE_DIAGONAL45", label: "Diagonal forward-right", short: "Fwd right", glyph: "↗", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_DIAGONAL135, name: "MOVE_DIAGONAL135", label: "Diagonal forward-left", short: "Fwd left", glyph: "↖", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_DIAGONAL225, name: "MOVE_DIAGONAL225", label: "Diagonal backward-left", short: "Back left", glyph: "↙", family: FAMILY_TRANSLATE, advanced: false },
+  { move: MOVE_DIAGONAL315, name: "MOVE_DIAGONAL315", label: "Diagonal backward-right", short: "Back right", glyph: "↘", family: FAMILY_TRANSLATE, advanced: false },
+  { move: PIVOT_RIGHT_FORWARD, name: "PIVOT_RIGHT_FORWARD", label: "Pivot right, forward", short: "Right fwd", glyph: "↱", family: FAMILY_PIVOT, advanced: true },
+  { move: PIVOT_RIGHT_BACKWARD, name: "PIVOT_RIGHT_BACKWARD", label: "Pivot right, backward", short: "Right back", glyph: "↳", family: FAMILY_PIVOT, advanced: true },
+  { move: PIVOT_LEFT_FORWARD, name: "PIVOT_LEFT_FORWARD", label: "Pivot left, forward", short: "Left fwd", glyph: "↰", family: FAMILY_PIVOT, advanced: true },
+  { move: PIVOT_LEFT_BACKWARD, name: "PIVOT_LEFT_BACKWARD", label: "Pivot left, backward", short: "Left back", glyph: "↲", family: FAMILY_PIVOT, advanced: true },
+  { move: PIVOT_SIDEWAYS_FORWARD_RIGHT, name: "PIVOT_SIDEWAYS_FORWARD_RIGHT", label: "Pivot sideways, forward-right", short: "Fwd right", glyph: "↷", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
+  { move: PIVOT_SIDEWAYS_FORWARD_LEFT, name: "PIVOT_SIDEWAYS_FORWARD_LEFT", label: "Pivot sideways, forward-left", short: "Fwd left", glyph: "↶", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
+  { move: PIVOT_SIDEWAYS_BACKWARD_RIGHT, name: "PIVOT_SIDEWAYS_BACKWARD_RIGHT", label: "Pivot sideways, backward-right", short: "Back right", glyph: "⤷", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
+  { move: PIVOT_SIDEWAYS_BACKWARD_LEFT, name: "PIVOT_SIDEWAYS_BACKWARD_LEFT", label: "Pivot sideways, backward-left", short: "Back left", glyph: "⤶", family: FAMILY_PIVOT_SIDEWAYS, advanced: true },
+  { move: ROTATE_CLOCKWISE, name: "ROTATE_CLOCKWISE", label: "Rotate clockwise", short: "Clockwise", glyph: "↻", family: null, advanced: false },
+  { move: ROTATE_COUNTERCLOCKWISE, name: "ROTATE_COUNTERCLOCKWISE", label: "Rotate counter-clockwise", short: "Counter-clockwise", glyph: "↺", family: null, advanced: false },
 ].map((motion) => Object.freeze(motion)));
 
 // The MOTIONS entry for a move code, or undefined for STOP,
@@ -103,9 +109,15 @@ function motionFor(move) {
   return MOTIONS.find((motion) => motion.move === move);
 }
 
+// The MOTIONS entry for a move code's name (MOVE_FORWARD), as telemetry and
+// a block program spell it, or undefined for anything that is not a motion.
+function motionNamed(name) {
+  return MOTIONS.find((motion) => motion.name === name);
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS, FAMILIES,
-    stickAngleDeg, moveForStick, MOTIONS, motionFor,
+    stickAngleDeg, moveForStick, MOTIONS, motionFor, motionNamed,
   };
 }

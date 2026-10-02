@@ -39,8 +39,10 @@ jobs:
             node --check "$script"
           done
       # The browser panel against a fake DOM, WebSocket and clock: what it
-      # sends for every press, release, blur and link loss, and its copy of
-      # the stick mapping against test/vectors/stick_moves.json.
+      # sends for every press, release, blur and link loss, its copy of the
+      # stick mapping against test/vectors/stick_moves.json, and the
+      # simulator's copies of the firmware (wheel table, sweep timing,
+      # telemetry), which check_protocol.py does not read.
       - name: Panel tests
         run: node --test extras/joystick/test/
       - name: Cache PlatformIO

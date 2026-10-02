@@ -1,0 +1,539 @@
+/* The simulator's view (js/simview.js). It fills #simSlot, a box the Program
+   tab sizes (css/program.css): a column beside the editor on a wide screen,
+   280 px tall under it on a phone. So the room takes whatever height is left
+   after one row of controls and two lines of status (three, in a narrow view
+   with a message to show), and the rest folds into a panel.
+
+   The palette is the panel's (css/panel.css): teal for live, amber for
+   closing distance, red only for stop and danger -- here, a ray inside
+   STOP_CM and a bump. A backward wheel takes the one colour the panel uses
+   nowhere else, so it never reads as a warning. */
+
+.sim {
+  --sim-floor: #202327;
+  --sim-grid: rgba(232, 228, 220, 0.045);
+  --sim-grid-major: rgba(232, 228, 220, 0.09);
+  --sim-wall: #8b939c;
+  --sim-box: #34383e;
+  --sim-box-edge: #5a616a;
+  --sim-plate: #3a3f46;
+  --sim-plate-edge: #d6d1c8;
+  --sim-fwd: var(--live);
+  --sim-back: #a594f9;
+  --sim-free: #5a616a;
+
+  position: relative;
+  container: sim / size;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  height: 100%;
+  /* The slot sets the height; this is only a floor, should it not. */
+  min-height: 280px;
+  padding: 8px;
+  min-width: 0;
+}
+
+/* --- controls --------------------------------------------------------- */
+
+.sim-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.sim-room {
+  flex: 1 1 90px;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--readout);
+  background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 6px 6px;
+  text-overflow: ellipsis;
+}
+
+.sim-room option { background: var(--panel); color: var(--readout); }
+
+.sim-room:focus-visible,
+.sim-rover:focus-visible,
+.sim-more button:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
+
+.sim-speed { flex: none; }
+
+.sim-speed button {
+  flex: none;
+  min-width: 28px;
+  padding: 6px 5px;
+  font-family: var(--mono);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sim-tool {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--dim);
+  background: var(--case);
+}
+
+.sim-tool:hover { color: var(--readout); }
+
+.sim-tool[aria-pressed="true"],
+.sim-tool[aria-expanded="true"] {
+  color: var(--readout);
+  border-color: var(--dim);
+  box-shadow: inset 0 -2px 0 var(--live);
+  background: var(--rule);
+}
+
+/* Paused is a state worth seeing from across the room. */
+.sim-pause[aria-pressed="true"] { color: var(--warn); }
+
+.sim-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- the room --------------------------------------------------------- */
+
+.sim-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.sim-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sim-floor { fill: var(--sim-floor); }
+
+.sim-grid { stroke: var(--sim-grid); stroke-width: 1; }
+.sim-grid.major { stroke: var(--sim-grid-major); }
+
+.sim-wall {
+  fill: none;
+  stroke: var(--sim-wall);
+  stroke-width: 2.5;
+  stroke-linecap: square;
+}
+
+.sim-box {
+  fill: var(--sim-box);
+  stroke: var(--sim-box-edge);
+  stroke-width: 1;
+}
+
+/* What the rover passes under, such as a table top: drawn, never felt. */
+.sim-outline {
+  fill: none;
+  stroke: var(--sim-box-edge);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.sim-label {
+  font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: var(--dim);
+  pointer-events: none;
+}
+
+.sim-trail polyline {
+  fill: none;
+  stroke: var(--readout);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sim-rays line { stroke-width: 1.5; stroke-linecap: round; }
+.sim-rays line[data-echo="none"] { stroke-dasharray: 3 4; }
+
+.sim-bump circle,
+.sim-bump path {
+  fill: none;
+  stroke: var(--stop);
+  stroke-width: 1.6;
+}
+
+.sim-bump circle { fill: rgba(217, 79, 67, 0.2); }
+
+/* The rover. */
+.sim-rover { cursor: grab; outline: none; }
+.sim-rover[data-dragging] { cursor: grabbing; }
+.sim-grip { fill: transparent; }
+.sim-halo { fill: rgba(232, 228, 220, 0.05); }
+
+.sim-plate {
+  fill: var(--sim-plate);
+  stroke: var(--sim-plate-edge);
+  stroke-width: 1.2;
+}
+
+.sim-deck {
+  fill: none;
+  stroke: rgba(232, 228, 220, 0.2);
+  stroke-width: 1;
+}
+
+.sim-rover[data-stalled="yes"] .sim-plate { stroke: var(--stop); }
+
+.sim-wheel { stroke-width: 1; }
+.sim-wheel[data-turn="fwd"] { fill: var(--sim-fwd); stroke: var(--sim-fwd); }
+.sim-wheel[data-turn="back"] { fill: var(--sim-back); stroke: var(--sim-back); }
+.sim-wheel[data-turn="free"] { fill: var(--sim-floor); stroke: var(--sim-free); }
+
+.sim-nose { fill: var(--readout); }
+
+.sim-sensor {
+  fill: #2a2e33;
+  stroke: var(--readout);
+  stroke-width: 1;
+}
+
+.sim-aim {
+  stroke: var(--live);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+.sim-handle-line {
+  stroke: var(--dim);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0;
+}
+
+.sim-handle {
+  fill: var(--case);
+  stroke: var(--readout);
+  stroke-width: 1.2;
+  opacity: 0;
+}
+
+/* The turning handle shows while the rover is pointed at, held or focused:
+   on a touch screen, which cannot point, a tap on the rover shows it. */
+.sim-rover:hover .sim-handle,
+.sim-rover:hover .sim-handle-line,
+.sim-rover:focus .sim-handle,
+.sim-rover:focus .sim-handle-line,
+.sim-rover[data-dragging] .sim-handle,
+.sim-rover[data-dragging] .sim-handle-line { opacity: 1; }
+
+/* Over the room, in the margin kept clear around it (SimView.PAD). */
+.sim-badge {
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--dim);
+  pointer-events: none;
+}
+
+.sim-badge strong {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.sim-badge span { overflow: hidden; text-overflow: ellipsis; }
+
+.sim-scale {
+  position: absolute;
+  left: 8px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--dim);
+  pointer-events: none;
+}
+
+.sim-scale-bar {
+  display: block;
+  height: 5px;
+  border: 1px solid var(--dim);
+  border-top: none;
+}
+
+/* --- under the room --------------------------------------------------- */
+
+.sim-foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  min-height: 34px;
+}
+
+.sim-inset {
+  width: 26px;
+  height: 32px;
+  flex: none;
+}
+
+.sim-inset .sim-plate { stroke-width: 0.5; }
+.sim-inset .sim-wheel { stroke-width: 0.45; }
+
+.sim-arrow { fill: var(--case); }
+.sim-arrow[data-turn="back"] { transform: rotate(180deg); transform-box: fill-box; transform-origin: center; }
+.sim-arrow[data-turn="free"] { fill: none; }
+
+.sim-motion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sim-move {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-move[data-stalled="yes"] { color: var(--stop); }
+
+.sim-twist,
+.sim-said {
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-said {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+}
+
+.sim-clock {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--readout);
+}
+
+.sim-clock[data-paused="yes"] { color: var(--warn); }
+
+.sim-log {
+  max-width: 100%;
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-log[data-tone="bump"] { color: var(--stop); }
+
+/* A narrow view (a phone, or the column beside the editor) gives each its
+   own line: sharing one, the motion and the latest message were both cut
+   short, and the obstacle's name -- the one new fact in "bumped into the
+   sofa" -- was the part lost. The message, once there is one, takes a line
+   of its own under the rest, and wraps rather than lose its end. */
+@container sim (max-width: 420px) {
+  .sim-foot {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "inset move clock"
+      "inset twist twist"
+      ". log log";
+    column-gap: 9px;
+    row-gap: 2px;
+  }
+
+  .sim-motion,
+  .sim-said { display: contents; }
+
+  .sim-inset { grid-area: inset; }
+  .sim-move { grid-area: move; }
+  .sim-twist { grid-area: twist; }
+  .sim-clock { grid-area: clock; justify-self: end; }
+
+  .sim-log {
+    grid-area: log;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .sim-log[data-empty="yes"] { display: none; }
+}
+
+/* On a phone the clock is just above it: the message's own time can go. */
+@container sim (max-width: 350px) {
+  .sim-log-at { display: none; }
+}
+
+/* --- the key, and the folded panel ------------------------------------ */
+
+.sim-key {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Under the status, only when the view is tall enough to spare it. */
+.sim-key.inline { display: none; flex: none; }
+
+@container sim (min-height: 470px) {
+  .sim-key.inline { display: flex; }
+}
+
+.sim-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.sim-key-row .label { min-width: 6.2ch; font-size: 10px; }
+
+.sim-key-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.sim-swatch { display: block; flex: none; }
+
+.sim-swatch.wheel {
+  width: 5px;
+  height: 10px;
+  border-radius: 1.5px;
+  border: 1px solid;
+}
+
+.sim-swatch.wheel.fwd { background: var(--sim-fwd); border-color: var(--sim-fwd); }
+.sim-swatch.wheel.back { background: var(--sim-back); border-color: var(--sim-back); }
+.sim-swatch.wheel.free { background: var(--sim-floor); border-color: var(--sim-free); }
+
+.sim-swatch.ray {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid;
+}
+
+.sim-swatch.ray.stop { border-color: var(--stop); }
+.sim-swatch.ray.warn { border-color: var(--warn); }
+.sim-swatch.ray.live { border-color: var(--live); }
+.sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
+
+/* Folded open over the room, under the controls that open it. */
+.sim-more {
+  position: absolute;
+  z-index: 2;
+  top: 46px;
+  right: 8px;
+  left: 8px;
+  max-height: calc(100% - 54px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--dim);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sim-more[hidden] { display: none; }
+
+@container sim (min-width: 420px) {
+  .sim-more { left: auto; width: 340px; }
+}
+
+.sim-toggles { display: flex; gap: 6px; }
+
+.sim-switch {
+  flex: none;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.sim-switch[aria-pressed="true"] {
+  color: var(--readout);
+  background: var(--rule);
+  border-color: var(--dim);
+  box-shadow: inset 0 -2px 0 var(--live);
+}
+
+.sim-switch:active { color: var(--case); }
+
+/* The label over the slider and its value: a phone has no width to spare. */
+.sim-drag {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.sim-drag .label { grid-column: 1 / -1; }
+
+.sim-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 3.5ch;
+  text-align: right;
+}
+
+.sim-about {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--dim);
+}
