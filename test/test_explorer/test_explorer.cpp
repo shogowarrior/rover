@@ -12,8 +12,8 @@
 // 20, the front is 90, and bearing -70 (right) is 160.
 //
 // The world does not move by itself unless a test asks it to close in while
-// the rover drives forward (closingCmPerS); tests that need other changes
-// mutate it from `onMotion`.
+// the rover drives forward (Harness::closing()); tests that need other
+// changes mutate it from `onMotion`.
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -25,6 +25,8 @@ const int FRONT_LEFT_DEG = 55;
 const int FRONT_DEG = 90;
 const int FRONT_RIGHT_DEG = 125;
 const int RIGHT_DEG = 160;
+
+bool isRotation(MoveCode move) { return move == ROTATE_CLOCKWISE || move == ROTATE_COUNTERCLOCKWISE; }
 
 // Steps the explorer the way Rover does: every 5 ms, applying each requested
 // motion as a deadline, so `motorsIdle` goes true when the motion ends.
@@ -38,10 +40,10 @@ struct Harness {
   std::vector<uint32_t> motionTimes;
   std::function<void(const Explorer::Motion&)> onMotion;
 
-  // Optional motion model: while the rover drives forward, what the sonar
-  // sees between closeFromDeg and closeToDeg (servo degrees) closes in at
-  // closingCmPerS -- for the first closeForMs of each forward run only, after
-  // which it stops changing, as if the wheels were held.
+  // Optional motion model (closing()): while the rover drives forward, what
+  // the sonar sees between closeFromDeg and closeToDeg (servo degrees) closes
+  // in at closingCmPerS -- for the first closeForMs of each forward run only,
+  // after which it stops changing, as if the wheels were held.
   float closingCmPerS = 0;
   uint32_t closeForMs = 0xFFFFFFFFu;
   int closeFromDeg = 0;
@@ -77,18 +79,36 @@ struct Harness {
     }
   }
 
+  // The world from fromDeg to toDeg closes in at `cmPerS` while the rover
+  // drives forward: the rover is really getting somewhere.
+  void closing(float cmPerS, int fromDeg = 60, int toDeg = 120) {
+    closingCmPerS = cmPerS;
+    closeFromDeg = fromDeg;
+    closeToDeg = toDeg;
+  }
+
   void closeIn(float cm) {
     for (int deg = closeFromDeg; deg <= closeToDeg; deg++) {
       if (scanner.range[deg] > 1.0f) scanner.range[deg] -= cm;
     }
   }
 
-  // Index of the first requested `move` at or after `from`, or -1.
-  int indexOf(MoveCode move, size_t from = 0) const {
+  // ...and opens out again as reversing motion `m` carries it back.
+  void recede(const Explorer::Motion& m) { closeIn(-closingCmPerS * m.durationMs / 1000.0f); }
+
+  // Index of the first motion at or after `from` whose move satisfies
+  // `is(move)`, or -1.
+  template <typename Is>
+  int indexWhere(Is is, size_t from = 0) const {
     for (size_t i = from; i < motions.size(); i++) {
-      if (motions[i].move == move) return static_cast<int>(i);
+      if (is(motions[i].move)) return static_cast<int>(i);
     }
     return -1;
+  }
+
+  // Index of the first requested `move` at or after `from`, or -1.
+  int indexOf(MoveCode move, size_t from = 0) const {
+    return indexWhere([move](MoveCode m) { return m == move; }, from);
   }
 
   int count(MoveCode move) const {
@@ -103,10 +123,8 @@ struct Harness {
 
   // The first motion that is not a STOP, or STOP if there is none.
   MoveCode firstMotion() const {
-    for (const Explorer::Motion& m : motions) {
-      if (m.move != STOP) return m.move;
-    }
-    return STOP;
+    const int i = indexWhere([](MoveCode m) { return m != STOP; });
+    return i < 0 ? STOP : motions[i].move;
   }
 
   // How many times `move` was requested before the first MOVE_FORWARD.
@@ -119,6 +137,20 @@ struct Harness {
     return n;
   }
 
+  // Rotation steps from the end of the first cruise to the start of the
+  // next, or -1 if the rover never drove on.
+  int rotationsBetweenCruises() const {
+    const int firstForward = indexOf(MOVE_FORWARD);
+    if (firstForward < 0) return -1;
+    size_t i = firstForward;
+    while (i < motions.size() && motions[i].move == MOVE_FORWARD) i++;  // the first cruise
+    int rotations = 0;
+    for (; i < motions.size() && motions[i].move != MOVE_FORWARD; i++) {
+      if (isRotation(motions[i].move)) rotations++;
+    }
+    return i < motions.size() ? rotations : -1;
+  }
+
   // The strafes, in order.
   std::vector<MoveCode> strafes() const {
     std::vector<MoveCode> result;
@@ -129,7 +161,41 @@ struct Harness {
   }
 };
 
-bool isRotation(MoveCode move) { return move == ROTATE_CLOCKWISE || move == ROTATE_COUNTERCLOCKWISE; }
+// Nothing reverses from motion `from` until the rover next drives forward.
+void assertNoReverseUntilForward(const Harness& h, size_t from) {
+  for (size_t i = from; i < h.motions.size() && h.motions[i].move != MOVE_FORWARD; i++) {
+    TEST_ASSERT_NOT_EQUAL(MOVE_BACKWARD, h.motions[i].move);
+  }
+}
+
+// Out of a dead end: from the end of the first cruise to the first rotation,
+// which comes after motion `notBefore` too, the rover never drives forward
+// and reverses for exactly as long as that cruise drove in.
+void assertReversedAllItDrove(const Harness& h, int notBefore = -1) {
+  const int firstForward = h.indexOf(MOVE_FORWARD);
+  TEST_ASSERT_TRUE(firstForward >= 0);
+  const int cruiseEnd = h.indexOf(STOP, firstForward);
+  TEST_ASSERT_TRUE(cruiseEnd > firstForward);
+  const uint32_t drove = h.motionTimes[cruiseEnd] - h.motionTimes[firstForward];
+
+  const int firstRotation = h.indexWhere(isRotation);
+  TEST_ASSERT_TRUE(firstRotation > cruiseEnd);
+  TEST_ASSERT_TRUE(firstRotation > notBefore);
+  uint32_t reversed = 0;
+  for (int i = cruiseEnd; i < firstRotation; i++) {
+    TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
+    if (h.motions[i].move == MOVE_BACKWARD) reversed += static_cast<uint32_t>(h.motions[i].durationMs);
+  }
+  TEST_ASSERT_EQUAL_UINT32(drove, reversed);
+}
+
+// Blocked ahead at `frontCm`, with a wall ~11 cm to the left, too close to
+// rotate beside (so it sidesteps right), and the right side open but echoing.
+void blockedBesideLeftWall(FakeScanner& scanner, float frontCm = 30.0f) {
+  scanner.setArc(60, 120, frontCm);
+  scanner.setArc(0, 30, 12.0f);
+  scanner.setArc(150, 180, 80.0f);
+}
 
 // A corridor 26 cm wide: walls 13 cm to each side, seen at 13 / sin(angle)
 // from every bearing that can see them (70 and 35 degrees in a sweep, 25 in
@@ -313,18 +379,10 @@ void test_vanishing_near_echo_ends_the_cruise(void) {
 void test_stuck_below_the_beam_backs_off_and_turns_away(void) {
   Harness h;
   h.scanner.setArc(60, 120, 150.0f);  // a far wall...
-  h.closingCmPerS = 25.0f;            // ...that gets closer for a while,
+  h.closing(25.0f);                   // ...that gets closer for a while,
   h.closeForMs = 600;                 // until the wheels are held
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
   h.run(6000);
-  int firstBackward = -1;
-  for (size_t i = 0; i < h.motions.size(); i++) {
-    if (h.motions[i].move == MOVE_BACKWARD) {
-      firstBackward = static_cast<int>(i);
-      break;
-    }
-  }
+  const int firstBackward = h.indexOf(MOVE_BACKWARD);
   TEST_ASSERT_TRUE(firstBackward > 0);
   TEST_ASSERT_TRUE(h.motions[firstBackward].durationMs <= ExploreParams().backoffMaxMs);
 
@@ -341,9 +399,7 @@ void test_stuck_below_the_beam_backs_off_and_turns_away(void) {
 void test_front_reading_that_grows_is_not_stuck(void) {
   Harness h;
   h.scanner.setArc(60, 120, 80.0f);  // a leg ahead
-  h.closingCmPerS = 25.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(25.0f);
   bool passed = false;
   h.onMotion = [&](const Explorer::Motion& m) {
     if (m.move == MOVE_FORWARD && !passed && h.forwardRunMs >= 600) {
@@ -444,9 +500,7 @@ void test_long_cruise_forgets_the_turn_direction(void) {
   Harness h;
   h.scanner.setArc(60, 120, 30.0f);
   h.scanner.setArc(121, 180, 25.0f);  // right close: commits to the left
-  h.closingCmPerS = 10.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(10.0f);
   int stage = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
     if (stage == 0 && isRotation(m.move)) {
@@ -460,14 +514,7 @@ void test_long_cruise_forgets_the_turn_direction(void) {
   };
   h.run(10000);
   TEST_ASSERT_EQUAL_INT(2, stage);
-  const int firstForward = h.indexOf(MOVE_FORWARD);
-  int turnAfter = -1;
-  for (size_t i = firstForward; i < h.motions.size(); i++) {
-    if (isRotation(h.motions[i].move)) {
-      turnAfter = static_cast<int>(i);
-      break;
-    }
-  }
+  const int turnAfter = h.indexWhere(isRotation, h.indexOf(MOVE_FORWARD));
   TEST_ASSERT_TRUE(turnAfter > 0);
   TEST_ASSERT_EQUAL_INT(ROTATE_CLOCKWISE, h.motions[turnAfter].move);
 }
@@ -483,10 +530,8 @@ void test_repeated_stucks_turn_further_the_same_way(void) {
 
   Harness h;
   h.scanner.setArc(60, 120, 150.0f);  // held after a short drive, every cruise
-  h.closingCmPerS = 25.0f;
+  h.closing(25.0f);
   h.closeForMs = 600;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
   // Three escapes of 4, 8 and 12 steps fit inside the 30-step circle; the
   // fourth would pass it and halt the rover, after which a retry may start
   // afresh in either direction.
@@ -536,13 +581,7 @@ void test_side_stop_turns_one_step_away(void) {
     const int stop = h.indexOf(STOP, firstForward);
     TEST_ASSERT_TRUE(stop > firstForward);
     TEST_ASSERT_TRUE(h.motionTimes[stop] - h.motionTimes[firstForward] < static_cast<uint32_t>(ExploreParams().stuckWindowMs));
-    int next = -1;
-    for (size_t i = firstForward; i < h.motions.size(); i++) {
-      if (h.motions[i].move != MOVE_FORWARD && h.motions[i].move != STOP) {
-        next = static_cast<int>(i);
-        break;
-      }
-    }
+    const int next = h.indexWhere([](MoveCode m) { return m != MOVE_FORWARD && m != STOP; }, firstForward);
     TEST_ASSERT_TRUE(next > 0);
     TEST_ASSERT_EQUAL_INT(c.away, h.motions[next].move);
   }
@@ -570,13 +609,8 @@ void test_how_a_cruise_ended_counts_for_one_decision_only(void) {
   h.run(8000);
   TEST_ASSERT_EQUAL_INT(3, stage);
   // From the first cruise to the next: the wander's steps and no more.
-  size_t i = h.indexOf(MOVE_FORWARD);
-  while (i < h.motions.size() && h.motions[i].move == MOVE_FORWARD) i++;
-  int rotations = 0;
-  for (; i < h.motions.size() && h.motions[i].move != MOVE_FORWARD; i++) {
-    if (isRotation(h.motions[i].move)) rotations++;
-  }
-  TEST_ASSERT_TRUE(i < h.motions.size());  // it did drive on
+  const int rotations = h.rotationsBetweenCruises();
+  TEST_ASSERT_TRUE_MESSAGE(rotations >= 0, "never drove on");
   TEST_ASSERT_EQUAL_INT(ExploreParams().wanderSteps, rotations);
 }
 
@@ -585,18 +619,10 @@ void test_how_a_cruise_ended_counts_for_one_decision_only(void) {
 // something the sonar cannot see.
 void test_capped_cruise_is_followed_by_a_short_wander(void) {
   Harness h;
-  h.closingCmPerS = 10.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(10.0f);
   h.run(8000);
-  const int firstForward = h.indexOf(MOVE_FORWARD);
-  TEST_ASSERT_TRUE(firstForward >= 0);
-  int rotations = 0;
-  size_t i = firstForward;
-  while (i < h.motions.size() && h.motions[i].move == MOVE_FORWARD) i++;  // the first cruise
-  for (; i < h.motions.size() && h.motions[i].move != MOVE_FORWARD; i++) {
-    if (isRotation(h.motions[i].move)) rotations++;
-  }
+  const int rotations = h.rotationsBetweenCruises();
+  TEST_ASSERT_TRUE_MESSAGE(rotations >= 0, "never drove on");
   TEST_ASSERT_EQUAL_INT(ExploreParams().wanderSteps, rotations);
 }
 
@@ -605,9 +631,7 @@ void test_capped_cruise_is_followed_by_a_short_wander(void) {
 void test_no_optional_rotation_where_there_is_no_room(void) {
   Harness h;
   narrowCorridor(h.scanner);
-  h.closingCmPerS = 10.0f;            // a far end that slowly gets closer
-  h.closeFromDeg = 70;
-  h.closeToDeg = 110;
+  h.closing(10.0f, 70, 110);  // a far end that slowly gets closer
   h.run(8000);
   TEST_ASSERT_TRUE(h.count(MOVE_FORWARD) > 0);
   TEST_ASSERT_EQUAL_INT(0, h.rotations());
@@ -638,9 +662,7 @@ void test_converging_on_a_wall_steps_away_from_it(void) {
 // sidestep goes the other way instead of pinning the rover to the wall.
 void test_sidestep_that_went_the_wrong_way_flips_direction(void) {
   Harness h;
-  h.scanner.setArc(60, 120, 30.0f);
-  h.scanner.setArc(0, 30, 12.0f);     // left wall close: sidestep right
-  h.scanner.setArc(150, 180, 80.0f);  // right side open, but echoing
+  blockedBesideLeftWall(h.scanner);
   int sidesteps = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
     if (m.move != MOVE_LEFT && m.move != MOVE_RIGHT) return;
@@ -661,9 +683,7 @@ void test_sidestep_that_went_the_wrong_way_flips_direction(void) {
 // A pinned rover moves neither flank. That must not look like a mirrored mapping.
 void test_pinned_sidestep_does_not_flip_direction(void) {
   Harness h;
-  h.scanner.setArc(60, 120, 30.0f);
-  h.scanner.setArc(0, 30, 12.0f);
-  h.scanner.setArc(150, 180, 80.0f);
+  blockedBesideLeftWall(h.scanner);
   h.run(6000);
   for (const Explorer::Motion& m : h.motions) {
     if (m.move == MOVE_LEFT) TEST_FAIL_MESSAGE("flipped without evidence");
@@ -679,9 +699,7 @@ void test_pinned_sidestep_does_not_flip_direction(void) {
 // wrong way.
 void test_one_flank_moving_does_not_flip_direction(void) {
   Harness h;
-  h.scanner.setArc(60, 120, 30.0f);
-  h.scanner.setArc(0, 30, 12.0f);     // left wall close: sidestep right
-  h.scanner.setArc(150, 180, 80.0f);  // right side open, but echoing
+  blockedBesideLeftWall(h.scanner);
   int sidesteps = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
     if ((m.move == MOVE_LEFT || m.move == MOVE_RIGHT) && ++sidesteps == 1) {
@@ -699,9 +717,7 @@ void test_one_flank_moving_does_not_flip_direction(void) {
 // which otherwise allows two more.
 void test_second_contradiction_switches_sidestepping_off(void) {
   Harness h;
-  h.scanner.setArc(60, 120, 30.0f);
-  h.scanner.setArc(0, 30, 12.0f);     // left wall close: sidestep right
-  h.scanner.setArc(150, 180, 80.0f);  // right side open, but echoing
+  blockedBesideLeftWall(h.scanner);
   int sidesteps = 0;
   int stage = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
@@ -719,9 +735,7 @@ void test_second_contradiction_switches_sidestepping_off(void) {
       h.scanner.setAll(200.0f);  // turned clear: a cruise follows
     } else if (stage == 1 && m.move == MOVE_FORWARD) {
       stage = 2;  // and ends blocked beside a wall again
-      h.scanner.setArc(60, 120, 20.0f);
-      h.scanner.setArc(0, 30, 12.0f);
-      h.scanner.setArc(150, 180, 80.0f);
+      blockedBesideLeftWall(h.scanner, 20.0f);
     }
   };
   h.run(15000);
@@ -740,9 +754,7 @@ void test_reverses_only_over_ground_just_driven(void) {
   TEST_ASSERT_EQUAL_INT(0, fresh.count(MOVE_BACKWARD));
 
   Harness driven;
-  driven.closingCmPerS = 25.0f;  // really driving: the far wall gets closer
-  driven.closeFromDeg = 60;
-  driven.closeToDeg = 120;
+  driven.closing(25.0f);  // really driving: the far wall gets closer
   uint32_t forwardAt = 0;
   driven.onMotion = [&](const Explorer::Motion& m) {
     if (m.move == MOVE_FORWARD && forwardAt == 0) forwardAt = driven.now;
@@ -761,9 +773,7 @@ void test_reverses_only_over_ground_just_driven(void) {
 // so the ground behind is no longer that ground.
 void test_no_reverse_after_a_turn(void) {
   Harness h;
-  h.closingCmPerS = 25.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(25.0f);
   int stage = 0;
   size_t sweepIndex = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
@@ -781,18 +791,13 @@ void test_no_reverse_after_a_turn(void) {
   };
   h.run(12000);
   TEST_ASSERT_EQUAL_INT(3, stage);
-  for (size_t i = sweepIndex; i < h.motions.size(); i++) {
-    if (h.motions[i].move == MOVE_FORWARD) break;
-    TEST_ASSERT_NOT_EQUAL(MOVE_BACKWARD, h.motions[i].move);
-  }
+  assertNoReverseUntilForward(h, sweepIndex);
 }
 
 // ...and so does a sidestep.
 void test_no_reverse_after_a_sidestep(void) {
   Harness h;
-  h.closingCmPerS = 25.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(25.0f);
   int stage = 0;
   size_t stepIndex = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
@@ -808,10 +813,7 @@ void test_no_reverse_after_a_sidestep(void) {
   };
   h.run(12000);
   TEST_ASSERT_EQUAL_INT(2, stage);
-  for (size_t i = stepIndex; i < h.motions.size(); i++) {
-    if (h.motions[i].move == MOVE_FORWARD) break;
-    TEST_ASSERT_NOT_EQUAL(MOVE_BACKWARD, h.motions[i].move);
-  }
+  assertNoReverseUntilForward(h, stepIndex);
 }
 
 // Held from the first moment of a cruise, the rover drove no ground at all,
@@ -829,9 +831,7 @@ void test_held_from_the_start_does_not_reverse(void) {
 // driven anywhere since. reset() forgets the ground the last stretch drove.
 void test_reset_forgets_the_ground_behind(void) {
   Harness h;
-  h.closingCmPerS = 25.0f;  // really driving: the far wall gets closer
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(25.0f);  // really driving: the far wall gets closer
   size_t resetIndex = 0;
   h.onMotion = [&](const Explorer::Motion& m) {
     if (resetIndex == 0 && m.move == STOP && h.indexOf(MOVE_FORWARD) >= 0) {
@@ -863,9 +863,7 @@ void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
     Harness h;
     narrowCorridor(h.scanner);
     h.scanner.setArc(70, 110, rightInFront ? 200.0f : 60.0f);  // the far end
-    h.closingCmPerS = 25.0f;  // getting closer while driving forward
-    h.closeFromDeg = 70;
-    h.closeToDeg = 110;
+    h.closing(25.0f, 70, 110);  // getting closer while driving forward
     bool appeared = false;
     int backoffs = 0;
     bool roomy = false;
@@ -877,7 +875,7 @@ void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
         h.scanner.setArc(70, 110, 5.0f);  // under minTurnClearCm
       } else if (m.move == MOVE_BACKWARD) {
         if (roomy) backoffsWithRoom++;
-        h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);  // and farther while reversing
+        h.recede(m);  // and farther while reversing
         if (++backoffs == 3) {
           roomy = true;  // out of the passage: room on both sides
           h.scanner.setArc(0, 69, 200.0f);
@@ -904,13 +902,7 @@ void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
     TEST_ASSERT_TRUE(roomy);
     TEST_ASSERT_EQUAL_INT(0, backoffsWithRoom);  // reversing stopped once there was room
     // Then it turns, without having driven back in first.
-    int firstRotation = -1;
-    for (size_t i = firstBackward; i < h.motions.size(); i++) {
-      if (isRotation(h.motions[i].move)) {
-        firstRotation = static_cast<int>(i);
-        break;
-      }
-    }
+    const int firstRotation = h.indexWhere(isRotation, firstBackward);
     TEST_ASSERT_TRUE(firstRotation > firstBackward);
     for (int i = firstBackward; i < firstRotation; i++) TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
   }
@@ -922,33 +914,12 @@ void test_backing_out_of_a_dead_end_stops_where_the_drive_began(void) {
   Harness h;
   narrowCorridor(h.scanner);
   h.scanner.setArc(70, 110, 60.0f);  // the dead end
-  h.closingCmPerS = 25.0f;
-  h.closeFromDeg = 70;
-  h.closeToDeg = 110;
+  h.closing(25.0f, 70, 110);
   h.onMotion = [&](const Explorer::Motion& m) {
-    if (m.move == MOVE_BACKWARD) h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);
+    if (m.move == MOVE_BACKWARD) h.recede(m);
   };
   h.run(10000);
-  const int firstForward = h.indexOf(MOVE_FORWARD);
-  TEST_ASSERT_TRUE(firstForward >= 0);
-  const int cruiseEnd = h.indexOf(STOP, firstForward);
-  TEST_ASSERT_TRUE(cruiseEnd > firstForward);
-  const uint32_t drove = h.motionTimes[cruiseEnd] - h.motionTimes[firstForward];
-
-  int firstRotation = -1;
-  for (size_t i = 0; i < h.motions.size(); i++) {
-    if (isRotation(h.motions[i].move)) {
-      firstRotation = static_cast<int>(i);
-      break;
-    }
-  }
-  TEST_ASSERT_TRUE(firstRotation > cruiseEnd);
-  uint32_t reversed = 0;
-  for (int i = cruiseEnd; i < firstRotation; i++) {
-    TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
-    if (h.motions[i].move == MOVE_BACKWARD) reversed += static_cast<uint32_t>(h.motions[i].durationMs);
-  }
-  TEST_ASSERT_EQUAL_UINT32(drove, reversed);
+  assertReversedAllItDrove(h);
 }
 
 // A sweep that hears nothing while the rover backs out of a dead end says
@@ -964,9 +935,7 @@ void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
     Harness h;
     narrowCorridor(h.scanner);
     h.scanner.setArc(70, 110, 60.0f);  // the dead end
-    h.closingCmPerS = 25.0f;
-    h.closeFromDeg = 70;
-    h.closeToDeg = 110;
+    h.closing(25.0f, 70, 110);
     int backoffs = 0;
     int silentFrom = -1;  // the motion that started the silent sweep
     bool restored = false;
@@ -978,7 +947,7 @@ void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
       }
       if (m.move == MOVE_BACKWARD) {
         backoffs++;
-        h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);
+        h.recede(m);
       } else if (m.move == STOP && backoffs == 1 && silentFrom < 0) {
         // The sweep after the first step back hears nothing at any bearing.
         silentFrom = static_cast<int>(h.motions.size()) - 1;
@@ -1000,25 +969,7 @@ void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
     // The silent sweep cost nothing: it still reverses over all the ground it
     // drove in by, and only then turns, as with no silence at all.
     TEST_ASSERT_TRUE(restored);
-    const int firstForward = h.indexOf(MOVE_FORWARD);
-    TEST_ASSERT_TRUE(firstForward >= 0);
-    const int cruiseEnd = h.indexOf(STOP, firstForward);
-    TEST_ASSERT_TRUE(cruiseEnd > firstForward);
-    const uint32_t drove = h.motionTimes[cruiseEnd] - h.motionTimes[firstForward];
-    int firstRotation = -1;
-    for (size_t i = 0; i < h.motions.size(); i++) {
-      if (isRotation(h.motions[i].move)) {
-        firstRotation = static_cast<int>(i);
-        break;
-      }
-    }
-    TEST_ASSERT_TRUE(firstRotation > silentFrom);
-    uint32_t reversed = 0;
-    for (int i = cruiseEnd; i < firstRotation; i++) {
-      TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
-      if (h.motions[i].move == MOVE_BACKWARD) reversed += static_cast<uint32_t>(h.motions[i].durationMs);
-    }
-    TEST_ASSERT_EQUAL_UINT32(drove, reversed);
+    assertReversedAllItDrove(h, silentFrom);
   }
 }
 
@@ -1051,9 +1002,7 @@ void test_halted_rover_resumes_when_the_way_opens(void) {
 // steps across short cruises added up to a false "boxed in" in a busy room.
 void test_short_cruises_never_add_up_to_boxed_in(void) {
   Harness h;
-  h.closingCmPerS = 25.0f;
-  h.closeFromDeg = 60;
-  h.closeToDeg = 120;
+  h.closing(25.0f);
   int turnsSinceBlock = 0;
   bool blocked = false;
   bool everHalted = false;
@@ -1111,7 +1060,7 @@ void test_echo_after_silence_resumes_exploring(void) {
 void test_a_sweep_that_hears_an_echo_resets_the_silent_count(void) {
   Harness h;
   h.scanner.setAll(-1.0f);
-  h.closingCmPerS = 25.0f;  // really driving, so no cruise reads as stuck
+  h.closing(25.0f, 0, 180);  // really driving, so no cruise reads as stuck
   bool silent = true;
   int flips = 0;
   bool everHalted = false;
