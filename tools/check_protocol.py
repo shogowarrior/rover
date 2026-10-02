@@ -191,6 +191,24 @@ CLIENT_COMMENTS = {
     ".py": (re.compile(r"(?:^|(?<=\s))#[^\n]*", re.M),),
 }
 
+# What every "cannot read" problem tells the reader to do: a check whose input
+# has moved must fail, not quietly stop checking.
+UPDATE_ME = "if it was renamed, moved or changed shape, update tools/check_protocol.py"
+
+
+def enum_body(text: str, name: str) -> str | None:
+    """The enumerators of the C++ `enum name { ... }` in text, or None."""
+    match = re.search(r"\benum\s+" + re.escape(name) + r"\s*\{(.*?)\}", text, re.S)
+    return match.group(1) if match else None
+
+
+def function_body(text: str, name: str, const: bool = False) -> str | None:
+    """The body of the C++ function definition `name(...) { ... }` in text,
+    which ends at the first `}` that starts a line; or None."""
+    head = r"\b" + re.escape(name) + r"\s*\([^)]*\)" + (r"\s*const" if const else "")
+    match = re.search(head + r"\s*\{(.*?)\n\}", text, re.S)
+    return match.group(1) if match else None
+
 
 class Checker:
     """Reads each file once and collects every problem, rather than stopping at
@@ -206,6 +224,9 @@ class Checker:
         # client; report it missing once.
         if message not in self.problems:
             self.problems.append(message)
+
+    def unreadable(self, where: str, what: str) -> None:
+        self.problem(f"{where}: cannot read {what}; {UPDATE_ME}")
 
     def text(self, relpath: str) -> str | None:
         """A file's contents, C++ comments removed; None (reported) if missing."""
@@ -242,7 +263,20 @@ class Checker:
             return [client]
         found = sorted(path.relative_to(self.root).as_posix() for path in self.root.glob(client))
         if not found:
-            self.problem(f"{client}: no files found; if the client moved, update tools/check_protocol.py")
+            self.unreadable(client, "any file")
+        return found
+
+    def usage(self, client: str) -> dict[str, tuple[set[str], list[set[str]]]]:
+        """For each file of a client: the telemetry keys it reads, and the
+        fields of each command object it sends."""
+        where = KEY_READERS[client]
+        literal, field = where["command"]
+        found = {}
+        for relpath in self.files(client):
+            code = self.code(relpath)
+            if code is not None:
+                found[relpath] = ({key for pattern in where["reads"] for key in pattern.findall(code)},
+                                  [set(field.findall(body)) for body in literal.findall(code)])
         return found
 
     def bearing_table(self, client: str) -> tuple[str, str] | None:
@@ -253,7 +287,7 @@ class Checker:
             table = block.search(code) if code is not None else None
             if table:
                 return relpath, table.group(1)
-        self.problem(f"{client}: no BEARINGS table of scan keys found; if it moved, update tools/check_protocol.py")
+        self.unreadable(client, "a BEARINGS table of scan keys")
         return None
 
     def constant(self, relpath: str, name: str) -> float | None:
@@ -264,10 +298,7 @@ class Checker:
         match = re.search(CONSTANT[Path(relpath).suffix].replace("NAME", re.escape(name)), text, re.M)
         if match:
             return float(match.group(1))
-        self.problem(
-            f"{relpath}: no {name} found. If it was renamed or moved, "
-            f"update tools/check_protocol.py so the check keeps running."
-        )
+        self.unreadable(relpath, name)
         return None
 
     # --- The checks ---------------------------------------------------------
@@ -323,10 +354,10 @@ class Checker:
         text = self.text(MOVE_CODES_H)
         if text is None:
             return 0
-        enum = re.search(r"\benum\s+MoveCode\s*\{(.*?)\}", text, re.S)
-        codes = self.enumerators(enum.group(1)) if enum else {}
+        enum = enum_body(text, "MoveCode")
+        codes = self.enumerators(enum) if enum is not None else {}
         if not codes:
-            self.problem(f"{MOVE_CODES_H}: no `enum MoveCode {{ NAME = N, ... }}` found")
+            self.unreadable(MOVE_CODES_H, "`enum MoveCode { NAME = N, ... }`")
             return 0
 
         # Two names on one value would make the firmware's own table ambiguous.
@@ -342,10 +373,7 @@ class Checker:
                 continue
             copies = [(name, int(value)) for name, value in MOVE_CODE_COPY[Path(relpath).suffix].findall(text) if name in codes]
             if not copies:
-                self.problem(
-                    f"{relpath}: no move-code constants found (NAME = N, named as in {MOVE_CODES_H}). "
-                    f"If the client now spells them differently, update tools/check_protocol.py."
-                )
+                self.unreadable(relpath, f"its move-code constants (NAME = N, named as in {MOVE_CODES_H})")
             for name, value in copies:
                 if value != codes[name]:
                     self.problem(f"{relpath}: {name} = {value}, but {MOVE_CODES_H} has {name} = {codes[name]}")
@@ -384,14 +412,11 @@ class Checker:
         scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', text))
         read = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]', text))
         if not sent:
-            self.problem(f'{PROTOCOL_CPP}: no telemetry keys found (doc["key"] = ...). '
-                         f"If writeTelemetry() changed shape, update tools/check_protocol.py.")
+            self.unreadable(PROTOCOL_CPP, 'the telemetry keys writeTelemetry() sets (doc["key"] = ...)')
         if not scan:
-            self.problem(f'{PROTOCOL_CPP}: no scan distances found (doc["key"] = status.scanCm[Explorer::BEARING]). '
-                         f"If writeTelemetry() changed shape, update tools/check_protocol.py.")
+            self.unreadable(PROTOCOL_CPP, 'the scan distances (doc["key"] = status.scanCm[Explorer::BEARING])')
         if not read:
-            self.problem(f'{PROTOCOL_CPP}: no command fields found (json["field"]). '
-                         f"If readCommand() changed shape, update tools/check_protocol.py.")
+            self.unreadable(PROTOCOL_CPP, 'the command fields readCommand() reads (json["field"])')
         return sent, scan, read
 
     def keys(self) -> int:
@@ -405,38 +430,26 @@ class Checker:
         sent, _, read = self.firmware_keys()
         if not sent or not read:
             return 0
-        for client, where in KEY_READERS.items():
-            texts = {relpath: self.code(relpath) for relpath in self.files(client)}
-            texts = {relpath: text for relpath, text in texts.items() if text is not None}
-            if not texts:
+        for client in KEY_READERS:
+            usage = self.usage(client)
+            if not usage:
                 continue
-
-            any_reads = False
-            any_commands = False
-            for relpath, text in texts.items():
-                reads = {key for pattern in where["reads"] for key in pattern.findall(text)}
-                any_reads = any_reads or bool(reads)
+            for relpath, (reads, commands) in usage.items():
                 for name in sorted(reads - sent):
                     self.problem(f'{relpath}: reads telemetry key "{name}", which {PROTOCOL_CPP} never sends')
-
-                literal, field = where["command"]
-                commands = literal.findall(text)
-                any_commands = any_commands or bool(commands)
-                for body in commands:
-                    for name in sorted(set(field.findall(body)) - read):
+                for fields in commands:
+                    for name in sorted(fields - read):
                         self.problem(f'{relpath}: sends command field "{name}", which {PROTOCOL_CPP} never reads')
 
             table = self.bearing_table(client)
             if table:
                 relpath, body = table
-                for name in sorted(set(where["bearings"][1].findall(body)) - sent):
+                for name in sorted(set(KEY_READERS[client]["bearings"][1].findall(body)) - sent):
                     self.problem(f'{relpath}: BEARINGS shows telemetry key "{name}", which {PROTOCOL_CPP} never sends')
-            if not any_reads:
-                self.problem(f"{client}: no telemetry reads found (data.key or data[\"key\"]); "
-                             f"if the client now spells them differently, update tools/check_protocol.py")
-            if not any_commands:
-                self.problem(f"{client}: no command object found to check; if the client now builds commands "
-                             f"differently, update tools/check_protocol.py")
+            if not any(reads for reads, _ in usage.values()):
+                self.unreadable(client, 'any telemetry read (data.key or data["key"])')
+            if not any(commands for _, commands in usage.values()):
+                self.unreadable(client, "a command object to check")
         return len(sent)
 
     def bearings(self) -> None:
@@ -454,8 +467,8 @@ class Checker:
         panel, body_of_table = table
 
         params = {name: int(value) for name, value in re.findall(r"\bint\s+(sweep\w*Deg)\s*=\s*(-?\d+)\s*;", params_text)}
-        body = re.search(r"\bExplorer::angleOf\s*\([^)]*\)\s*const\s*\{(.*?)\n\}", explorer, re.S)
-        cases = re.findall(r"\bcase\s+(\w+)\s*:\s*return\s+(-?)\s*(?:params\.(\w+)|(\d+))\s*;", body.group(1)) if body else []
+        body = function_body(explorer, "Explorer::angleOf", const=True) or ""
+        cases = re.findall(r"\bcase\s+(\w+)\s*:\s*return\s+(-?)\s*(?:params\.(\w+)|(\d+))\s*;", body)
         angles: dict[str, int] = {}
         for bearing, minus, param, literal in cases:
             if param and param not in params:
@@ -464,22 +477,17 @@ class Checker:
             angle = params[param] if param else int(literal)
             angles[bearing] = -angle if minus else angle
         if not angles:
-            self.problem(f"{EXPLORER_CPP}: cannot read Explorer::angleOf() (case BEARING: return [-]params.x;); "
-                         f"if it changed shape, update tools/check_protocol.py")
+            self.unreadable(EXPLORER_CPP, "Explorer::angleOf() (case BEARING: return [-]params.x;)")
             return
 
         drawn = dict(re.findall(r"\bkey:\s*[\"'](\w+)[\"'][^}]*?\bbearing:\s*(-?\d+)", body_of_table))
         if not drawn:
-            self.problem(f"{panel}: cannot read BEARINGS ({{ key: \"...\", ..., bearing: N }}); "
-                         f"if it changed shape, update tools/check_protocol.py")
+            self.unreadable(panel, 'BEARINGS ({ key: "...", ..., bearing: N })')
             return
         for name, bearing in sorted(scan.items()):
             if bearing not in angles:
-                self.problem(
-                    f"{EXPLORER_CPP}: cannot read the angle of {bearing}, which {PROTOCOL_CPP} sends as {name}, in "
-                    f"Explorer::angleOf() (expected `case {bearing}: return [-]params.x;`); if it changed shape, "
-                    f"update tools/check_protocol.py"
-                )
+                self.unreadable(EXPLORER_CPP, f"the angle of {bearing}, which {PROTOCOL_CPP} sends as {name}, in "
+                                f"Explorer::angleOf() (expected `case {bearing}: return [-]params.x;`)")
             elif name not in drawn:
                 self.problem(f"{panel}: BEARINGS has no wedge for {name}, which telemetry sends")
             elif int(drawn[name]) != angles[bearing]:
@@ -500,30 +508,26 @@ class Checker:
         if kinematics is None or protocol is None or panel is None:
             return 0
 
-        enum = re.search(r"\benum\s+ControlScheme\s*\{(.*?)\}", kinematics, re.S)
-        schemes = [item.strip() for item in enum.group(1).split(",") if item.strip()] if enum else []
+        enum = enum_body(kinematics, "ControlScheme")
+        schemes = [item.strip() for item in enum.split(",") if item.strip()] if enum is not None else []
         if not schemes or not all(re.fullmatch(r"[A-Za-z_]\w*", item) for item in schemes):
-            self.problem(f"{KINEMATICS_H}: cannot read `enum ControlScheme {{ A, B }}`; "
-                         f"if it changed shape, update tools/check_protocol.py")
+            self.unreadable(KINEMATICS_H, "`enum ControlScheme { A, B }`")
             return 0
 
-        body = re.search(r"\bschemeName\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
         ternary = re.search(r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
-                            body.group(1)) if body else None
+                            function_body(protocol, "schemeName") or "")
         names: dict[str, str] = {}
         if ternary and len(schemes) == 2:
             which, yes, no = ternary.groups()
             names = {scheme: yes if scheme == which else no for scheme in schemes}
         if set(names) != set(schemes):
-            self.problem(f"{PROTOCOL_CPP}: cannot read the name schemeName() gives each of {', '.join(schemes)}; "
-                         f"if it changed shape, update tools/check_protocol.py")
+            self.unreadable(PROTOCOL_CPP, f"the name schemeName() gives each of {', '.join(schemes)}")
             return 0
 
         for scheme, name in names.items():
             match = re.search(STRING_CONSTANT.replace("NAME", re.escape(scheme)), panel, re.M)
             if not match:
-                self.problem(f'{SCHEME_CLIENT}: no {scheme} found (const {scheme} = "{name}";); '
-                             f"if it was renamed or moved, update tools/check_protocol.py")
+                self.unreadable(SCHEME_CLIENT, f'{scheme} (const {scheme} = "{name}";)')
             elif match.group(1) != name:
                 self.problem(f'{SCHEME_CLIENT}: {scheme} = "{match.group(1)}", but schemeName() in {PROTOCOL_CPP} '
                              f'names it "{name}" -- the rover ignores a scheme name it does not know')
@@ -543,34 +547,26 @@ class Checker:
         protocol = self.text(PROTOCOL_CPP)
         if protocol is None:
             return
-        reader = re.search(r"\breadMessage\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
-        body = reader.group(1) if reader else ""
-        fields = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*is\s*<\s*const\s+char\s*\*\s*>\s*\(\s*\)', body))
-        absent = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*isNull\s*\(\s*\)', body))
-        writer = re.search(r"\bwriteTelemetry\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
-        keys = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*schemeName\s*\(', writer.group(1) if writer else ""))
+        reader = function_body(protocol, "readMessage") or ""
+        fields = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*is\s*<\s*const\s+char\s*\*\s*>\s*\(\s*\)', reader))
+        absent = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]\s*\.\s*isNull\s*\(\s*\)', reader))
+        writer = function_body(protocol, "writeTelemetry") or ""
+        keys = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*schemeName\s*\(', writer))
         if len(fields) != 1 or not absent:
-            self.problem(f'{PROTOCOL_CPP}: cannot read which field readMessage() takes a scheme from '
-                         f'(json["field"].is<const char*>() and json["move"].isNull()); '
-                         f"if it changed shape, update tools/check_protocol.py")
+            self.unreadable(PROTOCOL_CPP, 'which field readMessage() takes a scheme from '
+                            '(json["field"].is<const char*>() and json["move"].isNull())')
             return
         if len(keys) != 1:
-            self.problem(f'{PROTOCOL_CPP}: cannot read the telemetry key writeTelemetry() sends the scheme under '
-                         f'(doc["key"] = schemeName(...)); if it changed shape, update tools/check_protocol.py')
+            self.unreadable(PROTOCOL_CPP, 'the telemetry key writeTelemetry() sends the scheme under '
+                            '(doc["key"] = schemeName(...))')
             return
         (field,), (key,) = fields, keys
 
-        where = KEY_READERS[PANEL_SCRIPTS]
-        literal, field_name = where["command"]
+        usage = self.usage(PANEL_SCRIPTS)
+        reads = set().union(*(reads for reads, _ in usage.values()))
         messages = 0
-        reads: set[str] = set()
-        for relpath in self.files(PANEL_SCRIPTS):
-            code = self.code(relpath)
-            if code is None:
-                continue
-            reads |= {name for pattern in where["reads"] for name in pattern.findall(code)}
-            for body in literal.findall(code):
-                sent = set(field_name.findall(body))
+        for relpath, (_, commands) in usage.items():
+            for sent in commands:
                 if sent & absent:
                     if field in sent:
                         self.problem(
@@ -592,8 +588,7 @@ class Checker:
                         f'readMessage() in {PROTOCOL_CPP} ignores there: send "{field}" alone'
                     )
         if not messages:
-            self.problem(f'{PANEL_SCRIPTS}: no scheme message found (send({{ {field}: ... }}) with no move); '
-                         f"if the panel now sends it differently, update tools/check_protocol.py")
+            self.unreadable(PANEL_SCRIPTS, f"a scheme message (send({{ {field}: ... }}) with no move)")
         if key not in reads:
             self.problem(f'{PANEL_SCRIPTS}: never reads telemetry key "{key}", which writeTelemetry() in '
                          f"{PROTOCOL_CPP} sends the scheme under; the panel's scheme toggle would stay disabled")
