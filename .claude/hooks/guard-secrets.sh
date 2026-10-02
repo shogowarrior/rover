@@ -1,55 +1,12 @@
 #!/bin/sh
-# PreToolUse guard: keep this rover's WiFi credentials out of the transcript.
-#
-# src/config.h holds the live WiFi SSID and password. It is gitignored, but
-# nothing otherwise stops it being read into context and echoed into a
-# transcript, commit message, or PR body. src/config.example.h has the same
-# shape with placeholder values and is always fine to read.
-#
-# settings.json runs this before every tool call, built in or MCP (Serena,
-# the browsers, the terminal panel...). What is checked:
-#
-#   any string in the call's input    (file_path, path, relative_path, a
-#                                      file:// url, a list of files...)
-#       blocked when the whole string is a path to src/config.h. Text that
-#       only mentions the file is not a path to it, so two kinds of string
-#       are skipped: what a tool searches for or writes (pattern, except
-#       Glob's, which names files; old_string, new_string, content,
-#       new_source), and prose, meaning any string with a space in it unless
-#       it starts with /, ~ or file://. "Never read ./src/config.h" is prose;
-#       "src/config.h" as the pattern of a Grep over docs/ is a search. A
-#       relative path with a space in it is missed; this project has none.
-#   glob                              (Grep)
-#       blocked when it could select config.h and the search covers this
-#       project's src/. Searching a directory skips gitignored files, but
-#       ripgrep's --glob overrides .gitignore, so `glob: "*.h"` alone would
-#       search the file and print its matching lines.
-#   command                           (Bash, the terminal panel's run_in_terminal)
-#       read as shell words, and blocked when it
-#         - names config.h, once every config.example.h is removed;
-#         - has a word the shell would expand to src/config.h (`cat src/*.h`);
-#         - runs a recursive grep, or an rg that ignores .gitignore (-u,
-#           --no-ignore) or picks files with --glob, over src/ or a
-#           directory above it -- `grep -rn WIFI src/` reads the file without
-#           naming it;
-#         - feeds a listing of src/, or of a directory above it, to a reader
-#           in the same pipeline (`find . -name '*.h' | xargs grep`,
-#           `find src -exec cat`). find's own tests are not read, so
-#           `find . -name '*.md' | xargs grep` is refused too: search with
-#           git grep --untracked or rg, which skip gitignored files;
-#         - prints the strings or bytes of a firmware build product
-#           (.pio/build/, firmware.elf or .bin, Network.cpp.o) with a dump
-#           tool (strings, xxd, od, objdump -s, grep -a...) or reads one
-#           whole (cat, head, base64...). The firmware embeds the
-#           credentials as plain strings, so those files leak them without
-#           ever naming config.h.
-#       It follows a plain `cd` (`cd src && cat *` is caught), and skips
-#       comments and heredoc bodies, so text written to a file is not read
-#       as commands. This is a tripwire for the obvious spellings, not a
-#       sandbox: it cannot see what a variable, a script or an alias expands
-#       to at run time (`cat "$f"`, `sh dump.sh`). The Read deny rule in
-#       settings.json is another layer, and the rule in AGENTS.md is the one
-#       that actually protects the file.
+# PreToolUse guard: keep this rover's WiFi credentials, src/config.h, out of
+# the transcript. settings.json runs it before every tool call, built in or
+# MCP. CLAUDE.md ("Hooks") lists what it blocks, each section below says why,
+# and test_guard.py beside it holds a case for every rule. It is a tripwire
+# for the obvious spellings, not a sandbox: it cannot see what a variable, a
+# script or an alias expands to at run time (`cat "$f"`, `sh dump.sh`).
+# settings.json's Read and Edit deny rules are another layer, and the rule
+# in AGENTS.md is what actually protects the file.
 #
 # The Mac's disk is case-insensitive, so SRC/Config.h opens the same file:
 # every comparison is made on a lower-cased, normalised path.
@@ -176,7 +133,8 @@ secret=$(normalise "$project/src/config.h")
 # src/config.h counts, not only this checkout's: a worktree's copy holds the
 # same credentials. A string with a space in it is prose unless it starts
 # like an absolute path: norm() would otherwise read "Never read ." as a
-# directory and the rest as a path below it.
+# directory and the rest as a path below it. So a relative path with a space
+# in it is missed; this project has none.
 named=$(string_values) || block "the tool call could not be parsed, so it could not be checked."
 if [ -n "$named" ]; then
   hit=$(printf '%s\n' "$named" | awk -v home="$HOME" -v cwd="$cwd" -v project="$project" "$PATHS_AWK"'
@@ -189,6 +147,9 @@ fi
 
 # --- Grep globs --------------------------------------------------------------
 
+# Searching a directory skips gitignored files, but an explicit glob
+# overrides .gitignore: `glob: "*.h"` alone would print the file's lines.
+#
 # glob_selects GLOB RELPATH -- whether GLOB could select config.h, whose path
 # relative to the search root is RELPATH. Deliberately looser than ripgrep, so
 # it can over-block but never under-block: {a,b} alternatives become '*',
@@ -378,7 +339,9 @@ END {
   # expanding to the file itself, and for naming src/. namessrc, a listing
   # that can include the file, lasts to the end of its pipeline: a find over
   # src/ or a directory above it, or any word naming src/ itself (as
-  # `git ls-files -o src` does).
+  # `git ls-files -o src` does). The tests of a find are not read, so
+  # `find . -name "*.md" | xargs grep` is refused too: git grep --untracked
+  # and rg skip gitignored files.
   found = ""; namessrc = 0
   start_command()
   for (k = 1; k <= n && found == ""; k++) {
