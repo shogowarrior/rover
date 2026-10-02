@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unity.h>
 
+#include "../support/Vectors.h"
 #include "Kinematics.h"
 #include "MovePatterns.h"
 #include "Tuning.h"
@@ -188,25 +189,13 @@ StickFamily familyNamed(const char* name) {
   return FAMILY_TRANSLATE;
 }
 
-// The test runner starts in the project directory.
-bool loadVectors(JsonDocument& doc) {
-  FILE* file = fopen("test/vectors/stick_moves.json", "rb");
-  if (file == nullptr) return false;
-  static char text[8192];
-  const size_t length = fread(text, 1, sizeof(text), file);
-  fclose(file);
-  if (length == sizeof(text)) return false;  // outgrew the buffer
-  return !deserializeJson(doc, text, length);
-}
-
 }  // namespace
 
 // The panel's copy, extras/joystick/js/mecanum.js, is tested against the same
 // file (extras/joystick/test/mecanum.test.js), so the stick on screen and the
 // stick on the pad pick the same move for the same push.
 void test_stick_matches_the_shared_vectors(void) {
-  JsonDocument doc;
-  TEST_ASSERT_TRUE_MESSAGE(loadVectors(doc), "test/vectors/stick_moves.json");
+  const JsonDocument doc = loadVectors("stick_moves.json");
   JsonArrayConst cases = doc["cases"].as<JsonArrayConst>();
   TEST_ASSERT_TRUE(cases.size() >= 20);
   for (JsonObjectConst c : cases) {
