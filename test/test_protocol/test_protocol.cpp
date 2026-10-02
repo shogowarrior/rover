@@ -64,7 +64,7 @@ void test_wrongly_typed_fields_default_to_stopping(void) {
 }
 
 void test_telemetry_carries_every_key_clients_read(void) {
-  char out[384];
+  char out[protocol::TELEMETRY_MAX_BYTES];
   const size_t length = protocol::writeTelemetry(sampleStatus(), kinematics::SCHEME_ADVANCED, 41.5f, out, sizeof(out));
   TEST_ASSERT_TRUE(length > 0);
 
@@ -91,7 +91,7 @@ void test_distances_are_omitted_until_scanned(void) {
   status.hasScan = false;
   status.mode = Rover::MODE_MANUAL;
   status.phase = nullptr;
-  char out[384];
+  char out[protocol::TELEMETRY_MAX_BYTES];
   const size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
@@ -104,11 +104,39 @@ void test_halt_reason_is_reported(void) {
   Rover::Status status = sampleStatus();
   status.phase = "HALTED";
   status.haltReason = "boxed in";
-  char out[384];
+  char out[protocol::TELEMETRY_MAX_BYTES];
   const size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
   TEST_ASSERT_EQUAL_STRING("boxed in", doc["halt"]);
+}
+
+// The largest frame must fit RemoteControl's buffer, or telemetry silently
+// stops in exactly those states. Every field at its longest, whether or not
+// the states can occur together: the longest move name, the longest phase and
+// halt reason, "false" for both flags, a negative temperature and distances
+// with seven significant digits.
+void test_longest_telemetry_fits(void) {
+  Rover::Status status;
+  status.mode = Rover::MODE_AUTONOMOUS;
+  status.move = STOP;
+  for (int code = 0; code < MOVE_CODE_COUNT; code++) {
+    const MoveCode move = static_cast<MoveCode>(code);
+    if (strlen(moveName(move)) > strlen(moveName(status.move))) status.move = move;
+  }
+  status.moving = false;
+  status.phase = "SIDESTEP";
+  status.haltReason = "sensor silent";
+  status.hasScan = true;
+  for (int i = 0; i < Explorer::BEARING_COUNT; i++) status.scanCm[i] = 399.9999f;
+  status.motorsReady = false;
+
+  char out[protocol::TELEMETRY_MAX_BYTES];
+  const size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_ADVANCED, -12.34568f, out, sizeof(out));
+  TEST_ASSERT_TRUE(length > 0);
+  JsonDocument doc;
+  TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+  TEST_ASSERT_EQUAL_STRING(moveName(status.move), doc["move"]);
 }
 
 void test_scheme_message_sets_the_scheme(void) {
@@ -153,6 +181,7 @@ int main(int, char**) {
   RUN_TEST(test_telemetry_carries_every_key_clients_read);
   RUN_TEST(test_distances_are_omitted_until_scanned);
   RUN_TEST(test_halt_reason_is_reported);
+  RUN_TEST(test_longest_telemetry_fits);
   RUN_TEST(test_too_small_a_buffer_writes_nothing);
   RUN_TEST(test_scheme_message_sets_the_scheme);
   RUN_TEST(test_unknown_scheme_is_ignored);

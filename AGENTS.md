@@ -281,7 +281,12 @@ reference; in short:
   `distanceLeft`, `distanceFrontLeft`, `distanceFront`, `distanceFrontRight`,
   `distanceRight` in cm once every bearing has been measured (999 means no
   echo). Distances stay live in manual mode too. `scheme` (`NORMAL` or
-  `ADVANCED`) is always sent.
+  `ADVANCED`) is always sent. A frame must fit
+  `protocol::TELEMETRY_MAX_BYTES` (384 bytes), or it is not sent at all and
+  telemetry freezes in exactly the states that outgrew it; the firmware says
+  so once on Serial. `test_longest_telemetry_fits` checks the worst case
+  (about 315 bytes today), so a new key that would not fit fails the host
+  tests.
 
 ## The browser control panel
 

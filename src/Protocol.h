@@ -59,6 +59,12 @@ Message readMessage(JsonVariantConst json);
 // "NORMAL" or "ADVANCED".
 const char* schemeName(kinematics::ControlScheme scheme);
 
+// RemoteControl's buffer for one telemetry frame, terminator included. A frame
+// that does not fit is not sent at all, so telemetry would freeze in exactly
+// the states that outgrow it. test_longest_telemetry_fits checks the worst
+// case against this, about 315 bytes today: a new key must keep it inside.
+constexpr size_t TELEMETRY_MAX_BYTES = 384;
+
 // Serialise telemetry into `out`. Returns the length written, or 0 if it did
 // not fit (never a truncated, invalid document).
 size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,

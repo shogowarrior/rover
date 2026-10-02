@@ -110,7 +110,15 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
 }
 
 void RemoteControl::broadcastTelemetry() {
-  char frame[384];
+  char frame[protocol::TELEMETRY_MAX_BYTES];
   const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), frame, sizeof(frame));
-  if (length > 0) server.broadcastTXT(frame, length);
+  if (length == 0) {
+    // Clients would only see telemetry freeze. Say why once, not every
+    // TELEMETRY_INTERVAL_MS.
+    static bool reported = false;
+    if (!reported) Serial.println("Telemetry outgrew protocol::TELEMETRY_MAX_BYTES: frames that do not fit are not sent.");
+    reported = true;
+    return;
+  }
+  server.broadcastTXT(frame, length);
 }
