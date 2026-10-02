@@ -7,8 +7,8 @@ Each case is a tool call and what the guard must do with it: B, block (exit
 2), or A, allow (exit 0). The paths are fictional (/p/rover, HOME=/h) and the
 guard opens no file, so no case touches the disk. The guard runs with a PATH
 that holds only the tools it uses, so CI's Ubuntu runner tries it with dash
-and mawk where a Mac has its own sh and awk. Without a JSON parser it cannot
-tell one call from another, so those runs must block every call.
+and mawk where a Mac has its own sh and awk. Without jq it cannot tell one
+call from another, so that run must block every call.
 
 CI runs this, and so does the build hook after an edit under .claude/hooks/.
 """
@@ -279,11 +279,11 @@ RAW = [
 
 TOOLS = ("awk", "cat", "grep", "sed", "tr")  # what the guard runs besides its parser
 
-# (name, the parsers on PATH, whether the case table applies or every call must block)
+# (name, what else is on PATH, whether the case table applies or every call
+# must block). python3 is there without jq to show it does not stand in.
 MODES = [
     ("jq", ("jq",), True),
-    ("python3 without jq", ("python3",), True),
-    ("neither jq nor python3", (), False),
+    ("python3 without jq", ("python3",), False),
 ]
 
 

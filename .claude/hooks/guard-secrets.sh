@@ -74,53 +74,18 @@ input=$(cat)
 # The text a tool searches for or writes is left out: a Grep for the name, or
 # an edit of .gitignore whose old_string is the name, opens nothing. Glob's
 # pattern is kept, as it names the files the tool returns.
-# jq is the usual parser and python3 stands in for it. With neither there is
-# no telling a read of config.h from any other call, so fail closed.
-if command -v jq >/dev/null 2>&1; then
-  get() { printf '%s' "$input" | jq -r --arg p "$1" 'getpath($p | split(".")) | strings'; }
-  string_values() {
-    printf '%s' "$input" | jq -r '
-      .tool_name as $tool | .tool_input | paths(strings) as $p
-      | select((($p[-1] | IN("old_string", "new_string", "content", "new_source"))
-                or ($p[-1] == "pattern" and $tool != "Glob")) | not)
-      | getpath($p) | select(contains("\n") | not)'
-  }
-elif command -v python3 >/dev/null 2>&1; then
-  get() {
-    printf '%s' "$input" | python3 -c '
-import json, sys
-node = json.load(sys.stdin)
-for key in sys.argv[1].split("."):
-    node = node.get(key) if isinstance(node, dict) else None
-if isinstance(node, str):
-    sys.stdout.write(node)
-' "$1"
-  }
-  string_values() {
-    printf '%s' "$input" | python3 -c '
-import json, sys
-call = json.load(sys.stdin)
-TEXT = {"old_string", "new_string", "content", "new_source"}
-if call.get("tool_name") != "Glob":
-    TEXT.add("pattern")
-def walk(node):
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if not (key in TEXT and isinstance(value, str)):
-                walk(value)
-    elif isinstance(node, list):
-        for value in node:
-            walk(value)
-    elif isinstance(node, str) and "\n" not in node:
-        print(node)
-walk(call.get("tool_input"))
-'
-  }
-else
-  echo "Blocked: .claude/hooks/guard-secrets.sh needs jq or python3 to inspect tool" >&2
-  echo "calls for access to src/config.h, and found neither. Install jq." >&2
-  exit 2
-fi
+# Without jq there is no telling a read of config.h from any other call, so
+# fail closed.
+command -v jq >/dev/null 2>&1 ||
+  block "the hook needs jq to inspect tool calls, and found none. Install jq."
+get() { printf '%s' "$input" | jq -r --arg p "$1" 'getpath($p | split(".")) | strings'; }
+string_values() {
+  printf '%s' "$input" | jq -r '
+    .tool_name as $tool | .tool_input | paths(strings) as $p
+    | select((($p[-1] | IN("old_string", "new_string", "content", "new_source"))
+              or ($p[-1] == "pattern" and $tool != "Glob")) | not)
+    | getpath($p) | select(contains("\n") | not)'
+}
 
 # Parse once up front: input that cannot be read cannot be cleared either.
 cwd=$(get cwd) || block "the tool call could not be parsed, so it could not be checked."

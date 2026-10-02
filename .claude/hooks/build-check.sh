@@ -40,31 +40,17 @@
 #
 # Exit 2 returns stderr to Claude so it can fix the break immediately.
 
-input=$(cat)
-
-# get KEY.PATH -- print the string at that path in the hook input, or nothing.
-# jq is the usual parser and python3 stands in for it.
-if command -v jq >/dev/null 2>&1; then
-  get() { printf '%s' "$input" | jq -r --arg p "$1" 'getpath($p | split(".")) | strings'; }
-elif command -v python3 >/dev/null 2>&1; then
-  get() {
-    printf '%s' "$input" | python3 -c '
-import json, sys
-node = json.load(sys.stdin)
-for key in sys.argv[1].split("."):
-    node = node.get(key) if isinstance(node, dict) else None
-if isinstance(node, str):
-    sys.stdout.write(node)
-' "$1"
-  }
-else
-  # Say so rather than skip quietly: a silent hook reads as a passing build.
-  echo "Build check skipped: .claude/hooks/build-check.sh needs jq or python3" >&2
-  echo "to read which file was edited, and found neither. Install jq." >&2
+# require TOOL WHAT -- stop unless TOOL is on PATH, saying WHAT went unchecked.
+# A silent hook would read as a passing build.
+require() {
+  command -v "$1" >/dev/null 2>&1 && return
+  echo "$2 skipped after editing ${file:-a file}: $1 is not on PATH. Install it." >&2
   exit 2
-fi
+}
 
-path=$(get tool_input.file_path)
+input=$(cat)
+require jq "Build check"
+path=$(printf '%s' "$input" | jq -r '.tool_input.file_path | strings')
 [ -n "$path" ] || exit 0
 project=${CLAUDE_PROJECT_DIR:-$(pwd)}
 

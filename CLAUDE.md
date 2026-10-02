@@ -9,7 +9,8 @@ under `.claude/`.
 ## Hooks
 
 Both are wired in `.claude/settings.json`. Do not disable or work around
-either.
+either. Both read the tool call with `jq` and fail closed without it: the
+guard blocks every call, and the build check says what it skipped.
 
 - **PostToolUse, `.claude/hooks/build-check.sh`.** After an Edit or Write
   inside the project (or one of its git worktrees), it runs what that file
