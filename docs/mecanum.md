@@ -16,11 +16,6 @@ cannot drift from it unnoticed.
 **None of this is bench-verified yet.** [bench-checklist.md](bench-checklist.md)
 says how to check it, with the wheels off the ground and then on the floor.
 
-The tables that used to be on this page contradicted the code and each other:
-the four-wheel table gave "Right" and "Rotate C" identical wheel directions
-(front pair forward, rear pair backward, which on mecanum wheels only fights
-itself), and two of its "Pivot Side" rows drove three wheels. They are gone.
-
 ## The table
 
 Forward and Backward are the direction a wheel turns (the way that would roll
@@ -94,8 +89,9 @@ row needs a coasting wheel to turn, so how freely a released gearbox turns
 changes nothing. A pivot then moves the chassis at half its wheels' speed and
 turns it about a point beyond the coasting pair, not at it: half the
 wheelbase plus half the track from the chassis' centre, about 16 cm by the
-simulator's estimate of where this rover's wheels sit. On the floor, how the rollers slip and grip decides how far a pivot
-really swings, which only the bench can show.
+simulator's estimate of where this rover's wheels sit. On the floor, how the
+rollers slip and grip decides how far a pivot really swings, which only the
+bench can show.
 
 Autonomous exploration and the keyboard client never send codes 9 to 16, and
 neither do the panel's stick and the gamepad under the NORMAL control scheme.
@@ -139,6 +135,7 @@ front and down the rear, toward the side pushed. If the bench shows a row's
 wheels do not match its name, fix the row in `MovePatterns.cpp`, with its
 test, and the stick follows. Fix the same row in `RoverSim.WHEELS` in
 [`extras/joystick/js/sim.js`](../extras/joystick/js/sim.js) too, or the
-panel's `test/sim.test.js` fails: the simulator previews with the table. `kinematics::moveForStick` does the mapping for
-the gamepad, the panel carries a copy, and both are tested against
+panel's `test/sim.test.js` fails: the simulator previews with the table.
+`kinematics::moveForStick` does the mapping for the gamepad, the panel carries
+a copy, and both are tested against
 [`test/vectors/stick_moves.json`](../test/vectors/stick_moves.json).

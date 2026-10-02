@@ -155,9 +155,9 @@ node --test extras/joystick/test/             # the browser panel and its simula
 ```
 
 CI runs all three, parses every client (Python and JavaScript), and builds
-every board environment on each pull request and each push to `main`. What no test can know (which motor is on which
-terminal, which way the servo turns) is covered by
-[docs/bench-checklist.md](docs/bench-checklist.md).
+every board environment on each pull request and each push to `main`. What
+no test can know (which motor is on which terminal, which way the servo
+turns) is covered by [docs/bench-checklist.md](docs/bench-checklist.md).
 
 ## Safety
 

@@ -33,10 +33,9 @@ stack: not GPIO36 or GPIO39, which sit at A4/A5, where the motor shield ties
 the header to its I2C lines
 ([Adafruit FAQ](https://learn.adafruit.com/adafruit-motor-shield-v2-for-arduino/faq)).
 GPIO35 (A2) works if the second sonar's echo is not moved there. Confirm with
-`/pin-audit`. Report volts in telemetry,
-stop exploring well before the BMS cuts off (2.5 V per cell), and optionally
-scale PWM by voltage so a given speed means the same thing on a full and a
-tired pack.
+`/pin-audit`. Report volts in telemetry, stop exploring well before the BMS
+cuts off (2.5 V per cell), and optionally scale PWM by voltage so a given
+speed means the same thing on a full and a tired pack.
 
 **Get the scanner's echo off GPIO12.** It is a strapping pin that can stop the
 board booting. Move the wire to GPIO34 through a divider, or swap in an
