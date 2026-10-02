@@ -77,6 +77,9 @@ class Rover {
   Status status() const;
 
  private:
+  // Start over in `mode`: the wheels released, and exploration from a fresh
+  // sweep.
+  void restart(Mode mode, uint32_t now);
   void setMode(Mode mode, uint32_t now);
   void drive(MoveCode move, int speed, int durationMs, uint32_t now);
   void release(uint32_t now);

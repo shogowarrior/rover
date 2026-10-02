@@ -10,11 +10,7 @@ using timing::reached;
 
 Rover::Rover(Motors& motors, RangeScanner& scanner) : motors(motors), explorer(scanner) {}
 
-void Rover::begin(Mode initialMode, uint32_t now) {
-  currentMode = initialMode;
-  release(now);
-  explorer.reset(now);
-}
+void Rover::begin(Mode initialMode, uint32_t now) { restart(initialMode, now); }
 
 void Rover::update(uint32_t now) {
   if (moving && reached(now, moveDeadline)) release(now);
@@ -35,10 +31,7 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   // that halted: the operator is saying the way is open now.
   if (move == RESUME_AUTONOMOUS) {
     if (currentMode == MODE_AUTONOMOUS) {
-      if (explorer.phase() == Explorer::HALTED) {
-        release(now);
-        explorer.reset(now);
-      }
+      if (explorer.phase() == Explorer::HALTED) restart(MODE_AUTONOMOUS, now);
       return;
     }
     setMode(MODE_AUTONOMOUS, now);
@@ -84,11 +77,14 @@ Rover::Status Rover::status() const {
   return status;
 }
 
-void Rover::setMode(Mode mode, uint32_t now) {
-  if (mode == currentMode) return;
+void Rover::restart(Mode mode, uint32_t now) {
   currentMode = mode;
   release(now);
   explorer.reset(now);
+}
+
+void Rover::setMode(Mode mode, uint32_t now) {
+  if (mode != currentMode) restart(mode, now);
 }
 
 // The single path to the motors: energise the wheels and record when they
