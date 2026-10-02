@@ -53,10 +53,15 @@ class GamepadSession {
   void update(const GamepadReport& report, uint32_t now);
 
  private:
+  // Whether the last thing sent was a motion. Read off lastSent rather than
+  // kept beside it, so no branch can update one and forget the other.
+  bool driving() const { return lastSent.move != STOP; }
+  // Stop what the pad is driving, if anything, and forget it.
+  void stopDriving(uint32_t now);
+
   Rover& rover;
   kinematics::ControlScheme& scheme;
   kinematics::ControlScheme schemeInUse;  // what the pad last drove under
-  bool driving = false;                   // the last thing sent was a motion
   bool awaitingRelease = false;           // stopped by a scheme change
   kinematics::DriveRequest lastSent = {STOP, 0};
   uint32_t lastSentMs = 0;

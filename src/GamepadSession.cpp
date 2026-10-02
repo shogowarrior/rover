@@ -16,6 +16,11 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now) {
 GamepadSession::GamepadSession(Rover& rover, kinematics::ControlScheme& scheme)
     : rover(rover), scheme(scheme), schemeInUse(scheme) {}
 
+void GamepadSession::stopDriving(uint32_t now) {
+  if (driving()) rover.command(STOP, 0, 0, now);
+  lastSent = {STOP, 0};
+}
+
 void GamepadSession::update(const GamepadReport& report, uint32_t now) {
   if (report.selectPressed) {
     scheme = scheme == kinematics::SCHEME_ADVANCED ? kinematics::SCHEME_NORMAL
@@ -23,16 +28,13 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
   }
   if (scheme != schemeInUse) {
     schemeInUse = scheme;
-    if (driving) {
-      rover.command(STOP, 0, 0, now);
-      driving = false;
-      lastSent = {STOP, 0};
+    if (driving()) {
+      stopDriving(now);
       awaitingRelease = true;
     }
   }
   if (report.startPressed) {
     rover.command(RESUME_AUTONOMOUS, 0, 0, now);
-    driving = false;
     lastSent = {STOP, 0};
     return;
   }
@@ -50,19 +52,16 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
   }
 
   if (wanted.move == STOP) {
-    if (driving) rover.command(STOP, 0, 0, now);
-    driving = false;
-    lastSent = wanted;
+    stopDriving(now);
     return;
   }
 
   const bool turned = wanted.move != lastSent.move;
   const bool respeeded = wanted.speed != lastSent.speed;
   const uint32_t gap = turned ? 0 : respeeded ? tuning::GAMEPAD_SPEED_CHANGE_MS : tuning::GAMEPAD_REFRESH_MS;
-  if (driving && timing::since(now, lastSentMs) < gap) return;
+  if (driving() && timing::since(now, lastSentMs) < gap) return;
 
   rover.command(wanted.move, wanted.speed, tuning::DEFAULT_MOVE_DURATION_MS, now);
   lastSent = wanted;
   lastSentMs = now;
-  driving = true;
 }
