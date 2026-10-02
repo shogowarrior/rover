@@ -32,7 +32,9 @@ either.
     tests share with the firmware's, or a firmware file those tests read
     (`MoveCodes.h`, `MovePatterns.cpp`, `Explorer.h`, `Kinematics.h`,
     `Tuning.h`, `Protocol.cpp`): `node --test extras/joystick/test/` (about a
-    second).
+    second);
+  - anything under `.claude/hooks/`: `python3 .claude/hooks/test_guard.py`,
+    the secrets guard's cases (a few seconds).
 
   It builds the checkout the edited file is in, against
   `src/config.example.h` where that checkout has no `src/config.h`, as CI
@@ -63,7 +65,9 @@ either.
   a script or an alias expands to at run time. The rule in AGENTS.md is what
   actually protects the file, from every tool. Because the check reads the
   command text, a commit message that mentions the file must go through a
-  file (`git commit -F <file>`).
+  file (`git commit -F <file>`). `.claude/hooks/test_guard.py` holds a case
+  for every rule, run by CI and by the build hook: a change to the guard
+  that lets one case through, or blocks one it should allow, fails there.
 
 ## Skills
 

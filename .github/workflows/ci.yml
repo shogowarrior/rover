@@ -25,6 +25,11 @@ jobs:
       # quietly on the robot, so fail here instead.
       - name: Check clients against the wire protocol
         run: python tools/check_protocol.py
+      # The hook that keeps the WiFi credentials out of an agent's transcript,
+      # against its case table, under dash and mawk as a Linux contributor
+      # would run it.
+      - name: Secrets guard
+        run: python .claude/hooks/test_guard.py
       # The panel's scripts run in a browser, and their tests in Node.
       - uses: actions/setup-node@v4
         with:

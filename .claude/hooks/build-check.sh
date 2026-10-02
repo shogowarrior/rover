@@ -20,7 +20,9 @@
 #     under test/vectors/ its tests share with the firmware's, or a firmware
 #     file those tests read (MoveCodes.h, MovePatterns.cpp, Explorer.h,
 #     Kinematics.h, Tuning.h, Protocol.cpp): run the panel's tests,
-#     `node --test extras/joystick/test/` (about a second).
+#     `node --test extras/joystick/test/` (about a second);
+#   * anything under .claude/hooks/: run the secrets guard's cases,
+#     .claude/hooks/test_guard.py (a few seconds).
 #
 # The host-tested list below mirrors build_src_filter in [env:native] plus the
 # headers those modules include, and the protocol list mirrors the files
@@ -111,9 +113,15 @@ case "$file" in
     src/Kinematics.h | src/Tuning.h | src/Protocol.cpp) panel=yes ;;
 esac
 
+# The secrets guard's case table, after an edit to either hook or the table.
+guard=no
+case "$file" in
+  .claude/hooks/*) guard=yes ;;
+esac
+
 case "$file" in
   *.cpp | *.h | *.ino | platformio.ini) ;;
-  *) [ "$protocol" = yes ] || [ "$panel" = yes ] || exit 0 ;;
+  *) [ "$protocol" = yes ] || [ "$panel" = yes ] || [ "$guard" = yes ] || exit 0 ;;
 esac
 
 build=no
@@ -184,6 +192,17 @@ if [ "$panel" = yes ]; then
         grep -vE '^[[:space:]]*(at |generatedMessage:|code:|actual:|expected:|operator:|[-+] |[{}]$)')" \
       '^✖|check\(s\) failed|^    [^ ]|Error|^ℹ (tests|fail) '
   printf '%s\n' "$out" | grep -E 'checks passed|^ℹ (tests|fail) '
+fi
+
+if [ "$guard" = yes ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Secrets guard cases skipped after editing $file: python3 is not on PATH," >&2
+    echo "so nothing has run .claude/hooks/test_guard.py. Install Python 3." >&2
+    exit 2
+  fi
+  out=$(python3 .claude/hooks/test_guard.py 2>&1) ||
+    fail "Secrets guard cases (.claude/hooks/test_guard.py) FAILED" "$out" '.'
+  printf '%s\n' "$out"
 fi
 
 [ "$build" = yes ] || [ "$tests" = yes ] || exit 0
