@@ -96,6 +96,24 @@ Only once section 1 passes. On a clear floor at speed 64 or lower:
 Do not fix wheel placement in software: every client and the autonomy share
 the same table.
 
+**Pivots, before anyone switches to ADVANCED.** Once the moves above are
+right, send each pivot (codes 9 to 16) with the script in section 0, step 4,
+and watch which pair drives and which way the rover goes. [mecanum.md](mecanum.md) has all
+eight; for example:
+
+- Code 9 (`PIVOT_RIGHT_FORWARD`): only the left-hand wheels turn, forward,
+  and the rover moves **forward** with its nose turning right, about its
+  right wheels. Code 10 drives the same pair backward.
+- Code 13 (`PIVOT_SIDEWAYS_FORWARD_RIGHT`): only the front axle turns, and
+  the front swings right about the rear axle. Code 15 swings the rear right,
+  about the front axle.
+
+The rows follow the reference table, so with `w` and `d` right, a pivot that
+travels against its name means a wrong row: fix it in
+`src/MovePatterns.cpp`, with its test in `test/test_move_patterns`. How far
+a pivot swings depends on how freely the released gearboxes coast; write
+what you see in mecanum.md.
+
 ## 3. Scanner left and right (on the stand)
 
 In manual mode the rover holds still but keeps sweeping its five bearings, so
@@ -185,6 +203,9 @@ On the stand:
   **START** switches to autonomous, or restarts exploration that has halted.
 - Switching the pad off while holding the stick stops the wheels within half
   a second.
+- **SELECT** switches to ADVANCED (the LEDs show player 2). Holding **L1**
+  with the stick up then shows `PIVOT_RIGHT_FORWARD` and turns only the
+  left-hand wheels, forward. SELECT again goes back to NORMAL.
 
 If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`

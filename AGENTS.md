@@ -325,8 +325,12 @@ the pad stops what it was driving and waits for the stick to come back to
 centre, so a toggle elsewhere can only ever stop it.
 `kinematics::moveForStick` maps the stick for the pad; the panel carries a
 copy, and both are tested against `test/vectors/stick_moves.json`.
-[docs/mecanum.md](docs/mecanum.md) has the table, and warns that the pivot
-rows are not bench-verified yet.
+[docs/mecanum.md](docs/mecanum.md) has the table and warns that none of it
+is bench-verified yet. Every row matches the owner's reference,
+[DroneBot Workshop's mecanum table](https://dronebotworkshop.com/mecanum/),
+whose constants `test/test_move_patterns` decodes; the pivots once drove
+against their names (stick forward with L1 backed the rover up), so change a
+row only on the bench's evidence or the reference's.
 
 ## Pins
 

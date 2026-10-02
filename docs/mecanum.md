@@ -8,9 +8,16 @@ what runs and this page is wrong. The code lists its columns as front-left,
 front-right, **rear-right, rear-left**; this page puts the rear wheels in
 left-right order, so copy between them with care.
 
-**None of this is bench-verified yet.** The rows were transcribed from the
-per-move methods the table replaced. [bench-checklist.md](bench-checklist.md)
-says how to check them with the wheels off the ground.
+**The reference is [DroneBot Workshop's mecanum
+article](https://dronebotworkshop.com/mecanum/).** Every row matches its
+constants, and `test/test_move_patterns` decodes them byte by byte, so a row
+cannot drift from it unnoticed. The four-wheel moves and the diagonals were
+transcribed from the per-move methods the table replaced, which agree with
+it; the pivots come from DroneBot, because those methods had them wrong (see
+[below](#four-wheel-and-two-wheel-moves)).
+
+**None of this is bench-verified yet.** [bench-checklist.md](bench-checklist.md)
+says how to check it, with the wheels off the ground and then on the floor.
 
 The tables that used to be on this page contradicted the code and each other:
 the four-wheel table gave "Right" and "Rotate C" identical wheel directions
@@ -34,14 +41,14 @@ coasts.
 | 6 | `MOVE_DIAGONAL135` | Diagonal, forward-left | Free | Forward | Forward | Free |
 | 7 | `MOVE_DIAGONAL225` | Diagonal, backward-left | Backward | Free | Free | Backward |
 | 8 | `MOVE_DIAGONAL315` | Diagonal, backward-right | Free | Backward | Backward | Free |
-| 9 | `PIVOT_RIGHT_FORWARD` | Pivot right | Free | Backward | Free | Backward |
-| 10 | `PIVOT_RIGHT_BACKWARD` | Pivot right | Free | Forward | Free | Forward |
-| 11 | `PIVOT_LEFT_FORWARD` | Pivot left | Backward | Free | Backward | Free |
-| 12 | `PIVOT_LEFT_BACKWARD` | Pivot left | Forward | Free | Forward | Free |
-| 13 | `PIVOT_SIDEWAYS_FORWARD_RIGHT` | Swing sideways | Forward | Backward | Free | Free |
-| 14 | `PIVOT_SIDEWAYS_FORWARD_LEFT` | Swing sideways | Free | Free | Forward | Backward |
-| 15 | `PIVOT_SIDEWAYS_BACKWARD_RIGHT` | Swing sideways | Free | Forward | Backward | Free |
-| 16 | `PIVOT_SIDEWAYS_BACKWARD_LEFT` | Swing sideways | Forward | Free | Free | Backward |
+| 9 | `PIVOT_RIGHT_FORWARD` | Forward about the right wheels, nose turning right | Forward | Free | Forward | Free |
+| 10 | `PIVOT_RIGHT_BACKWARD` | Backward about the right wheels, nose turning left | Backward | Free | Backward | Free |
+| 11 | `PIVOT_LEFT_FORWARD` | Forward about the left wheels, nose turning left | Free | Forward | Free | Forward |
+| 12 | `PIVOT_LEFT_BACKWARD` | Backward about the left wheels, nose turning right | Free | Backward | Free | Backward |
+| 13 | `PIVOT_SIDEWAYS_FORWARD_RIGHT` | Front swings right about the rear axle | Forward | Backward | Free | Free |
+| 14 | `PIVOT_SIDEWAYS_FORWARD_LEFT` | Front swings left about the rear axle | Backward | Forward | Free | Free |
+| 15 | `PIVOT_SIDEWAYS_BACKWARD_RIGHT` | Rear swings right about the front axle | Free | Free | Backward | Forward |
+| 16 | `PIVOT_SIDEWAYS_BACKWARD_LEFT` | Rear swings left about the front axle | Free | Free | Forward | Backward |
 | 17 | `ROTATE_CLOCKWISE` | Rotate right on the spot | Forward | Backward | Forward | Backward |
 | 18 | `ROTATE_COUNTERCLOCKWISE` | Rotate left on the spot | Backward | Forward | Backward | Forward |
 
@@ -65,26 +72,39 @@ also covers.
 
 The **two-wheel moves** (codes 5 to 16) drive one pair and let the other two
 coast. The diagonals drive one diagonal pair the same way, which on mecanum
-wheels moves the rover at 45 degrees without turning it. The pivots drive one
-side (9 to 12), one axle (13 and 14) or one diagonal pair (15 and 16).
+wheels moves the rover at 45 degrees without turning it.
 
-What a pivot actually does depends on how freely a released TT gearbox
-coasts, so treat the names of codes 9 to 16 as intent, not fact. Two rows in
-particular need a look on the bench:
+Each pivot is half of a four-wheel move: one pair turns exactly as in that
+move, and the rover swings about the pair that coasts.
 
-- The `PIVOT_*_FORWARD` codes turn their wheels backward, and the
-  `PIVOT_*_BACKWARD` codes forward. Code 9 drives the right-hand pair
-  backward; the old table drove the left-hand pair forward instead. Both turn
-  the nose right, but the old version moves the rover forward and the code's
-  version moves it backward.
-- Codes 15 and 16 drive a diagonal pair in opposite directions. With the
-  wheels in the pattern that makes code 3 strafe right, that produces no net
-  push, only a turning couple, so the rover should spin rather than swing
-  sideways as 13 and 14 do.
+- **Pivots (9 to 12)** drive one side as `MOVE_FORWARD` or `MOVE_BACKWARD`
+  would. The name gives the side the rover pivots about and the way it
+  travels: `PIVOT_RIGHT_FORWARD` drives the left pair forward, so the rover
+  moves forward with its nose turning right, about its right wheels.
+- **Sideways pivots (13 to 16)** drive one axle as `MOVE_RIGHT` or
+  `MOVE_LEFT` would. `FORWARD` swings the front and `BACKWARD` the rear
+  (DroneBot's `FRONT` and `REAR`), toward the side named:
+  `PIVOT_SIDEWAYS_BACKWARD_RIGHT` strafes the rear axle right, about the
+  front one.
 
-Autonomous exploration and the keyboard client never send codes 9 to 16, and
-neither do the panel and the gamepad under the NORMAL control scheme. Check
-these rows on the bench before switching to ADVANCED (below).
+The per-move methods the table replaced had the pivots wrong. Every
+`PIVOT_*_FORWARD` code drove a pair backward and every `PIVOT_*_BACKWARD`
+code forward, using the pair the rover should pivot about: code 9 turned the
+nose right as it should, but moved the rover backward, where nothing
+watches. So under ADVANCED a stick pushed forward with L1 held backed the
+rover up, and one pulled back drove it forward. Code 14 drove the rear axle,
+and codes 15 and 16 a diagonal pair in opposite directions, which gives no
+net push, only a turning couple: they spun the rover on the spot instead of
+swinging it. The rows now follow DroneBot's constants, and
+`test_move_patterns` checks both the constants and each pivot's direction
+against its name.
+
+How far a pivot really swings depends on how freely a released TT gearbox
+coasts, which only the bench can show. Autonomous exploration and the
+keyboard client never send codes 9 to 16, and neither do the panel and the
+gamepad under the NORMAL control scheme. Run the pivot step in
+[bench-checklist.md](bench-checklist.md) (section 2) before switching to
+ADVANCED (below).
 
 ## Control schemes
 
@@ -110,8 +130,11 @@ under another operator's thumb into a pivot.
 In a pivot family the stick's quadrant picks the move by its name: up and
 right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
 left `PIVOT_LEFT_BACKWARD` (`PIVOT_SIDEWAYS_BACKWARD_LEFT`), and a push
-exactly along an axis counts as right and forward. So if the bench shows a
-row's wheels do not match its name, fix the row in `MovePatterns.cpp` and the
-stick follows. `kinematics::moveForStick` does the mapping for the gamepad,
-the panel carries a copy, and both are tested against
+exactly along an axis counts as right and forward. So in the pivot family
+(L1, or Pivot on the panel) up drives forward and down backward, about the
+side pushed; in the sideways family (R1, or Pivot sideways) up swings the
+front and down the rear, toward the side pushed. If the bench shows a row's
+wheels do not match its name, fix the row in `MovePatterns.cpp`, with its
+test, and the stick follows. `kinematics::moveForStick` does the mapping for
+the gamepad, the panel carries a copy, and both are tested against
 [`test/vectors/stick_moves.json`](../test/vectors/stick_moves.json).

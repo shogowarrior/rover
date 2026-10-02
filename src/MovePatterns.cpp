@@ -15,8 +15,14 @@ constexpr WheelDirection FREE = WHEEL_FREE;
 // wheel free-wheels for this move, which is how the diagonal and pivot moves
 // work on mecanum wheels.
 //
-// Transcribed from the eighteen per-move methods this table replaced, and not
-// yet verified on the bench -- docs/bench-checklist.md says how.
+// Every row matches DroneBot Workshop's mecanum table
+// (https://dronebotworkshop.com/mecanum/), the owner's reference, whose
+// constants test_move_patterns decodes. The four-wheel moves and the
+// diagonals were transcribed from the per-move methods this table replaced.
+// The pivots were not: those methods drove every *_FORWARD pivot backward, so
+// a stick pushed forward under ADVANCED backed the rover up, and three of the
+// sideways pivots drove the wrong wheels. None of it is verified on the bench
+// yet -- docs/bench-checklist.md says how.
 const MovePattern PATTERNS[] = {
     PATTERN(STOP, FREE, FREE, FREE, FREE),
     PATTERN(MOVE_FORWARD, FWD, FWD, FWD, FWD),
@@ -27,14 +33,20 @@ const MovePattern PATTERNS[] = {
     PATTERN(MOVE_DIAGONAL135, FREE, FWD, FREE, FWD),
     PATTERN(MOVE_DIAGONAL225, BACK, FREE, BACK, FREE),
     PATTERN(MOVE_DIAGONAL315, FREE, BACK, FREE, BACK),
-    PATTERN(PIVOT_RIGHT_FORWARD, FREE, BACK, BACK, FREE),
-    PATTERN(PIVOT_RIGHT_BACKWARD, FREE, FWD, FWD, FREE),
-    PATTERN(PIVOT_LEFT_FORWARD, BACK, FREE, FREE, BACK),
-    PATTERN(PIVOT_LEFT_BACKWARD, FWD, FREE, FREE, FWD),
+    // Pivot about one side: the other side's pair turns as in MOVE_FORWARD or
+    // MOVE_BACKWARD. RIGHT pivots about the right wheels, nose turning right
+    // going forward.
+    PATTERN(PIVOT_RIGHT_FORWARD, FWD, FREE, FREE, FWD),
+    PATTERN(PIVOT_RIGHT_BACKWARD, BACK, FREE, FREE, BACK),
+    PATTERN(PIVOT_LEFT_FORWARD, FREE, FWD, FWD, FREE),
+    PATTERN(PIVOT_LEFT_BACKWARD, FREE, BACK, BACK, FREE),
+    // Pivot sideways about one axle: the other axle turns as in MOVE_RIGHT or
+    // MOVE_LEFT. FORWARD swings the front toward the side named, BACKWARD the
+    // rear (DroneBot's FRONT and REAR).
     PATTERN(PIVOT_SIDEWAYS_FORWARD_RIGHT, FWD, BACK, FREE, FREE),
-    PATTERN(PIVOT_SIDEWAYS_FORWARD_LEFT, FREE, FREE, BACK, FWD),
-    PATTERN(PIVOT_SIDEWAYS_BACKWARD_RIGHT, FREE, FWD, FREE, BACK),
-    PATTERN(PIVOT_SIDEWAYS_BACKWARD_LEFT, FWD, FREE, BACK, FREE),
+    PATTERN(PIVOT_SIDEWAYS_FORWARD_LEFT, BACK, FWD, FREE, FREE),
+    PATTERN(PIVOT_SIDEWAYS_BACKWARD_RIGHT, FREE, FREE, FWD, BACK),
+    PATTERN(PIVOT_SIDEWAYS_BACKWARD_LEFT, FREE, FREE, BACK, FWD),
     PATTERN(ROTATE_CLOCKWISE, FWD, BACK, BACK, FWD),
     PATTERN(ROTATE_COUNTERCLOCKWISE, BACK, FWD, FWD, BACK),
 };

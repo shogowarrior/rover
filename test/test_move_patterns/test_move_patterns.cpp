@@ -4,9 +4,12 @@
 #include "MovePatterns.h"
 
 // The wheel table is the whole wire-protocol-to-motion mapping. These tests
-// pin it: the rows were transcribed from the eighteen per-move methods the
-// table replaced (git show 89593e2:src/Rover.cpp), and a silent edit here
-// would spin a wheel the wrong way with no compile error.
+// pin it, because a silent edit here would spin a wheel the wrong way with no
+// compile error. The owner's reference is DroneBot Workshop's mecanum table
+// (https://dronebotworkshop.com/mecanum/), and every row matches it. The
+// four-wheel moves and the diagonals were transcribed from the eighteen
+// per-move methods the table replaced (git show 89593e2:src/Rover.cpp), which
+// agree with DroneBot. The pivots do not come from those methods: see below.
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -32,17 +35,66 @@ const Expected EXPECTED[] = {
     {MOVE_DIAGONAL135, {X, F, X, F}},
     {MOVE_DIAGONAL225, {B, X, B, X}},
     {MOVE_DIAGONAL315, {X, B, X, B}},
-    {PIVOT_RIGHT_FORWARD, {X, B, B, X}},
-    {PIVOT_RIGHT_BACKWARD, {X, F, F, X}},
-    {PIVOT_LEFT_FORWARD, {B, X, X, B}},
-    {PIVOT_LEFT_BACKWARD, {F, X, X, F}},
+    // The original pivot methods were inverted against their names and
+    // against DroneBot: each *_FORWARD pivot drove the wrong side's pair
+    // backward, and each *_BACKWARD pivot forward, so under ADVANCED a stick
+    // pushed forward with L1 held backed the rover up, where nothing watches.
+    // Of the sideways pivots, FORWARD_LEFT drove the rear axle, and the two
+    // BACKWARD ones a diagonal pair against itself, which only spins the
+    // rover on the spot. These eight rows are DroneBot's.
+    {PIVOT_RIGHT_FORWARD, {F, X, X, F}},
+    {PIVOT_RIGHT_BACKWARD, {B, X, X, B}},
+    {PIVOT_LEFT_FORWARD, {X, F, F, X}},
+    {PIVOT_LEFT_BACKWARD, {X, B, B, X}},
     {PIVOT_SIDEWAYS_FORWARD_RIGHT, {F, B, X, X}},
-    {PIVOT_SIDEWAYS_FORWARD_LEFT, {X, X, B, F}},
-    {PIVOT_SIDEWAYS_BACKWARD_RIGHT, {X, F, X, B}},
-    {PIVOT_SIDEWAYS_BACKWARD_LEFT, {F, X, B, X}},
+    {PIVOT_SIDEWAYS_FORWARD_LEFT, {B, F, X, X}},
+    {PIVOT_SIDEWAYS_BACKWARD_RIGHT, {X, X, F, B}},
+    {PIVOT_SIDEWAYS_BACKWARD_LEFT, {X, X, B, F}},
     {ROTATE_CLOCKWISE, {F, B, B, F}},
     {ROTATE_COUNTERCLOCKWISE, {B, F, F, B}},
 };
+
+// DroneBot Workshop's constants, verbatim, as the bits of each byte, with
+// its name for each. Its moveMotors() writes two bits per motor from bit 7
+// down: right front, left front, right rear, left rear, each as IN1 then IN2.
+// "10" turns a motor forward (its motor test sketch drives "FR - Forward"
+// with AI1 HIGH and AI2 LOW), "01" backward, and "00" leaves it off. Its
+// PIVOT_SIDEWAYS_FRONT_* and _REAR_* are our PIVOT_SIDEWAYS_FORWARD_* and
+// _BACKWARD_*: the axle that swings.
+struct Reference {
+  MoveCode move;
+  const char* bits;
+};
+
+const Reference DRONEBOT[] = {
+    {MOVE_FORWARD, "10101010"},                   // MEC_STRAIGHT_FORWARD
+    {MOVE_BACKWARD, "01010101"},                  // MEC_STRAIGHT_BACKWARD
+    {MOVE_RIGHT, "01101001"},                     // MEC_SIDEWAYS_RIGHT
+    {MOVE_LEFT, "10010110"},                      // MEC_SIDEWAYS_LEFT
+    {MOVE_DIAGONAL45, "00101000"},                // MEC_DIAGONAL_45
+    {MOVE_DIAGONAL135, "10000010"},               // MEC_DIAGONAL_135
+    {MOVE_DIAGONAL225, "00010100"},               // MEC_DIAGONAL_225
+    {MOVE_DIAGONAL315, "01000001"},               // MEC_DIAGONAL_315
+    {PIVOT_RIGHT_FORWARD, "00100010"},            // MEC_PIVOT_RIGHT_FORWARD
+    {PIVOT_RIGHT_BACKWARD, "00010001"},           // MEC_PIVOT_RIGHT_BACKWARD
+    {PIVOT_LEFT_FORWARD, "10001000"},             // MEC_PIVOT_LEFT_FORWARD
+    {PIVOT_LEFT_BACKWARD, "01000100"},            // MEC_PIVOT_LEFT_BACKWARD
+    {PIVOT_SIDEWAYS_FORWARD_RIGHT, "01100000"},   // MEC_PIVOT_SIDEWAYS_FRONT_RIGHT
+    {PIVOT_SIDEWAYS_FORWARD_LEFT, "10010000"},    // MEC_PIVOT_SIDEWAYS_FRONT_LEFT
+    {PIVOT_SIDEWAYS_BACKWARD_RIGHT, "00001001"},  // MEC_PIVOT_SIDEWAYS_REAR_RIGHT
+    {PIVOT_SIDEWAYS_BACKWARD_LEFT, "00000110"},   // MEC_PIVOT_SIDEWAYS_REAR_LEFT
+    {ROTATE_CLOCKWISE, "01100110"},               // MEC_ROTATE_CLOCKWISE
+    {ROTATE_COUNTERCLOCKWISE, "10011001"},        // MEC_ROTATE_COUNTERCLOCKWISE
+};
+
+// DroneBot's motor order, from bit 7 down, as our wheels.
+const Wheel DRONEBOT_MOTORS[WHEEL_COUNT] = {WHEEL_FRONT_RIGHT, WHEEL_FRONT_LEFT, WHEEL_REAR_RIGHT, WHEEL_REAR_LEFT};
+
+WheelDirection fromBits(char in1, char in2) {
+  if (in1 == '1' && in2 == '0') return WHEEL_FORWARD;
+  if (in1 == '0' && in2 == '1') return WHEEL_BACKWARD;
+  return WHEEL_FREE;
+}
 
 WheelDirection opposite(WheelDirection direction) {
   if (direction == WHEEL_FORWARD) return WHEEL_BACKWARD;
@@ -60,9 +112,22 @@ void assertOpposite(MoveCode a, MoveCode b) {
   }
 }
 
+// A pivot is half of a four-wheel move: one pair of wheels turns exactly as
+// in `whole`, and the other pair coasts, so the rover swings about it.
+void assertHalfOf(MoveCode pivot, MoveCode whole, Wheel first, Wheel second) {
+  const MovePattern* half = findMovePattern(pivot);
+  const MovePattern* full = findMovePattern(whole);
+  TEST_ASSERT_NOT_NULL(half);
+  TEST_ASSERT_NOT_NULL(full);
+  for (int wheel = 0; wheel < WHEEL_COUNT; wheel++) {
+    const bool driven = wheel == first || wheel == second;
+    TEST_ASSERT_EQUAL_INT_MESSAGE(driven ? full->wheels[wheel] : WHEEL_FREE, half->wheels[wheel], half->name);
+  }
+}
+
 }  // namespace
 
-void test_every_motion_matches_the_original_methods(void) {
+void test_every_motion_drives_its_pinned_wheels(void) {
   for (const Expected& expected : EXPECTED) {
     const MovePattern* pattern = findMovePattern(expected.move);
     TEST_ASSERT_NOT_NULL_MESSAGE(pattern, "a motion code has no pattern");
@@ -71,6 +136,43 @@ void test_every_motion_matches_the_original_methods(void) {
       TEST_ASSERT_EQUAL_INT_MESSAGE(expected.wheels[wheel], pattern->wheels[wheel], pattern->name);
     }
   }
+}
+
+// Every motion DroneBot defines, decoded from its own bytes, so no row can
+// drift from the reference unnoticed, as the pivots once had.
+void test_every_motion_matches_dronebot_workshop(void) {
+  for (const Reference& reference : DRONEBOT) {
+    const MovePattern* pattern = findMovePattern(reference.move);
+    TEST_ASSERT_NOT_NULL(pattern);
+    TEST_ASSERT_EQUAL_INT(2 * WHEEL_COUNT, static_cast<int>(strlen(reference.bits)));
+    for (int motor = 0; motor < WHEEL_COUNT; motor++) {
+      const WheelDirection direction = fromBits(reference.bits[2 * motor], reference.bits[2 * motor + 1]);
+      TEST_ASSERT_EQUAL_INT_MESSAGE(direction, pattern->wheels[DRONEBOT_MOTORS[motor]], pattern->name);
+    }
+  }
+}
+
+// A *_FORWARD pivot drives its pair forward and a *_BACKWARD pivot backward,
+// the way MOVE_FORWARD and MOVE_BACKWARD turn those wheels, so the stick's
+// fore-and-aft sense holds in the pivot family. RIGHT pivots about the
+// right-hand wheels: the left pair drives, and the nose turns right going
+// forward. The original methods had the fore-and-aft sense of all four
+// inverted.
+void test_pivots_drive_the_way_their_names_say(void) {
+  assertHalfOf(PIVOT_RIGHT_FORWARD, MOVE_FORWARD, WHEEL_FRONT_LEFT, WHEEL_REAR_LEFT);
+  assertHalfOf(PIVOT_RIGHT_BACKWARD, MOVE_BACKWARD, WHEEL_FRONT_LEFT, WHEEL_REAR_LEFT);
+  assertHalfOf(PIVOT_LEFT_FORWARD, MOVE_FORWARD, WHEEL_FRONT_RIGHT, WHEEL_REAR_RIGHT);
+  assertHalfOf(PIVOT_LEFT_BACKWARD, MOVE_BACKWARD, WHEEL_FRONT_RIGHT, WHEEL_REAR_RIGHT);
+}
+
+// A sideways pivot strafes one axle and lets the other coast, so that end of
+// the rover swings toward the side named: FORWARD swings the front axle and
+// BACKWARD the rear, the way MOVE_RIGHT and MOVE_LEFT turn its wheels.
+void test_sideways_pivots_swing_the_axle_their_names_say(void) {
+  assertHalfOf(PIVOT_SIDEWAYS_FORWARD_RIGHT, MOVE_RIGHT, WHEEL_FRONT_LEFT, WHEEL_FRONT_RIGHT);
+  assertHalfOf(PIVOT_SIDEWAYS_FORWARD_LEFT, MOVE_LEFT, WHEEL_FRONT_LEFT, WHEEL_FRONT_RIGHT);
+  assertHalfOf(PIVOT_SIDEWAYS_BACKWARD_RIGHT, MOVE_RIGHT, WHEEL_REAR_RIGHT, WHEEL_REAR_LEFT);
+  assertHalfOf(PIVOT_SIDEWAYS_BACKWARD_LEFT, MOVE_LEFT, WHEEL_REAR_RIGHT, WHEEL_REAR_LEFT);
 }
 
 void test_every_code_except_resume_is_a_motion(void) {
@@ -102,6 +204,8 @@ void test_opposite_motions_mirror_every_wheel(void) {
   assertOpposite(ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE);
   assertOpposite(PIVOT_RIGHT_FORWARD, PIVOT_RIGHT_BACKWARD);
   assertOpposite(PIVOT_LEFT_FORWARD, PIVOT_LEFT_BACKWARD);
+  assertOpposite(PIVOT_SIDEWAYS_FORWARD_RIGHT, PIVOT_SIDEWAYS_FORWARD_LEFT);
+  assertOpposite(PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT);
 }
 
 void test_move_code_validation(void) {
@@ -114,7 +218,10 @@ void test_move_code_validation(void) {
 
 int main(int, char**) {
   UNITY_BEGIN();
-  RUN_TEST(test_every_motion_matches_the_original_methods);
+  RUN_TEST(test_every_motion_drives_its_pinned_wheels);
+  RUN_TEST(test_every_motion_matches_dronebot_workshop);
+  RUN_TEST(test_pivots_drive_the_way_their_names_say);
+  RUN_TEST(test_sideways_pivots_swing_the_axle_their_names_say);
   RUN_TEST(test_every_code_except_resume_is_a_motion);
   RUN_TEST(test_names_are_the_enum_identifiers);
   RUN_TEST(test_opposite_motions_mirror_every_wheel);
