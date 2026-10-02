@@ -85,51 +85,12 @@ void test_half_deflection_gives_about_half_speed(void) {
   TEST_ASSERT_INT_WITHIN(2, 50, speed);
 }
 
-void test_angle_is_normalised_into_zero_to_360(void) {
-  for (int x = -127; x <= 127; x += 17) {
-    for (int y = -127; y <= 127; y += 17) {
-      const float angle = stickAngleDeg(x, y);
-      TEST_ASSERT_TRUE(angle >= 0.0f);
-      TEST_ASSERT_TRUE(angle < 360.0f);
-    }
-  }
-}
-
-// The old angle used atan2(y, -x), a mirrored convention: "right" came out at
-// 180 degrees, on the boundary between forward and backward.
-void test_angle_convention_is_right_zero_up_ninety(void) {
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, stickAngleDeg(100, 0));
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 90.0f, stickAngleDeg(0, 100));
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, stickAngleDeg(-100, 0));
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 270.0f, stickAngleDeg(0, -100));
-}
-
-void test_stick_maps_to_all_eight_mecanum_directions(void) {
-  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, moveForStick(0, 100));
-  TEST_ASSERT_EQUAL_INT(MOVE_BACKWARD, moveForStick(0, -100));
-  TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, moveForStick(100, 0));
-  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, moveForStick(-100, 0));
-  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL45, moveForStick(100, 100));
-  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL135, moveForStick(-100, 100));
-  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL225, moveForStick(-100, -100));
-  TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL315, moveForStick(100, -100));
-}
-
-// A little noise on the other axis must not flip the direction. The old
-// mapping chattered between forward and backward for a sideways push.
-void test_sideways_push_is_stable_against_axis_noise(void) {
-  TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, moveForStick(127, 1));
-  TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, moveForStick(127, -1));
-  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, moveForStick(-127, 1));
-  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, moveForStick(-127, -1));
-}
-
 // --- gamepad ---------------------------------------------------------------
 
 namespace {
 DriveRequest pad(int lx, int ly, int l2, int r2) {
   const GamepadState state = {lx, ly, l2, r2, false, false};
-  return translateGamepad(state, 20, 50);
+  return translateGamepad(state, 20, 50, SCHEME_NORMAL);
 }
 
 DriveRequest advancedPad(int lx, int ly, bool l1, bool r1) {
@@ -183,22 +144,10 @@ void test_gamepad_stick_beats_triggers(void) {
 
 // --- control schemes -------------------------------------------------------
 
-void test_pivot_family_picks_by_quadrant(void) {
-  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, moveForStick(60, 60, FAMILY_PIVOT));
-  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_FORWARD, moveForStick(-60, 60, FAMILY_PIVOT));
-  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_BACKWARD, moveForStick(60, -60, FAMILY_PIVOT));
-  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_BACKWARD, moveForStick(-60, -60, FAMILY_PIVOT));
-  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_FORWARD_RIGHT, moveForStick(60, 60, FAMILY_PIVOT_SIDEWAYS));
-  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_FORWARD_LEFT, moveForStick(-60, 60, FAMILY_PIVOT_SIDEWAYS));
-  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_RIGHT, moveForStick(60, -60, FAMILY_PIVOT_SIDEWAYS));
-  TEST_ASSERT_EQUAL_INT(PIVOT_SIDEWAYS_BACKWARD_LEFT, moveForStick(-60, -60, FAMILY_PIVOT_SIDEWAYS));
-}
-
 // NORMAL ignores the shoulder buttons: L1 held by habit must not turn a
 // strafe into a pivot.
 void test_normal_scheme_ignores_shoulder_buttons(void) {
   const GamepadState held = {127, 0, 0, 0, true, true};
-  TEST_ASSERT_EQUAL_INT(FAMILY_TRANSLATE, gamepadFamily(held, SCHEME_NORMAL));
   TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, translateGamepad(held, 20, 50, SCHEME_NORMAL).move);
 }
 
@@ -287,10 +236,6 @@ int main(int, char**) {
   RUN_TEST(test_full_single_axis_gives_max_speed);
   RUN_TEST(test_centred_stick_gives_zero_speed);
   RUN_TEST(test_half_deflection_gives_about_half_speed);
-  RUN_TEST(test_angle_is_normalised_into_zero_to_360);
-  RUN_TEST(test_angle_convention_is_right_zero_up_ninety);
-  RUN_TEST(test_stick_maps_to_all_eight_mecanum_directions);
-  RUN_TEST(test_sideways_push_is_stable_against_axis_noise);
 
   RUN_TEST(test_gamepad_stick_up_drives_forward);
   RUN_TEST(test_gamepad_stick_sideways_strafes);
@@ -299,7 +244,6 @@ int main(int, char**) {
   RUN_TEST(test_gamepad_trigger_speed_follows_the_whole_pull);
   RUN_TEST(test_gamepad_stick_beats_triggers);
 
-  RUN_TEST(test_pivot_family_picks_by_quadrant);
   RUN_TEST(test_normal_scheme_ignores_shoulder_buttons);
   RUN_TEST(test_advanced_scheme_shoulders_pick_the_pivots);
   RUN_TEST(test_advanced_pivot_near_vertical_push_keeps_its_quadrant);

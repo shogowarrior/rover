@@ -31,12 +31,6 @@ float normalizeDistance(float rawCm) {
   return rawCm;
 }
 
-float stickAngleDeg(int x, int yUp) {
-  float angle = atan2f(static_cast<float>(yUp), static_cast<float>(x)) * 180.0f / PI_F;
-  if (angle < 0.0f) angle += 360.0f;
-  return angle;
-}
-
 int stickSpeed(int x, int y, int maxSpeed) {
   if (maxSpeed <= 0) return 0;
 
@@ -51,6 +45,27 @@ int triggerSpeed(int pressure, int maxSpeed) {
   if (maxSpeed <= 0) return 0;
   return clampInt(pressure, 0, TRIGGER_MAX) * maxSpeed / TRIGGER_MAX;
 }
+
+namespace {
+
+// Stick deflection angle in degrees, normalised to [0, 360): 0 is right, 90 is
+// up (forward). `yUp` is positive when the stick is pushed away from the user.
+float stickAngleDeg(int x, int yUp) {
+  float angle = atan2f(static_cast<float>(yUp), static_cast<float>(x)) * 180.0f / PI_F;
+  if (angle < 0.0f) angle += 360.0f;
+  return angle;
+}
+
+// The family the gamepad's shoulder buttons select under `scheme`: L1 pivots,
+// R1 pivots sideways, and neither (or the NORMAL scheme) translates.
+StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme) {
+  if (scheme != SCHEME_ADVANCED) return FAMILY_TRANSLATE;
+  if (pad.l1) return FAMILY_PIVOT;
+  if (pad.r1) return FAMILY_PIVOT_SIDEWAYS;
+  return FAMILY_TRANSLATE;
+}
+
+}  // namespace
 
 MoveCode moveForStick(int x, int yUp, StickFamily family) {
   // A pivot family has four motions, one per quadrant. Axis-aligned pushes
@@ -78,13 +93,6 @@ MoveCode moveForStick(int x, int yUp, StickFamily family) {
   if (angle < 247.5f) return MOVE_DIAGONAL225;
   if (angle < 292.5f) return MOVE_BACKWARD;
   return MOVE_DIAGONAL315;
-}
-
-StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme) {
-  if (scheme != SCHEME_ADVANCED) return FAMILY_TRANSLATE;
-  if (pad.l1) return FAMILY_PIVOT;
-  if (pad.r1) return FAMILY_PIVOT_SIDEWAYS;
-  return FAMILY_TRANSLATE;
 }
 
 DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,

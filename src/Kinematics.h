@@ -52,10 +52,6 @@ int clampDuration(int durationMs);
 // DISTANCE_FAR_CM; everything else passes through.
 float normalizeDistance(float rawCm);
 
-// Stick deflection angle in degrees, normalised to [0, 360): 0 is right, 90 is
-// up (forward). `yUp` is positive when the stick is pushed away from the user.
-float stickAngleDeg(int x, int yUp);
-
 // Deflection magnitude scaled to [0, maxSpeed]. Saturates rather than
 // overshooting on diagonals.
 int stickSpeed(int x, int y, int maxSpeed);
@@ -90,7 +86,7 @@ enum StickFamily { FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS };
 // ..._BACKWARD_LEFT). extras/joystick/js/mecanum.js is the panel's copy, and
 // both are tested against test/vectors/stick_moves.json. The caller rejects a
 // centred stick first: this always returns a motion.
-MoveCode moveForStick(int x, int yUp, StickFamily family = FAMILY_TRANSLATE);
+MoveCode moveForStick(int x, int yUp, StickFamily family);
 
 // One reading of the PS3 controls the rover uses, in the controller's own
 // convention: axes -128..127 with ly NEGATIVE when pushed up; triggers 0..255;
@@ -109,17 +105,13 @@ struct DriveRequest {
   int speed;
 };
 
-// The family the gamepad's shoulder buttons select under `scheme`: L1 pivots,
-// R1 pivots sideways, and neither (or the NORMAL scheme) translates.
-StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme);
-
 // What the gamepad is asking for. The left stick moves within the family the
 // shoulder buttons select (see ControlScheme); with the stick centred, L2
 // rotates left (counter-clockwise) and R2 right, at up to half the stick's
 // speed, by how far the trigger is pulled. Returns {STOP, 0} when nothing is
 // deflected past the deadzone, which the triggers share with the stick.
 DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,
-                              ControlScheme scheme = SCHEME_NORMAL);
+                              ControlScheme scheme);
 
 }  // namespace kinematics
 
