@@ -97,10 +97,7 @@ MoveCode moveForStick(int x, int yUp, StickFamily family) {
 
 DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,
                               ControlScheme scheme) {
-  // The stick wins over the triggers when both are deflected. The rover can
-  // only execute one move at a time, and an earlier version that collected
-  // several into an array simply ran them back to back, so the last one won
-  // after the others had each briefly twitched the wheels.
+  // One move at a time: the stick wins over the triggers.
   if (abs(pad.lx) > deadzone || abs(pad.ly) > deadzone) {
     const int yUp = -pad.ly;  // the PS3 reports "pushed up" as negative
     const MoveCode move = moveForStick(pad.lx, yUp, gamepadFamily(pad, scheme));

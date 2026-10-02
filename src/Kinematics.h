@@ -3,15 +3,8 @@
 
 #include "MoveCodes.h"
 
-// Pure geometry, clamping, and input mapping.
-//
-// Nothing here touches Arduino, FreeRTOS, or any peripheral, which is the
-// point: this is part of the firmware that is compiled and tested on the host
-// (`pio test -e native`) instead of only on the board.
-//
-// Keep it that way. If a function here seems to need millis(), a motor or
-// Serial, pass the value in or add an interface in Hardware.h, and keep the
-// logic here, where it is tested (see AGENTS.md, Architecture).
+// Pure geometry, clamping and input mapping. Pure core (AGENTS.md,
+// Architecture): no Arduino here, so it is host-tested in test/test_kinematics.
 
 namespace kinematics {
 
@@ -30,10 +23,9 @@ constexpr int MOTOR_SPEED_MAX = 255;
 // HCSR04 2.0.0's measureDistanceCm() returns -1 for every failed measurement:
 // no echo within range (~400 cm), an echo deflected away by an angled surface,
 // and a dead or unplugged sensor alike. It never returns 0. For avoidance a
-// missing echo is read as "nothing within range", so it normalises to "far".
-// Explorer never drives forward on a sweep that heard nothing, and halts after
-// ExploreParams::silentSweepsToHalt of them in a row, which is how a dead
-// sensor shows up. See normalizeDistance. Telemetry sends it as is: FAR_CM in
+// missing echo is read as "nothing within range", so it normalises to "far",
+// safe only because Explorer never drives on a sweep that heard nothing
+// (AGENTS.md, Invariants). Telemetry sends it as is: FAR_CM in
 // extras/joystick/js/protocol.js and DISTANCE_FAR_CM in client/drive.py are
 // copies, and tools/check_protocol.py checks them.
 constexpr float DISTANCE_FAR_CM = 999.0f;
@@ -60,9 +52,6 @@ int stickSpeed(int x, int y, int maxSpeed);
 constexpr int TRIGGER_MAX = 255;
 
 // Trigger pressure scaled to [0, maxSpeed] over the trigger's whole travel.
-// The triggers once went through stickSpeed(), scaled for a +-127 axis, so
-// they reached their top speed at half a pull and the rest of the pull did
-// nothing.
 int triggerSpeed(int pressure, int maxSpeed);
 
 // How a controller's stick and buttons map onto the 18 mecanum motions. The

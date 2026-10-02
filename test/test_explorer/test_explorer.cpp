@@ -241,8 +241,8 @@ void test_consecutive_sweeps_alternate_direction(void) {
   for (int i = 0; i < 10; i++) TEST_ASSERT_EQUAL_INT(expected[i], h.scanner.pingAngles[i]);
 }
 
-// A fixed 250 ms settle was too short for the 140-degree swing that started
-// every old scan cycle, so its first reading was taken mid-swing.
+// A fixed 250 ms settle was too short for a 140-degree swing, so the first
+// reading after one was taken mid-swing.
 void test_servo_settles_in_proportion_to_its_travel(void) {
   Harness h;
   h.run(5000);
@@ -440,9 +440,9 @@ void test_sensor_dying_mid_cruise_stops_within_a_weave(void) {
 
 // --- turning -----------------------------------------------------------------
 
-// The livelock this replaces: chooseExploreMove answered a wall ahead with
-// "reverse", then "forward" once it was past SAFE_DISTANCE, forever, turning
-// zero degrees. Now it turns until the way is clear, then drives on.
+// Answering a wall ahead with reverse, then forward once past the threshold,
+// livelocked: zero degrees turned, for ever. Now it turns until the way is
+// clear, then drives on.
 void test_wall_ahead_turns_until_clear_then_drives_on(void) {
   Harness h;
   h.scanner.setArc(60, 120, 30.0f);

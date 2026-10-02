@@ -17,12 +17,8 @@ constexpr WheelDirection FREE = WHEEL_FREE;
 //
 // Every row matches DroneBot Workshop's mecanum table
 // (https://dronebotworkshop.com/mecanum/), the owner's reference, whose
-// constants test_move_patterns decodes. The four-wheel moves and the
-// diagonals were transcribed from the per-move methods this table replaced.
-// The pivots were not: those methods drove every *_FORWARD pivot backward, so
-// a stick pushed forward under ADVANCED backed the rover up, and three of the
-// sideways pivots drove the wrong wheels. None of it is verified on the bench
-// yet -- docs/bench-checklist.md says how.
+// constants test_move_patterns decodes; it also says what the pivots got wrong
+// before. None of it is bench-verified yet: docs/bench-checklist.md says how.
 //
 // The panel's simulator copies this table (RoverSim.WHEELS in
 // extras/joystick/js/sim.js) to preview programs; its test/sim.test.js parses

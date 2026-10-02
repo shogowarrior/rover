@@ -25,10 +25,8 @@ void Rover::update(uint32_t now) {
 }
 
 void Rover::command(int move, int speed, int durationMs, uint32_t now) {
-  // The only command that gives control back. setMode() stops the motors and
-  // restarts exploration from a fresh sweep, not from whatever the rover last
-  // saw before a human took over. Already exploring, it restarts an explorer
-  // that halted: the operator is saying the way is open now.
+  // The one command that gives control back. On a halted explorer it starts
+  // over: the operator is saying the way is open now.
   if (move == RESUME_AUTONOMOUS) {
     if (currentMode == MODE_AUTONOMOUS) {
       if (explorer.phase() == Explorer::HALTED) restart(MODE_AUTONOMOUS, now);
@@ -87,8 +85,7 @@ void Rover::setMode(Mode mode, uint32_t now) {
   if (mode != currentMode) restart(mode, now);
 }
 
-// The single path to the motors: energise the wheels and record when they
-// must stop. Clamping here covers every source at once.
+// Every source reaches the motors here, so every input is clamped here.
 void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   speed = kinematics::clampSpeed(speed);
   durationMs = kinematics::clampDuration(durationMs);
@@ -104,7 +101,7 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   // the deadline moves: rewriting all four motors is ~7 ms of I2C each time.
   // Every MOTOR_REFRESH_MS the pattern is written again anyway, so a write the
   // bus lost -- the library does not report one -- is repaired while the
-  // rover moves. release() above always writes: stopping is never skipped.
+  // rover moves.
   const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed &&
                               !elapsed(now, lastMotorWriteAt, tuning::MOTOR_REFRESH_MS);
   if (!alreadyDoingIt) {

@@ -24,9 +24,7 @@ RemoteControl remote(rover, controlScheme);
 Network network(rover, remote);
 Gamepad gamepad(rover, controlScheme);
 
-// Exploring straight after power-on is the point of the rover. Any other
-// reset -- an OTA flash, a crash, the watchdog, a brownout from a stalled
-// motor -- comes up in manual, so a rover nobody has told to move stays put.
+// Only a power-on explores (Features.h, AUTONOMOUS_AT_POWER_ON, says why).
 Rover::Mode startupMode() {
   const bool poweredOn = esp_reset_reason() == ESP_RST_POWERON;
   return features::AUTONOMOUS_AT_POWER_ON && poweredOn ? Rover::MODE_AUTONOMOUS
@@ -44,17 +42,14 @@ void setup() {
   if (features::GAMEPAD) gamepad.begin(features::PS3_HOST_MAC);
   network.begin();
 
-  // From here on nothing may block. The watchdog resets the board if one pass
-  // of loop() ever takes longer than 5 s; the rebooted setup() releases the
-  // motors in driveTrain.begin(). The shield's PWM chip is not reset with the
-  // ESP32, so the wheels run on through the reboot (about half a second).
+  // The backstop for a blocked loop: a pass over 5 s resets the board, and
+  // the wheels run on until driveTrain.begin() releases them (AGENTS.md,
+  // Invariants).
   enableLoopWDT();
 }
 
-// Nothing in this loop may block. Every call here has to return promptly:
-// stalling starves the WebSocket server and ArduinoOTA, which means commands
-// (including stop commands) stop arriving and the board can no longer be
-// recovered over the air.
+// Nothing here may block: that starves the WebSocket server and ArduinoOTA,
+// STOP commands included.
 void loop() {
   const uint32_t now = millis();
   rover.update(now);  // move deadlines first, then one step of exploration

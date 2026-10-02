@@ -20,12 +20,9 @@ constexpr size_t MAX_COMMAND_BYTES = 256;
 // ~2 s keeps its queue short of that. The pong timeout must stay below the
 // ping interval, or a fresh ping resets the timer before it can expire.
 //
-// The misses are counted per slot, and HeartbeatServer clears them on every
-// disconnect, so a slot's next client starts where a fresh slot does. That is
-// not quite two misses: the library charges a new client one miss
-// HEARTBEAT_PONG_TIMEOUT_MS after accept, before its first ping, and pings it
-// at once, so its first pong must come back within 600 ms of that ping.
-// After that, two misses in a row drop it.
+// HeartbeatServer clears a slot's misses on every disconnect (RemoteControl.h
+// says why). A new client is charged one miss HEARTBEAT_PONG_TIMEOUT_MS after
+// accept and pinged at once, so its first pong must come back within that.
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;

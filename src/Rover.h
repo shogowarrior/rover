@@ -7,23 +7,11 @@
 #include "Hardware.h"
 #include "MoveCodes.h"
 
-// The rover's brain: who is in control, what the wheels are doing, and when
-// they must stop.
-//
-// Pure logic, like Explorer: the motors and the sonar are reached through the
-// interfaces in Hardware.h and time arrives as `now`, so every invariant this
-// class enforces is tested on the host (test/test_rover):
-//
-//   * Motors are released by deadline. drive() records when a move ends and
-//     update() releases the motors once it passes. Nothing waits. A release
-//     that ended motion is written once more MOTOR_REFRESH_MS later, because
-//     a lost stop has no next command to repair it (servicePendingRelease()).
-//   * External input is clamped here, in drive(), the one path every source
-//     (WebSocket, gamepad, Explorer) reaches the motors through. Durations are
-//     capped at tuning::COMMAND_DURATION_MAX_MS, which makes that cap the
-//     deadman: a client that stops sending stops the rover within it.
-//   * Autonomous and manual never both drive. Any command takes control
-//     (MODE_MANUAL); only RESUME_AUTONOMOUS gives it back.
+// Mode arbitration, move deadlines and the one clamped path to the motors.
+// Pure core (AGENTS.md, Architecture), host-tested in test/test_rover. It
+// enforces four of AGENTS.md's Invariants: release by deadline (a lost stop is
+// written again; see release()), clamping in drive(), the duration cap as the
+// deadman, and autonomous and manual never both driving.
 class Rover {
  public:
   enum Mode { MODE_AUTONOMOUS, MODE_MANUAL };
@@ -65,12 +53,10 @@ class Rover {
   // RESUME_AUTONOMOUS restores exploration once a client can reach it again.
   void standDown(uint32_t now);
 
-  // Make the second write of a stop that ended motion once it is due (see
-  // release()), and nothing else: no exploring, no sonar, no new motion.
-  // update() calls it every loop. An OTA upload blocks the loop from its
-  // start until the reboot, so Network also calls it from the upload's
-  // progress callback: without that, a lost stand-down release left the
-  // wheels running through the whole upload.
+  // Make a stop's pending second write once it is due (see release()), and
+  // nothing else: no exploring, no sonar, no new motion. update() calls it
+  // every loop, and Network from the OTA progress callback (Network.cpp says
+  // why).
   void servicePendingRelease(uint32_t now);
 
   Mode mode() const { return currentMode; }

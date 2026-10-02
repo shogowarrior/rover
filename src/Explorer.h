@@ -8,37 +8,10 @@
 #include "Tuning.h"
 
 // Autonomous exploration: where to look, when to measure, and which way to go.
-//
-// Pure logic, like Kinematics: no Arduino calls, time arrives as `now`, the
-// sonar is reached through the RangeScanner interface, and motion leaves as a
-// request that Rover carries out (clamped, released by deadline, and only in
-// autonomous mode). Host-tested in test/test_explorer.
-//
-// The behaviour in brief:
-//   SWEEP     Stand still and measure five bearings (left, front-left, front,
-//             front-right, right), sweeping back and forth.
-//   CRUISE    If the way ahead is clear, drive forward on a short lease that
-//             only a clear ping renews, while the servo keeps looking ahead
-//             and slightly to each side. Anything in the rover's path, an echo
-//             that vanishes as the rover closes on it, a front reading that
-//             stops changing (wheels stuck below the beam), or a run of looks
-//             that hear nothing at all ends the cruise.
-//   TURN      If the way is blocked, rotate toward the more open side in short
-//             steps, measuring after each, and keep turning that way until the
-//             front is clear. Committing to one direction is what stops the
-//             rover dithering in corners.
-//   BACKOFF   Reverse a little first if the front is too close to rotate, but
-//             only over ground just driven forward: nothing watches behind.
-//             At a dead end too narrow to rotate in, back out the way it came
-//             a step at a time, sweeping after each, until the flanks have
-//             room or that ground runs out, and only then turn.
-//   SIDESTEP  Strafe away from a flank that is too close to rotate beside.
-//   HALTED    Stop and retry every few seconds when a full circle of turning
-//             finds no way out, or three sweeps in a row hear nothing at all
-//             (the signature of a dead sensor). A sweep that heard nothing is
-//             never grounds to drive forward: the rover only turns in place
-//             to look again -- or, backing out of a dead end where it may not
-//             turn, stands still to look again.
+// Pure core (AGENTS.md, Architecture): the sonar is reached through
+// RangeScanner, and motion leaves as a request that Rover carries out.
+// Host-tested in test/test_explorer. AGENTS.md "How autonomy works" describes
+// each phase; ExploreParams below holds every threshold.
 
 struct ExploreParams {
   // Distances are measured from the sensor. Hysteresis on the rover's path:

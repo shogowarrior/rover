@@ -84,7 +84,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
 | `test/fakes/` | Fake `Motors` and `RangeScanner` for the host tests |
 | `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does, `Vectors.h` reads `test/vectors/` |
-| `test/vectors/` | Cases shared by the firmware's tests and the panel's (stick to move) |
+| `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Telemetry listener only |
@@ -138,18 +138,16 @@ compared against `millis()` (move deadlines, Explorer's phases), never a sleep.
 The only routine busy-wait is the sonar ping in `Scanner::measureCm()`,
 bounded at about 30 ms and spaced at least 70 ms apart. A WebSocket handshake
 can still stall the loop, and no move deadline is serviced meanwhile:
-`WEBSOCKETS_TCP_TIMEOUT=2` in `platformio.ini` makes a header read give up
-after 2 s of silence, where the library's default let one stray byte freeze
-the loop for 83 minutes. That is 2 s per character and per half-open client,
-so a peer that trickles bytes, or several stalled at once, can hold one pass
-far longer. The real bound is the loop watchdog, enabled at the end of
-`setup()`: it resets the board if one pass ever takes 5 s (OTA feeds it while
-flashing). The reset alone does not stop the wheels. The shield's PCA9685 is
-not reset with the ESP32 and keeps its last PWM, so the wheels run on through
-the reboot (about half a second) until `DriveTrain::begin()` releases them
-(it tries even when the shield's probe fails), and indefinitely if the board
-never boots that far. The only `delay()` calls are in `setup()`: the bounded
-WiFi connect and the shield probe's retries.
+`WEBSOCKETS_TCP_TIMEOUT=2` in `platformio.ini` (whose comment says why)
+bounds each handshake read, not the pass. The real bound is the loop
+watchdog, enabled at the end of `setup()`: it resets the board if one pass
+ever takes 5 s (OTA feeds it while flashing). The reset alone does not stop
+the wheels. The shield's PCA9685 is not reset with the ESP32 and keeps its
+last PWM, so the wheels run on through the reboot (about half a second) until
+`DriveTrain::begin()` releases them (it tries even when the shield's probe
+fails), and indefinitely if the board never boots that far. The only
+`delay()` calls are in `setup()`: the bounded WiFi connect and the shield
+probe's retries.
 
 **Motors are released by deadline, not by waiting.** `Rover::drive()` sets the
 wheels and records `moveDeadline`; `Rover::update()`, every loop, releases them
@@ -157,14 +155,13 @@ once it passes. A repeat of the move already running only moves the deadline,
 except that the pattern is rewritten every `tuning::MOTOR_REFRESH_MS` (500 ms)
 to repair an I2C write the bus lost, which the library never reports. A
 release always writes, and one that ends motion is written once more
-`MOTOR_REFRESH_MS` later. A stop has no next command to repair it: one lost
-burst left the wheels driving while telemetry said STOP, through the deadman
-and into the obstacle a cruise had stopped for. A new move cancels that second
-write, and an idle rover writes nothing. `Rover::servicePendingRelease()`
-makes it, from `update()` and, while an OTA upload blocks the loop, from the
-upload's progress callback. There are no per-move tasks or
-timers: an earlier design spawned four FreeRTOS tasks per move, which raced on
-shared motor parameters and could exhaust the heap under a fast client.
+`MOTOR_REFRESH_MS` later, because a stop has no next command to repair a lost
+write (`Rover::release()` says what that cost); a new move cancels it, and an
+idle rover writes nothing. `Rover::servicePendingRelease()` makes that second
+write, from `update()` and, while an OTA upload blocks the loop, from its
+progress callback. There are no per-move tasks or timers: an earlier design
+spawned four FreeRTOS tasks per move, which raced on shared motor parameters
+and could exhaust the heap under a fast client.
 
 **Every input is clamped in `Rover::drive()`, the one path to the motors.**
 WebSocket commands, the gamepad and Explorer all arrive there. Speed is clamped
@@ -189,12 +186,9 @@ released:
 - A client stops answering the heartbeat: the server pings every client each
   second and drops one that misses two pongs in a row, which counts as a
   disconnect. This also keeps a vanished client's full send buffer from
-  blocking the loop. The library charges a new client one miss 600 ms after
-  it connects, before its first ping, and pings it at once, so its first
-  pong must come back within 600 ms of that ping. Every disconnect clears
-  the slot's missed pongs (`HeartbeatServer`): the library left them to the
-  slot's next client, so a phone reconnecting after a drop was dropped again
-  about 0.6 s after connecting, every time, until a reboot.
+  blocking the loop. A new client's first pong must come back within 600 ms,
+  and `HeartbeatServer` clears a slot's missed pongs on every disconnect
+  (`RemoteControl.h` says why).
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
 - An OTA flash starts: `standDown()` too, so an upload that fails also leaves
@@ -245,11 +239,8 @@ nothing else; `Gamepad::update()`, on the loop task, takes a copy and hands it
 to `GamepadSession`, the only thing that talks to `Rover`. Keep motor state and
 the I2C bus single-threaded: no calls into `Rover` from callbacks, interrupts
 or other tasks. `Gamepad::update()` reads the clock under the same lock, not
-`loop()`'s `now`: the pad keeps reporting while `rover.update()` busy-waits on
-the sonar, so a report can be newer than `now`, and its unsigned age then
-wraps to 49.7 days. Aged that way, every report that landed during a ping was
-wiped as silence: a held stick stuttered on every ping, START and SELECT
-presses were lost, and a scheme change's hold on the stick was lifted.
+`loop()`'s `now`, so no report is stamped later than the clock it is aged
+against (its comment says what that cost).
 
 ## How autonomy works
 
@@ -296,12 +287,10 @@ reference; in short:
   `distanceLeft`, `distanceFrontLeft`, `distanceFront`, `distanceFrontRight`,
   `distanceRight` in cm once every bearing has been measured (999 means no
   echo). Distances stay live in manual mode too. `scheme` (`NORMAL` or
-  `ADVANCED`) is always sent. A frame must fit
-  `protocol::TELEMETRY_MAX_BYTES` (384 bytes), or it is not sent at all and
-  telemetry freezes in exactly the states that outgrew it; the firmware says
-  so once on Serial. `test_longest_telemetry_fits` checks the worst case
-  (about 315 bytes today), so a new key that would not fit fails the host
-  tests.
+  `ADVANCED`) is always sent. A frame must fit `protocol::TELEMETRY_MAX_BYTES`
+  (384 bytes; `Protocol.h` says why), and `test_longest_telemetry_fits` fails
+  the host tests when a new key would not. `test/vectors/telemetry.json`
+  holds example frames, key for key, that `test_protocol` checks.
 
 ## The browser control panel
 
@@ -385,15 +374,13 @@ calibration block of `js/sim.js` with how to measure each.
 `GamepadSession` turns the pad's reports into commands; `test/test_gamepad`
 checks its rules. The left stick picks one of eight moves and wins over the
 triggers; L2 rotates left (counter-clockwise) and R2 right, matching the
-panel's Left button and `drive.py`'s `q` (earlier firmware had the triggers
-the other way round). A trigger's speed follows its whole pull, up to half
-the stick's top speed; earlier firmware scaled the 0..255 trigger like
-a +-127 stick axis, so the second half of the pull did nothing. A held stick
-is re-sent every `GAMEPAD_REFRESH_MS` (200 ms); a new direction goes at once, a
-new speed in the same direction at most every `GAMEPAD_SPEED_CHANGE_MS`
-(100 ms). Letting go sends one STOP, never a stream, so a resting pad cannot
-keep forcing manual while the rover explores; a pad silent for
-`GAMEPAD_SILENCE_MS` counts as let go. START sends `RESUME_AUTONOMOUS`.
+panel's Left button and `drive.py`'s `q`. A trigger's speed follows its whole
+pull, up to half the stick's top speed. A held stick is re-sent every
+`GAMEPAD_REFRESH_MS` (200 ms); a new direction goes at once, a new speed in
+the same direction at most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms). Letting
+go sends one STOP, never a stream, so a resting pad cannot keep forcing manual
+while the rover explores; a pad silent for `GAMEPAD_SILENCE_MS` counts as let
+go. START sends `RESUME_AUTONOMOUS`.
 
 **Control schemes.** The rover holds one scheme for every controller
 (`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),
@@ -414,9 +401,8 @@ copy, and both are tested against `test/vectors/stick_moves.json`.
 [docs/mecanum.md](docs/mecanum.md) has the table and warns that none of it
 is bench-verified yet. Every row matches the owner's reference,
 [DroneBot Workshop's mecanum table](https://dronebotworkshop.com/mecanum/),
-whose constants `test/test_move_patterns` decodes; the pivots once drove
-against their names (stick forward with L1 backed the rover up), so change a
-row only on the bench's evidence or the reference's.
+whose constants `test/test_move_patterns` decodes, so change a row only on the
+bench's evidence or the reference's.
 
 ## Pins
 
@@ -467,7 +453,7 @@ shows how the operator passes one to an upload instead.
   checks the copy. The panel simulator's copies in
   `extras/joystick/js/sim.js` (the wheel table, the sweep timing, the
   telemetry interval) are checked by `extras/joystick/test/sim.test.js`
-  instead; `src/` does not name them yet.
+  instead.
 - Optional features are switches in `Features.h`, not commented-out code, and
   every setting keeps compiling (CI builds `car_wire_gamepad` for the gamepad
   path).

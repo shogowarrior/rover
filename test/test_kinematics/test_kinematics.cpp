@@ -8,12 +8,9 @@
 #include "MovePatterns.h"
 #include "Tuning.h"
 
-// Host-side tests for the parts of the firmware that do not touch hardware.
-// Run with: ~/.platformio/penv/bin/pio test -e native
-//
-// Most of these are regression tests for specific bugs. Where that is the
-// case the comment says which one, because a test whose reason is forgotten
-// is a test someone deletes.
+// Kinematics: clamping, sensor normalisation, the stick and the gamepad. Most
+// are regression tests, and each comment names its bug: a test whose reason is
+// forgotten is a test someone deletes.
 
 using namespace kinematics;
 

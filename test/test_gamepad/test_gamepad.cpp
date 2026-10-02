@@ -258,17 +258,12 @@ void test_mailbox_forgets_a_silent_pad(void) {
   TEST_ASSERT_FALSE(takeGamepadReport(mailbox, wrappedRound).hasReport);
 }
 
-// loop() reads its `now`, then rover.update() pings the sonar, busy-waiting
-// up to ~30 ms while the pad keeps reporting from the other core.
-// Gamepad::update reads the clock again under the mailbox's lock, so every
-// report it takes landed before that clock; this models it, with a report
-// landing mid-ping on every pass. Aged against loop()'s older `now` instead,
-// such a report read as 49.7 days old and was wiped: the held stick was
-// released and re-driven on every ping, and a START or SELECT in it was lost.
+// Gamepad::update reads its clock under the mailbox lock, after loop()'s
+// sonar ping; this models a report landing mid-ping on every pass. Aged against
+// loop()'s older `now`, such a report read as 49.7 days old and was wiped:
+// the held stick released on every ping, and a START or SELECT was lost.
 void test_report_landing_mid_ping_keeps_the_stick_held(void) {
-  // The hazard itself: a stamp later than the clock it is aged against is
-  // silence, because an unsigned age cannot tell it from one 49.7 days old
-  // (and a signed one would let a 24.8-day-old stick read as fresh).
+  // The hazard itself: a stamp later than its clock reads as silence.
   GamepadReport aheadOfLoop = pad(0, -127, 0, 0, 20);
   TEST_ASSERT_FALSE(takeGamepadReport(aheadOfLoop, 0).hasReport);
 

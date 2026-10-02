@@ -11,10 +11,7 @@ left-right order, so copy between them with care.
 **The reference is [DroneBot Workshop's mecanum
 article](https://dronebotworkshop.com/mecanum/).** Every row matches its
 constants, and `test/test_move_patterns` decodes them byte by byte, so a row
-cannot drift from it unnoticed. The four-wheel moves and the diagonals were
-transcribed from the per-move methods the table replaced, which agree with
-it; the pivots come from DroneBot, because those methods had them wrong (see
-[below](#four-wheel-and-two-wheel-moves)).
+cannot drift from it unnoticed.
 
 **None of this is bench-verified yet.** [bench-checklist.md](bench-checklist.md)
 says how to check it, with the wheels off the ground and then on the floor.
@@ -88,17 +85,9 @@ coasts (see below for where).
   `PIVOT_SIDEWAYS_BACKWARD_RIGHT` strafes the rear axle right, about the
   front one.
 
-The per-move methods the table replaced had the pivots wrong. Every
-`PIVOT_*_FORWARD` code drove a pair backward and every `PIVOT_*_BACKWARD`
-code forward, using the pair the rover should pivot about: code 9 turned the
-nose right as it should, but moved the rover backward, where nothing
-watches. So under ADVANCED a stick pushed forward with L1 held backed the
-rover up, and one pulled back drove it forward. Code 14 drove the rear axle,
-and codes 15 and 16 a diagonal pair in opposite directions, which gives no
-net push, only a turning couple: they spun the rover on the spot instead of
-swinging it. The rows now follow DroneBot's constants, and
-`test_move_patterns` checks both the constants and each pivot's direction
-against its name.
+Before this table, the per-move methods drove every `*_FORWARD` pivot
+backward and three sideways pivots wrongly; `test_move_patterns` pins the
+corrected rows.
 
 With ideal rollers that never slip, as the panel's simulator models them, no
 row needs a coasting wheel to turn, so how freely a released gearbox turns

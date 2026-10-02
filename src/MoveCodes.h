@@ -5,9 +5,6 @@
 // extras/joystick/ send these numeric values, and tools/check_protocol.py fails
 // CI when their copies drift. Append new codes above MOVE_CODE_COUNT; never
 // renumber existing ones.
-//
-// This header is deliberately free of Arduino dependencies so that the pure
-// modules and their host-side tests can use it.
 
 enum MoveCode {
   STOP = 0,

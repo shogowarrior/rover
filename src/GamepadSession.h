@@ -53,9 +53,7 @@ class GamepadSession {
   GamepadSession(Rover& rover, kinematics::ControlScheme& scheme);
 
   // `report` is what takeGamepadReport() returned for this same `now`, so its
-  // stamp is never later than `now`. A later stamp would read as 49.7 days
-  // old: timing::since() cannot tell one from a stamp that ancient, and must
-  // not, or a pad silent for 24.8 days would read as fresh.
+  // stamp is never later than `now` (Gamepad::update says why).
   void update(const GamepadReport& report, uint32_t now);
 
   // The player LED to light, 1 for NORMAL or 2 for ADVANCED, or 0 to leave
