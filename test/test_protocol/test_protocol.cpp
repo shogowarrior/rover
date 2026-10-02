@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unity.h>
 
+#include <string>
+
 #include "../support/Vectors.h"
 #include "Protocol.h"
 #include "Tuning.h"
@@ -83,6 +85,14 @@ JsonDocument written(const Rover::Status& status, kinematics::ControlScheme sche
   return doc;
 }
 
+// `value` as JSON text, which pins its type along with its value: ArduinoJson
+// finds 0 equal to false, but the panel and drive.py read only a boolean.
+std::string jsonText(JsonVariantConst value) {
+  std::string text;
+  serializeJson(value, text);
+  return text;
+}
+
 }  // namespace
 
 void test_command_fields_are_read(void) {
@@ -103,9 +113,9 @@ void test_wrongly_typed_fields_default_to_stopping(void) {
 // that the distances appear only once every bearing has been measured
 // (before that there is nothing true to report), "phase" only while
 // exploring and "halt" only when halted, and that the two flags each carry
-// their own value, false included: serialised from the wrong field, or as a
-// constant, "motorsReady" hides the dead shield it exists to report, and
-// telemetry names a move that never reaches the wheels.
+// their own value, false included, as a boolean: serialised from the wrong
+// field, as a constant or as a number, "motorsReady" hides the dead shield it
+// exists to report, and telemetry names a move that never reaches the wheels.
 void test_telemetry_frames_match_the_vectors(void) {
   const JsonDocument vectors = loadVectors("telemetry.json");
   for (JsonPairConst named : vectors["frames"].as<JsonObjectConst>()) {
@@ -115,7 +125,7 @@ void test_telemetry_frames_match_the_vectors(void) {
     for (JsonPairConst key : frame) {
       char label[64];
       snprintf(label, sizeof(label), "%s: %s", named.key().c_str(), key.key().c_str());
-      TEST_ASSERT_TRUE_MESSAGE(out[key.key()] == key.value(), label);
+      TEST_ASSERT_EQUAL_STRING_MESSAGE(jsonText(key.value()).c_str(), jsonText(out[key.key()]).c_str(), label);
     }
   }
 }
