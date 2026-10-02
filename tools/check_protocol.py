@@ -10,7 +10,8 @@ the browser panel each carry their own copies of parts of it. This checks:
   * the distances the panel colours its scan fan with, and the distance
     telemetry sends for a bearing with no echo;
   * the command timing: no client asks for more than the firmware's cap,
-    and the panel re-sends a held move before the last one runs out;
+    and the panel re-sends a held move twice within its duration, as often
+    as the gamepad does;
   * the panel's limit on how often a dragged stick changes speed, which is
     the gamepad's rule too (GAMEPAD_SPEED_CHANGE_MS);
   * the angle the panel draws each scan wedge at, against the bearing the
@@ -58,6 +59,7 @@ Standard library only; the files are parsed with regular expressions.
 
 from __future__ import annotations
 
+import operator
 import re
 import sys
 from pathlib import Path
@@ -97,29 +99,48 @@ MOVE_CODE_CLIENTS = (DRIVE_PY, PANEL_PROTOCOL_JS)
 # ADVANCED scheme.
 COMPLETE_MOVE_CODE_CLIENTS = (PANEL_PROTOCOL_JS,)
 
-# Client constants that must equal a firmware constant:
-#   (client file, its name for the constant, firmware file, firmware name, why)
+# How a client constant must relate to the one it follows: the test, and how
+# a problem words it.
+RELATIONS = {
+    "==": (operator.eq, "equal"),
+    "<=": (operator.le, "be at most"),
+    "<=half": (lambda theirs, ours: 2 * theirs <= ours, "be at most half of"),
+}
+
+DEADMAN = ("the firmware cuts every command to its cap, the deadman, so a longer one leaves the "
+           "client's own arithmetic describing a different rover")
+
+# Client constants checked against a firmware constant, or another of the
+# client's own:
+#   (client file, its name, relation, file, name, why it matters)
 MIRRORS = [
-    (PANEL_PROTOCOL_JS, "STOP_CM", TUNING_H, "EXPLORE_STOP_CM",
+    (PANEL_PROTOCOL_JS, "STOP_CM", "==", TUNING_H, "EXPLORE_STOP_CM",
      "the panel marks a bearing blocked at the distance exploration stops at"),
-    (PANEL_PROTOCOL_JS, "GO_CM", TUNING_H, "EXPLORE_GO_CM",
+    (PANEL_PROTOCOL_JS, "GO_CM", "==", TUNING_H, "EXPLORE_GO_CM",
      "the panel marks a bearing clear at the distance exploration starts at"),
-    (PANEL_PROTOCOL_JS, "FAR_CM", KINEMATICS_H, "DISTANCE_FAR_CM",
+    (PANEL_PROTOCOL_JS, "FAR_CM", "==", KINEMATICS_H, "DISTANCE_FAR_CM",
      "telemetry sends this value for a bearing with no echo"),
-    (DRIVE_PY, "DISTANCE_FAR_CM", KINEMATICS_H, "DISTANCE_FAR_CM",
+    (DRIVE_PY, "DISTANCE_FAR_CM", "==", KINEMATICS_H, "DISTANCE_FAR_CM",
      "telemetry sends this value for a bearing with no echo"),
-    (PANEL_PROTOCOL_JS, "PORT", TUNING_H, "WEBSOCKET_PORT",
+    (PANEL_PROTOCOL_JS, "PORT", "==", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
-    (DRIVE_PY, "DEFAULT_PORT", TUNING_H, "WEBSOCKET_PORT",
+    (DRIVE_PY, "DEFAULT_PORT", "==", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
-    (PANEL_PROTOCOL_JS, "STICK_SEND_MS", TUNING_H, "GAMEPAD_SPEED_CHANGE_MS",
+    (PANEL_PROTOCOL_JS, "STICK_SEND_MS", "==", TUNING_H, "GAMEPAD_SPEED_CHANGE_MS",
      "a dragged stick changes speed at most this often from the panel as from the gamepad; "
      "each change costs the rover a four-motor rewrite"),
-    (PANEL_PROTOCOL_JS, "SPEED_MAX", KINEMATICS_H, "MOTOR_SPEED_MAX",
+    (PANEL_PROTOCOL_JS, "SPEED_MAX", "==", KINEMATICS_H, "MOTOR_SPEED_MAX",
      "the panel clamps a program's speed to this; the motor driver takes a byte"),
-    (PANEL_PROTOCOL_JS, "MOTOR_SPEED_LIMIT", TUNING_H, "MOTOR_SPEED_LIMIT",
+    (PANEL_PROTOCOL_JS, "MOTOR_SPEED_LIMIT", "==", TUNING_H, "MOTOR_SPEED_LIMIT",
      "the simulator clamps a preview's speed to this, as Rover::drive() clamps the rover's; "
      "otherwise a preview drives faster and farther than the rover"),
+    (PANEL_PROTOCOL_JS, "MOVE_DURATION_MS", "<=", TUNING_H, "COMMAND_DURATION_MAX_MS", DEADMAN),
+    (DRIVE_PY, "MOVE_DURATION_MS", "<=", TUNING_H, "COMMAND_DURATION_MAX_MS", DEADMAN),
+    (PANEL_PROTOCOL_JS, "REPEAT_MS", "<=half", PANEL_PROTOCOL_JS, "MOVE_DURATION_MS",
+     "a held move is re-sent before its command runs out, with room for one frame to arrive late; "
+     "otherwise a held stick stutters"),
+    (PANEL_PROTOCOL_JS, "REPEAT_MS", "==", TUNING_H, "GAMEPAD_REFRESH_MS",
+     "the panel and the gamepad re-send a held move equally often"),
 ]
 
 # The panel's name for each control scheme (kinematics::ControlScheme) must be
@@ -337,41 +358,16 @@ class Checker:
         return len(codes)
 
     def mirrors(self) -> None:
-        """Ports, thresholds and sentinels copied from the firmware match it."""
-        for client, client_name, firmware, firmware_name, why in MIRRORS:
+        """Every row of MIRRORS holds."""
+        for client, client_name, relation, source, source_name, why in MIRRORS:
             theirs = self.constant(client, client_name)
-            ours = self.constant(firmware, firmware_name)
-            if theirs is not None and ours is not None and theirs != ours:
+            ours = self.constant(source, source_name)
+            holds, wording = RELATIONS[relation]
+            if theirs is not None and ours is not None and not holds(theirs, ours):
                 self.problem(
-                    f"{client}: {client_name} = {show(theirs)}, but {firmware} has "
-                    f"{firmware_name} = {show(ours)} -- {why}"
+                    f"{client}: {client_name} = {show(theirs)}, but it must {wording} "
+                    f"{source_name} = {show(ours)} in {source} -- {why}"
                 )
-
-    def timing(self) -> None:
-        """Held commands stay alive, and no client asks for more than the cap.
-
-        The firmware cuts every command to COMMAND_DURATION_MAX_MS; that cap
-        is the deadman. The panel keeps a command alive by re-sending it every
-        REPEAT_MS, which only works while each command lasts longer than the
-        gap to the next -- and a duration past the cap is silently cut to it,
-        so the client's own arithmetic stops describing what the rover does.
-        """
-        cap = self.constant(TUNING_H, "COMMAND_DURATION_MAX_MS")
-        for client in (PANEL_PROTOCOL_JS, DRIVE_PY):
-            duration = self.constant(client, "MOVE_DURATION_MS")
-            if cap is not None and duration is not None and duration > cap:
-                self.problem(
-                    f"{client}: MOVE_DURATION_MS = {show(duration)} exceeds COMMAND_DURATION_MAX_MS = "
-                    f"{show(cap)} in {TUNING_H}; the firmware cuts every command to {show(cap)} ms"
-                )
-
-        repeat = self.constant(PANEL_PROTOCOL_JS, "REPEAT_MS")
-        duration = self.constant(PANEL_PROTOCOL_JS, "MOVE_DURATION_MS")
-        if repeat is not None and duration is not None and not repeat < duration:
-            self.problem(
-                f"{PANEL_PROTOCOL_JS}: REPEAT_MS = {show(repeat)} is not below MOVE_DURATION_MS = "
-                f"{show(duration)}; a held stick's command would expire before it is re-sent"
-            )
 
     def firmware_keys(self) -> tuple[set[str], dict[str, str], set[str]]:
         """What src/Protocol.cpp puts on the wire and takes off it.
@@ -612,7 +608,6 @@ def main() -> int:
     checker = Checker(ROOT)
     code_count = checker.move_codes()
     checker.mirrors()
-    checker.timing()
     key_count = checker.keys()
     checker.bearings()
     scheme_count = checker.schemes()

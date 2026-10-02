@@ -55,7 +55,8 @@ constexpr int GAMEPAD_MAX_SPEED = 50;  // stick fully deflected; a full trigger 
 // Of the stick's +-127. The triggers' 0..255 share it: 8% of a pull.
 constexpr int GAMEPAD_DEADZONE = 20;
 // A held stick is re-sent this often, well inside DEFAULT_MOVE_DURATION_MS,
-// so the rover keeps moving until the stick is released.
+// so the rover keeps moving until the stick is released. REPEAT_MS in the
+// panel's js/protocol.js.
 constexpr uint32_t GAMEPAD_REFRESH_MS = 200;
 // The pad reports continuously while connected. This long without a report
 // means it is gone, and whatever it was driving stops.
