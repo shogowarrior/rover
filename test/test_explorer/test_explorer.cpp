@@ -853,10 +853,11 @@ void test_reset_forgets_the_ground_behind(void) {
 // A dead end in a passage too narrow to rotate in. Turning there swung the
 // corners into the walls and ended halted "boxed in", where the rover could
 // have reversed out. It backs out the way it came, sweeping after each step,
-// and turns only once the flanks have room. It does not drive back in when
-// the way ahead starts to look clear again. An end found right in front,
-// closer than the rover may rotate at, is the same dead end: one short
-// backoff and a turn would still swing the corners into the walls.
+// and turns only once the flanks have room -- and as soon as they do, since
+// nothing watches behind it. It does not drive back in when the way ahead
+// starts to look clear again. An end found right in front, closer than the
+// rover may rotate at, is the same dead end: one short backoff and a turn
+// would still swing the corners into the walls.
 void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
   const bool foundRightInFront[2] = {false, true};
   for (bool rightInFront : foundRightInFront) {
@@ -870,11 +871,13 @@ void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
     int backoffs = 0;
     bool roomy = false;
     int rotationsWithoutRoom = 0;
+    int backoffsWithRoom = 0;
     h.onMotion = [&](const Explorer::Motion& m) {
       if (m.move == MOVE_FORWARD && rightInFront && !appeared && h.forwardRunMs >= 1000) {
         appeared = true;
         h.scanner.setArc(70, 110, 5.0f);  // under minTurnClearCm
       } else if (m.move == MOVE_BACKWARD) {
+        if (roomy) backoffsWithRoom++;
         h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);  // and farther while reversing
         if (++backoffs == 3) {
           roomy = true;  // out of the passage: room on both sides
@@ -900,6 +903,7 @@ void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
 
     TEST_ASSERT_EQUAL_INT(0, rotationsWithoutRoom);
     TEST_ASSERT_TRUE(roomy);
+    TEST_ASSERT_EQUAL_INT(0, backoffsWithRoom);  // reversing stopped once there was room
     // Then it turns, without having driven back in first.
     int firstRotation = -1;
     for (size_t i = firstBackward; i < h.motions.size(); i++) {
