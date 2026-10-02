@@ -535,6 +535,38 @@ void test_side_stop_turns_one_step_away(void) {
   }
 }
 
+// How a cruise ended speaks for the decision right after it, and no later
+// one. A side stop kept past the wander that a silent sweep makes turned the
+// rover one step more, away from where the obstacle had been before the
+// wander changed the heading.
+void test_how_a_cruise_ended_counts_for_one_decision_only(void) {
+  Harness h;
+  h.scanner.setArc(62, 68, 20.0f);  // ends the cruise at the +25 look
+  int stage = 0;
+  h.onMotion = [&](const Explorer::Motion& m) {
+    if (stage == 0 && m.move == MOVE_FORWARD) {
+      stage = 1;
+    } else if (stage == 1 && m.move == STOP) {
+      stage = 2;
+      h.scanner.setAll(-1.0f);  // the sweep after the cruise hears nothing
+    } else if (stage == 2 && isRotation(m.move)) {
+      stage = 3;
+      h.scanner.setAll(200.0f);  // and after that the way is open
+    }
+  };
+  h.run(8000);
+  TEST_ASSERT_EQUAL_INT(3, stage);
+  // From the first cruise to the next: the wander's steps and no more.
+  size_t i = h.indexOf(MOVE_FORWARD);
+  while (i < h.motions.size() && h.motions[i].move == MOVE_FORWARD) i++;
+  int rotations = 0;
+  for (; i < h.motions.size() && h.motions[i].move != MOVE_FORWARD; i++) {
+    if (isRotation(h.motions[i].move)) rotations++;
+  }
+  TEST_ASSERT_TRUE(i < h.motions.size());  // it did drive on
+  TEST_ASSERT_EQUAL_INT(ExploreParams().wanderSteps, rotations);
+}
+
 // A cruise that nothing stopped ends at the cap, and the rover then turns a
 // couple of steps before driving on: coverage, and a bound on pushing against
 // something the sonar cannot see.
@@ -951,6 +983,7 @@ int main(int, char**) {
   RUN_TEST(test_long_cruise_forgets_the_turn_direction);
   RUN_TEST(test_repeated_stucks_turn_further_the_same_way);
   RUN_TEST(test_side_stop_turns_one_step_away);
+  RUN_TEST(test_how_a_cruise_ended_counts_for_one_decision_only);
   RUN_TEST(test_capped_cruise_is_followed_by_a_short_wander);
   RUN_TEST(test_no_optional_rotation_where_there_is_no_room);
   // sidestepping

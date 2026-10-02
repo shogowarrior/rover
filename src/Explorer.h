@@ -167,6 +167,7 @@ class Explorer {
     int sidesteps = 0;           // in a row, without a cruise between
     int silentSweeps = 0;        // in a row
     int32_t reverseBudgetMs = 0; // forward driving since the heading last changed
+    // How the last cruise ended. decide() reads both once and clears them.
     bool cruiseEndedByCap = false;
     int sideStopDeg = 0;         // weave angle whose echo ended the last cruise, 0 if none
     bool waitForClearPath = false;

@@ -130,6 +130,15 @@ Explorer::Motion Explorer::stepSweep(uint32_t now, bool decideWhenDone) {
 Explorer::Motion Explorer::decide(uint32_t now) {
   if (episode.sidestep.pending) checkSidestepWentAway();
 
+  // How the last cruise ended is good for this one decision, whichever way
+  // it goes. Left set past a turn, it described a heading the rover no
+  // longer has: a side stop kept through a silent sweep's wander turned the
+  // rover one more step away from where the obstacle used to be.
+  const int sideStop = episode.sideStopDeg;
+  const bool cappedCruise = episode.cruiseEndedByCap;
+  episode.sideStopDeg = 0;
+  episode.cruiseEndedByCap = false;
+
   // A working sonar hears something in a room -- a wall, a chair, the floor
   // at an angle. Hearing nothing sweep after sweep is what a disconnected or
   // dead sensor looks like, and every no-echo reads as open space.
@@ -138,13 +147,7 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // A sweep that heard nothing at all says nothing about the way ahead, so
   // it is never grounds to drive forward. Turn a little in place and look
   // again; a working sensor soon finds a wall, and a dead one halts above.
-  if (!scan.heardEcho) {
-    episode.cruiseEndedByCap = false;
-    return startTurn(now, wanderDirection(), params.wanderSteps, false);
-  }
-
-  const int sideStop = episode.sideStopDeg;
-  episode.sideStopDeg = 0;
+  if (!scan.heardEcho) return startTurn(now, wanderDirection(), params.wanderSteps, false);
 
   if (!pathBlocked(params.goCm)) {
     episode.waitForClearPath = false;
@@ -157,22 +160,19 @@ Explorer::Motion Explorer::decide(uint32_t now) {
         // rather than drive straight back into it.
         return turnOrSidestep(now, sideStop > 0 ? -1 : +1, 1, false);
       }
-      if (episode.cruiseEndedByCap && params.wanderSteps > 0) {
+      if (cappedCruise && params.wanderSteps > 0) {
         // Nothing stopped the last cruise. Turn a little anyway: it spreads
         // coverage, and bounds how long the rover can push against something
         // the sonar cannot see.
-        episode.cruiseEndedByCap = false;
         return turnOrSidestep(now, wanderDirection(), params.wanderSteps, false);
       }
       const int veer = veerDirection();
       if (veer != 0) return turnOrSidestep(now, veer, 1, false);
     }
-    episode.cruiseEndedByCap = false;
     episode.sidesteps = 0;
     return startCruise(now);
   }
 
-  episode.cruiseEndedByCap = false;
   // After turning a full circle without finding a way out, only a path that
   // opens by itself resumes exploring; the rover does not spin again.
   if (episode.waitForClearPath) return halt(now, HALT_BOXED_IN);
