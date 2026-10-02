@@ -6,7 +6,7 @@ the browser panel each carry their own copies of parts of it. This checks:
 
   * the move codes (src/MoveCodes.h) in drive.py and the panel, which
     carries every one of them;
-  * the WebSocket port, in all three clients;
+  * the WebSocket port, in drive.py (ws.py imports it) and the panel;
   * the distances the panel colours its scan fan with, and the distance
     telemetry sends for a bearing with no echo;
   * the command timing: no client asks for more than the firmware's cap,
@@ -45,8 +45,8 @@ fails when something it looks for is missing, so that renaming one cannot
 quietly switch its check off: if a client renames a constant, update the
 tables below to match.
 
-Not covered: client/rover.ipynb (an experiment, which imports its numbers
-from drive.py); the default host address, which is per-network
+Not covered: client/ws.py and client/rover.ipynb, which import their numbers
+from drive.py; the default host address, which is per-network
 configuration every client lets the operator override; and the panel's
 simulator's copies in extras/joystick/js/sim.js (the wheel table from
 src/MovePatterns.cpp, the sweep timing from ExploreParams, the telemetry
@@ -71,7 +71,6 @@ PROTOCOL_CPP = "src/Protocol.cpp"
 EXPLORER_H = "src/Explorer.h"
 EXPLORER_CPP = "src/Explorer.cpp"
 DRIVE_PY = "client/drive.py"
-WS_PY = "client/ws.py"
 PANEL_PROTOCOL_JS = "extras/joystick/js/protocol.js"
 PANEL_SCRIPTS = "extras/joystick/js/*.js"  # a glob: every panel script but joy.js
 
@@ -100,7 +99,6 @@ COMPLETE_MOVE_CODE_CLIENTS = (PANEL_PROTOCOL_JS,)
 
 # Client constants that must equal a firmware constant:
 #   (client file, its name for the constant, firmware file, firmware name, why)
-# A tuple of names accepts any one of them.
 MIRRORS = [
     (PANEL_PROTOCOL_JS, "STOP_CM", TUNING_H, "EXPLORE_STOP_CM",
      "the panel marks a bearing blocked at the distance exploration stops at"),
@@ -112,9 +110,7 @@ MIRRORS = [
      "telemetry sends this value for a bearing with no echo"),
     (PANEL_PROTOCOL_JS, "PORT", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
-    (DRIVE_PY, ("PORT", "DEFAULT_PORT"), TUNING_H, "WEBSOCKET_PORT",
-     "the client would connect to a port nothing listens on"),
-    (WS_PY, ("PORT", "DEFAULT_PORT"), TUNING_H, "WEBSOCKET_PORT",
+    (DRIVE_PY, "DEFAULT_PORT", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
     (PANEL_PROTOCOL_JS, "STICK_SEND_MS", TUNING_H, "GAMEPAD_SPEED_CHANGE_MS",
      "a dragged stick changes speed at most this often from the panel as from the gamepad; "
@@ -239,19 +235,16 @@ class Checker:
         self.problem(f"{client}: no BEARINGS table of scan keys found; if it moved, update tools/check_protocol.py")
         return None
 
-    def constant(self, relpath: str, names: str | tuple[str, ...]) -> tuple[str, float] | None:
-        """(name, value) of the first of `names` defined in the file, or None."""
-        names = (names,) if isinstance(names, str) else names
+    def constant(self, relpath: str, name: str) -> float | None:
+        """The value of the constant `name` in the file, or None (reported)."""
         text = self.text(relpath)
         if text is None:
             return None
-        spelling = CONSTANT[Path(relpath).suffix]
-        for name in names:
-            match = re.search(spelling.replace("NAME", re.escape(name)), text, re.M)
-            if match:
-                return name, float(match.group(1))
+        match = re.search(CONSTANT[Path(relpath).suffix].replace("NAME", re.escape(name)), text, re.M)
+        if match:
+            return float(match.group(1))
         self.problem(
-            f"{relpath}: no {' or '.join(names)} found. If it was renamed or moved, "
+            f"{relpath}: no {name} found. If it was renamed or moved, "
             f"update tools/check_protocol.py so the check keeps running."
         )
         return None
@@ -345,13 +338,13 @@ class Checker:
 
     def mirrors(self) -> None:
         """Ports, thresholds and sentinels copied from the firmware match it."""
-        for client, client_names, firmware, firmware_name, why in MIRRORS:
-            theirs = self.constant(client, client_names)
+        for client, client_name, firmware, firmware_name, why in MIRRORS:
+            theirs = self.constant(client, client_name)
             ours = self.constant(firmware, firmware_name)
-            if theirs and ours and theirs[1] != ours[1]:
+            if theirs is not None and ours is not None and theirs != ours:
                 self.problem(
-                    f"{client}: {theirs[0]} = {show(theirs[1])}, but {firmware} has "
-                    f"{firmware_name} = {show(ours[1])} -- {why}"
+                    f"{client}: {client_name} = {show(theirs)}, but {firmware} has "
+                    f"{firmware_name} = {show(ours)} -- {why}"
                 )
 
     def timing(self) -> None:
@@ -366,18 +359,18 @@ class Checker:
         cap = self.constant(TUNING_H, "COMMAND_DURATION_MAX_MS")
         for client in (PANEL_PROTOCOL_JS, DRIVE_PY):
             duration = self.constant(client, "MOVE_DURATION_MS")
-            if cap and duration and duration[1] > cap[1]:
+            if cap is not None and duration is not None and duration > cap:
                 self.problem(
-                    f"{client}: MOVE_DURATION_MS = {show(duration[1])} exceeds COMMAND_DURATION_MAX_MS = "
-                    f"{show(cap[1])} in {TUNING_H}; the firmware cuts every command to {show(cap[1])} ms"
+                    f"{client}: MOVE_DURATION_MS = {show(duration)} exceeds COMMAND_DURATION_MAX_MS = "
+                    f"{show(cap)} in {TUNING_H}; the firmware cuts every command to {show(cap)} ms"
                 )
 
         repeat = self.constant(PANEL_PROTOCOL_JS, "REPEAT_MS")
         duration = self.constant(PANEL_PROTOCOL_JS, "MOVE_DURATION_MS")
-        if repeat and duration and not repeat[1] < duration[1]:
+        if repeat is not None and duration is not None and not repeat < duration:
             self.problem(
-                f"{PANEL_PROTOCOL_JS}: REPEAT_MS = {show(repeat[1])} is not below MOVE_DURATION_MS = "
-                f"{show(duration[1])}; a held stick's command would expire before it is re-sent"
+                f"{PANEL_PROTOCOL_JS}: REPEAT_MS = {show(repeat)} is not below MOVE_DURATION_MS = "
+                f"{show(duration)}; a held stick's command would expire before it is re-sent"
             )
 
     def firmware_keys(self) -> tuple[set[str], dict[str, str], set[str]]:
@@ -502,9 +495,8 @@ class Checker:
     def schemes(self) -> int:
         """The panel names each control scheme as protocol::schemeName() does.
 
-        Reads the enumerators of kinematics::ControlScheme, then the name
-        schemeName() returns for each: a `case X: return "NAME";` per scheme,
-        or, for two, `return scheme == X ? "NAME" : "OTHER";`.
+        Reads the two enumerators of kinematics::ControlScheme, then the name
+        schemeName() returns for each: `return scheme == X ? "NAME" : "OTHER";`.
         """
         kinematics = self.text(KINEMATICS_H)
         protocol = self.text(PROTOCOL_CPP)
@@ -520,14 +512,12 @@ class Checker:
             return 0
 
         body = re.search(r"\bschemeName\s*\([^)]*\)\s*\{(.*?)\n\}", protocol, re.S)
+        ternary = re.search(r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
+                            body.group(1)) if body else None
         names: dict[str, str] = {}
-        if body:
-            names = dict(re.findall(r'\bcase\s+(?:\w+::)*(\w+)\s*:\s*return\s+"([^"]*)"\s*;', body.group(1)))
-            ternary = re.search(r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
-                                body.group(1))
-            if not names and ternary and len(schemes) == 2:
-                which, yes, no = ternary.groups()
-                names = {scheme: yes if scheme == which else no for scheme in schemes}
+        if ternary and len(schemes) == 2:
+            which, yes, no = ternary.groups()
+            names = {scheme: yes if scheme == which else no for scheme in schemes}
         if set(names) != set(schemes):
             self.problem(f"{PROTOCOL_CPP}: cannot read the name schemeName() gives each of {', '.join(schemes)}; "
                          f"if it changed shape, update tools/check_protocol.py")
@@ -638,8 +628,7 @@ def main() -> int:
         f"check_protocol: OK -- {code_count} move codes, the port, the panel's thresholds and scan angles, the "
         f"no-echo distance, the speed limit, the command timing and stick rate, {scheme_count} scheme names, the "
         f"scheme message and its telemetry key, and the names of {key_count} telemetry keys and the command fields "
-        f"agree across {DRIVE_PY}, {WS_PY} and "
-        f"{PANEL_SCRIPTS}"
+        f"agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
     )
     return 0
 

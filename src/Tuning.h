@@ -72,7 +72,7 @@ constexpr uint32_t GAMEPAD_LED_MIN_INTERVAL_MS = 250;
 // --- Network ---------------------------------------------------------------
 
 constexpr uint32_t SERIAL_BAUD = 115200;
-constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in the panel's js/protocol.js, DEFAULT_PORT in drive.py and ws.py
+constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in the panel's js/protocol.js, DEFAULT_PORT in drive.py
 constexpr uint32_t TELEMETRY_INTERVAL_MS = 500;  // SimTarget.TELEMETRY_MS in the panel's js/sim.js
 constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup() only
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;

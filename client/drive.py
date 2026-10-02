@@ -26,8 +26,8 @@ drives, and closing it does not stop the rover.
 
 Reading single keys needs termios, which Windows lacks. There, and whenever
 stdin is not a terminal, this client only listens. termios is imported only
-where keys are read, so client/rover.ipynb can import this module's constants
-on any platform.
+where keys are read, so client/ws.py and client/rover.ipynb can import this
+module's constants on any platform.
 """
 
 import argparse

@@ -11,8 +11,7 @@ import sys
 
 import websockets
 
-DEFAULT_HOST = "192.168.0.115"
-DEFAULT_PORT = 81
+from drive import DEFAULT_HOST, DEFAULT_PORT
 
 
 async def listen(host: str, port: int) -> None:
