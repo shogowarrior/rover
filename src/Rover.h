@@ -59,7 +59,6 @@ class Rover {
   // why).
   void servicePendingRelease(uint32_t now);
 
-  Mode mode() const { return currentMode; }
   Status status() const;
 
  private:

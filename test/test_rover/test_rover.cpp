@@ -155,7 +155,7 @@ void test_unknown_codes_stop_the_rover(void) {
     rover->command(MOVE_FORWARD, 100, 500, 0);
     rover->command(code, 100, 500, 10);
     TEST_ASSERT_FALSE(motors->driving);
-    TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+    TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   }
 }
 
@@ -187,7 +187,7 @@ void test_a_command_takes_control_from_exploration(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   uint32_t now = runUntilCruising(0);
   rover->command(MOVE_LEFT, 80, 400, now);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   TEST_ASSERT_EQUAL_INT(MOVE_LEFT, motors->lastPattern->move);
 
   // Exploration does not drive again, however long the rover sits.
@@ -202,7 +202,7 @@ void test_stop_takes_control_from_exploration(void) {
   const uint32_t now = runUntilCruising(0);
   rover->command(STOP, 0, 0, now);
   TEST_ASSERT_FALSE(motors->driving);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   assertStaysStopped(now);
 }
 
@@ -214,7 +214,7 @@ void test_unknown_code_takes_control_from_exploration(void) {
     const uint32_t now = runUntilCruising(0);
     rover->command(code, 100, 500, now);
     TEST_ASSERT_FALSE(motors->driving);
-    TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+    TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
     assertStaysStopped(now);
   }
 }
@@ -236,7 +236,7 @@ void test_resume_autonomous_hands_control_back(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(MOVE_FORWARD, 100, 500, 0);
   rover->command(RESUME_AUTONOMOUS, 0, 0, 10);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_FALSE(motors->driving);  // stops, then explores from a fresh sweep
   runUntilCruising(10);
 }
@@ -248,7 +248,7 @@ void test_stop_keeps_the_mode(void) {
   rover->command(MOVE_FORWARD, 100, 500, 0);
   rover->stop(10);
   TEST_ASSERT_FALSE(motors->driving);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
 }
 
 // With the link gone nobody can send STOP, so exploring on would leave the
@@ -258,7 +258,7 @@ void test_losing_the_link_stops_exploration(void) {
   const uint32_t now = runUntilCruising(0);
   rover->standDown(now);
   TEST_ASSERT_FALSE(motors->driving);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   assertStaysStopped(now);
 }
 
@@ -294,7 +294,7 @@ void test_losing_the_link_while_driven_releases_at_once(void) {
   rover->command(MOVE_FORWARD, 100, 1500, 0);
   rover->standDown(10);
   TEST_ASSERT_FALSE(motors->driving);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
 }
 
 // An operator pressing Autonomous on a rover that halted "boxed in" is saying
@@ -363,8 +363,8 @@ void test_a_lost_obstacle_stop_is_written_again(void) {
   uint32_t now = runUntilCruising(0);
   motors->releasesToLose = 1;
   scanner->setAll(tuning::EXPLORE_STOP_CM - 10);  // a wall, inside the stop distance
-  for (int i = 0; i < 200 && rover->status().moving; i++) rover->update(now += 5);
-  TEST_ASSERT_FALSE(rover->status().moving);
+  const bool stopped = advanceUntil(now, 1000, 5, updateRover, [] { return !rover->status().moving; });
+  TEST_ASSERT_TRUE_MESSAGE(stopped, "the cruise never stopped at the wall");
   TEST_ASSERT_TRUE(motors->driving);  // lost on the bus
   const int drivesSoFar = motors->driveCalls;
   runFor(now, tuning::MOTOR_REFRESH_MS + 5);

@@ -68,7 +68,7 @@ void tearDown(void) {
 void test_resting_pad_leaves_exploration_alone(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   hold(pad(0, 0, 0, 0, 0), 0, 3000);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
 }
 
 // Each command lasts DEFAULT_MOVE_DURATION_MS. Sending only on change, as the
@@ -91,7 +91,7 @@ void test_release_sends_one_stop(void) {
   TEST_ASSERT_FALSE(motors->driving);
   rover->command(RESUME_AUTONOMOUS, 0, 0, now);
   hold(pad(0, 0, 0, 0, 0), now, 2000);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());  // and nothing more
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);  // and nothing more
 }
 
 // The library never reports a disconnect. Silence is the only sign the pad
@@ -100,7 +100,7 @@ void test_silent_pad_stops_what_it_drove(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   uint32_t now = hold(pad(0, -127, 0, 0, 0), 0, 500);
   const GamepadReport lastWords = pad(0, -127, 0, 0, now - 10);  // stick still forward
-  for (uint32_t t = now; t < now + tuning::GAMEPAD_SILENCE_MS + 50; t += 10) session->update(lastWords, t);
+  advance(now, tuning::GAMEPAD_SILENCE_MS + 50, 10, [&lastWords](uint32_t t) { session->update(lastWords, t); });
   TEST_ASSERT_FALSE(motors->driving);
 }
 
@@ -118,8 +118,9 @@ void test_ancient_report_is_not_fresh(void) {
 void test_no_report_yet_sends_nothing(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   GamepadReport nothing;
-  for (uint32_t t = 0; t < 1000; t += 10) session->update(nothing, t);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  uint32_t now = 0;
+  advance(now, 1000, 10, [&nothing](uint32_t t) { session->update(nothing, t); });
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
 }
 
 void test_start_hands_control_back_to_exploration(void) {
@@ -128,9 +129,9 @@ void test_start_hands_control_back_to_exploration(void) {
   GamepadReport start = pad(0, 0, 0, 0, now);
   start.startPressed = true;
   session->update(start, now);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   hold(pad(0, 0, 0, 0, 0), now + 10, 1000);  // resting afterwards changes nothing
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
 }
 
 // A new direction goes at once; a new speed in the same direction waits up
@@ -155,7 +156,7 @@ void test_select_toggles_the_scheme_without_taking_control(void) {
   TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, scheme);
   session->update(pressSelect(10), 10);
   TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
 
@@ -216,7 +217,7 @@ void test_scheme_change_at_rest_sends_nothing(void) {
   uint32_t now = hold(pad(0, 0, 0, 0, 0), 0, 100);
   scheme = kinematics::SCHEME_ADVANCED;
   hold(pad(0, 0, 0, 0, 0), now, 500);
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
 
@@ -285,7 +286,7 @@ void test_report_landing_mid_ping_keeps_the_stick_held(void) {
     }
     loopNow = padNow + 1;
   }
-  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());  // the last START got through
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);  // the last START got through
 }
 
 // --- the player LEDs -------------------------------------------------------
