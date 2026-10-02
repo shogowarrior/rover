@@ -41,8 +41,8 @@
   min-width: 0;
 }
 
-@media (min-width: 1100px) and (min-height: 600px) {
-  .sim { --sim-tool: 32px; }
+@media (min-width: 960px) and (min-height: 521px) {
+  .sim { --sim-tool: var(--tap-sm); }
 }
 
 /* --- controls --------------------------------------------------------- */
@@ -107,7 +107,7 @@
 .sim-tool[aria-expanded="true"] {
   color: var(--readout);
   background: var(--raised-hi);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--live);
 }
 
 /* Paused is a state worth seeing from across the room. */
@@ -171,8 +171,8 @@
 
 .sim-label {
   font-family: var(--sans);
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   fill: var(--dim);
   pointer-events: none;
@@ -277,7 +277,7 @@
 }
 
 .sim-badge strong {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--warn);
 }
 
@@ -337,7 +337,7 @@
 .sim-move {
   font-family: var(--mono);
   font-size: var(--t-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -367,7 +367,7 @@
 .sim-clock {
   font-family: var(--mono);
   font-size: var(--t-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   font-variant-numeric: tabular-nums;
   color: var(--readout);
 }
@@ -498,7 +498,7 @@
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--r-md);
-  box-shadow: 0 10px 28px var(--shade);
+  box-shadow: var(--lift-pop);
 }
 
 .sim-more[hidden] { display: none; }
@@ -521,7 +521,7 @@
 .sim-switch[aria-pressed="true"] {
   color: var(--readout);
   background: var(--raised-hi);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--live);
 }
 
 /* The label over the slider and its value: a phone has no width to spare. */
@@ -537,7 +537,7 @@
 .sim-value {
   font-family: var(--mono);
   font-size: var(--t-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   min-width: 3.5ch;
   text-align: right;
 }
@@ -545,6 +545,6 @@
 .sim-about {
   margin: 0;
   font-size: var(--t-sm);
-  line-height: 1.5;
+  line-height: var(--lh-loose);
   color: var(--dim);
 }

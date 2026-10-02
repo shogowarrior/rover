@@ -46,19 +46,20 @@ class RoverBlocks {
   // The blocks that drive a motion, named by their MOVE field.
   static DRIVES = Object.freeze(["rover_drive_for", "rover_drive_until"]);
 
-  // The block colours, one per toolbox category. Mid-tones that hold white
-  // text and still read on the panel's near-black. Red is the panel's stop red,
-  // and only the stop block wears it: anywhere else it would stop meaning
-  // anything.
+  // The block colours, one per toolbox category. Mid-tones that hold the
+  // blocks' white 12 px text at 4.5:1 or better and still read on the
+  // panel's near-black. Red is the panel's stop red (--stop in
+  // css/panel.css), and only the stop block wears it: anywhere else it would
+  // stop meaning anything.
   static PALETTE = Object.freeze({
-    motion: "#2c9a8b",
-    sensors: "#3f80c4",
-    control: "#c9832a",
+    motion: "#237d70",
+    sensors: "#3674b5",
+    control: "#a6651b",
     logic: "#7462d4",
-    math: "#3a915d",
+    math: "#2f7d4e",
     variables: "#b8508a",
     output: "#66758a",
-    stop: "#d93a33",
+    stop: "#d23c37",
   });
 
   // The motions in the order the motion menu lists them: the eight
@@ -596,8 +597,8 @@ class RoverBlocks {
         scrollbarOpacity: 0.35,
         insertionMarkerColour: "#ffffff",
         insertionMarkerOpacity: 0.25,
-        markerColour: token("--live", "#3ddc97"),
-        cursorColour: token("--live", "#3ddc97"),
+        markerColour: token("--live", "#4db8a8"),
+        cursorColour: token("--live", "#4db8a8"),
       },
       fontStyle: { family: token("--sans", "system-ui, sans-serif"), weight: "600", size: 12 },
       startHats: false,

@@ -5,8 +5,9 @@
    Thumb-first. On a phone the Drive tab is a dock at the foot of the screen,
    the stick under the left thumb, the rotate buttons and Stop under the
    right, and the scan sits at the top where a glance finds it. On a wide
-   screen the same parts sit side by side: the open tab on the left, and on
-   the right the rail of what the rover reports, with Stop at its foot.
+   screen the same parts sit side by side: the open tab on the left, the
+   rail of what the rover reports on the right, and Stop and Autonomous in a
+   bar across the foot, Stop under the controls.
 
    One rule shapes the layout: nothing that contains the stick may be
    positioned, transformed, filtered or contained. joy.js places a touch by
@@ -18,10 +19,12 @@
 
 /* --- tokens -------------------------------------------------------------- */
 
-/* Each hue has one job. Blue is the operator's own: the stick, the chosen
-   segment, focus. Green is the rover doing well: linked, a clear way,
-   exploring. Amber is caution: something closing in, a fault. Red is Stop
-   and danger and nothing else -- anywhere else it would stop meaning
+/* Three signal hues, each with one job. Teal is the accent: the operator's
+   own controls and the rover doing well (linked, a clear way, exploring).
+   It is the teal joy.js paints the stick's knob in (js/drive.js), so the
+   page takes its colour from the stick rather than repainting a canvas CSS
+   cannot reach. Amber is caution: something closing in, a fault. Red is
+   Stop and danger and nothing else -- anywhere else it would stop meaning
    anything. Every text colour holds 4.5:1 on the surfaces it is used on. */
 :root {
   color-scheme: dark;
@@ -41,32 +44,52 @@
   --faint: #4a525d; /* marks, never text */
 
   /* signals */
-  --accent: #5b9cff;
-  --on-accent: #06142c;
-  --accent-ink: #8ab8ff; /* blue text on a blue tint */
-  --accent-soft: rgb(91 156 255 / 0.16);
-  --live: #3ddc97;
-  --on-live: #04150d;
-  --live-soft: rgb(61 220 151 / 0.14);
-  --live-glow: rgb(61 220 151 / 0.09);
+  --live: #4db8a8;
+  --on-live: #062420;
+  --live-ink: #86d9cc; /* teal text on a teal tint */
+  --live-soft: rgb(77 184 168 / 0.16);
+  --live-glow: rgb(77 184 168 / 0.08);
   --warn: #ffb547;
   --warn-soft: rgb(255 181 71 / 0.12);
-  --stop: #d93a33;
-  --stop-hi: #c22f29;
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
   --on-fill: #ffffff; /* text on a saturated fill: Stop, a block's menu */
   --on-stop: var(--on-fill);
   --stop-ink: #ff7a6e; /* red text on a dark surface */
-  --stop-soft: rgb(217 58 51 / 0.16);
-  --stop-glow: rgb(217 58 51 / 0.32);
+  --stop-soft: rgb(210 60 55 / 0.16);
+  --stop-glow: rgb(210 60 55 / 0.32);
 
-  /* type: one family, sizes on a ~1.2 ratio; numbers in tabular figures */
+  /* elevation */
+  --lift-sheet: 0 -12px 32px var(--shade);
+  --lift-pop: 0 10px 28px var(--shade);
+  --lift-stop: 0 8px 24px var(--stop-glow);
+
+  /* type: one family for words, a DIN-style one for figures (system fonts
+     only, so it works offline), sizes on a ~1.2 ratio */
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --gauge: "DIN Alternate", Bahnschrift, var(--sans);
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --t-xs: 11px;
   --t-sm: 12px;
   --t-md: 14px;
   --t-lg: 17px;
   --t-xl: 20px;
+  --t-2xl: 26px;
+  --fw-medium: 500;
+  --fw-semi: 600;
+  --fw-bold: 700;
+  --fw-heavy: 800;
+  --lh-tight: 1.2;
+  --lh-body: 1.4;
+  --lh-loose: 1.6;
+  --track-tight: -0.02em;
+  --track-label: 0.04em;
+  --track-wide: 0.08em;
+  --track-caps: 0.12em;
+  /* The scan's text, in the drawing's own units: test/panel.test.js budgets
+     the labels' boxes from these two sizes. */
+  --scan-reading: 15px;
+  --scan-tick: 10px;
 
   /* space: a 4 px grid */
   --s-0: 2px;
@@ -85,24 +108,49 @@
   --r-xl: 24px;
   --r-full: 999px;
 
-  /* touch targets: 44 px is the floor on a phone; the dock's are bigger */
+  /* sizes. 44 px is the floor for a touch target on a phone; the dock's are
+     bigger. */
   --tap: 44px;
+  --tap-sm: 32px;
   --tap-lg: 64px;
   --pill-h: 32px;
   --range-track: 6px;
   --range-thumb: 26px;
+  --icon: 20px;
+  --icon-lg: 26px;
+  --icon-xl: 34px;
+  --glyph: 16px;
+  --lamp: 8px;
+  --mark: 22px;
+  --notch: 10px;
 
-  /* layout. joy.js reads the stick's size once, when the page loads, so
-     --stick must not depend on anything that settles later (a web font, a
+  --glide: 480ms; /* about a telemetry interval */
+
+  /* layout. Screen heights count from the small viewport, the screen left
+     when a phone's browser shows its bars; 1vh where svh is unknown. A
+     custom property cannot fall back by being declared twice: an svh it
+     held would only fail where used, leaving the stick unsized. */
+  --svh: 1vh;
+  /* joy.js reads the stick's size once, when the page loads, so --stick
+     must not depend on anything that settles later (a web font, a
      scrollbar); the viewport is enough. */
-  --stick: clamp(156px, min(54vw, 25vh), 236px);
+  --stick: clamp(148px, min(54vw, 25 * var(--svh)), 236px);
   --gutter: var(--s-4);
   /* The scan yields first when a phone is short of height (the fault, the
-     stick family): a small scan beats a stick under the Stop bar. */
+     stick family, the note): a small scan beats a stick under the Stop
+     bar. */
   --scan-min: 72px;
   --scan-strip: 132px;
-  --rail: clamp(380px, 34vw, 500px);
+  /* The rail beside each tab on a wide screen: wide beside the Drive tab,
+     for a large fan; narrow beside the Program tab, whose editor and
+     simulator want the room. */
+  --rail-drive: clamp(340px, 52vw - 160px, 620px);
+  --rail-program: clamp(280px, 24vw, 380px);
   --shell-max: 720px;
+}
+
+@supports (height: 1svh) {
+  :root { --svh: 1svh; }
 }
 
 /* --- base ---------------------------------------------------------------- */
@@ -115,7 +163,7 @@ body {
   color: var(--readout);
   font-family: var(--sans);
   font-size: var(--t-md);
-  line-height: 1.4;
+  line-height: var(--lh-body);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
@@ -126,7 +174,7 @@ body {
 /* A caption: sentence case, quiet, never shouting over the values. */
 .label {
   font-size: var(--t-sm);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--dim);
 }
 
@@ -142,8 +190,8 @@ body {
 }
 
 .icon {
-  width: 20px;
-  height: 20px;
+  width: var(--icon);
+  height: var(--icon);
   flex: none;
   fill: none;
   stroke: currentColor;
@@ -161,7 +209,7 @@ button {
   padding: 0 var(--s-4);
   font: inherit;
   font-size: var(--t-md);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   color: var(--readout);
   background: var(--raised);
   border: 1px solid transparent;
@@ -171,14 +219,18 @@ button {
   -webkit-touch-callout: none;
 }
 
-button:hover { background: var(--raised-hi); }
+/* Only where there is a pointer to hover with: on a touch screen a hover
+   sticks to the last button tapped. */
+@media (hover: hover) {
+  button:hover { background: var(--raised-hi); }
+}
 
 button:disabled { cursor: default; }
 
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--live);
   outline-offset: 2px;
 }
 
@@ -206,9 +258,9 @@ input[type="range"]::-webkit-slider-thumb {
   height: var(--range-thumb);
   margin-top: calc((var(--range-track) - var(--range-thumb)) / 2);
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--live);
   border: var(--s-1) solid var(--panel);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--live);
 }
 
 input[type="range"]::-moz-range-track {
@@ -220,7 +272,7 @@ input[type="range"]::-moz-range-track {
 input[type="range"]::-moz-range-progress {
   height: var(--range-track);
   border-radius: var(--r-full);
-  background: var(--accent);
+  background: var(--live);
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -228,9 +280,9 @@ input[type="range"]::-moz-range-thumb {
   width: calc(var(--range-thumb) - 2 * var(--s-1));
   height: calc(var(--range-thumb) - 2 * var(--s-1));
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--live);
   border: var(--s-1) solid var(--panel);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--live);
 }
 
 /* A panel's own display (grid, flex) would otherwise override the hidden
@@ -241,9 +293,8 @@ input[type="range"]::-moz-range-thumb {
 
 /* One column, as tall as the screen at least. The scan's row takes what the
    others leave, so on the Drive tab the dock lands at the foot of the
-   screen and nothing needs scrolling. The rail's parts join this grid (see
-   .rail). Rows are spaced by margins, not gap: an empty row (the fault, most
-   of the time) would still take a gap. */
+   screen and nothing needs scrolling. Rows are spaced by margins, not gap:
+   an empty row (the fault, most of the time) would still take a gap. */
 .shell {
   --edge-l: calc(var(--gutter) + env(safe-area-inset-left, 0px));
   --edge-r: calc(var(--gutter) + env(safe-area-inset-right, 0px));
@@ -258,13 +309,8 @@ input[type="range"]::-moz-range-thumb {
   padding: calc(var(--s-3) + env(safe-area-inset-top, 0px)) var(--edge-r) 0 var(--edge-l);
 }
 
-/* The Program tab scrolls as a page does; the scan becomes a strip above it. */
-.shell:has(> #programTab:not([hidden])) {
-  grid-template-rows: auto auto auto auto 1fr auto;
-}
-
-/* On a phone the rail is not a box of its own: its parts are rows of the
-   shell, the scan above the open tab and Stop at the foot. */
+/* The rail is not a box of its own: its parts are rows of the shell, placed
+   by each layout. */
 .rail { display: contents; }
 
 .shell > [role="tabpanel"] {
@@ -274,36 +320,53 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- header ------------------------------------------------------------------ */
 
+/* On a phone, four rows: the mark and the status pills; the tabs and the
+   scheme; the address; and the note, when there is one, under it. */
 .bar {
   grid-area: head;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas:
-    "brand status"
-    "tabs  scheme"
-    "link  link";
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   gap: var(--s-2);
   margin-bottom: var(--s-3);
 }
 
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: var(--pill-h);
+}
+
 .wordmark {
-  grid-area: brand;
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
   font-size: var(--t-xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--track-tight);
 }
 
-/* The mark: a wheel hub in the operator's blue. */
+/* The mark: a wheel hub in the stick's teal. */
 .wordmark::before {
   content: "";
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: var(--mark);
+  height: var(--mark);
   border-radius: var(--r-sm);
-  background: radial-gradient(circle, var(--case) 0 3px, transparent 3.5px), var(--accent);
+  background: radial-gradient(circle, var(--case) 0 3px, transparent 3.5px), var(--live);
+}
+
+/* A phone keeps the row for the status: the mark alone says whose panel
+   this is. So does a phone on its side, whose header has a column only. */
+@media (max-width: 439.98px), (orientation: landscape) and (max-height: 520px) {
+  .wordmark .word { display: none; }
+}
+
+.switches {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-2);
 }
 
 /* Segmented controls: the tabs, the scheme, the stick family. One track;
@@ -317,8 +380,6 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-md);
 }
 
-.tabs { grid-area: tabs; }
-
 .tabs [role="tab"],
 .segmented button {
   flex: 1 1 0;
@@ -330,8 +391,10 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-md);
 }
 
-.tabs [role="tab"]:hover,
-.segmented button:hover { color: var(--readout); background: none; }
+@media (hover: hover) {
+  .tabs [role="tab"]:hover,
+  .segmented button:hover { color: var(--readout); background: none; }
+}
 
 .tabs [role="tab"][aria-selected="true"],
 .segmented button[aria-pressed="true"] {
@@ -340,10 +403,10 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 0 0 3px var(--raised);
 }
 
-/* The open tab is where the operator is: the one segment in their blue. */
+/* The open tab is where the operator is: the one segment in the accent. */
 .tabs [role="tab"][aria-selected="true"] {
-  color: var(--accent-ink);
-  background: var(--accent-soft);
+  color: var(--live-ink);
+  background: var(--live-soft);
 }
 
 .segmented button:disabled {
@@ -355,26 +418,26 @@ input[type="range"]::-moz-range-thumb {
 /* Asked for and not yet reported: outlined, never lit, so a request the
    rover did not take cannot look applied. */
 .segmented button[data-pending="yes"] {
-  color: var(--accent);
-  outline: 1px dashed var(--accent);
+  color: var(--live);
+  outline: 1px dashed var(--live);
   outline-offset: -4px;
   animation: pending 800ms ease-in-out infinite alternate;
 }
 
 @keyframes pending { to { opacity: 0.5; } }
 
-#schemeSlot { grid-area: scheme; min-width: 0; }
+#schemeSlot { min-width: 0; }
 
 /* Unknown until telemetry names a scheme: nothing lit, the track dashed and
-   faded, like a readout with no reading. */
+   faded, like a readout with no reading. Its segments are disabled. */
 .scheme[data-state="unknown"] .segmented {
   border: 1px dashed var(--faint);
   opacity: 0.55;
 }
 
 /* Stale: telemetry has stopped. The scheme last reported stays lit but
-   faded, as the scan is, and its segments are disabled: no telemetry could
-   confirm a request. */
+   faded, and its segments are disabled: no telemetry could confirm a
+   request. */
 .scheme[data-state="stale"] .segmented { opacity: 0.55; }
 
 .scheme[data-state="stale"] .segmented button[aria-pressed="true"] {
@@ -383,13 +446,12 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 0 0 3px var(--raised);
 }
 
-/* Status pills: the link, and the mode. Each takes its colour from the state
-   it shows, so a glance at the corner says enough. */
+/* Status pills: the link, the mode and the motors. Each takes its colour
+   from the state it shows, so a glance at the corner says enough. */
 .status {
-  grid-area: status;
-  justify-self: end;
   display: flex;
-  gap: var(--s-2);
+  justify-content: flex-end;
+  gap: var(--s-1);
   min-width: 0;
 }
 
@@ -398,9 +460,9 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   gap: var(--s-2);
   min-height: var(--pill-h);
-  padding: 0 var(--s-3);
+  padding: 0 var(--s-2);
   font-size: var(--t-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
   color: var(--dim);
   background: var(--raised);
@@ -411,8 +473,8 @@ input[type="range"]::-moz-range-thumb {
 .modePill::before {
   content: "";
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: var(--lamp);
+  height: var(--lamp);
   border-radius: 50%;
   background: currentColor;
 }
@@ -422,9 +484,9 @@ body[data-link="up"] .linkPill { color: var(--live); background: var(--live-soft
 body[data-link="stale"] .linkPill { color: var(--warn); background: var(--warn-soft); }
 body[data-link="connecting"] .lamp { animation: pending 600ms ease-in-out infinite alternate; }
 
-/* No mode to show until a link brings one. */
-body[data-link="down"] .modePill,
-body[data-link="connecting"] .modePill { display: none; }
+/* Nothing to say about the rover until a link brings word of it. */
+body[data-link="down"] :is(.modePill, .motorsPill),
+body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 
 /* readouts.js reports "MANUAL" and "AUTONOMOUS"; the pill says them in
    sentence case. */
@@ -439,7 +501,7 @@ body[data-link="connecting"] .modePill { display: none; }
    last mode, greyed. Exploring is the loud one -- the rover is moving by
    itself -- and fills the pill. */
 body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill { color: var(--readout); }
-body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--accent); }
+body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--live); }
 
 body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill {
   color: var(--on-live);
@@ -450,8 +512,21 @@ body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before {
   animation: pending 700ms ease-in-out infinite alternate;
 }
 
+/* One of the motors pill's three words, by what the rover last said. A
+   browser without :has() says "Motors" and leaves the alarm to the fault
+   card. "Motors OK" only while the link vouches for it; a fault stays
+   amber while its card shows. */
+.motorsPill [data-say]:not([data-say="unknown"]) { display: none; }
+
+body:has(#motorsFault:is([data-ready="yes"], [data-ready="no"])) .motorsPill [data-say="unknown"] { display: none; }
+
+body:has(#motorsFault[data-ready="yes"]) .motorsPill [data-say="yes"],
+body:has(#motorsFault[data-ready="no"]) .motorsPill [data-say="no"] { display: inline; }
+
+body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill { color: var(--live); background: var(--live-soft); }
+body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); background: var(--warn-soft); }
+
 .link {
-  grid-area: link;
   display: flex;
   gap: var(--s-2);
   min-width: 0;
@@ -476,11 +551,38 @@ body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before {
 
 /* With no link, connecting is the next thing to do. */
 body[data-link="down"] #connect {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--on-live);
+  background: var(--live);
 }
 
-/* --- what the rover reports: fault, scan, note, readouts -------------------- */
+/* What the link has to say, under the address it is about: a line in the
+   page, never over the scan, whose near field is where the closest
+   obstacles are drawn. */
+#note {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+  padding-inline: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--dim);
+}
+
+#note::before {
+  content: "";
+  flex: none;
+  width: var(--lamp);
+  height: var(--lamp);
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#note:empty { display: none; }
+
+#note[data-tone="bad"] { color: var(--warn); }
+
+/* --- what the rover reports: fault, scan, readouts ------------------------- */
 
 /* A fault the rover reports about itself. Amber, not red: nothing is moving
    that should stop; the rover simply cannot move. */
@@ -488,8 +590,8 @@ body[data-link="down"] #connect {
   grid-area: fault;
   margin: 0 0 var(--s-3);
   padding: var(--s-2) var(--s-3);
-  font-size: var(--t-sm);
-  line-height: 1.4;
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
   color: var(--readout);
   background: var(--warn-soft);
   border: 1px solid var(--warn);
@@ -499,7 +601,8 @@ body[data-link="down"] #connect {
 .fault strong {
   display: block;
   margin-bottom: var(--s-0);
-  font-size: var(--t-md);
+  font-size: var(--t-sm);
+  line-height: var(--lh-tight);
   color: var(--warn);
 }
 
@@ -513,7 +616,7 @@ body[data-link="down"] #connect {
   contain: size;
   min-height: var(--scan-min);
   display: grid;
-  padding: var(--s-3) var(--s-2) var(--s-1);
+  padding: var(--s-3) var(--s-1) var(--s-1);
   background:
     radial-gradient(90% 60% at 50% 75%, var(--live-glow), transparent),
     radial-gradient(circle, var(--raised) 1px, transparent 1.5px) 0 0 / var(--s-5) var(--s-5),
@@ -528,12 +631,10 @@ body[data-link="down"] #connect {
   min-height: 0;
 }
 
-.shell:has(> #programTab:not([hidden])) .scan { height: var(--scan-strip); }
-
 /* Readings glide over the telemetry interval rather than snapping, so the
    eye tracks a distance changing instead of a number replacing itself. */
 .wedge {
-  transition: d 480ms linear, fill 480ms linear, opacity 480ms linear;
+  transition: d var(--glide) linear, fill var(--glide) linear, opacity var(--glide) linear;
 }
 
 .ring {
@@ -555,19 +656,19 @@ body[data-link="down"] #connect {
 }
 
 /* No text-anchor here: scan.js sets it per label, and a CSS rule would
-   override the attribute. Sizes are in the drawing's units, and
-   test/panel.test.js budgets the labels' boxes from them. */
+   override the attribute. */
 .reading {
-  font-size: 15px;
-  font-weight: 700;
+  font-family: var(--gauge);
+  font-size: var(--scan-reading);
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   fill: var(--readout);
 }
 
 .tick {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: var(--scan-tick);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--track-label);
   fill: var(--dim);
 }
 
@@ -576,33 +677,12 @@ body[data-link="down"] #connect {
 .tick.go { fill: var(--warn); }
 
 /* The rover, at the fan's centre. */
-#scan > circle { fill: var(--accent); }
+#scan > circle { fill: var(--live); }
 
 /* Without a live link the fan is history: the wedges fade and the numbers
    grey, still legible. */
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
-
-#note {
-  grid-area: scan;
-  align-self: end;
-  justify-self: center;
-  max-width: calc(100% - 2 * var(--s-3));
-  margin: 0 0 var(--s-3);
-  padding: var(--s-2) var(--s-3);
-  font-size: var(--t-sm);
-  line-height: 1.4;
-  text-align: center;
-  color: var(--readout);
-  background: var(--raised);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  box-shadow: 0 6px 18px var(--shade);
-}
-
-#note:empty { display: none; }
-
-#note[data-tone="bad"] { color: var(--warn); }
 
 .readouts {
   grid-area: read;
@@ -629,8 +709,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Narrower than 360 px, a step smaller, so the longest move still fits. */
 .cell output {
+  font-family: var(--gauge);
   font-size: clamp(var(--t-sm), 3.8vw, var(--t-md));
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -658,6 +739,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* A sheet across the foot of the screen, joined to the Stop bar below it.
    Stick on the left, for the left thumb; rotate and speed on the right. */
 .dock {
+  margin-inline: calc(-1 * var(--edge-l)) calc(-1 * var(--edge-r));
+  padding: var(--s-4) var(--edge-r) var(--s-4) var(--edge-l);
+  background: var(--panel);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--lift-sheet);
+}
+
+.controls {
   display: grid;
   grid-template-columns: var(--stick) minmax(0, 1fr);
   grid-template-rows: auto 1fr 1fr;
@@ -666,11 +755,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     "stick  spin"
     "stick  speed";
   column-gap: var(--s-4);
-  margin-inline: calc(-1 * var(--edge-l)) calc(-1 * var(--edge-r));
-  padding: var(--s-4) var(--edge-r) var(--s-2) var(--edge-l);
-  background: var(--panel);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: 0 -12px 32px var(--shade);
 }
 
 #familySlot { grid-area: family; min-width: 0; }
@@ -707,19 +791,22 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   min-height: max-content;
   border-radius: 50%;
   background:
-    linear-gradient(var(--faint), var(--faint)) 50% var(--s-2) / 2px 10px no-repeat,
-    linear-gradient(var(--faint), var(--faint)) 50% calc(100% - var(--s-2)) / 2px 10px no-repeat,
-    linear-gradient(var(--faint), var(--faint)) var(--s-2) 50% / 10px 2px no-repeat,
-    linear-gradient(var(--faint), var(--faint)) calc(100% - var(--s-2)) 50% / 10px 2px no-repeat,
+    linear-gradient(var(--faint), var(--faint)) 50% var(--s-2) / 2px var(--notch) no-repeat,
+    linear-gradient(var(--faint), var(--faint)) 50% calc(100% - var(--s-2)) / 2px var(--notch) no-repeat,
+    linear-gradient(var(--faint), var(--faint)) var(--s-2) 50% / var(--notch) 2px no-repeat,
+    linear-gradient(var(--faint), var(--faint)) calc(100% - var(--s-2)) 50% / var(--notch) 2px no-repeat,
     radial-gradient(circle, var(--raised), var(--case));
   box-shadow: inset 0 3px 14px var(--shade), inset 0 0 0 1px var(--rule);
 }
 
 /* The stick's own box, a label in each corner, clear of the stick's ring.
-   pointer-events: none, so every touch still lands on joy.js's canvas. */
+   pointer-events: none, so every touch still lands on joy.js's canvas. It
+   reaches a little past the stick on each side, into the column gap: on a
+   short phone's smaller stick, "Left back" and "Right back" met. */
 .hints {
-  width: var(--stick);
+  width: calc(var(--stick) + 2 * var(--s-2));
   height: var(--stick);
+  margin-inline: calc(-1 * var(--s-2));
   display: grid;
   grid-template: 1fr 1fr / 1fr 1fr;
   pointer-events: none;
@@ -732,7 +819,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   align-items: center;
   gap: var(--s-1);
   font-size: var(--t-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
   color: var(--readout);
 }
@@ -742,8 +829,8 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .hint .glyph,
 .family .glyph {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: var(--glyph);
+  height: var(--glyph);
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -752,7 +839,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 .hint .glyph,
-.family button[aria-pressed="true"] .glyph { color: var(--accent); }
+.family button[aria-pressed="true"] .glyph { color: var(--live); }
 
 .hint[data-corner="upLeft"] { align-self: start; justify-self: start; }
 .hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; }
@@ -761,7 +848,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 .family {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-1);
   margin-bottom: var(--s-3);
 }
 
@@ -769,11 +856,10 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 .family .segmented button {
   flex-direction: column;
-  gap: var(--s-0);
-  min-height: calc(var(--tap) + var(--s-1));
-  padding: var(--s-1);
+  gap: 0;
+  padding: var(--s-0) var(--s-1);
   font-size: var(--t-sm);
-  line-height: 1.2;
+  line-height: var(--lh-tight);
 }
 
 /* Amber, as the motor warning is: a caution, not a stop. */
@@ -782,8 +868,8 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   align-items: baseline;
   gap: var(--s-2);
   margin: 0;
-  font-size: var(--t-sm);
-  line-height: 1.4;
+  font-size: var(--t-xs);
+  line-height: var(--lh-tight);
   color: var(--dim);
 }
 
@@ -816,14 +902,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   border-radius: var(--r-lg);
 }
 
-.spin .icon { width: 26px; height: 26px; }
+.spin .icon { width: var(--icon-lg); height: var(--icon-lg); }
 
 /* No transition on press: a control that moves a robot must feel
    instantaneous, not eased. */
 .spin button:active,
 .spin button[data-held="yes"] {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--on-live);
+  background: var(--live);
 }
 
 .speed {
@@ -840,7 +926,10 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 #speedOut {
   grid-area: value;
-  font-weight: 700;
+  font-family: var(--gauge);
+  font-size: var(--t-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -850,7 +939,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* On a phone, stuck to the foot of the screen whenever the page is longer
    than it -- the Program tab -- and the dock's last row otherwise. Its panel
-   colour hides what scrolls beneath. */
+   colour hides what scrolls beneath; a rule across its top keeps the stick
+   apart from Autonomous, so a thumb that strays off the stick cannot start
+   the rover exploring. */
 .actions {
   grid-area: act;
   position: sticky;
@@ -860,22 +951,16 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   gap: var(--s-3);
   margin-inline: calc(-1 * var(--edge-l)) calc(-1 * var(--edge-r));
-  padding: var(--s-2) var(--edge-r) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) var(--edge-l);
-  background: var(--panel);
-}
-
-/* Without the dock above it, the bar is a sheet of its own. */
-.shell:has(> #driveTab[hidden]) .actions {
-  margin-top: var(--s-3);
-  padding-top: var(--s-3);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: 0 -12px 32px var(--shade);
+  padding: var(--s-3) var(--edge-r) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) var(--edge-l);
+  background:
+    linear-gradient(var(--rule), var(--rule)) top center / calc(100% - var(--edge-l) - var(--edge-r)) 1px no-repeat,
+    var(--panel);
 }
 
 .actions button {
   min-height: var(--tap-lg);
   font-size: var(--t-md);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   border-radius: var(--r-lg);
 }
 
@@ -892,20 +977,23 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 #stop {
   font-size: var(--t-xl);
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--track-wide);
   text-transform: uppercase;
   color: var(--on-stop);
   background: var(--stop);
-  box-shadow: 0 8px 24px var(--stop-glow);
+  box-shadow: var(--lift-stop);
 }
 
-#stop:hover,
 #stop:active { background: var(--stop-hi); }
 
+@media (hover: hover) {
+  #stop:hover { background: var(--stop-hi); }
+}
+
 #stop .icon {
-  width: 22px;
-  height: 22px;
+  width: var(--mark);
+  height: var(--mark);
   fill: currentColor;
   stroke: none;
 }
@@ -913,74 +1001,178 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 /* --- the other layouts ------------------------------------------------------- */
 
 /* Every layout but the side-by-side one (the media query below, negated). */
-@media (max-width: 1099.98px), (max-height: 599.98px) {
+@media (max-width: 959.98px), (max-height: 520.98px) {
   .shell > [role="tabpanel"] { margin-top: var(--s-3); }
 
-  /* The fault's room comes from the readouts, whose Move reports commands
-     the rover takes while no wheel turns: the very thing the fault
-     explains. Taken from the scan, the dock went under the Stop bar. */
-  .shell:has(#motorsFault:not([hidden])) .readouts { display: none; }
-  .shell:has(#motorsFault:not([hidden])) .scan { border-radius: var(--r-xl); }
+  /* The Program tab scrolls as a page does; the scan becomes a strip above
+     it. */
+  .shell:has(> #programTab:not([hidden])) {
+    grid-template-rows: auto auto auto auto 1fr auto;
+  }
+
+  .shell:has(> #programTab:not([hidden])) .scan { height: var(--scan-strip); }
+
+  /* Without the dock above it, the bar is a sheet of its own. */
+  .shell:has(> #driveTab[hidden]) .actions {
+    margin-top: var(--s-3);
+    background: var(--panel);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    box-shadow: var(--lift-sheet);
+  }
+
+  /* A motor fault takes the scan's place. With no wheel able to turn, why
+     matters more than what is near, and the scan, squeezed into what the
+     fault left of a phone, was a strip too small to read. The readouts
+     stay: the Move the rover reports while no wheel turns is what the fault
+     explains. */
+  .shell:has(#motorsFault:not([hidden])) .scan { display: none; }
+
+  .shell:has(#motorsFault:not([hidden])) .fault {
+    grid-area: scan;
+    display: grid;
+    align-content: center;
+    padding: var(--s-4);
+    font-size: var(--t-sm);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+  }
+}
+
+/* A short phone screen (its browser's bars showing): the readouts on a line
+   each, the bar's buttons and the stick a step smaller, so the stick family
+   still fits above the Stop bar. */
+@media (max-width: 959.98px) and (max-height: 720px) {
+  :root {
+    --stick: clamp(140px, min(54vw, 23 * var(--svh)), 236px);
+    --scan-min: 64px;
+  }
+
+  .bar { margin-bottom: var(--s-2); }
+
+  .cell {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--s-2);
+    padding-block: var(--s-2);
+  }
+
+  /* The chip's reading never wraps; the move's longest names may. */
+  .cell:last-child { flex: none; }
+
+  .shell:has(#motorsFault:not([hidden])) .fault {
+    padding: var(--s-3);
+    font-size: var(--t-xs);
+  }
+
+  .dock { padding-top: var(--s-3); }
+
+  .family { margin-bottom: var(--s-2); }
+
+  .actions button { min-height: calc(var(--tap) + var(--s-3)); }
 }
 
 @media (min-width: 600px) {
   :root { --gutter: var(--s-6); }
 }
 
-/* Side by side: the open tab on the left, the rail on the right, the page
-   exactly as tall as the screen. The Program tab scrolls inside its own
-   pane, so the rail -- the scan, the readouts and Stop -- never moves. */
-@media (min-width: 1100px) and (min-height: 600px) {
+/* Side by side: the open tab on the left, the rail on the right, Stop and
+   Autonomous in a bar across the foot, the page exactly as tall as the
+   screen. The Program tab scrolls inside its own pane, and the bar keeps
+   the Drive tab's columns on both tabs, so Stop never moves: it stays
+   under the controls, a short trip from the stick. */
+@media (min-width: 960px) and (min-height: 521px) {
   :root {
-    --stick: clamp(220px, 44vh, 360px);
-    --shell-max: 1480px;
+    /* As much stick as the screen's height and the dock's width allow. 324
+       px of height is the header, the bar and the dock's own padding and
+       caption; 368 px of width the gutters, the rail's gap and the dock's
+       other column. */
+    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 324px, 100vw - var(--rail-drive) - 368px), 400px);
+    --shell-max: 1600px;
+    --pill-h: 34px;
   }
 
-  .shell,
-  .shell:has(> #programTab:not([hidden])) {
+  .shell {
+    --rail: var(--rail-drive);
     height: 100vh;
     height: 100dvh;
     grid-template-columns: minmax(0, 1fr) var(--rail);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas: "head head" "main rail";
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "head head"
+      "main fault"
+      "main scan"
+      "main read"
+      "act  act";
     column-gap: var(--s-5);
-    padding-block: var(--s-5);
+    padding-top: var(--s-5);
   }
 
+  .shell:has(> #programTab:not([hidden])) { --rail: var(--rail-program); }
+
+  /* Two rows on the shell's two columns: the mark and the status, then the
+     tabs and the scheme, on the left; the address, then the note under it,
+     on the right. */
   .bar {
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand tabs scheme . status link";
-    column-gap: var(--s-4);
-    margin-bottom: var(--s-5);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rail);
+    grid-template-areas:
+      "mast     link"
+      "switches note";
+    align-items: center;
+    gap: var(--s-4) var(--s-5);
+    margin-bottom: var(--s-4);
   }
 
-  .wordmark { margin-right: var(--s-2); }
+  .masthead {
+    grid-area: mast;
+    justify-content: flex-start;
+    gap: var(--s-5);
+  }
+
+  .status { gap: var(--s-2); }
+
+  .pill {
+    padding-inline: var(--s-3);
+    font-size: var(--t-md);
+  }
+
+  .switches {
+    grid-area: switches;
+    display: flex;
+    gap: var(--s-4);
+  }
 
   .tabs [role="tab"],
   .scheme .segmented button { flex: none; padding-inline: var(--s-5); }
 
-  .link { width: clamp(280px, 24vw, 360px); }
-
-  /* The scan takes what the rail does not need, as a scope's screen. */
-  .rail {
-    grid-area: rail;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-    grid-template-areas: "fault" "scan" "read" "act";
-    min-height: 0;
+  /* As wide as the narrower rail, so the tab switch neither moves the
+     address nor changes its width. */
+  .link {
+    grid-area: link;
+    justify-self: end;
+    width: var(--rail-program);
   }
 
-  .scan,
-  .shell:has(> #programTab:not([hidden])) .scan {
-    height: auto;
-    padding: var(--s-4) var(--s-3);
+  /* Under the address, as wide. */
+  #note {
+    grid-area: note;
+    justify-self: end;
+    width: var(--rail-program);
   }
+
+  .fault {
+    margin-bottom: var(--s-4);
+    padding: var(--s-3) var(--s-4);
+    font-size: var(--t-sm);
+  }
+
+  .fault strong { font-size: var(--t-md); }
+
+  .scan { padding: var(--s-4) var(--s-3); }
 
   /* A column of readouts, label and value on a line, as an instrument's. */
   .readouts {
     flex-direction: column;
     flex-wrap: nowrap;
-    margin-bottom: 0;
   }
 
   .cell {
@@ -998,49 +1190,76 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   #phaseCell { order: 0; flex-basis: auto; }
 
-  .fault { padding: var(--s-3) var(--s-4); }
-
   .cell output {
     font-size: var(--t-lg);
     text-align: right;
   }
 
   .dock {
-    grid-template-columns: var(--stick) minmax(0, 300px);
-    grid-template-rows: auto auto auto;
-    align-content: center;
-    justify-content: center;
-    column-gap: var(--s-7);
+    display: grid;
+    place-content: center;
     margin: 0;
-    padding: var(--s-7);
+    padding: var(--s-6);
     border-radius: var(--r-xl);
     box-shadow: none;
-    background: radial-gradient(70% 60% at 30% 55%, var(--accent-soft), transparent), var(--panel);
+    background: radial-gradient(70% 60% at 30% 55%, var(--live-glow), transparent), var(--panel);
   }
 
-  #familySlot { justify-self: center; width: min(100%, 460px); }
+  /* The stick on the left; rotate, speed and the stick family down the
+     right, the family last. The grid takes its content's height, and only
+     the family's row is flexible, so the stick's extra height goes there:
+     the stick sets the grid's height, and the family coming and going with
+     the scheme moves nothing. */
+  .controls {
+    grid-template-columns: var(--stick) minmax(220px, 300px);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "stick spin"
+      "stick speed"
+      "stick family";
+    gap: var(--s-6) var(--s-7);
+  }
 
-  .family { margin-bottom: var(--s-6); }
+  .stickPad { align-content: start; }
 
-  .spin { gap: var(--s-3); }
+  .spin { align-self: start; gap: var(--s-3); }
 
-  .spin button { min-height: calc(var(--tap-lg) + 2 * var(--s-5)); font-size: var(--t-md); }
+  .spin button {
+    min-height: calc(var(--tap-lg) + 2 * var(--s-5));
+    font-size: var(--t-md);
+  }
 
-  .spin .icon { width: 34px; height: 34px; }
+  .spin .icon { width: var(--icon-xl); height: var(--icon-xl); }
 
-  .speed { margin-top: var(--s-4); }
+  .speed { margin-top: 0; }
 
-  .actions,
-  .shell:has(> #driveTab[hidden]) .actions {
+  #speedOut { font-size: var(--t-2xl); }
+
+  /* Held open, a little more than the selector and two lines of its
+     caveat, so the scheme changing never changes the grid's height, and the
+     stick and the buttons stay where the mouse left them. */
+  #familySlot { min-height: calc(var(--tap) + 3 * var(--s-2) + 2 * var(--lh-body) * var(--t-sm)); }
+
+  .family { margin-bottom: 0; gap: var(--s-2); }
+
+  .family .segmented button { min-height: calc(var(--tap) + var(--s-2)); }
+
+  .caveat { font-size: var(--t-sm); line-height: var(--lh-body); }
+
+  /* A strip across the foot of the page, its columns the Drive tab's:
+     beside the Program tab's narrower rail, Autonomous keeps its place. */
+  .actions {
     position: static;
-    margin: var(--s-4) 0 0;
-    padding: 0;
-    background: none;
-    border-radius: 0;
-    box-shadow: none;
+    grid-template-columns: minmax(0, 1fr) var(--rail-drive);
+    column-gap: var(--s-5);
+    margin-top: var(--s-4);
+    padding-block: var(--s-3) var(--s-4);
+    background: var(--panel);
+    border-top: 1px solid var(--rule);
   }
 
-  .actions button { min-height: calc(var(--tap-lg) + var(--s-2)); }
+  #stop { grid-area: 1 / 1; }
+  #auto { grid-area: 1 / 2; }
 
   #programTab {
     overflow-y: auto;
@@ -1085,13 +1304,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .shell > .dock {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
-    grid-template-columns: var(--stick) minmax(0, 1fr) var(--side);
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas:
-      "family . spin"
-      "stick  . speed"
-      "stick  . .";
-    column-gap: var(--s-5);
+    display: grid;
     margin: 0;
     padding: 0;
     background: none;
@@ -1099,20 +1312,39 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     box-shadow: none;
   }
 
+  .controls {
+    grid-template-columns: var(--stick) minmax(0, 1fr) var(--side);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "family . spin"
+      "stick  . speed"
+      "stick  . .";
+    column-gap: var(--s-5);
+  }
+
   /* Over the dock, which comes later in the page and would paint over it. */
   .bar { z-index: 1; }
+
+  .status { flex-wrap: wrap; }
 
   .stickPad { align-self: center; }
 
   .spin { align-self: start; }
 
-  .actions,
-  .shell:has(> #driveTab[hidden]) .actions {
+  .actions {
     align-self: end;
     grid-template-columns: minmax(0, 1fr);
     bottom: var(--s-3);
     margin: 0;
     padding: 0;
+    background: none;
+  }
+
+  /* In its column beside the Program tab, not a sheet across the foot. Kept
+     apart from the rule above: a browser without :has() drops a whole
+     selector list that names it. */
+  .shell:has(> #driveTab[hidden]) .actions {
+    margin: 0;
     background: none;
     border-radius: 0;
     box-shadow: none;
@@ -1124,6 +1356,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 @media (prefers-reduced-motion: reduce) {
   .wedge { transition: none; }
   .segmented button[data-pending="yes"],
-  body[data-link="connecting"] .lamp,
+  body[data-link="connecting"] .lamp { animation: none; }
   body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before { animation: none; }
 }

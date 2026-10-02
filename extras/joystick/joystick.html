@@ -14,96 +14,118 @@
 
 <body data-link="down">
   <!-- The shell is a grid of the header, the open tab and the rail (the
-       scan, the readouts and Stop). On a phone they stack: the scan under
-       the header, the Drive tab as a dock under the thumbs, Stop at the foot
-       of the screen. On a wide screen the rail is a column on the right and
-       the open tab fills the left. css/panel.css lays both out. -->
+       fault, the scan, the readouts and Stop). On a phone they stack: the
+       scan under the header, the Drive tab as a dock under the thumbs, Stop
+       at the foot of the screen. On a wide screen the rail's parts make a
+       column on the right, the open tab fills the left, and Stop and
+       Autonomous sit in a bar across the foot. css/panel.css lays out both. -->
   <main class="shell">
 
     <header class="bar">
-      <span class="wordmark">Rover</span>
+      <div class="masthead">
+        <span class="wordmark"><span class="word">Rover</span></span>
 
-      <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in
-           step. The Drive tab is the one shown until the scripts run: joy.js
-           sizes the stick from its container once, and needs it laid out. -->
-      <div class="tabs" role="tablist" aria-label="Controls">
-        <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
-        <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
-                tabindex="-1">Program</button>
-      </div>
-
-      <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
-           scheme.js builds the two segments, and keeps them disabled until a
-           frame names a scheme: firmware from before schemes never does. -->
-      <div id="schemeSlot">
-        <div class="scheme" id="scheme" role="group" aria-labelledby="schemeLabel">
-          <span class="label" id="schemeLabel">Scheme</span>
-          <div class="segmented" id="schemeChoice"></div>
+        <!-- What the operator must know at a glance: whether the link is up,
+             whether the rover is driving itself, and whether its motors
+             answered. The pills take their colour from body[data-link],
+             which link.js keeps, the Autonomous button's aria-pressed and
+             #motorsFault's data-ready, which readouts.js keeps; the motors
+             pill shows the one of its words that data-ready picks. -->
+        <div class="status" role="group" aria-label="Rover status">
+          <span class="pill linkPill">
+            <span class="lamp" aria-hidden="true"></span>
+            <span id="linkState">No link</span>
+          </span>
+          <span class="pill modePill">
+            <span class="srOnly">Mode</span>
+            <output id="mode">—</output>
+          </span>
+          <span class="pill motorsPill">
+            <span class="lamp" aria-hidden="true"></span>
+            <span data-say="unknown">Motors</span>
+            <span data-say="yes">Motors OK</span>
+            <span data-say="no">No motor shield</span>
+          </span>
         </div>
       </div>
 
-      <!-- What the operator must know at a glance: whether the link is up,
-           and whether the rover is driving itself. The pills take their
-           colour from body[data-link], which link.js keeps, and from the
-           Autonomous button's aria-pressed, which readouts.js keeps. -->
-      <div class="status">
-        <span class="pill linkPill">
-          <span class="lamp" aria-hidden="true"></span>
-          <span id="linkState">No link</span>
-        </span>
-        <span class="pill modePill">
-          <span class="srOnly">Mode</span>
-          <output id="mode">—</output>
-        </span>
+      <div class="switches">
+        <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in
+             step. The Drive tab is the one shown until the scripts run:
+             joy.js sizes the stick from its container once, and needs it
+             laid out. -->
+        <div class="tabs" role="tablist" aria-label="Controls">
+          <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
+          <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
+                  tabindex="-1">Program</button>
+        </div>
+
+        <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
+             scheme.js builds the two segments, and keeps them disabled until
+             a frame names a scheme: firmware from before schemes never does. -->
+        <div id="schemeSlot">
+          <div class="scheme" id="scheme" role="group" aria-labelledby="schemeLabel">
+            <span class="label" id="schemeLabel">Scheme</span>
+            <div class="segmented" id="schemeChoice"></div>
+          </div>
+        </div>
       </div>
 
       <div class="link">
         <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false">
         <button id="connect">Connect</button>
       </div>
+
+      <!-- What link.js has to say, under the address: how to connect, and
+           why the link went. Empty while all is well. -->
+      <p id="note" aria-live="polite"></p>
     </header>
 
     <!-- The dock: the stick under the left thumb; the rotate buttons and the
-         speed under the right, with Stop below them on a phone. -->
+         speed under the right, with Stop below them on a phone. .controls
+         is the grid they sit on, its own box so that on a wide screen it
+         can take its content's height and sit centred in the dock. -->
     <section class="dock" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
-      <!-- The stick family, offered under the ADVANCED scheme only. -->
-      <div id="familySlot">
-        <div class="family" id="family" role="group" aria-label="Stick family" hidden>
-          <div class="segmented" id="familyChoice"></div>
-          <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
+      <div class="controls">
+        <!-- The stick family, offered under the ADVANCED scheme only. -->
+        <div id="familySlot">
+          <div class="family" id="family" role="group" aria-label="Stick family" hidden>
+            <div class="segmented" id="familyChoice"></div>
+            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
+          </div>
         </div>
-      </div>
 
-      <div class="stickPad">
-        <!-- Names the stick family; family.js keeps it in step. Above the
-             stick, where the thumb on it does not hide it. -->
-        <span class="label" id="stickLabel">Translate</span>
-        <!-- The stick, and over it the move each quadrant sends under a pivot
-             family. The two share one grid cell rather than being positioned:
-             joy.js places a touch by its canvas's offsetParent, which a
-             positioned ancestor would change. -->
-        <div class="stickArea">
-          <div id="stick"></div>
-          <div class="hints" id="stickHints" hidden></div>
+        <div class="stickPad">
+          <!-- Names the stick family; family.js keeps it in step. Above the
+               stick, where the thumb on it does not hide it. -->
+          <span class="label" id="stickLabel">Translate</span>
+          <!-- The stick, and over it the move each quadrant sends under a pivot
+               family. The two share one grid cell rather than being positioned:
+               joy.js places a touch by its canvas's offsetParent, which a
+               positioned ancestor would change. -->
+          <div class="stickArea">
+            <div id="stick"></div>
+            <div class="hints" id="stickHints" hidden></div>
+          </div>
         </div>
-      </div>
 
-      <div class="spin" role="group" aria-label="Rotate">
-        <button id="ccw" aria-label="Rotate counter-clockwise">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
-          <span>Left</span>
-        </button>
-        <button id="cw" aria-label="Rotate clockwise">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
-          <span>Right</span>
-        </button>
-      </div>
+        <div class="spin" role="group" aria-label="Rotate">
+          <button id="ccw" aria-label="Rotate counter-clockwise">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
+            <span>Left</span>
+          </button>
+          <button id="cw" aria-label="Rotate clockwise">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
+            <span>Right</span>
+          </button>
+        </div>
 
-      <div class="speed">
-        <span class="label" id="speedLabel">Speed</span>
-        <output id="speedOut">64</output>
-        <input type="range" id="speed" min="0" max="255" step="8" value="64"
-               aria-labelledby="speedLabel">
+        <div class="speed">
+          <span class="label" id="speedLabel">Speed</span>
+          <output id="speedOut">64</output>
+          <input type="range" id="speed" min="0" max="255" step="8" value="64"
+                 aria-labelledby="speedLabel">
+        </div>
       </div>
     </section>
 
@@ -174,19 +196,20 @@
       </div>
     </section>
 
-    <!-- The rail: what the rover reports, and Stop. The same on both tabs
-         and in the same place: a column beside the open tab on a wide
-         screen. On a phone its parts join the page around the open tab, the
-         scan above it and Stop at the foot of the screen. It comes after the
-         tabs so that Stop is the last control in the focus order, as it is
-         the last thing on a phone's screen. -->
+    <!-- The rail: what the rover reports, and Stop. Its parts are rows of
+         the shell's grid: on a phone the scan above the open tab and Stop at
+         the foot of the screen; on a wide screen a column beside the open
+         tab, narrower beside the Program tab, with Stop and Autonomous in a
+         bar across the foot that the tab switch never moves. It comes after
+         the tabs so that Stop is the last control in the focus order. -->
     <div class="rail">
       <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
            it again when the rover says true, says nothing, or the link goes.
            It says what a reset does because a power-on or EN reset starts
            exploration: once the shield answers, the wheels turn straight
-           away, likely with the operator's hands still on the wiring. -->
-      <p class="fault" id="motorsFault" role="alert" hidden>
+           away, likely with the operator's hands still on the wiring.
+           data-ready says what the rover last said, for the motors pill. -->
+      <p class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
         <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
         It did not answer when the rover booted. Check its I2C wiring and power,
         then reset the rover with its wheels off the ground: after a power-on or
@@ -207,10 +230,6 @@
           <title id="scanDesc">Live ultrasonic scan at five bearings</title>
         </svg>
       </section>
-
-      <!-- What link.js has to say, over the foot of the scan: how to
-           connect, and why the link went. Empty while all is well. -->
-      <p id="note" aria-live="polite"></p>
 
       <section class="readouts">
         <div class="cell"><span class="label">Move</span><output id="move">—</output></div>

@@ -55,7 +55,7 @@
 
 .programBar button:disabled:hover { background: var(--raised); }
 
-.programBar .icon { width: 16px; height: 16px; }
+.programBar .icon { width: var(--glyph); height: var(--glyph); }
 
 /* Run and Stop program draw filled shapes. */
 .programBar .run .icon,
@@ -66,11 +66,11 @@
 
 /* Run is the one filled button: the thing to press. */
 .programBar .run {
-  color: var(--on-accent);
-  background: var(--accent);
+  color: var(--on-live);
+  background: var(--live);
 }
 
-.programBar .run:hover { background: var(--accent); filter: brightness(1.1); }
+.programBar .run:hover { background: var(--live); filter: brightness(1.1); }
 
 .programBar .run:disabled {
   color: var(--dim);
@@ -97,7 +97,7 @@
   padding: 0 var(--s-7) 0 var(--s-4);
   font: inherit;
   font-size: var(--t-md);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   color: var(--readout);
   /* The caret: two half-squares meeting in a V, in the panel's colours. */
   background:
@@ -113,7 +113,7 @@
 #programExamples option { background: var(--panel); color: var(--readout); }
 
 /* Too narrow for one row: the examples and the file tools take a second. */
-@container program (max-width: 900px) {
+@container program (max-width: 899.98px) {
   .programBar .grow { flex-basis: 100%; height: 0; }
 }
 
@@ -146,7 +146,7 @@
    it: below about 300 px the view no longer fits its own controls, which
    take two rows on a phone. */
 .programStage {
-  --stage-h: clamp(360px, 62vh, 560px);
+  --stage-h: clamp(360px, 62 * var(--svh), 560px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
@@ -200,22 +200,34 @@
 .simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
 .programSim[data-collapsed="yes"] #simSlot { display: none; }
 
-/* The wide layout's left pane: the page no longer scrolls, the pane does,
-   and the stage fills what the toolbar and the console leave of it. About
-   330 px of the screen is the header, the toolbar, the console and the
-   margins; under about 630 px of window the floor wins and the pane
-   scrolls. */
-@media (min-width: 1100px) and (min-height: 600px) {
+/* The wide layout's left pane: the page no longer scrolls, the pane does.
+   The stage takes what the toolbar and the console leave of it, down to a
+   floor under which the pane scrolls; the editor and the view stretch to
+   the stage's height, which gives #simSlot its definite size. The console
+   keeps its own: with overflow: hidden it would otherwise shrink away. The
+   toolbar's buttons are a step narrower, so it keeps to one row beside the
+   rail. */
+@media (min-width: 960px) and (min-height: 521px) {
   .programStage {
-    --stage-h: clamp(300px, calc(100vh - 330px), 720px);
+    flex: 1 1 0;
+    min-height: 300px;
     grid-template-columns: minmax(0, 1fr) clamp(280px, 36%, 400px);
   }
 
   .programStage[data-sim="no"] { grid-template-columns: minmax(0, 1fr); }
 
-  #simSlot { height: var(--stage-h); }
+  .programEditor { height: auto; }
+
+  #simSlot { height: 100%; }
 
   .simToggle { display: none; }
+
+  .programConsole { flex: none; }
+
+  .programBar button,
+  .programBar .segmented button { padding-inline: var(--s-3); }
+
+  #programExamples { padding-inline: var(--s-3) var(--s-6); }
 }
 
 /* Over the workspace while it is empty. */
@@ -229,7 +241,7 @@
   padding: var(--s-3) var(--s-4);
   color: var(--dim);
   font-size: var(--t-md);
-  line-height: 1.5;
+  line-height: var(--lh-loose);
   text-align: center;
   border: 1px dashed var(--rule);
   border-radius: var(--r-lg);
@@ -257,7 +269,7 @@
   padding: var(--s-7) var(--s-6);
   text-align: center;
   font-size: var(--t-md);
-  line-height: 1.5;
+  line-height: var(--lh-loose);
   color: var(--dim);
   background: radial-gradient(circle, var(--rule) 1px, transparent 1.5px) 0 0 / 24px 24px, var(--case);
 }
@@ -282,8 +294,8 @@
   margin: 0;
   padding: var(--s-3) var(--s-4);
   font-size: var(--t-md);
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-body);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -323,7 +335,7 @@
   overflow-y: auto;
   font-family: var(--mono);
   font-size: var(--t-sm);
-  line-height: 1.65;
+  line-height: var(--lh-loose);
   color: var(--dim);
   background: var(--case);
   -webkit-user-select: text;
@@ -403,7 +415,7 @@
 .roverCategory .blocklyToolboxCategoryLabel {
   font-family: var(--sans);
   font-size: var(--t-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   color: var(--readout);
 }
 
@@ -458,12 +470,12 @@
   background: var(--raised);
   border: 1px solid var(--rule);
   border-radius: var(--r-sm);
-  box-shadow: 0 10px 28px var(--shade);
+  box-shadow: var(--lift-pop);
 }
 
 .blocklyDropDownDiv {
   border-radius: var(--r-md);
-  box-shadow: 0 10px 28px var(--shade);
+  box-shadow: var(--lift-pop);
 }
 
 .blocklyMenuItem { color: var(--readout); border-radius: var(--r-sm); }
@@ -472,19 +484,19 @@
 
 .blocklyMenuSeparator { border-top-color: var(--rule); }
 
-.blocklyWidgetDiv .blocklyHtmlInput { font-family: var(--sans); font-weight: 600; }
+.blocklyWidgetDiv .blocklyHtmlInput { font-family: var(--sans); font-weight: var(--fw-semi); }
 
 .blocklyTooltipDiv {
   max-width: 320px;
   padding: var(--s-2) var(--s-3);
   font-family: var(--sans);
   font-size: var(--t-sm);
-  line-height: 1.45;
+  line-height: var(--lh-body);
   color: var(--readout);
   background: var(--case);
   border: 1px solid var(--rule);
   border-radius: var(--r-sm);
-  box-shadow: 0 8px 22px var(--shade);
+  box-shadow: var(--lift-pop);
   opacity: 1 !important;
 }
 

@@ -49,7 +49,10 @@ class Readouts {
   // says MOVE_FORWARD -- while the wheels never turn, which looks like a
   // software fault. Only an explicit false raises the warning: firmware from
   // before the key existed sends none, and that says nothing about the motors.
+  // data-ready keeps the three cases apart for the header's motors pill,
+  // which says "Motors OK" only on an explicit true.
   #showMotorsReady(ready) {
     this.#ui.motorsFault.hidden = ready !== false;
+    this.#ui.motorsFault.dataset.ready = ready === true ? "yes" : ready === false ? "no" : "unknown";
   }
 }

@@ -331,7 +331,20 @@ same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
 below). Letting go, blurring the window or hiding the tab stops what the panel
 is driving and leaves an exploring rover alone. Its Drive and Program tabs
 switch only what is shown: switching sends nothing, and the scan, the readouts
-and the Stop and Autonomous buttons stay on screen on both, in the same place.
+and the Stop and Autonomous buttons stay on screen on both. Stop and Autonomous
+stay in the same place; the scan gives the Program tab room, as a strip above
+it on a phone and a narrower column beside it on a wide screen.
+
+The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
+On a phone the Drive tab is a dock at the foot of the screen, the stick under
+the left thumb, rotate, speed and Stop under the right, and the scan takes
+what height is left; on a wide screen (960 px by 521 px and up) the open tab
+fills the left, the scan and readouts a column on the right, and Stop and
+Autonomous a bar across the foot, Stop under the controls. No ancestor of the
+stick may be positioned, transformed, filtered or contained: joy.js places a
+touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
+for it. The stick's teal is joy.js's own (`js/drive.js`), and the theme's
+accent follows it.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is

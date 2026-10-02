@@ -327,12 +327,10 @@ class Driver {
   }
 
   #wireStick(stick) {
-    // The knob in the operator's blue, on css/panel.css's palette (--accent,
-    // --case, --raised-hi): joy.js paints a canvas, which CSS cannot reach.
     new JoyStick(stick.id, {
-      internalFillColor: "#5b9cff",
-      internalStrokeColor: "#0b0d11",
-      externalStrokeColor: "#2b323c",
+      internalFillColor: "#4db8a8",
+      internalStrokeColor: "#1c1e21",
+      externalStrokeColor: "#383c42",
       internalLineWidth: 2,
       externalLineWidth: 2,
       autoReturnToCenter: true,
