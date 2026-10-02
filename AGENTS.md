@@ -65,7 +65,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
 | `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
-| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT. Pure |
+| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, when to rewrite the player LEDs. Pure |
 | `src/Timing.h` | `timing::reached()` and `timing::since()`: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
@@ -76,7 +76,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, and the WiFi-loss failsafe |
 | `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands in, telemetry out, driver tracking, heartbeat |
-| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
+| `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED write. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
 | `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
@@ -325,7 +325,10 @@ so the pad and the panel always drive the same way. NORMAL is the above.
 ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
 quadrant pick a pivot, holding R1 a pivot sideways; the panel has the same
 choice as a selector. SELECT toggles the scheme, the panel's toggle sends the
-`scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED).
+`scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
+rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
+a Bluetooth send from the loop task, and any client can flip the scheme as
+fast as it sends.
 Any client may change the scheme, so a change never redirects a held stick:
 the pad stops what it was driving and waits for the stick to come back to
 centre, so a toggle elsewhere can only ever stop it.

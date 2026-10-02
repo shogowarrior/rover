@@ -6,9 +6,9 @@
 
 // The gamepad's rules, on the host: what a held stick, a released stick, a
 // silent pad, START and SELECT do to the rover, what a scheme change does to
-// a held stick, and how a report is taken out of the Bluetooth mailbox. The
-// PS3 library itself stays in Gamepad.cpp; GamepadSession gets the controls
-// the way it would from the mailbox.
+// a held stick, how a report is taken out of the Bluetooth mailbox, and when
+// the player LEDs are rewritten. The PS3 library itself stays in Gamepad.cpp;
+// GamepadSession gets the controls the way it would from the mailbox.
 
 namespace {
 
@@ -292,6 +292,50 @@ void test_report_landing_mid_ping_keeps_the_stick_held(void) {
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());  // the last START got through
 }
 
+// --- the player LEDs -------------------------------------------------------
+
+// Any client can flip the scheme as fast as it sends, and each LED write is a
+// Bluetooth send from the loop task. Ten flips in 100 ms get one write; the
+// LEDs then catch up with the last flip once the limit has passed, and stay.
+void test_led_writes_are_rate_limited_and_catch_up(void) {
+  TEST_ASSERT_EQUAL_INT(1, session->playerLedToShow(true, 1000));  // NORMAL
+  int writes = 0;
+  int lastWritten = 0;
+  for (uint32_t t = 2000; t < 2100; t += 10) {
+    scheme = scheme == kinematics::SCHEME_ADVANCED ? kinematics::SCHEME_NORMAL
+                                                   : kinematics::SCHEME_ADVANCED;
+    const int led = session->playerLedToShow(true, t);
+    if (led != 0) {
+      writes++;
+      lastWritten = led;
+    }
+  }
+  TEST_ASSERT_EQUAL_INT(1, writes);
+  TEST_ASSERT_EQUAL_INT(2, lastWritten);  // the first flip
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);  // where the ten left it
+
+  const uint32_t limitPassed = 2000 + tuning::GAMEPAD_LED_MIN_INTERVAL_MS;
+  for (uint32_t t = 2100; t < limitPassed; t += 10) TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, t));
+  TEST_ASSERT_EQUAL_INT(1, session->playerLedToShow(true, limitPassed));
+  for (uint32_t t = limitPassed + 10; t < limitPassed + 2000; t += 10) {
+    TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, t));
+  }
+}
+
+// A pad that (re)connects is set to player 1 by the library, whatever the
+// scheme, and the session sees only silence and then reports again: the LEDs
+// are rewritten when it comes back. A pad that is not reporting gets nothing.
+void test_led_is_rewritten_for_a_pad_that_reappears(void) {
+  scheme = kinematics::SCHEME_ADVANCED;
+  TEST_ASSERT_EQUAL_INT(2, session->playerLedToShow(true, 1000));
+  TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, 1500));
+  scheme = kinematics::SCHEME_NORMAL;
+  TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(false, 2000));  // gone, and changed meanwhile
+  scheme = kinematics::SCHEME_ADVANCED;
+  TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(false, 2500));
+  TEST_ASSERT_EQUAL_INT(2, session->playerLedToShow(true, 3000));  // back: the same LED again
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_resting_pad_leaves_exploration_alone);
@@ -310,5 +354,7 @@ int main(int, char**) {
   RUN_TEST(test_mailbox_hands_over_each_press_once);
   RUN_TEST(test_mailbox_forgets_a_silent_pad);
   RUN_TEST(test_report_landing_mid_ping_keeps_the_stick_held);
+  RUN_TEST(test_led_writes_are_rate_limited_and_catch_up);
+  RUN_TEST(test_led_is_rewritten_for_a_pad_that_reappears);
   return UNITY_END();
 }

@@ -65,3 +65,16 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
   lastSent = wanted;
   lastSentMs = now;
 }
+
+int GamepadSession::playerLedToShow(bool padPresent, uint32_t now) {
+  if (!padPresent) {
+    shownLed = 0;
+    return 0;
+  }
+  const int wanted = scheme == kinematics::SCHEME_ADVANCED ? 2 : 1;
+  if (shownLed == wanted) return 0;
+  if (timing::since(now, lastLedWriteMs) < tuning::GAMEPAD_LED_MIN_INTERVAL_MS) return 0;
+  shownLed = wanted;
+  lastLedWriteMs = now;
+  return wanted;
+}

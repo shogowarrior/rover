@@ -3,11 +3,8 @@
 #include <Arduino.h>
 
 #include "Features.h"
-#include "Timing.h"
-#include "Tuning.h"
 
-Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme)
-    : scheme(scheme), session(rover, scheme) {}
+Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme) : session(rover, scheme) {}
 
 #if ROVER_ENABLE_GAMEPAD
 #include <Ps3Controller.h>
@@ -69,26 +66,9 @@ void Gamepad::update() {
   portEXIT_CRITICAL(&mailboxLock);
 
   session.update(report, now);
-  showScheme(report.hasReport, now);
-}
-
-// Light the player LED for the current scheme whenever it differs from what
-// the pad shows: after SELECT, after the panel changes the scheme, and on a
-// pad that has just (re)appeared, which the library sets to player 1 on
-// connecting. Sent from the loop task, as the library's own examples do, and
-// only to a pad that is reporting: the library sends without checking. At
-// most one write per GAMEPAD_LED_MIN_INTERVAL_MS, however fast clients flip
-// the scheme; the LEDs catch up with the last one.
-void Gamepad::showScheme(bool padPresent, uint32_t now) {
-  if (!padPresent) {
-    shownScheme = -1;
-    return;
-  }
-  if (shownScheme == scheme) return;
-  if (timing::since(now, lastLedWriteMs) < tuning::GAMEPAD_LED_MIN_INTERVAL_MS) return;
-  Ps3.setPlayer(scheme == kinematics::SCHEME_ADVANCED ? 2 : 1);
-  shownScheme = scheme;
-  lastLedWriteMs = now;
+  // From the loop task, as the library's own examples send it.
+  const int led = session.playerLedToShow(report.hasReport, now);
+  if (led != 0) Ps3.setPlayer(led);
 }
 
 #else  // gamepad support not compiled in
@@ -96,7 +76,5 @@ void Gamepad::showScheme(bool padPresent, uint32_t now) {
 void Gamepad::begin(const char*) {}
 
 void Gamepad::update() {}
-
-void Gamepad::showScheme(bool, uint32_t) {}
 
 #endif

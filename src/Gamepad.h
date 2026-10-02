@@ -15,7 +15,7 @@
 // holding L1 makes the stick pivot and R1 pivot sideways (see
 // kinematics::ControlScheme). The player LEDs show the scheme: 1 for NORMAL,
 // 2 for ADVANCED. GamepadSession holds those rules; this class only carries
-// the controls across from the Bluetooth task and lights the LED.
+// the controls across from the Bluetooth task and sends the LED it is given.
 //
 // The PS3 library reports on its Bluetooth task (core 0), while the rest of
 // the firmware runs on the loop task (core 1). Its callback therefore only
@@ -36,14 +36,8 @@ class Gamepad {
   void update();
 
  private:
-  void showScheme(bool padPresent, uint32_t now);
-
-  kinematics::ControlScheme& scheme;
   GamepadSession session;
   bool started = false;
-  // The scheme the pad's LEDs show; -1 when unknown (no pad, or a new one).
-  int shownScheme = -1;
-  uint32_t lastLedWriteMs = 0;
 };
 
 #endif

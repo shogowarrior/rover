@@ -210,8 +210,9 @@ On the stand:
 If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`
 ([src/Kinematics.cpp](../src/Kinematics.cpp)); fix it there together with its
-test in `test/test_kinematics`. The timing rules (re-sending, silence, START)
-are in `GamepadSession`, tested in `test/test_gamepad`.
+test in `test/test_kinematics`. The timing rules (re-sending, silence, START,
+SELECT, when the player LEDs are rewritten) are in `GamepadSession`, tested in
+`test/test_gamepad`.
 
 ## 7. Reset behaviour
 
