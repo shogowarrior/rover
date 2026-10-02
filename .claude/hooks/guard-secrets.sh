@@ -307,28 +307,21 @@ function skip_heredoc(   rest, eol, line) {
   delim = ""
 }
 
+# Whether a grep or rg searches src/: one of its operands covers it, or it
+# has none and searches the working directory. The first argument is the
+# pattern, unless -e or -f gave it.
+function searches_src(   k) {
+  for (k = patternopt ? 1 : 2; k <= nargs; k++) if (covers(arg[k])) return 1
+  return nargs < (patternopt ? 1 : 2) && covers(".")
+}
+
 # One command: when it ends, judge it.
-function finish(   k, operands) {
+function finish() {
   if (prog == "cd" && nargs == 1 && arg[1] !~ /[$`*?[]/ && arg[1] != "-") cwd = norm(arg[1], cwd)
   if (prog == "find" && findpaths == 0 && covers(".")) namessrc = 1  # GNU find lists . by default
-  if (prog ~ /^[ef]?grep$/ && recursive) {
-    operands = 0
-    for (k = 1; k <= nargs && found == ""; k++) {
-      if (k == 1 && !patternopt) continue  # the pattern
-      operands++
-      if (covers(arg[k])) found = "recursive-grep\n" prog
-    }
-    if (found == "" && operands == 0 && covers(".")) found = "recursive-grep\n" prog
-  } else if (prog == "rg" && (noignore != "" || rgglob != "")) {
-    operands = 0
-    for (k = 1; k <= nargs; k++) {
-      if (k == 1 && !patternopt) continue
-      operands++
-      if (covers(arg[k])) break
-    }
-    if (k <= nargs || (operands == 0 && covers(".")))
-      found = noignore != "" ? "rg-no-ignore\n" noignore : "rg-glob\n" rgglob
-  }
+  if (prog ~ /^[ef]?grep$/ && recursive && searches_src()) found = "recursive-grep\n" prog
+  else if (prog == "rg" && (noignore != "" || rgglob != "") && searches_src())
+    found = noignore != "" ? "rg-no-ignore\n" noignore : "rg-glob\n" rgglob
   if (found == "" && fed && namessrc &&
       prog ~ /^([ef]?grep|rg|ag|ack|cat|head|tail|less|more|sed|awk|nl|tr|cut|sort|strings|xxd|od|hexdump|base64|bat)$/)
     found = "fed-reader\n" prog
