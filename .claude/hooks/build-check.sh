@@ -1,47 +1,19 @@
 #!/bin/sh
-# PostToolUse: build the firmware, run the host tests and check the clients
-# against the protocol, after an edit.
+# PostToolUse: after an Edit or Write in this project or one of its worktrees,
+# build, test and check what the edited file can break. CLAUDE.md ("Hooks")
+# lists what runs when, and each case below says why. This project has no
+# runtime feedback loop: a break is otherwise found only by flashing the
+# board and watching it misbehave. A file changed any other way, sed or a
+# heredoc through Bash, is never checked here.
 #
-# This project has no runtime feedback loop -- a broken build, a broken
-# invariant in the pure logic, or a client whose copy of the protocol has
-# drifted is otherwise not discovered until someone flashes the board and
-# watches it misbehave. So after an edit inside the project:
+# It builds the checkout the edited file is in. Where that checkout has no
+# src/config.h (gitignored; only the operator creates it), the build uses a
+# copy of src/config.example.h under .pio/, as CI does: src/ is never touched.
 #
-#   * a C/C++ source or header anywhere but test/, or platformio.ini: build
-#     car_wire (~8 s from a warm cache);
-#   * the gamepad adapter, or a header its Bluetooth-only code uses, or
-#     platformio.ini: also build car_wire_gamepad. car_wire compiles that code
-#     out (ROVER_ENABLE_GAMEPAD is 0 there), so its build says nothing about it;
-#   * a host-tested module, a header they share, anything under test/, or
-#     platformio.ini: also run the host tests, `pio test -e native`;
-#   * a file tools/check_protocol.py reads -- a client, or a firmware file a
-#     client mirrors -- or the checker itself: run it (milliseconds);
-#   * anything under extras/joystick/ (the browser panel), the stick vectors
-#     under test/vectors/ its tests share with the firmware's, or a firmware
-#     file those tests read (MoveCodes.h, MovePatterns.cpp, Explorer.h,
-#     Kinematics.h, Tuning.h, Protocol.cpp): run the panel's tests,
-#     `node --test extras/joystick/test/` (about a second);
-#   * anything under .claude/hooks/: run the secrets guard's cases,
-#     .claude/hooks/test_guard.py (a few seconds).
-#
-# The host-tested list below mirrors build_src_filter in [env:native] plus the
-# headers those modules include, and the protocol list mirrors the files
-# tools/check_protocol.py reads; keep them in step.
-#
-# The build runs in the checkout the edited file is in, so an edit in a git
-# worktree of this project builds that worktree, not the main checkout. A
-# checkout with no src/config.h (a fresh clone or worktree: the file is
-# gitignored, and only the operator creates it) is built against
-# src/config.example.h instead, as CI does, from a copy under .pio/: src/ is
-# never touched.
-#
-# settings.json runs this after Edit and Write only. A file changed any other
-# way -- sed or a heredoc through Bash -- is never built or tested here.
-#
-# Exit 2 returns stderr to Claude so it can fix the break immediately.
+# Exit 2 returns stderr to Claude so it can fix the break at once, and so does
+# a missing tool: a silent hook would read as a passing build.
 
 # require TOOL WHAT -- stop unless TOOL is on PATH, saying WHAT went unchecked.
-# A silent hook would read as a passing build.
 require() {
   command -v "$1" >/dev/null 2>&1 && return
   echo "$2 skipped after editing ${file:-a file}: $1 is not on PATH. Install it." >&2
@@ -76,27 +48,18 @@ else
   esac
 fi
 
-# A case pattern's * matches "/" too, so extras/joystick/*.js is every panel
-# script at any depth: js/, test/, and joy.js.
+# Every file tools/check_protocol.py could read, rather than a list that has
+# to follow it: the check takes a fifth of a second. A case * matches "/" too.
 protocol=no
 case "$file" in
-  client/*.py | extras/joystick/*.js | tools/check_protocol.py | \
-    src/MoveCodes.h | src/Tuning.h | src/Kinematics.h | src/Protocol.cpp | \
-    src/Explorer.h | src/Explorer.cpp)
-    protocol=yes
-    ;;
+  src/* | client/* | extras/joystick/*.js | tools/check_protocol.py) protocol=yes ;;
 esac
 
-# The browser panel's own tests: anything in the panel (its page, styles,
-# scripts and tests), the stick vectors its mecanum.js is tested against, or
-# a firmware file those tests read: the move codes, the wheel table the
-# simulator copies, the sweep angles and timing, the tuning, the no-echo
-# distance and the telemetry keys.
+# The browser panel's tests: the panel itself, the vectors they share with the
+# host tests, and the firmware they read (about two seconds).
 panel=no
 case "$file" in
-  extras/joystick/* | test/vectors/* | \
-    src/MoveCodes.h | src/MovePatterns.cpp | src/Explorer.h | \
-    src/Kinematics.h | src/Tuning.h | src/Protocol.cpp) panel=yes ;;
+  extras/joystick/* | test/vectors/* | src/*) panel=yes ;;
 esac
 
 # The secrets guard's case table, after an edit to either hook or the table.
@@ -105,20 +68,14 @@ case "$file" in
   .claude/hooks/*) guard=yes ;;
 esac
 
-case "$file" in
-  *.cpp | *.h | *.ino | platformio.ini) ;;
-  *) [ "$protocol" = yes ] || [ "$panel" = yes ] || [ "$guard" = yes ] || exit 0 ;;
-esac
-
 build=no
 case "$file" in
   test/*) ;;  # the tests are not part of the firmware
   *.cpp | *.h | *.ino | platformio.ini) build=yes ;;
 esac
 
-# What the `#if ROVER_ENABLE_GAMEPAD` half of Gamepad.cpp reads: the mailbox
-# (GamepadSession.h), the controls (Kinematics.h), timing and tuning, and the
-# switch itself (Features.h).
+# The `#if ROVER_ENABLE_GAMEPAD` half of Gamepad.cpp, which car_wire compiles
+# out, and the headers it reads; Timing.h too, for the pad's timing rules.
 gamepad=no
 case "$file" in
   src/Gamepad.* | src/GamepadSession.h | src/Features.h | src/Kinematics.h | \
@@ -127,6 +84,8 @@ case "$file" in
     ;;
 esac
 
+# build_src_filter in [env:native], the headers those modules include, and
+# the tests themselves.
 tests=no
 case "$file" in
   src/Kinematics.* | src/MovePatterns.* | src/Explorer.* | src/Rover.* | \
@@ -150,28 +109,19 @@ fail() {
   exit 2
 }
 
-# First, as it takes milliseconds and needs no toolchain.
+# The quick checks first, as they need no toolchain.
 if [ "$protocol" = yes ]; then
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "Protocol check skipped after editing $file: python3 is not on PATH, so" >&2
-    echo "nothing has checked the clients against the firmware. Install Python 3." >&2
-    exit 2
-  fi
+  require python3 "Protocol check (tools/check_protocol.py)"
   out=$(python3 tools/check_protocol.py 2>&1) ||
     fail "Protocol check (tools/check_protocol.py) FAILED" "$out" '.'
   printf '%s\n' "$out"
 fi
 
-# Next, as it takes a second or so. The panel's harness runs the real page
-# against a fake DOM; a failed check prints its message indented under the
-# test's name. Stack frames and the assertion's own fields are dropped: the
-# messages already say what differed.
+# The panel's harness runs the real page against a fake DOM; a failed check
+# prints its message indented under the test's name. Stack frames and the
+# assertion's own fields are dropped: the messages already say what differed.
 if [ "$panel" = yes ]; then
-  if ! command -v node >/dev/null 2>&1; then
-    echo "Panel tests skipped after editing $file: node is not on PATH, so" >&2
-    echo "nothing has run extras/joystick/test/. Install Node.js." >&2
-    exit 2
-  fi
+  require node "Panel tests (node --test extras/joystick/test/)"
   out=$(node --test extras/joystick/test/ 2>&1) ||
     fail "Panel tests (node --test extras/joystick/test/) FAILED" \
       "$(printf '%s\n' "$out" |
@@ -181,11 +131,7 @@ if [ "$panel" = yes ]; then
 fi
 
 if [ "$guard" = yes ]; then
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "Secrets guard cases skipped after editing $file: python3 is not on PATH," >&2
-    echo "so nothing has run .claude/hooks/test_guard.py. Install Python 3." >&2
-    exit 2
-  fi
+  require python3 "Secrets guard cases (.claude/hooks/test_guard.py)"
   out=$(python3 .claude/hooks/test_guard.py 2>&1) ||
     fail "Secrets guard cases (.claude/hooks/test_guard.py) FAILED" "$out" '.'
   printf '%s\n' "$out"
@@ -198,7 +144,6 @@ if [ ! -x "$PIO" ]; then
   if command -v pio >/dev/null 2>&1; then
     PIO=pio
   else
-    # As above: without pio nothing was built, and silence would say it was.
     echo "Build check skipped after editing $file: pio is not at $PIO or on PATH," >&2
     echo "so nothing has checked that this edit builds. Install PlatformIO, or" >&2
     echo "point PIO_BIN at it." >&2

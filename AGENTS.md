@@ -24,9 +24,7 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
   is flashed. Build after every firmware change, run the host tests after
   every change to the pure modules, run `tools/check_protocol.py` after
   changing a client or a value a client mirrors, and run the panel's tests
-  after changing the browser panel or a file in `src/` they read
-  (`MoveCodes.h`, `MovePatterns.cpp`, `ExploreParams` in `Explorer.h`,
-  `Tuning.h`, `Kinematics.h`, `Protocol.cpp`).
+  after changing the browser panel or anything in `src/`.
 
 ## Commands
 

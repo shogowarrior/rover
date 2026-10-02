@@ -18,22 +18,19 @@ guard blocks every call, and the build check says what it skipped.
   - a `.cpp`, `.h` or `.ino` file outside `test/`, or `platformio.ini`: build
     `car_wire` (about 8 s warm);
   - the gamepad adapter, a header its Bluetooth-only code reads
-    (`Features.h`, `GamepadSession.h`, `Kinematics.h`, `Tuning.h`,
-    `Timing.h`), or `platformio.ini`: also build `car_wire_gamepad`, because
+    (`Features.h`, `GamepadSession.h`, `Kinematics.h`, `Tuning.h`),
+    `Timing.h`, or `platformio.ini`: also build `car_wire_gamepad`, because
     `car_wire` compiles that code out;
   - a host-tested module (`Kinematics`, `MovePatterns`, `Explorer`, `Rover`,
     `GamepadSession`, `Protocol`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
     `Hardware.h`, anything under `test/`, or `platformio.ini`: also
     `pio test -e native`;
-  - a client (any `.js` file under `extras/joystick/`, at any depth,
-    included), a firmware file a client mirrors, or the checker itself:
-    `tools/check_protocol.py`;
-  - anything under `extras/joystick/` (the panel's page, styles, scripts and
-    tests), anything under `test/vectors/`, whose stick cases the panel's
-    tests share with the firmware's, or a firmware file those tests read
-    (`MoveCodes.h`, `MovePatterns.cpp`, `Explorer.h`, `Kinematics.h`,
-    `Tuning.h`, `Protocol.cpp`): `node --test extras/joystick/test/` (about a
-    second);
+  - anything in `src/` or `client/`, any `.js` file under
+    `extras/joystick/` at any depth, or the checker itself:
+    `tools/check_protocol.py` (a fifth of a second);
+  - anything in `src/`, `extras/joystick/` (the panel's page, styles, scripts
+    and tests) or `test/vectors/` (the cases the panel's tests share with the
+    host tests): `node --test extras/joystick/test/` (about two seconds);
   - anything under `.claude/hooks/`: `python3 .claude/hooks/test_guard.py`,
     the secrets guard's cases (a few seconds).
 
