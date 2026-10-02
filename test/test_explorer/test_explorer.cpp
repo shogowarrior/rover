@@ -6,6 +6,7 @@
 #include "../fakes/FakeHardware.h"
 #include "../support/Loop.h"
 #include "Explorer.h"
+#include "Timing.h"
 
 // Autonomy, tested against a scripted world. FakeScanner holds a distance for
 // every servo angle; with the scanner as mounted, bearing +70 (left) is servo
@@ -41,13 +42,14 @@ struct Harness {
   std::function<void(const Explorer::Motion&)> onMotion;
 
   // Optional motion model (closing()): while the rover drives forward, what
-  // the sonar sees between closeFromDeg and closeToDeg (servo degrees) closes
-  // in at closingCmPerS -- for the first closeForMs of each forward run only,
-  // after which it stops changing, as if the wheels were held.
+  // the sonar sees between closeFromDeg and closeToDeg (servo degrees; the
+  // path ahead unless the test says otherwise) closes in at closingCmPerS --
+  // for the first closeForMs of each forward run only, after which it stops
+  // changing, as if the wheels were held.
   float closingCmPerS = 0;
   uint32_t closeForMs = 0xFFFFFFFFu;
-  int closeFromDeg = 0;
-  int closeToDeg = 180;
+  int closeFromDeg = 60;
+  int closeToDeg = 120;
   uint32_t forwardRunMs = 0;  // how long the current forward run has lasted
   MoveCode lastMove = STOP;
 
@@ -79,10 +81,11 @@ struct Harness {
     }
   }
 
-  // The world from fromDeg to toDeg closes in at `cmPerS` while the rover
-  // drives forward: the rover is really getting somewhere.
-  void closing(float cmPerS, int fromDeg = 60, int toDeg = 120) {
-    closingCmPerS = cmPerS;
+  // The world closes in at `cmPerS` while the rover drives forward: the rover
+  // is really getting somewhere. From fromDeg to toDeg, when they are given.
+  void closing(float cmPerS) { closingCmPerS = cmPerS; }
+  void closing(float cmPerS, int fromDeg, int toDeg) {
+    closing(cmPerS);
     closeFromDeg = fromDeg;
     closeToDeg = toDeg;
   }
@@ -189,6 +192,19 @@ void assertReversedAllItDrove(const Harness& h, int notBefore = -1) {
   TEST_ASSERT_EQUAL_UINT32(drove, reversed);
 }
 
+// Every backoff, strafe and rotation step runs its whole course: nothing else
+// is asked for until its time is up. A backoff cut short no longer makes the
+// room the turn after it needs. Forward is left out: a cruise renews its
+// lease early on purpose.
+void assertMovesRunTheirCourse(const Harness& h) {
+  for (size_t i = 0; i + 1 < h.motions.size(); i++) {
+    const Explorer::Motion& m = h.motions[i];
+    if (m.move == MOVE_FORWARD || m.move == STOP) continue;
+    TEST_ASSERT_TRUE_MESSAGE(h.motionTimes[i + 1] - h.motionTimes[i] >= static_cast<uint32_t>(m.durationMs),
+                             moveName(m.move));
+  }
+}
+
 // Blocked ahead at `frontCm`, with a wall ~11 cm to the left, too close to
 // rotate beside (so it sidesteps right), and the right side open but echoing.
 void blockedBesideLeftWall(FakeScanner& scanner, float frontCm = 30.0f) {
@@ -253,7 +269,7 @@ void test_servo_settles_in_proportion_to_its_travel(void) {
     // an aim stamped with the same millisecond as a ping came after it.
     while (aim + 1 < h.scanner.aimTimes.size() && h.scanner.aimTimes[aim + 1] < h.scanner.pingTimes[ping]) aim++;
     const int from = aim == 0 ? -1 : h.scanner.aims[aim - 1];
-    const int travel = from < 0 ? 180 : abs(h.scanner.aims[aim] - from);
+    const int travel = from < 0 ? hardware::SERVO_MAX_DEG : abs(h.scanner.aims[aim] - from);
     const uint32_t settle = params.servoBaseMs + static_cast<uint32_t>(params.servoMsPerDeg * travel);
     TEST_ASSERT_TRUE(h.scanner.pingTimes[ping] - h.scanner.aimTimes[aim] >= settle);
   }
@@ -455,6 +471,7 @@ void test_wall_ahead_turns_until_clear_then_drives_on(void) {
   // Nothing driven yet, so nothing to reverse over.
   TEST_ASSERT_EQUAL_INT(0, h.countBeforeFirstForward(MOVE_BACKWARD));
   TEST_ASSERT_TRUE(h.count(MOVE_FORWARD) > 0);
+  assertMovesRunTheirCourse(h);
 }
 
 void test_turns_toward_the_more_open_side(void) {
@@ -682,6 +699,7 @@ void test_sidestep_that_went_the_wrong_way_flips_direction(void) {
   TEST_ASSERT_TRUE(strafes.size() >= 2);
   TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, strafes[0]);
   TEST_ASSERT_EQUAL_INT(MOVE_LEFT, strafes[1]);
+  assertMovesRunTheirCourse(h);
 }
 
 // A pinned rover moves neither flank. That must not look like a mirrored mapping.
@@ -924,6 +942,7 @@ void test_backing_out_of_a_dead_end_stops_where_the_drive_began(void) {
   };
   h.run(10000);
   assertReversedAllItDrove(h);
+  assertMovesRunTheirCourse(h);
 }
 
 // A sweep that hears nothing while the rover backs out of a dead end says
@@ -943,11 +962,11 @@ void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
     int backoffs = 0;
     int silentFrom = -1;  // the motion that started the silent sweep
     bool restored = false;
-    float world[181];
+    FakeScanner::World world;
     h.onMotion = [&](const Explorer::Motion& m) {
       if (silentFrom >= 0 && !diesForGood && !restored) {
         restored = true;  // the sweep after the silent one hears the passage again
-        for (int deg = 0; deg <= 180; deg++) h.scanner.range[deg] = world[deg];
+        h.scanner.range = world;
       }
       if (m.move == MOVE_BACKWARD) {
         backoffs++;
@@ -955,7 +974,7 @@ void test_silent_sweep_while_backing_out_looks_again_in_place(void) {
       } else if (m.move == STOP && backoffs == 1 && silentFrom < 0) {
         // The sweep after the first step back hears nothing at any bearing.
         silentFrom = static_cast<int>(h.motions.size()) - 1;
-        for (int deg = 0; deg <= 180; deg++) world[deg] = h.scanner.range[deg];
+        world = h.scanner.range;
         h.scanner.setAll(-1.0f);
       }
     };
@@ -1064,7 +1083,7 @@ void test_echo_after_silence_resumes_exploring(void) {
 void test_a_sweep_that_hears_an_echo_resets_the_silent_count(void) {
   Harness h;
   h.scanner.setAll(-1.0f);
-  h.closing(25.0f, 0, 180);  // really driving, so no cruise reads as stuck
+  h.closing(25.0f, 0, hardware::SERVO_MAX_DEG);  // really driving, so no cruise reads as stuck
   bool silent = true;
   int flips = 0;
   bool everHalted = false;
