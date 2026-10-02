@@ -21,7 +21,9 @@ portMUX_TYPE mailboxLock = portMUX_INITIALIZER_UNLOCKED;
 GamepadReport mailbox;
 
 // Called on the Bluetooth task for every report the pad sends. Copy, and
-// touch nothing else.
+// touch nothing else. The stamp is taken before the lock, so it is never
+// later than the clock of the pass that reads this report: that pass reads
+// its clock under the lock, after this write.
 void onReport() {
   const uint32_t now = millis();
   portENTER_CRITICAL(&mailboxLock);
@@ -49,19 +51,21 @@ void Gamepad::begin(const char* hostMac) {
   started = true;
 }
 
-void Gamepad::update(uint32_t now) {
+void Gamepad::update() {
   if (!started) return;
 
-  GamepadReport report;
+  // The clock is read here, under the lock, and not taken from loop(). The
+  // pad reports every 10 ms or so on the other core, while loop() reads its
+  // `now` before rover.update(), whose sonar ping busy-waits up to ~30 ms. A
+  // report that landed during the ping was newer than that `now`, so its
+  // unsigned age wrapped to 49.7 days and it was wiped as silence: a held
+  // stick was released and re-driven on every ping, START and SELECT presses
+  // were lost, and a scheme change's hold on the stick was lifted. Every
+  // report written before the lock is stamped no later than this clock; one
+  // written after it waits for the next pass.
   portENTER_CRITICAL(&mailboxLock);
-  // A pad silent past the limit is forgotten outright, so its last stick
-  // position can never read as fresh again, however long the silence.
-  if (mailbox.hasReport && timing::since(now, mailbox.lastReportMs) >= tuning::GAMEPAD_SILENCE_MS) {
-    mailbox = GamepadReport();
-  }
-  report = mailbox;
-  mailbox.startPressed = false;  // consumed
-  mailbox.selectPressed = false;
+  const uint32_t now = millis();
+  const GamepadReport report = takeGamepadReport(mailbox, now);
   portEXIT_CRITICAL(&mailboxLock);
 
   session.update(report, now);
@@ -91,7 +95,7 @@ void Gamepad::showScheme(bool padPresent, uint32_t now) {
 
 void Gamepad::begin(const char*) {}
 
-void Gamepad::update(uint32_t) {}
+void Gamepad::update() {}
 
 void Gamepad::showScheme(bool, uint32_t) {}
 

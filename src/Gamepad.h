@@ -29,8 +29,11 @@ class Gamepad {
   // Pair with the controller. `hostMac` is the address stored in the pad.
   void begin(const char* hostMac);
 
-  // Call every loop: hands the latest controls to the session.
-  void update(uint32_t now);
+  // Call every loop: hands the latest controls to the session. It reads its
+  // own clock, under the mailbox's lock, rather than taking loop()'s `now`:
+  // the reports are stamped on the other core, and a stamp newer than the
+  // clock reads as silence (see the definition).
+  void update();
 
  private:
   void showScheme(bool padPresent, uint32_t now);

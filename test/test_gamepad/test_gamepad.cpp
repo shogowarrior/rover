@@ -5,9 +5,10 @@
 #include "Tuning.h"
 
 // The gamepad's rules, on the host: what a held stick, a released stick, a
-// silent pad and START do to the rover. The PS3 library itself stays in
-// Gamepad.cpp; GamepadSession gets the controls the way it would from the
-// Bluetooth mailbox.
+// silent pad, START and SELECT do to the rover, what a scheme change does to
+// a held stick, and how a report is taken out of the Bluetooth mailbox. The
+// PS3 library itself stays in Gamepad.cpp; GamepadSession gets the controls
+// the way it would from the mailbox.
 
 namespace {
 
@@ -218,6 +219,79 @@ void test_scheme_change_at_rest_sends_nothing(void) {
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
 
+// --- the Bluetooth mailbox -------------------------------------------------
+
+// START and SELECT are edges: each press is acted on once, however many
+// passes the pad's latest report stays in the mailbox.
+void test_mailbox_hands_over_each_press_once(void) {
+  GamepadReport mailbox = pad(0, -127, 0, 0, 1000);
+  mailbox.startPressed = true;
+  mailbox.selectPressed = true;
+  const GamepadReport first = takeGamepadReport(mailbox, 1000);  // stamped this very ms
+  TEST_ASSERT_TRUE(first.hasReport);
+  TEST_ASSERT_TRUE(first.startPressed);
+  TEST_ASSERT_TRUE(first.selectPressed);
+  const GamepadReport second = takeGamepadReport(mailbox, 1010);
+  TEST_ASSERT_FALSE(second.startPressed);
+  TEST_ASSERT_FALSE(second.selectPressed);
+  TEST_ASSERT_TRUE(second.hasReport);  // the report itself stays
+  TEST_ASSERT_EQUAL_INT(-127, second.controls.ly);
+}
+
+// A pad silent for GAMEPAD_SILENCE_MS is forgotten outright, a press still
+// pending in its last report included, and stays forgotten: once the 32-bit
+// clock comes back round past its stamp, 49.7 days on, that stamp would read
+// as fresh again.
+void test_mailbox_forgets_a_silent_pad(void) {
+  const uint32_t lastWords = 1000;
+  GamepadReport mailbox = pad(0, -127, 0, 0, lastWords);
+  TEST_ASSERT_TRUE(takeGamepadReport(mailbox, lastWords + tuning::GAMEPAD_SILENCE_MS - 1).hasReport);
+
+  mailbox.startPressed = true;
+  const GamepadReport silent = takeGamepadReport(mailbox, lastWords + tuning::GAMEPAD_SILENCE_MS);
+  TEST_ASSERT_FALSE(silent.hasReport);
+  TEST_ASSERT_FALSE(silent.startPressed);
+  TEST_ASSERT_EQUAL_INT(0, silent.controls.ly);
+
+  const uint32_t wrappedRound = lastWords + 10;  // 2^32 ms later
+  TEST_ASSERT_FALSE(takeGamepadReport(mailbox, wrappedRound).hasReport);
+}
+
+// loop() reads its `now`, then rover.update() pings the sonar, busy-waiting
+// up to ~30 ms while the pad keeps reporting from the other core.
+// Gamepad::update reads the clock again under the mailbox's lock, so every
+// report it takes landed before that clock; this models it, with a report
+// landing mid-ping on every pass. Aged against loop()'s older `now` instead,
+// such a report read as 49.7 days old and was wiped: the held stick was
+// released and re-driven on every ping, and a START or SELECT in it was lost.
+void test_report_landing_mid_ping_keeps_the_stick_held(void) {
+  // The hazard itself: a stamp later than the clock it is aged against is
+  // silence, because an unsigned age cannot tell it from one 49.7 days old
+  // (and a signed one would let a 24.8-day-old stick read as fresh).
+  GamepadReport aheadOfLoop = pad(0, -127, 0, 0, 20);
+  TEST_ASSERT_FALSE(takeGamepadReport(aheadOfLoop, 0).hasReport);
+
+  rover->begin(Rover::MODE_MANUAL, 0);
+  const int releasesBefore = motors->releaseCalls;
+  GamepadReport mailbox;
+  uint32_t loopNow = 0;
+  for (int pass = 0; pass < 100; pass++) {
+    rover->update(loopNow);
+    mailbox.controls = {0, -127, 0, 0, false, false};
+    mailbox.lastReportMs = loopNow + 20;  // during a 25 ms ping
+    mailbox.hasReport = true;
+    mailbox.startPressed = pass == 99;
+    const uint32_t padNow = loopNow + 25;  // the clock under the lock
+    session->update(takeGamepadReport(mailbox, padNow), padNow);
+    if (pass < 99) {
+      TEST_ASSERT_TRUE(motors->driving);
+      TEST_ASSERT_EQUAL_INT(releasesBefore, motors->releaseCalls);
+    }
+    loopNow = padNow + 1;
+  }
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());  // the last START got through
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_resting_pad_leaves_exploration_alone);
@@ -233,5 +307,8 @@ int main(int, char**) {
   RUN_TEST(test_scheme_change_stops_a_held_stick_until_released);
   RUN_TEST(test_select_mid_hold_stops_until_released);
   RUN_TEST(test_scheme_change_at_rest_sends_nothing);
+  RUN_TEST(test_mailbox_hands_over_each_press_once);
+  RUN_TEST(test_mailbox_forgets_a_silent_pad);
+  RUN_TEST(test_report_landing_mid_ping_keeps_the_stick_held);
   return UNITY_END();
 }

@@ -3,6 +3,16 @@
 #include "Timing.h"
 #include "Tuning.h"
 
+GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now) {
+  if (mailbox.hasReport && timing::since(now, mailbox.lastReportMs) >= tuning::GAMEPAD_SILENCE_MS) {
+    mailbox = GamepadReport();
+  }
+  const GamepadReport report = mailbox;
+  mailbox.startPressed = false;  // consumed
+  mailbox.selectPressed = false;
+  return report;
+}
+
 GamepadSession::GamepadSession(Rover& rover, kinematics::ControlScheme& scheme)
     : rover(rover), scheme(scheme), schemeInUse(scheme) {}
 

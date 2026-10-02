@@ -94,8 +94,9 @@ like flashing, with the rover on a stand. It also never exits on its own.
 ## Architecture
 
 `main.cpp` builds the object graph and does nothing else. Each pass of
-`loop()` calls `rover.update(now)`, then `gamepad.update(now)`, then
-`network.update(now)`, which serves OTA and the WebSocket.
+`loop()` calls `rover.update(now)`, then `gamepad.update()`, which reads its
+own clock (see the mailbox below), then `network.update(now)`, which serves
+OTA and the WebSocket.
 
 ```
   RemoteControl (WebSocket :81, Protocol) --+ commands
@@ -224,7 +225,12 @@ task (core 1). The callback copies the controls under a spinlock and touches
 nothing else; `Gamepad::update()`, on the loop task, takes a copy and hands it
 to `GamepadSession`, the only thing that talks to `Rover`. Keep motor state and
 the I2C bus single-threaded: no calls into `Rover` from callbacks, interrupts
-or other tasks.
+or other tasks. `Gamepad::update()` reads the clock under the same lock, not
+`loop()`'s `now`: the pad keeps reporting while `rover.update()` busy-waits on
+the sonar, so a report can be newer than `now`, and its unsigned age then
+wraps to 49.7 days. Aged that way, every report that landed during a ping was
+wiped as silence: a held stick stuttered on every ping, START and SELECT
+presses were lost, and a scheme change's hold on the stick was lifted.
 
 ## How autonomy works
 

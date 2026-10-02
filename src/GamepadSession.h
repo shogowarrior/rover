@@ -15,6 +15,15 @@ struct GamepadReport {
   bool selectPressed = false;  // SELECT went down since the last update
 };
 
+// The loop's side of the Bluetooth mailbox: this pass's report, taken out of
+// `mailbox`, which must be locked. Read `now` under that same lock, so that no
+// stamp in the mailbox is later than it (Gamepad::update says why).
+//   * A pad silent for GAMEPAD_SILENCE_MS is forgotten outright, so its last
+//     stick position can never read as fresh again, however long the silence.
+//   * START and SELECT are edges: the copy carries them and the mailbox drops
+//     them, so each press is acted on once.
+GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
+
 // Turns gamepad reports into rover commands. Pure, like Rover: the PS3
 // library stays in Gamepad, and this is host-tested (test/test_gamepad).
 //
@@ -37,6 +46,10 @@ class GamepadSession {
  public:
   GamepadSession(Rover& rover, kinematics::ControlScheme& scheme);
 
+  // `report` is what takeGamepadReport() returned for this same `now`, so its
+  // stamp is never later than `now`. A later stamp would read as 49.7 days
+  // old: timing::since() cannot tell one from a stamp that ancient, and must
+  // not, or a pad silent for 24.8 days would read as fresh.
   void update(const GamepadReport& report, uint32_t now);
 
  private:

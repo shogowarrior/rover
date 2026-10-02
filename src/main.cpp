@@ -58,6 +58,6 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
   rover.update(now);  // move deadlines first, then one step of exploration
-  gamepad.update(now);
+  gamepad.update();   // reads its own clock: a pad report can be newer than `now`
   network.update(now);
 }
