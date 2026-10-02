@@ -1,0 +1,14 @@
+{
+  "about": "Telemetry frames exactly as src/Protocol.cpp writes them, every key and no other: test/test_protocol builds the status each frame describes and checks that writeTelemetry() writes this frame back. 999 is a bearing with no echo (DISTANCE_FAR_CM).",
+  "frames": {
+    "sweeping": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 41.5, "motorsReady": true, "scheme": "NORMAL", "phase": "SWEEP",
+                 "distanceLeft": 120, "distanceFrontLeft": 80, "distanceFront": 200, "distanceFrontRight": 60, "distanceRight": 150},
+    "cruising": {"mode": "AUTONOMOUS", "move": "MOVE_FORWARD", "moving": true, "temperature": 41.5, "motorsReady": true, "scheme": "ADVANCED", "phase": "CRUISE",
+                 "distanceLeft": 100, "distanceFrontLeft": 101, "distanceFront": 102, "distanceFrontRight": 103, "distanceRight": 104},
+    "halted": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL", "phase": "HALTED", "halt": "boxed in",
+               "distanceLeft": 10, "distanceFrontLeft": 11, "distanceFront": 12, "distanceFrontRight": 13, "distanceRight": 14},
+    "manualBeforeScan": {"mode": "MANUAL", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL"},
+    "deadShield": {"mode": "MANUAL", "move": "MOVE_FORWARD", "moving": true, "temperature": -3.5, "motorsReady": false, "scheme": "NORMAL",
+                   "distanceLeft": 999, "distanceFrontLeft": 50, "distanceFront": 999, "distanceFrontRight": 25, "distanceRight": 0}
+  }
+}
