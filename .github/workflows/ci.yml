@@ -19,10 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # The Python clients and the browser panel carry their own copies of the
-      # move codes, port, distance thresholds, command timing, stick rate and
-      # scan angles, and read telemetry by key name. A drifted copy fails
-      # quietly on the robot, so fail here instead.
+      # The clients carry copies of the protocol, and a drifted copy fails
+      # quietly on the robot (tools/check_protocol.py says what it compares).
       - name: Check clients against the wire protocol
         run: python tools/check_protocol.py
       # The hook that keeps the WiFi credentials out of an agent's transcript,

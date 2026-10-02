@@ -2,36 +2,13 @@
 """Check that every client agrees with the firmware on the wire protocol.
 
 The firmware defines the protocol once, in src/, but the Python clients and
-the browser panel each carry their own copies of parts of it. This checks:
-
-  * the move codes (src/MoveCodes.h) in drive.py and the panel, which
-    carries every one of them;
-  * the WebSocket port, in drive.py (ws.py imports it) and the panel;
-  * the distances the panel colours its scan fan with, and the distance
-    telemetry sends for a bearing with no echo;
-  * the command timing: no client asks for more than the firmware's cap,
-    and the panel re-sends a held move twice within its duration, as often
-    as the gamepad does;
-  * the panel's limit on how often a dragged stick changes speed, which is
-    the gamepad's rule too (GAMEPAD_SPEED_CHANGE_MS);
-  * the angle the panel draws each scan wedge at, against the bearing the
-    firmware measures that distance at (ExploreParams, Explorer::angleOf);
-  * the names of the telemetry keys the panel and drive.py read, and of the
-    command fields they send, against those src/Protocol.cpp writes and
-    reads;
-  * the control-scheme names the panel sends, against those
-    protocol::schemeName() gives (src/Protocol.cpp), the most speed the
-    panel lets a command ask for, and the limit the firmware clamps that to
-    (MOTOR_SPEED_LIMIT), which the panel's simulator clamps a preview to;
-  * the panel's scheme message, against the field readMessage() takes a
-    scheme from (and never with a move, which would make it a command), and
-    the telemetry key the panel reads the scheme from, against the one
-    writeTelemetry() sends it under.
-
+the browser panel each carry copies of parts of it: move codes, the port,
+thresholds, sentinels and command timing (MIRRORS below), scan angles,
+telemetry keys and command fields, and the control-scheme names and message.
+Each Checker method says what it compares and why; main() runs them all.
 The panel keeps every number and name it mirrors in
-extras/joystick/js/protocol.js. Its telemetry reads, its commands and its
-scan bearings may be in any of extras/joystick/js/*.js, and are looked for in
-all of them.
+extras/joystick/js/protocol.js; its reads, commands and bearings are looked
+for in every extras/joystick/js/*.js.
 
 Nothing at build time notices when a copy drifts, and a drifted copy fails
 quietly -- a key that sends the wrong motion, a panel that shows a clear path
@@ -615,10 +592,9 @@ def main() -> int:
         return 1
 
     print(
-        f"check_protocol: OK -- {code_count} move codes, the port, the panel's thresholds and scan angles, the "
-        f"no-echo distance, the speed limit, the command timing and stick rate, {scheme_count} scheme names, the "
-        f"scheme message and its telemetry key, and the names of {key_count} telemetry keys and the command fields "
-        f"agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
+        f"check_protocol: OK -- {code_count} move codes, {len(MIRRORS)} mirrored constants, the scan angles, "
+        f"{scheme_count} scheme names and the scheme message, and the names of {key_count} telemetry keys and the "
+        f"command fields agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
     )
     return 0
 
