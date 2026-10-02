@@ -19,11 +19,17 @@ Rover* rover;
 kinematics::ControlScheme scheme;
 GamepadSession* session;
 
-GamepadReport pad(int lx, int ly, int l2, int r2, uint32_t reportedAt) {
+GamepadReport pad(int lx, int ly, int l2, int r2, uint32_t reportedAt, bool l1 = false, bool r1 = false) {
   GamepadReport report;
-  report.controls = {lx, ly, l2, r2, false, false};
+  report.controls = {lx, ly, l2, r2, l1, r1};
   report.hasReport = true;
   report.lastReportMs = reportedAt;
+  return report;
+}
+
+GamepadReport pressSelect(uint32_t now) {
+  GamepadReport report = pad(0, 0, 0, 0, now);
+  report.selectPressed = true;
   return report;
 }
 
@@ -141,12 +147,6 @@ void test_speed_changes_are_rate_limited(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, motors->lastPattern->move);  // new direction: at once
 }
 
-GamepadReport pressSelect(uint32_t now) {
-  GamepadReport report = pad(0, 0, 0, 0, now);
-  report.selectPressed = true;
-  return report;
-}
-
 // SELECT flips the scheme both ways, and by itself neither moves the rover
 // nor takes control from exploration.
 void test_select_toggles_the_scheme_without_taking_control(void) {
@@ -163,9 +163,7 @@ void test_select_toggles_the_scheme_without_taking_control(void) {
 void test_advanced_l1_pivots(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   session->update(pressSelect(0), 0);
-  GamepadReport pivot = pad(100, -100, 0, 0, 0);  // up and right
-  pivot.controls.l1 = true;
-  hold(pivot, 10, 100);
+  hold(pad(100, -100, 0, 0, 0, true), 10, 100);  // up and right, L1 held
   TEST_ASSERT_TRUE(motors->driving);
   TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, motors->lastPattern->move);
 }
@@ -176,8 +174,7 @@ void test_advanced_l1_pivots(void) {
 // from a fresh push.
 void test_scheme_change_stops_a_held_stick_until_released(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  GamepadReport held = pad(-100, 100, 0, 0, 0);  // down and left
-  held.controls.r1 = true;
+  const GamepadReport held = pad(-100, 100, 0, 0, 0, false, true);  // down and left, R1 held
   uint32_t now = hold(held, 0, 100);
   TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL225, motors->lastPattern->move);  // NORMAL: R1 ignored
   const int drivesBefore = motors->driveCalls;
@@ -196,8 +193,7 @@ void test_scheme_change_stops_a_held_stick_until_released(void) {
 // The pad's own SELECT follows the same rule.
 void test_select_mid_hold_stops_until_released(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  GamepadReport held = pad(100, -100, 0, 0, 0);  // up and right
-  held.controls.l1 = true;
+  const GamepadReport held = pad(100, -100, 0, 0, 0, true);  // up and right, L1 held
   uint32_t now = hold(held, 0, 100);
   TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL45, motors->lastPattern->move);
   GamepadReport select = held;
