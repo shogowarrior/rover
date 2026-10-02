@@ -75,13 +75,9 @@ ARRIVAL_SLACK_S = 0.5
 DISTANCE_FAR_CM = 999
 NO_ECHO = "no echo"
 
-# Shown in place of the move while telemetry says "motorsReady": false: the
-# motor shield did not answer when the rover booted, so no move reaches the
-# wheels, whatever the move column would say. Older firmware sends no
-# motorsReady at all, and that is not the same as false. The warning says what
-# a reset does because the operator reading it has been watching a rover that
-# could not move, likely with hands on its wiring: a power-on or EN reset
-# starts exploration, so once the shield answers the wheels turn at once.
+# Shown in place of the move while telemetry says "motorsReady": false. The
+# warning says what a reset does: whoever reads it may have hands on the
+# wiring, and a power-on or EN reset starts exploring.
 NO_MOTORS = "NO MOTORS"
 NO_MOTORS_WARNING = """\
   NO MOTORS: the motor shield did not answer when the rover booted, so the
@@ -162,9 +158,7 @@ def raw_terminal():
         yield False
         return
     try:
-        # POSIX only. Imported here, not at the top, because the notebook
-        # imports this module for its constants: a top-level import stopped
-        # it on Windows with ModuleNotFoundError before it did anything.
+        # POSIX only, imported here so ws.py and the notebook import this anywhere.
         import termios
         import tty
     except ImportError:
