@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <unity.h>
 
 #include "../fakes/FakeHardware.h"
@@ -36,6 +37,15 @@ uint32_t runUntilCruising(uint32_t from) {
   }
   TEST_FAIL_MESSAGE("exploration never drove forward");
   return now;
+}
+
+// Runs from `from` for ten seconds and checks the wheels never move: what an
+// operator who stopped the rover expects.
+void assertStaysStopped(uint32_t from) {
+  const int drivesSoFar = motors->driveCalls;
+  runFor(from, 10000);
+  TEST_ASSERT_EQUAL_INT(drivesSoFar, motors->driveCalls);
+  TEST_ASSERT_FALSE(motors->driving);
 }
 
 }  // namespace
@@ -127,6 +137,19 @@ void test_zero_speed_or_duration_releases(void) {
   TEST_ASSERT_FALSE(motors->driving);
 }
 
+// The lower bounds matter as much as the upper ones, and readCommand() passes
+// negative numbers through. Speed -1 as the driver's byte is 255, full pack
+// voltage. Duration INT32_MIN would put the deadline 2^31 ms away: 24.8 days
+// past the deadman.
+void test_negative_speed_or_duration_releases(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(MOVE_FORWARD, -1, 500, 0);
+  TEST_ASSERT_FALSE(motors->driving);
+  rover->command(MOVE_FORWARD, 100, INT32_MIN, 0);
+  rover->update(10);
+  TEST_ASSERT_FALSE(motors->driving);
+}
+
 // An instruction we cannot read, from a client we do not control: stop.
 void test_unknown_codes_stop_the_rover(void) {
   const int unknown[] = {-1, MOVE_CODE_COUNT, 257, 1000000};
@@ -139,11 +162,17 @@ void test_unknown_codes_stop_the_rover(void) {
   }
 }
 
+// STOP stops whatever speed and duration ride along with it. Clients send
+// speed 0, which would release on its own; a STOP at speed 100 must too.
 void test_stop_command_releases(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(MOVE_FORWARD, 100, 500, 0);
   rover->command(STOP, 0, 0, 10);
   TEST_ASSERT_FALSE(motors->driving);
+  rover->command(MOVE_FORWARD, 100, 500, 20);
+  rover->command(STOP, 100, 500, 30);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_FALSE(rover->status().moving);
 }
 
 // --- mode arbitration --------------------------------------------------------
@@ -170,6 +199,31 @@ void test_a_command_takes_control_from_exploration(void) {
   runFor(now, 20000);
   TEST_ASSERT_EQUAL_INT(drivesSoFar, motors->driveCalls);
   TEST_ASSERT_FALSE(motors->driving);
+}
+
+// STOP takes control too. A STOP that only released the wheels and kept
+// exploring would be undone at the next clear ping, tens of milliseconds
+// later: the operator could not stop an exploring rover.
+void test_stop_takes_control_from_exploration(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  const uint32_t now = runUntilCruising(0);
+  rover->command(STOP, 0, 0, now);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+  assertStaysStopped(now);
+}
+
+// And so does a code it cannot read, for the same reason.
+void test_unknown_code_takes_control_from_exploration(void) {
+  const int unknown[] = {-1, MOVE_CODE_COUNT, 1000};
+  for (int code : unknown) {
+    rover->begin(Rover::MODE_AUTONOMOUS, 0);
+    const uint32_t now = runUntilCruising(0);
+    rover->command(code, 100, 500, now);
+    TEST_ASSERT_FALSE(motors->driving);
+    TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
+    assertStaysStopped(now);
+  }
 }
 
 // Manual mode keeps scanning, so telemetry shows live distances while a
@@ -300,10 +354,13 @@ int main(int, char**) {
   RUN_TEST(test_speed_is_clamped);
   RUN_TEST(test_long_duration_stops_at_the_deadman_cap);
   RUN_TEST(test_zero_speed_or_duration_releases);
+  RUN_TEST(test_negative_speed_or_duration_releases);
   RUN_TEST(test_unknown_codes_stop_the_rover);
   RUN_TEST(test_stop_command_releases);
   RUN_TEST(test_autonomous_mode_explores);
   RUN_TEST(test_a_command_takes_control_from_exploration);
+  RUN_TEST(test_stop_takes_control_from_exploration);
+  RUN_TEST(test_unknown_code_takes_control_from_exploration);
   RUN_TEST(test_manual_mode_scans_but_never_drives);
   RUN_TEST(test_resume_autonomous_hands_control_back);
   RUN_TEST(test_stop_keeps_the_mode);
