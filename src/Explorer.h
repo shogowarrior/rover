@@ -194,6 +194,17 @@ class Explorer {
     bool hasStuckReference = false;
     float stuckReferenceCm = 0;
     uint32_t stuckReferenceAt = 0;
+
+    void sawFront(float cm, uint32_t now) {
+      lastFrontEchoCm = cm;
+      lastFrontEchoAt = now;
+    }
+    // The stuck window starts over from this front reading.
+    void restartStuckWindow(float cm, uint32_t now) {
+      hasStuckReference = true;
+      stuckReferenceCm = cm;
+      stuckReferenceAt = now;
+    }
   };
 
   // One turn. startTurn() replaces it whole.
@@ -210,6 +221,7 @@ class Explorer {
   Motion startSweep(uint32_t now);
   Motion decide(uint32_t now);
   Motion startCruise(uint32_t now);
+  // `direction` is +1 (left, counter-clockwise) or -1 (right), never 0.
   Motion startTurn(uint32_t now, int direction, int minSteps, bool untilClear);
   Motion turnOrSidestep(uint32_t now, int direction, int minSteps, bool untilClear);
   Motion startSidestep(uint32_t now, int direction);
@@ -224,6 +236,9 @@ class Explorer {
   Motion stepSweep(uint32_t now, bool decideWhenDone);
   Motion stepCruise(uint32_t now);
   Motion stepTurn(uint32_t now, bool motorsIdle);
+  // A backoff, a sidestep or a rotation step is over: the wheels have stopped
+  // and its time is up.
+  bool motionDone(uint32_t now, bool motorsIdle) const;
 
   // Looking and measuring.
   void aim(uint32_t now, int angleDeg);
@@ -238,6 +253,7 @@ class Explorer {
   bool pathBlocked(float limitCm) const;
   float lateralCm(Bearing bearing) const;
   bool roomToRotate() const;
+  int commitTurnDirection();
   int chooseTurnDirection();
   int veerDirection() const;
   int sidestepDirection() const;
