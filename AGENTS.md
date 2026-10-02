@@ -184,8 +184,9 @@ released:
 - A client stops answering the heartbeat: the server pings every client each
   second and drops one that misses two pongs in a row, which counts as a
   disconnect. This also keeps a vanished client's full send buffer from
-  blocking the loop. A new client's first pong must come back within 600 ms,
-  and `HeartbeatServer` clears a slot's missed pongs on every disconnect
+  blocking the loop. A new client's first ping goes out about 600 ms after
+  it connects, and its pong must come back within 600 ms of that ping.
+  `HeartbeatServer` clears a slot's missed pongs on every disconnect
   (`RemoteControl.h` says why).
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.

@@ -21,8 +21,10 @@ constexpr size_t MAX_COMMAND_BYTES = 256;
 // ping interval, or a fresh ping resets the timer before it can expire.
 //
 // HeartbeatServer clears a slot's misses on every disconnect (RemoteControl.h
-// says why). A new client is charged one miss HEARTBEAT_PONG_TIMEOUT_MS after
-// accept and pinged at once, so its first pong must come back within that.
+// says why). The library charges a new client one miss
+// HEARTBEAT_PONG_TIMEOUT_MS after accept, before any ping, and pings it then;
+// its first pong must arrive within HEARTBEAT_PONG_TIMEOUT_MS of that ping,
+// or the second miss drops it.
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;

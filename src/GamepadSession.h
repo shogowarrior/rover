@@ -15,7 +15,9 @@ struct GamepadReport {
   bool selectPressed = false;  // SELECT went down since the last update
 
   // Whether a report arrived less than GAMEPAD_SILENCE_MS before `now`. The
-  // age is unsigned, so a pad silent that long never reads as fresh again.
+  // age is unsigned, so a report 24.8 days old is not fresh, as a signed age
+  // would make it. It reads fresh again only once the clock wraps, 49.7 days
+  // on, which is why takeGamepadReport() forgets a silent pad outright.
   bool freshAt(uint32_t now) const;
 };
 

@@ -135,7 +135,9 @@ void test_gamepad_trigger_speed_follows_the_whole_pull(void) {
   TEST_ASSERT_EQUAL_INT(0, triggerSpeed(-5, 25));
 }
 
-// Only one move can run at a time; the stick takes precedence.
+// Only one move can run at a time; the stick takes precedence. An earlier
+// version ran every deflected control back to back, so each briefly twitched
+// the wheels before the last one won.
 void test_gamepad_stick_beats_triggers(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, pad(0, -128, 255, 255).move);
 }
