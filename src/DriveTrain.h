@@ -8,11 +8,11 @@
 // The four wheel motors on the Adafruit Motor Shield V2.
 class DriveTrain : public Motors {
  public:
-  // Find the shield and release all four wheels. Returns false when it does
-  // not answer on I2C; drive() then does nothing, telemetry reports
-  // "motorsReady": false, and release() still tries, because the shield's
-  // PWM chip keeps driving the wheels through an ESP32 reset.
-  bool begin();
+  // Find the shield and release all four wheels. When it does not answer on
+  // I2C, drive() does nothing, telemetry reports "motorsReady": false, and
+  // release() still tries, because the shield's PWM chip keeps driving the
+  // wheels through an ESP32 reset.
+  void begin();
 
   void drive(const MovePattern& pattern, uint8_t speed) override;
   void release() override;

@@ -1,8 +1,6 @@
 #ifndef GAMEPAD_H
 #define GAMEPAD_H
 
-#include <stdint.h>
-
 #include "GamepadSession.h"
 #include "Rover.h"
 

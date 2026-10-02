@@ -23,7 +23,7 @@ uint8_t shieldCommand(WheelDirection direction) {
 }  // namespace
 
 // setup() only, so the short retry delay is harmless.
-bool DriveTrain::begin() {
+void DriveTrain::begin() {
   for (int attempt = 0; attempt < PROBE_ATTEMPTS && !shieldReady; attempt++) {
     if (attempt > 0) delay(PROBE_RETRY_MS);
     shieldReady = shield.begin();
@@ -38,7 +38,6 @@ bool DriveTrain::begin() {
   release();
 
   if (!shieldReady) Serial.println("Motor shield not found on I2C (0x60); motors disabled.");
-  return shieldReady;
 }
 
 void DriveTrain::drive(const MovePattern& pattern, uint8_t speed) {
