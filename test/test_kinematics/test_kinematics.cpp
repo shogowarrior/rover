@@ -209,6 +209,15 @@ void test_advanced_scheme_shoulders_pick_the_pivots(void) {
   TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_FORWARD, advancedPad(-100, -100, true, true).move);  // L1 wins
 }
 
+// The deadzone gates the stick as a whole, never one axis, so a pivot takes
+// the quadrant of the raw push: straight up a few counts left of centre, as
+// a thumb pushes it, is the left pivot. The bench checklist says "up and to
+// the right" because of this; change both together.
+void test_advanced_pivot_near_vertical_push_keeps_its_quadrant(void) {
+  TEST_ASSERT_EQUAL_INT(PIVOT_RIGHT_FORWARD, advancedPad(3, -127, true, false).move);
+  TEST_ASSERT_EQUAL_INT(PIVOT_LEFT_FORWARD, advancedPad(-3, -127, true, false).move);
+}
+
 // A shoulder button alone, stick centred, is not a motion.
 void test_advanced_shoulder_without_stick_is_stop(void) {
   TEST_ASSERT_EQUAL_INT(STOP, advancedPad(0, 0, true, false).move);
@@ -293,6 +302,7 @@ int main(int, char**) {
   RUN_TEST(test_pivot_family_picks_by_quadrant);
   RUN_TEST(test_normal_scheme_ignores_shoulder_buttons);
   RUN_TEST(test_advanced_scheme_shoulders_pick_the_pivots);
+  RUN_TEST(test_advanced_pivot_near_vertical_push_keeps_its_quadrant);
   RUN_TEST(test_advanced_shoulder_without_stick_is_stop);
   RUN_TEST(test_advanced_pivot_speed_follows_the_stick);
   RUN_TEST(test_stick_matches_the_shared_vectors);

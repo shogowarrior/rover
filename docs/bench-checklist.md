@@ -206,8 +206,11 @@ On the stand:
 - Switching the pad off while holding the stick stops the wheels within half
   a second.
 - **SELECT** switches to ADVANCED (the LEDs show player 2). Holding **L1**
-  with the stick up then shows `PIVOT_RIGHT_FORWARD` and turns only the
-  left-hand wheels, forward. SELECT again goes back to NORMAL.
+  with the stick up and to the right then shows `PIVOT_RIGHT_FORWARD` and
+  turns only the left-hand wheels, forward; up and to the left shows
+  `PIVOT_LEFT_FORWARD` and turns only the right-hand wheels, forward. The
+  stick's quadrant picks the pivot ([mecanum.md](mecanum.md)), so a push
+  straight up can show either. SELECT again goes back to NORMAL.
 
 If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`

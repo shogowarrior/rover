@@ -25,6 +25,7 @@
     {"x": 60, "yUp": -60, "family": "PIVOT", "move": "PIVOT_RIGHT_BACKWARD"},
     {"x": -60, "yUp": -60, "family": "PIVOT", "move": "PIVOT_LEFT_BACKWARD"},
     {"x": 5, "yUp": 127, "family": "PIVOT", "move": "PIVOT_RIGHT_FORWARD"},
+    {"x": -3, "yUp": 127, "family": "PIVOT", "move": "PIVOT_LEFT_FORWARD"},
     {"x": -127, "yUp": -5, "family": "PIVOT", "move": "PIVOT_LEFT_BACKWARD"},
     {"x": 0, "yUp": 100, "family": "PIVOT", "move": "PIVOT_RIGHT_FORWARD"},
     {"x": -100, "yUp": 0, "family": "PIVOT", "move": "PIVOT_LEFT_FORWARD"},
