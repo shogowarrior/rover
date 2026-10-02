@@ -19,10 +19,14 @@ protocol::Message message(const char* json) {
   return protocol::readMessage(doc.as<JsonVariantConst>());
 }
 
-protocol::Command parse(const char* json) {
-  JsonDocument doc;
-  TEST_ASSERT_FALSE(deserializeJson(doc, json));
-  return protocol::readCommand(doc.as<JsonVariantConst>());
+// A malformed message degrades to STOP, speed 0 -- releasing the motors --
+// not to whatever as<int>() would have produced for a missing field.
+void assertDefaultsToStop(const char* json) {
+  const protocol::Message m = message(json);
+  TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::DRIVE, m.kind, json);
+  TEST_ASSERT_EQUAL_INT_MESSAGE(STOP, m.command.move, json);
+  TEST_ASSERT_EQUAL_INT_MESSAGE(0, m.command.speed, json);
+  TEST_ASSERT_EQUAL_INT_MESSAGE(tuning::DEFAULT_MOVE_DURATION_MS, m.command.durationMs, json);
 }
 
 Rover::Status sampleStatus() {
@@ -41,26 +45,16 @@ Rover::Status sampleStatus() {
 }  // namespace
 
 void test_command_fields_are_read(void) {
-  const protocol::Command command = parse("{\"move\":4,\"speed\":120,\"duration\":400}");
+  const protocol::Command command = message("{\"move\":4,\"speed\":120,\"duration\":400}").command;
   TEST_ASSERT_EQUAL_INT(MOVE_LEFT, command.move);
   TEST_ASSERT_EQUAL_INT(120, command.speed);
   TEST_ASSERT_EQUAL_INT(400, command.durationMs);
 }
 
-// A malformed message degrades to STOP, speed 0 -- releasing the motors --
-// not to whatever as<int>() would have produced for a missing field.
-void test_missing_fields_default_to_stopping(void) {
-  const protocol::Command command = parse("{}");
-  TEST_ASSERT_EQUAL_INT(STOP, command.move);
-  TEST_ASSERT_EQUAL_INT(0, command.speed);
-  TEST_ASSERT_EQUAL_INT(tuning::DEFAULT_MOVE_DURATION_MS, command.durationMs);
-}
+void test_missing_fields_default_to_stopping(void) { assertDefaultsToStop("{}"); }
 
 void test_wrongly_typed_fields_default_to_stopping(void) {
-  const protocol::Command command = parse("{\"move\":\"1\",\"speed\":64.5,\"duration\":\"long\"}");
-  TEST_ASSERT_EQUAL_INT(STOP, command.move);
-  TEST_ASSERT_EQUAL_INT(0, command.speed);
-  TEST_ASSERT_EQUAL_INT(tuning::DEFAULT_MOVE_DURATION_MS, command.durationMs);
+  assertDefaultsToStop("{\"move\":\"1\",\"speed\":64.5,\"duration\":\"long\"}");
 }
 
 void test_telemetry_carries_every_key_clients_read(void) {

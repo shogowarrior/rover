@@ -45,11 +45,6 @@ struct Message {
   kinematics::ControlScheme scheme;
 };
 
-// Read a drive command. `|` supplies the default when a key is absent or has
-// the wrong type, so a malformed message degrades to STOP / speed 0 (which
-// releases the motors) rather than to whatever as<int>() would produce.
-Command readCommand(JsonVariantConst json);
-
 // Read any client message. One carrying "scheme" (and no "move") sets the
 // control scheme: it never takes control and never stops the rover, and an
 // unknown scheme name is ignored. Everything else is a drive command,

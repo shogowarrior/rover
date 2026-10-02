@@ -7,6 +7,11 @@
 
 namespace protocol {
 
+namespace {
+
+// `|` supplies the default when a key is absent or has the wrong type, so a
+// malformed message degrades to STOP / speed 0 (which releases the motors)
+// rather than to whatever as<int>() would produce.
 Command readCommand(JsonVariantConst json) {
   Command command;
   command.move = json["move"] | static_cast<int>(STOP);
@@ -14,6 +19,8 @@ Command readCommand(JsonVariantConst json) {
   command.durationMs = json["duration"] | tuning::DEFAULT_MOVE_DURATION_MS;
   return command;
 }
+
+}  // namespace
 
 Message readMessage(JsonVariantConst json) {
   Message message;
