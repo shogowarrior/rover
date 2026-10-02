@@ -245,8 +245,8 @@ presses were lost, and a scheme change's hold on the stick was lifted.
 five bearings: +70, +35, 0, -35 and -70 degrees from straight ahead (positive
 is left), reported as left, front-left, front, front-right and right. It cruises
 only when nothing *in the rover's path* is within `EXPLORE_GO_CM` (40 cm), and
-ends a cruise when something is within `EXPLORE_STOP_CM` (25 cm); the gap
-between the two is hysteresis. Testing the path rather than each ray is what
+ends a cruise when something in it comes within `EXPLORE_STOP_CM` (25 cm); the
+gap between the two is hysteresis. Testing the path rather than each ray is what
 lets it enter a corridor whose walls are near at the sides but not ahead. It
 drives at `EXPLORE_SPEED` (64).
 

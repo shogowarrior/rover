@@ -40,10 +40,11 @@
 //             to look again.
 
 struct ExploreParams {
-  // Distances are measured from the sensor. Hysteresis on the front bearing:
-  // a cruise stops at stopCm but only starts beyond goCm, so a reading
-  // hovering near one threshold cannot flip the rover between cruising and
-  // turning.
+  // Distances are measured from the sensor. Hysteresis on the rover's path:
+  // a cruise stops when anything in the path is within stopCm and starts
+  // only when the path is clear beyond goCm, so a reading hovering near one
+  // threshold cannot flip the rover between cruising and turning. The path
+  // is the chassis width plus pathMarginCm, wherever a bearing sees into it.
   float stopCm = tuning::EXPLORE_STOP_CM;
   float goCm = tuning::EXPLORE_GO_CM;
   float minTurnClearCm = 8;      // closer than this ahead: back off before rotating
