@@ -9,12 +9,15 @@
 
 // WebSocketsServer 2.6.1 never clears a client slot's count of missed pongs
 // when the slot is reused: newClient() resets the ping timer but not
-// pongTimeoutCount, and only a timely pong zeroes it. A heartbeat drop leaves
-// the count at the limit, so the next client in that slot -- usually the same
-// phone reconnecting -- was dropped at its first late pong, with no second
-// chance, while the operator tried to reach a rover to stop it. Nothing public
-// clears the count (enableHeartbeat() does not), so this reaches the library's
-// protected client table, and does nothing else.
+// pongTimeoutCount, and only a timely pong zeroes it. The library also
+// charges every new client one miss 600 ms after accept, before its first
+// ping. So any disconnect with a miss counted (a heartbeat drop leaves two)
+// doomed the slot's next client -- usually the same phone reconnecting, as a
+// new client takes the lowest free slot -- to be dropped about 0.6 s after
+// connecting, every time, whatever its link, and the count kept climbing
+// until reboot, while the operator tried to reach a rover to stop it.
+// Nothing public clears the count (enableHeartbeat() does not), so this
+// reaches the library's protected client table, and does nothing else.
 class HeartbeatServer : public WebSocketsServer {
  public:
   explicit HeartbeatServer(uint16_t port) : WebSocketsServer(port) {}

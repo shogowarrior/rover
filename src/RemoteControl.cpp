@@ -18,9 +18,14 @@ constexpr size_t MAX_COMMAND_BYTES = 256;
 // buffer fills every telemetry broadcast to it blocks loop() for seconds --
 // move deadlines, STOP commands and OTA all stall with it. Dropping it within
 // ~2 s keeps its queue short of that. The pong timeout must stay below the
-// ping interval, or a fresh ping resets the timer before it can expire. The
-// misses are counted per slot, and HeartbeatServer clears them on every
-// disconnect so a slot's next client gets the full allowance.
+// ping interval, or a fresh ping resets the timer before it can expire.
+//
+// The misses are counted per slot, and HeartbeatServer clears them on every
+// disconnect, so a slot's next client starts where a fresh slot does. That is
+// not quite two misses: the library charges a new client one miss
+// HEARTBEAT_PONG_TIMEOUT_MS after accept, before its first ping, and pings it
+// at once, so its first pong must come back within 600 ms of that ping.
+// After that, two misses in a row drop it.
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;

@@ -184,11 +184,14 @@ released:
   `Rover::stop()` releases the wheels and keeps the mode. A telemetry-only
   listener coming and going does not stop anything.
 - A client stops answering the heartbeat: the server pings every client each
-  second and drops one that misses two pongs, which counts as a disconnect.
-  This also keeps a vanished client's full send buffer from blocking the loop.
-  Every disconnect clears the slot's missed pongs (`HeartbeatServer`): the
-  library left them to the slot's next client, so a phone reconnecting after
-  a drop was dropped again at its first late pong.
+  second and drops one that misses two pongs in a row, which counts as a
+  disconnect. This also keeps a vanished client's full send buffer from
+  blocking the loop. The library charges a new client one miss 600 ms after
+  it connects, before its first ping, and pings it at once, so its first
+  pong must come back within 600 ms of that ping. Every disconnect clears
+  the slot's missed pongs (`HeartbeatServer`): the library left them to the
+  slot's next client, so a phone reconnecting after a drop was dropped again
+  about 0.6 s after connecting, every time, until a reboot.
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
 - An OTA flash starts: `standDown()` too, so an upload that fails also leaves
