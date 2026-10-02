@@ -51,6 +51,11 @@ int stickSpeed(int x, int y, int maxSpeed) {
   return clampInt(speed, 0, maxSpeed);
 }
 
+int triggerSpeed(int pressure, int maxSpeed) {
+  if (maxSpeed <= 0) return 0;
+  return clampInt(pressure, 0, TRIGGER_MAX) * maxSpeed / TRIGGER_MAX;
+}
+
 MoveCode moveForStick(int x, int yUp, StickFamily family) {
   // A pivot family has four motions, one per quadrant. Axis-aligned pushes
   // (x or yUp exactly 0) count as right and forward.
@@ -97,8 +102,8 @@ DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpee
     const MoveCode move = moveForStick(pad.lx, yUp, gamepadFamily(pad, scheme));
     return {move, stickSpeed(pad.lx, yUp, maxSpeed)};
   }
-  if (pad.l2 > deadzone) return {ROTATE_COUNTERCLOCKWISE, stickSpeed(pad.l2, 0, maxSpeed / 2)};
-  if (pad.r2 > deadzone) return {ROTATE_CLOCKWISE, stickSpeed(pad.r2, 0, maxSpeed / 2)};
+  if (pad.l2 > deadzone) return {ROTATE_COUNTERCLOCKWISE, triggerSpeed(pad.l2, maxSpeed / 2)};
+  if (pad.r2 > deadzone) return {ROTATE_CLOCKWISE, triggerSpeed(pad.r2, maxSpeed / 2)};
   return {STOP, 0};
 }
 

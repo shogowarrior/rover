@@ -312,12 +312,14 @@ and the Stop and Autonomous buttons stay on screen on both.
 checks its rules. The left stick picks one of eight moves and wins over the
 triggers; L2 rotates left (counter-clockwise) and R2 right, matching the
 panel's Left button and `drive.py`'s `q` (earlier firmware had the triggers
-the other way round). A held stick is re-sent every `GAMEPAD_REFRESH_MS`
-(200 ms); a new direction goes at once, a new speed in the same direction at
-most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms). Letting go sends one STOP, never
-a stream, so a resting pad cannot keep forcing manual while the rover
-explores; a pad silent for `GAMEPAD_SILENCE_MS` counts as let go. START sends
-`RESUME_AUTONOMOUS`.
+the other way round). A trigger's speed follows its whole pull, up to half
+the stick's top speed; earlier firmware scaled the 0..255 trigger like
+a +-127 stick axis, so the second half of the pull did nothing. A held stick
+is re-sent every `GAMEPAD_REFRESH_MS` (200 ms); a new direction goes at once, a
+new speed in the same direction at most every `GAMEPAD_SPEED_CHANGE_MS`
+(100 ms). Letting go sends one STOP, never a stream, so a resting pad cannot
+keep forcing manual while the rover explores; a pad silent for
+`GAMEPAD_SILENCE_MS` counts as let go. START sends `RESUME_AUTONOMOUS`.
 
 **Control schemes.** The rover holds one scheme for every controller
 (`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),

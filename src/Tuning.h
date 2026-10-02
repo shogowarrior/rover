@@ -50,8 +50,9 @@ constexpr float EXPLORE_GO_CM = 40.0f;
 
 // --- Gamepad ---------------------------------------------------------------
 
-constexpr int GAMEPAD_MAX_SPEED = 50;  // stick fully deflected
-constexpr int GAMEPAD_DEADZONE = 20;   // of the stick's +-127
+constexpr int GAMEPAD_MAX_SPEED = 50;  // stick fully deflected; a full trigger pull gets half
+// Of the stick's +-127. The triggers' 0..255 share it: 8% of a pull.
+constexpr int GAMEPAD_DEADZONE = 20;
 // A held stick is re-sent this often, well inside DEFAULT_MOVE_DURATION_MS,
 // so the rover keeps moving until the stick is released.
 constexpr uint32_t GAMEPAD_REFRESH_MS = 200;

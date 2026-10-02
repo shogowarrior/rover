@@ -199,6 +199,8 @@ On the stand:
   `MOVE_FORWARD`); stick right strafes right.
 - **L2** rotates left (`ROTATE_COUNTERCLOCKWISE`), **R2** rotates right.
   Earlier firmware had them the other way round.
+- Pulling a trigger further turns faster, right to the end of its travel.
+  Earlier firmware reached its top rotate speed at half a pull.
 - Holding the stick keeps the wheels turning; releasing it stops them.
   **START** switches to autonomous, or restarts exploration that has halted.
 - Switching the pad off while holding the stick stops the wheels within half

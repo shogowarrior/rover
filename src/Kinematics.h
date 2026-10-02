@@ -54,6 +54,15 @@ float stickAngleDeg(int x, int yUp);
 // overshooting on diagonals.
 int stickSpeed(int x, int y, int maxSpeed);
 
+// The PS3's analogue triggers, L2 and R2, report 0..255: twice a stick axis.
+constexpr int TRIGGER_MAX = 255;
+
+// Trigger pressure scaled to [0, maxSpeed] over the trigger's whole travel.
+// The triggers once went through stickSpeed(), scaled for a +-127 axis, so
+// they reached their top speed at half a pull and the rest of the pull did
+// nothing.
+int triggerSpeed(int pressure, int maxSpeed);
+
 // How a controller's stick and buttons map onto the 18 mecanum motions. The
 // rover holds one scheme for every controller (the default is in Features.h;
 // PS3 SELECT and the panel's toggle change it), so the gamepad and the panel
@@ -100,8 +109,9 @@ StickFamily gamepadFamily(const GamepadState& pad, ControlScheme scheme);
 
 // What the gamepad is asking for. The left stick moves within the family the
 // shoulder buttons select (see ControlScheme); with the stick centred, L2
-// rotates left (counter-clockwise) and R2 right, at half speed. Returns
-// {STOP, 0} when nothing is deflected past the deadzone.
+// rotates left (counter-clockwise) and R2 right, at up to half the stick's
+// speed, by how far the trigger is pulled. Returns {STOP, 0} when nothing is
+// deflected past the deadzone, which the triggers share with the stick.
 DriveRequest translateGamepad(const GamepadState& pad, int deadzone, int maxSpeed,
                               ControlScheme scheme = SCHEME_NORMAL);
 

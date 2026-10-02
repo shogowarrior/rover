@@ -164,6 +164,18 @@ void test_gamepad_triggers_rotate_at_half_speed(void) {
   TEST_ASSERT_EQUAL_INT(ROTATE_CLOCKWISE, pad(0, 0, 0, 255).move);
 }
 
+// The triggers report 0..255, twice a stick axis. Scaled as a stick, half a
+// pull already rotated at the triggers' top speed and the rest of the pull
+// did nothing.
+void test_gamepad_trigger_speed_follows_the_whole_pull(void) {
+  TEST_ASSERT_EQUAL_INT(6, pad(0, 0, 64, 0).speed);
+  TEST_ASSERT_EQUAL_INT(12, pad(0, 0, 128, 0).speed);
+  TEST_ASSERT_EQUAL_INT(18, pad(0, 0, 0, 192).speed);
+  TEST_ASSERT_EQUAL_INT(25, triggerSpeed(TRIGGER_MAX, 25));
+  TEST_ASSERT_EQUAL_INT(25, triggerSpeed(400, 25));  // out of range saturates
+  TEST_ASSERT_EQUAL_INT(0, triggerSpeed(-5, 25));
+}
+
 // Only one move can run at a time; the stick takes precedence.
 void test_gamepad_stick_beats_triggers(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, pad(0, -128, 255, 255).move);
@@ -274,6 +286,7 @@ int main(int, char**) {
   RUN_TEST(test_gamepad_stick_sideways_strafes);
   RUN_TEST(test_gamepad_inside_deadzone_is_stop);
   RUN_TEST(test_gamepad_triggers_rotate_at_half_speed);
+  RUN_TEST(test_gamepad_trigger_speed_follows_the_whole_pull);
   RUN_TEST(test_gamepad_stick_beats_triggers);
 
   RUN_TEST(test_pivot_family_picks_by_quadrant);

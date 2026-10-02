@@ -75,7 +75,7 @@ stops within half a second.
 |---|---|---|---|
 | Move | Joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
 | Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
-| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50 (triggers 25) |
+| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
 | Stop | Stop | space | Let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
 
