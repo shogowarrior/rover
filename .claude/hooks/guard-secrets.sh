@@ -32,9 +32,12 @@ input=$(cat)
 # an edit of .gitignore whose old_string is the name, opens nothing. Glob's
 # pattern is kept, as it names the files the tool returns.
 # Without jq there is no telling a read of config.h from any other call, so
-# fail closed.
-command -v jq >/dev/null 2>&1 ||
-  block "the hook needs jq to inspect tool calls, and found none. Install jq."
+# fail closed, but not through block(): its note about the file would come
+# with every call, however unrelated.
+command -v jq >/dev/null 2>&1 || {
+  echo "Blocked: .claude/hooks/guard-secrets.sh needs jq to inspect tool calls, and found none. Install jq." >&2
+  exit 2
+}
 get() { printf '%s' "$input" | jq -r --arg p "$1" 'getpath($p | split(".")) | strings'; }
 string_values() {
   printf '%s' "$input" | jq -r '

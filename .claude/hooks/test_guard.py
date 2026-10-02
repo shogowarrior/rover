@@ -280,7 +280,8 @@ RAW = [
 TOOLS = ("awk", "cat", "grep", "sed", "tr")  # what the guard runs besides its parser
 
 # (name, what else is on PATH, whether the case table applies or every call
-# must block). python3 is there without jq to show it does not stand in.
+# must block, saying only that jq is missing). python3 is there without jq to
+# show it does not stand in.
 MODES = [
     ("jq", ("jq",), True),
     ("python3 without jq", ("python3",), False),
@@ -320,7 +321,11 @@ def main():
             wrong = 0
             for (name, want, stdin), (got, err) in zip(calls, outcomes):
                 want = want if table else "B"
-                if got != want:
+                # Without jq, the missing tool is all a block may name: the
+                # note about config.h would come with every call, however
+                # unrelated. Empty input is turned away before jq is sought.
+                misleads = not table and stdin and ("needs jq" not in err or "WiFi" in err)
+                if got != want or misleads:
                     wrong += 1
                     print(f"{mode}, {name}: want {want}, got {got}\n  {stdin[:120]}\n  {err.strip()[:200]}")
             print(f"{mode}: {len(calls) - wrong}/{len(calls)} as expected")
