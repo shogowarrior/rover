@@ -28,14 +28,18 @@ class Motors {
   ~Motors() {}
 };
 
+namespace hardware {
+
 // The scanner's servo turns 0..SERVO_MAX_DEG and looks straight ahead at
 // SERVO_CENTRE_DEG.
 constexpr int SERVO_CENTRE_DEG = 90;
 constexpr int SERVO_MAX_DEG = 180;
 
+}  // namespace hardware
+
 class RangeScanner {
  public:
-  // Point the sonar: servo degrees, 0..SERVO_MAX_DEG.
+  // Point the sonar: servo degrees, 0..hardware::SERVO_MAX_DEG.
   virtual void aim(int servoDeg) = 0;
   // Raw distance in cm from the aimed sonar; negative means no echo came back.
   // Busy-waits for the echo, up to ~30 ms.

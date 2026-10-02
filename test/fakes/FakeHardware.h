@@ -6,6 +6,7 @@
 // (`#include "../fakes/FakeHardware.h"`); neither is a suite, because
 // PlatformIO only treats test/test_* directories as suites.
 
+#include <array>
 #include <vector>
 
 #include "Hardware.h"
@@ -62,16 +63,19 @@ class FakeScanner final : public RangeScanner {
     return range[servo];
   }
 
-  void setAll(float cm) { setArc(0, SERVO_MAX_DEG, cm); }
+  void setAll(float cm) { range.fill(cm); }
 
   // Everything from `fromDeg` to `toDeg` inclusive.
   void setArc(int fromDeg, int toDeg, float cm) {
     for (int deg = fromDeg; deg <= toDeg; deg++) range[deg] = cm;
   }
 
-  int servo = SERVO_CENTRE_DEG;
+  // `range`'s type, so a test can save the whole world and restore it.
+  typedef std::array<float, hardware::SERVO_MAX_DEG + 1> World;
+
+  int servo = hardware::SERVO_CENTRE_DEG;
   int pings = 0;
-  float range[SERVO_MAX_DEG + 1];
+  World range;
   const uint32_t* clock = nullptr;  // optional: stamps aims and pings
   std::vector<int> aims;
   std::vector<uint32_t> aimTimes;
