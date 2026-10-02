@@ -29,6 +29,9 @@
 //             rover dithering in corners.
 //   BACKOFF   Reverse a little first if the front is too close to rotate, but
 //             only over ground just driven forward: nothing watches behind.
+//             At a dead end too narrow to rotate in, back out the way it came
+//             a step at a time, sweeping after each, until the flanks have
+//             room or that ground runs out, and only then turn.
 //   SIDESTEP  Strafe away from a flank that is too close to rotate beside.
 //   HALTED    Stop and retry every few seconds when a full circle of turning
 //             finds no way out, or three sweeps in a row hear nothing at all
@@ -167,6 +170,7 @@ class Explorer {
     int sidesteps = 0;           // in a row, without a cruise between
     int silentSweeps = 0;        // in a row
     int32_t reverseBudgetMs = 0; // forward driving since the heading last changed
+    bool backingOut = false;     // reversing out of a dead end too narrow to rotate in
     // How the last cruise ended. decide() reads both once and clears them.
     bool cruiseEndedByCap = false;
     int sideStopDeg = 0;         // weave angle whose echo ended the last cruise, 0 if none

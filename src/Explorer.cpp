@@ -58,6 +58,8 @@ Explorer::Motion Explorer::update(uint32_t now, bool motorsIdle) {
       return stepTurn(now, motorsIdle);
     case BACKOFF: {
       if (!motorsIdle || !reached(now, phaseUntil)) return noMotion();
+      // Backing out of a dead end: look again before every further step.
+      if (episode.backingOut) return startSweep(now);
       const int steps = episode.escapeSteps;  // used up by this one turn
       episode.escapeSteps = 0;
       return startTurn(now, episode.committedDirection, steps, true);
@@ -149,6 +151,17 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // again; a working sensor soon finds a wall, and a dead one halts above.
   if (!scan.heardEcho) return startTurn(now, wanderDirection(), params.wanderSteps, false);
 
+  // Still backing out of a dead end (the blocked path, below). This comes
+  // before the path check: backed off far enough, the way back in looks
+  // clear again, and driving back in would shuttle the rover in and out of
+  // the dead end for ever.
+  if (episode.backingOut) {
+    if (!roomToRotate() && episode.reverseBudgetMs > 0) return startBackoff(now);
+    episode.backingOut = false;
+    if (episode.committedDirection == 0) episode.committedDirection = chooseTurnDirection();
+    return turnOrSidestep(now, episode.committedDirection, 0, true);
+  }
+
   if (!pathBlocked(params.goCm)) {
     episode.waitForClearPath = false;
     // The small turns below are optional, so they are skipped where rotating
@@ -176,6 +189,17 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // After turning a full circle without finding a way out, only a path that
   // opens by itself resumes exploring; the rover does not spin again.
   if (episode.waitForClearPath) return halt(now, HALT_BOXED_IN);
+  if (!roomToRotate() && episode.reverseBudgetMs > 0) {
+    // A dead end in a passage too narrow to rotate in. Turning here swung the
+    // corners into the walls this sweep had just measured, and then halted
+    // boxed in where the rover could have reversed out. Back out the way it
+    // came instead, a step at a time with a sweep after each, until the
+    // flanks have room. Only when that ground runs out does it turn anyway.
+    // This comes before the too-close backoff below, which reverses only once
+    // and then turns.
+    episode.backingOut = true;
+    return startBackoff(now);
+  }
   if (episode.committedDirection == 0) episode.committedDirection = chooseTurnDirection();
   if (scan.cm[FRONT] < params.minTurnClearCm && episode.reverseBudgetMs > 0) return startBackoff(now);
   return turnOrSidestep(now, episode.committedDirection, 0, true);

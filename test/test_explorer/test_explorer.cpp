@@ -129,6 +129,20 @@ struct Harness {
 
 bool isRotation(MoveCode move) { return move == ROTATE_CLOCKWISE || move == ROTATE_COUNTERCLOCKWISE; }
 
+// A corridor 26 cm wide: walls 13 cm to each side, seen at 13 / sin(angle)
+// from every bearing that can see them (70 and 35 degrees in a sweep, 25 in
+// the weave). Outside the 12 cm path, so the rover drives along it, but
+// inside the 16 cm the corners need to rotate. The far end, servo 70 to 110,
+// is left for the test to set.
+void narrowCorridor(FakeScanner& scanner) {
+  scanner.setArc(0, 40, 13.8f);     // 70 degrees left
+  scanner.setArc(41, 60, 22.7f);    // 35
+  scanner.setArc(61, 69, 30.8f);    // 25
+  scanner.setArc(111, 119, 30.8f);  // and the same to the right
+  scanner.setArc(120, 139, 22.7f);
+  scanner.setArc(140, 180, 13.8f);
+}
+
 }  // namespace
 
 // --- sweeping ----------------------------------------------------------------
@@ -591,10 +605,7 @@ void test_capped_cruise_is_followed_by_a_short_wander(void) {
 // a long cruise) are skipped: rotating would swing a corner into a wall.
 void test_no_optional_rotation_where_there_is_no_room(void) {
   Harness h;
-  h.scanner.setArc(0, 40, 13.8f);     // walls ~13 cm to each side
-  h.scanner.setArc(140, 180, 13.8f);
-  h.scanner.setArc(41, 69, 22.7f);    // the same walls at +-35 degrees: not in the path
-  h.scanner.setArc(111, 139, 22.7f);
+  narrowCorridor(h.scanner);
   h.closingCmPerS = 10.0f;            // a far end that slowly gets closer
   h.closeFromDeg = 70;
   h.closeToDeg = 110;
@@ -839,6 +850,104 @@ void test_reset_forgets_the_ground_behind(void) {
   }
 }
 
+// A dead end in a passage too narrow to rotate in. Turning there swung the
+// corners into the walls and ended halted "boxed in", where the rover could
+// have reversed out. It backs out the way it came, sweeping after each step,
+// and turns only once the flanks have room. It does not drive back in when
+// the way ahead starts to look clear again. An end found right in front,
+// closer than the rover may rotate at, is the same dead end: one short
+// backoff and a turn would still swing the corners into the walls.
+void test_dead_end_too_narrow_to_rotate_in_is_backed_out_of(void) {
+  const bool foundRightInFront[2] = {false, true};
+  for (bool rightInFront : foundRightInFront) {
+    Harness h;
+    narrowCorridor(h.scanner);
+    h.scanner.setArc(70, 110, rightInFront ? 200.0f : 60.0f);  // the far end
+    h.closingCmPerS = 25.0f;  // getting closer while driving forward
+    h.closeFromDeg = 70;
+    h.closeToDeg = 110;
+    bool appeared = false;
+    int backoffs = 0;
+    bool roomy = false;
+    int rotationsWithoutRoom = 0;
+    h.onMotion = [&](const Explorer::Motion& m) {
+      if (m.move == MOVE_FORWARD && rightInFront && !appeared && h.forwardRunMs >= 1000) {
+        appeared = true;
+        h.scanner.setArc(70, 110, 5.0f);  // under minTurnClearCm
+      } else if (m.move == MOVE_BACKWARD) {
+        h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);  // and farther while reversing
+        if (++backoffs == 3) {
+          roomy = true;  // out of the passage: room on both sides
+          h.scanner.setArc(0, 69, 200.0f);
+          h.scanner.setArc(111, 180, 200.0f);
+        }
+      } else if (isRotation(m.move)) {
+        if (!roomy) rotationsWithoutRoom++;
+        h.scanner.setAll(200.0f);  // turned away from the passage
+      }
+    };
+    h.run(15000);
+    if (rightInFront) TEST_ASSERT_TRUE(appeared);
+    // The first move after the cruise into the dead end is a reverse.
+    const int firstBackward = h.indexOf(MOVE_BACKWARD);
+    TEST_ASSERT_TRUE(firstBackward > 0);
+    int lastForward = -1;
+    for (int i = 0; i < firstBackward; i++) {
+      if (h.motions[i].move == MOVE_FORWARD) lastForward = i;
+    }
+    TEST_ASSERT_TRUE(lastForward >= 0);
+    for (int i = lastForward + 1; i < firstBackward; i++) TEST_ASSERT_EQUAL_INT(STOP, h.motions[i].move);
+
+    TEST_ASSERT_EQUAL_INT(0, rotationsWithoutRoom);
+    TEST_ASSERT_TRUE(roomy);
+    // Then it turns, without having driven back in first.
+    int firstRotation = -1;
+    for (size_t i = firstBackward; i < h.motions.size(); i++) {
+      if (isRotation(h.motions[i].move)) {
+        firstRotation = static_cast<int>(i);
+        break;
+      }
+    }
+    TEST_ASSERT_TRUE(firstRotation > firstBackward);
+    for (int i = firstBackward; i < firstRotation; i++) TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
+  }
+}
+
+// With no room anywhere on the way back, it reverses over all the ground it
+// drove into the dead end, and no further, before turning anyway.
+void test_backing_out_of_a_dead_end_stops_where_the_drive_began(void) {
+  Harness h;
+  narrowCorridor(h.scanner);
+  h.scanner.setArc(70, 110, 60.0f);  // the dead end
+  h.closingCmPerS = 25.0f;
+  h.closeFromDeg = 70;
+  h.closeToDeg = 110;
+  h.onMotion = [&](const Explorer::Motion& m) {
+    if (m.move == MOVE_BACKWARD) h.closeIn(-h.closingCmPerS * m.durationMs / 1000.0f);
+  };
+  h.run(10000);
+  const int firstForward = h.indexOf(MOVE_FORWARD);
+  TEST_ASSERT_TRUE(firstForward >= 0);
+  const int cruiseEnd = h.indexOf(STOP, firstForward);
+  TEST_ASSERT_TRUE(cruiseEnd > firstForward);
+  const uint32_t drove = h.motionTimes[cruiseEnd] - h.motionTimes[firstForward];
+
+  int firstRotation = -1;
+  for (size_t i = 0; i < h.motions.size(); i++) {
+    if (isRotation(h.motions[i].move)) {
+      firstRotation = static_cast<int>(i);
+      break;
+    }
+  }
+  TEST_ASSERT_TRUE(firstRotation > cruiseEnd);
+  uint32_t reversed = 0;
+  for (int i = cruiseEnd; i < firstRotation; i++) {
+    TEST_ASSERT_NOT_EQUAL(MOVE_FORWARD, h.motions[i].move);
+    if (h.motions[i].move == MOVE_BACKWARD) reversed += static_cast<uint32_t>(h.motions[i].durationMs);
+  }
+  TEST_ASSERT_EQUAL_UINT32(drove, reversed);
+}
+
 // --- halting -----------------------------------------------------------------
 
 void test_boxed_in_halts_and_never_drives_blind(void) {
@@ -999,6 +1108,8 @@ int main(int, char**) {
   RUN_TEST(test_no_reverse_after_a_sidestep);
   RUN_TEST(test_held_from_the_start_does_not_reverse);
   RUN_TEST(test_reset_forgets_the_ground_behind);
+  RUN_TEST(test_dead_end_too_narrow_to_rotate_in_is_backed_out_of);
+  RUN_TEST(test_backing_out_of_a_dead_end_stops_where_the_drive_began);
   // halting
   RUN_TEST(test_boxed_in_halts_and_never_drives_blind);
   RUN_TEST(test_halted_rover_resumes_when_the_way_opens);
