@@ -6,6 +6,7 @@
 #include "Kinematics.h"
 #include "Timing.h"
 
+using timing::elapsed;
 using timing::reached;
 using timing::since;
 
@@ -20,9 +21,6 @@ float radians(int degrees) { return degrees * kinematics::PI_F / 180.0f; }
 
 // How far to the side of the rover a reading `cm` away at `angleDeg` lies.
 float lateralOf(int angleDeg, float cm) { return fabsf(cm * sinf(radians(angleDeg))); }
-
-// True once `ms` (an ExploreParams duration) has passed since `start`.
-bool lasted(uint32_t now, uint32_t start, int ms) { return since(now, start) >= static_cast<uint32_t>(ms); }
 
 Explorer::Motion motion(MoveCode move, int durationMs) {
   Explorer::Motion m;
@@ -234,7 +232,7 @@ Explorer::Motion Explorer::startCruise(uint32_t now) {
 }
 
 Explorer::Motion Explorer::stepCruise(uint32_t now) {
-  if (lasted(now, cruise.start, params.cruiseMaxMs)) {
+  if (elapsed(now, cruise.start, params.cruiseMaxMs)) {
     episode.cruiseEndedByCap = true;
     return endCruise(now);
   }
@@ -441,7 +439,7 @@ void Explorer::aim(uint32_t now, int angleDeg) {
 
 bool Explorer::readyToPing(uint32_t now) const {
   if (!reached(now, sonar.readyAt)) return false;
-  return !sonar.hasPinged || lasted(now, sonar.lastPingAt, params.pingIntervalMs);
+  return !sonar.hasPinged || elapsed(now, sonar.lastPingAt, params.pingIntervalMs);
 }
 
 float Explorer::ping(uint32_t now) {
@@ -548,7 +546,7 @@ int Explorer::sidestepDirection() const {
 
 bool Explorer::echoVanished(uint32_t now) const {
   return cruise.lastFrontEchoCm >= 0.0f && cruise.lastFrontEchoCm < params.suspectNearCm &&
-         !lasted(now, cruise.lastFrontEchoAt, params.suspectWindowMs);
+         !elapsed(now, cruise.lastFrontEchoAt, params.suspectWindowMs);
 }
 
 // Stuck: a front echo that has not changed, either way, over a whole window
@@ -557,7 +555,7 @@ bool Explorer::echoVanished(uint32_t now) const {
 // a reading that stays put means the wheels are held.
 bool Explorer::notChanging(float frontCm, uint32_t now) {
   if (cruise.hasStuckReference) {
-    if (!lasted(now, cruise.stuckReferenceAt, params.stuckWindowMs)) return false;
+    if (!elapsed(now, cruise.stuckReferenceAt, params.stuckWindowMs)) return false;
     // Stuck: keep the reference, whose time escapeStuck() needs.
     if (fabsf(cruise.stuckReferenceCm - frontCm) < params.stuckProgressCm) return true;
   }

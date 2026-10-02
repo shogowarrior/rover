@@ -68,7 +68,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
 | `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, when to rewrite the player LEDs. Pure |
-| `src/Timing.h` | `timing::reached()` and `timing::since()`: every wrap-safe time comparison |
+| `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
@@ -477,8 +477,9 @@ shows how the operator passes one to an upload instead.
   key gets a safe default.
 - `millis()` wraps every 49.7 days. Compare times only through `src/Timing.h`:
   `timing::reached(now, deadline)` for a deadline in the future (signed),
-  `timing::since(now, then)` for an age (unsigned, so it stays right for any
-  age up to 49.7 days). Never `now >= deadline`.
+  `timing::since(now, then)` or `timing::elapsed(now, then, interval)` for an
+  age (unsigned, so it stays right for any age up to 49.7 days). Never
+  `now >= deadline`.
 - Library and platform versions are pinned exactly in `platformio.ini`. Bump
   one at a time and re-run everything.
 - Comments explain why, and often name the bug a line prevents.

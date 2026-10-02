@@ -6,7 +6,8 @@
 // Wrap-safe arithmetic on 32-bit millisecond clocks. millis() rolls over every
 // ~49.7 days, so `now >= deadline` and `now - since > window` written naively
 // go wrong once in a while, on a robot that drives. Every time comparison in
-// the firmware goes through one of these two.
+// the firmware goes through these: reached() for a deadline, since() and
+// elapsed() for an age.
 namespace timing {
 
 // Has `now` reached `deadline`, a moment in the future when it was set? Valid
@@ -19,6 +20,11 @@ inline bool reached(uint32_t now, uint32_t deadline) {
 // correct for any age up to ~49.7 days: a long-silent source reads as old,
 // never as fresh again.
 inline uint32_t since(uint32_t now, uint32_t since) { return now - since; }
+
+// Has `interval` passed since `then`? An age, unsigned like since().
+inline bool elapsed(uint32_t now, uint32_t then, uint32_t interval) {
+  return since(now, then) >= interval;
+}
 
 }  // namespace timing
 

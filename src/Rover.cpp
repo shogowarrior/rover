@@ -5,6 +5,7 @@
 #include "Timing.h"
 #include "Tuning.h"
 
+using timing::elapsed;
 using timing::reached;
 
 Rover::Rover(Motors& motors, RangeScanner& scanner) : motors(motors), explorer(scanner) {}
@@ -62,7 +63,7 @@ void Rover::standDown(uint32_t now) {
 }
 
 void Rover::servicePendingRelease(uint32_t now) {
-  if (!releasePending || !reached(now, releasedAt + tuning::MOTOR_REFRESH_MS)) return;
+  if (!releasePending || !elapsed(now, releasedAt, tuning::MOTOR_REFRESH_MS)) return;
   releasePending = false;
   motors.release();
 }
@@ -109,7 +110,7 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   // bus lost -- the library does not report one -- is repaired while the
   // rover moves. release() above always writes: stopping is never skipped.
   const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed &&
-                              !reached(now, lastMotorWriteAt + tuning::MOTOR_REFRESH_MS);
+                              !elapsed(now, lastMotorWriteAt, tuning::MOTOR_REFRESH_MS);
   if (!alreadyDoingIt) {
     motors.drive(*pattern, static_cast<uint8_t>(speed));
     lastMotorWriteAt = now;
