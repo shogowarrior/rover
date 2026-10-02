@@ -16,9 +16,11 @@
 #     platformio.ini: also run the host tests, `pio test -e native`;
 #   * a file tools/check_protocol.py reads -- a client, or a firmware file a
 #     client mirrors -- or the checker itself: run it (milliseconds);
-#   * anything under extras/joystick/ (the browser panel), or the stick vectors
-#     under test/vectors/ its tests share with the firmware's: run the panel's
-#     tests, `node --test extras/joystick/test/` (about a second).
+#   * anything under extras/joystick/ (the browser panel), the stick vectors
+#     under test/vectors/ its tests share with the firmware's, or a firmware
+#     file those tests read (MoveCodes.h, MovePatterns.cpp, Explorer.h,
+#     Kinematics.h, Tuning.h, Protocol.cpp): run the panel's tests,
+#     `node --test extras/joystick/test/` (about a second).
 #
 # The host-tested list below mirrors build_src_filter in [env:native] plus the
 # headers those modules include, and the protocol list mirrors the files
@@ -98,10 +100,15 @@ case "$file" in
 esac
 
 # The browser panel's own tests: anything in the panel (its page, styles,
-# scripts and tests), or the stick vectors its mecanum.js is tested against.
+# scripts and tests), the stick vectors its mecanum.js is tested against, or
+# a firmware file those tests read: the move codes, the wheel table the
+# simulator copies, the sweep angles and timing, the tuning, the no-echo
+# distance and the telemetry keys.
 panel=no
 case "$file" in
-  extras/joystick/* | test/vectors/*) panel=yes ;;
+  extras/joystick/* | test/vectors/* | \
+    src/MoveCodes.h | src/MovePatterns.cpp | src/Explorer.h | \
+    src/Kinematics.h | src/Tuning.h | src/Protocol.cpp) panel=yes ;;
 esac
 
 case "$file" in

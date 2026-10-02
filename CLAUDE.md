@@ -28,8 +28,10 @@ either.
     included), a firmware file a client mirrors, or the checker itself:
     `tools/check_protocol.py`;
   - anything under `extras/joystick/` (the panel's page, styles, scripts and
-    tests), or under `test/vectors/`, whose stick cases the panel's tests
-    share with the firmware's: `node --test extras/joystick/test/` (about a
+    tests), anything under `test/vectors/`, whose stick cases the panel's
+    tests share with the firmware's, or a firmware file those tests read
+    (`MoveCodes.h`, `MovePatterns.cpp`, `Explorer.h`, `Kinematics.h`,
+    `Tuning.h`, `Protocol.cpp`): `node --test extras/joystick/test/` (about a
     second).
 
   It builds the checkout the edited file is in, against
@@ -85,6 +87,23 @@ states only a power cycle escapes, motor state shared across tasks, strapping
 pins, and sensor errors that fail toward danger. Run it after changing motor
 control, `loop()`, sensor handling, network input handling, a failsafe or a
 pin, before calling the change done.
+
+## Looking at the panel
+
+Check the panel's look and behaviour in the desktop app's built-in browser
+pane: it shows the live DOM, and the operator sees the same view. The pane
+renders a `file://` page as a static snapshot, with no CSS or JS, so serve the
+panel instead. `.claude/launch.json` defines the `panel` preview: it runs
+`.claude/serve_panel.py`, which serves `extras/joystick/` on
+`http://localhost:8766` with every response marked `no-store`. Python's plain
+`http.server` let the pane run a fresh script against a stale cached one.
+
+- Measure the layout with JavaScript, and resize the pane to 375 and 1280 px
+  wide. Take screenshots only where they add something.
+- A hidden pane pauses the simulator preview, as a hidden page should.
+- Background agents running in parallel cannot share the one pane, so they
+  use a headless script.
+- Never use a headed browser MCP: it opens windows on the operator's screen.
 
 ## Permissions
 

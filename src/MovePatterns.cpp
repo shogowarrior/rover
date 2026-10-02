@@ -23,6 +23,10 @@ constexpr WheelDirection FREE = WHEEL_FREE;
 // a stick pushed forward under ADVANCED backed the rover up, and three of the
 // sideways pivots drove the wrong wheels. None of it is verified on the bench
 // yet -- docs/bench-checklist.md says how.
+//
+// The panel's simulator copies this table (RoverSim.WHEELS in
+// extras/joystick/js/sim.js) to preview programs; its test/sim.test.js parses
+// this file and fails when the copy drifts.
 const MovePattern PATTERNS[] = {
     PATTERN(STOP, FREE, FREE, FREE, FREE),
     PATTERN(MOVE_FORWARD, FWD, FWD, FWD, FWD),

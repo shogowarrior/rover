@@ -65,6 +65,9 @@ struct ExploreParams {
   // points left and 160 right, as the scanner is mounted today. If a hand at
   // the rover's left moves "distanceRight" on the panel, make this +1.
   int servoDegPerBearing = -1;
+  // These three are copied by the panel's simulator (SimSonar.TIMING in
+  // extras/joystick/js/sim.js), so its preview's readings lag as the rover's
+  // do; test/sim.test.js checks the copy.
   int servoBaseMs = 60;          // settle after a servo move: base + perDeg x travel
   float servoMsPerDeg = 2.5f;    // an SG90 needs ~1.7 unloaded; margin for load and sag
   int pingIntervalMs = 70;       // HC-SR04: at least 60 ms between pings
