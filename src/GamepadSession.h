@@ -13,6 +13,10 @@ struct GamepadReport {
   uint32_t lastReportMs = 0;   // when the latest report arrived
   bool startPressed = false;   // START went down since the last update
   bool selectPressed = false;  // SELECT went down since the last update
+
+  // Whether a report arrived less than GAMEPAD_SILENCE_MS before `now`. The
+  // age is unsigned, so a pad silent that long never reads as fresh again.
+  bool freshAt(uint32_t now) const;
 };
 
 // The loop's side of the Bluetooth mailbox: this pass's report, taken out of

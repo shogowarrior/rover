@@ -3,8 +3,12 @@
 #include "Timing.h"
 #include "Tuning.h"
 
+bool GamepadReport::freshAt(uint32_t now) const {
+  return hasReport && timing::since(now, lastReportMs) < tuning::GAMEPAD_SILENCE_MS;
+}
+
 GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now) {
-  if (mailbox.hasReport && timing::since(now, mailbox.lastReportMs) >= tuning::GAMEPAD_SILENCE_MS) {
+  if (mailbox.hasReport && !mailbox.freshAt(now)) {
     mailbox = GamepadReport();
   }
   const GamepadReport report = mailbox;
@@ -39,12 +43,10 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
     return;
   }
 
-  const bool fresh =
-      report.hasReport && timing::since(now, report.lastReportMs) < tuning::GAMEPAD_SILENCE_MS;
   const kinematics::DriveRequest wanted =
-      fresh ? kinematics::translateGamepad(report.controls, tuning::GAMEPAD_DEADZONE,
-                                           tuning::GAMEPAD_MAX_SPEED, scheme)
-            : kinematics::DriveRequest{STOP, 0};
+      report.freshAt(now) ? kinematics::translateGamepad(report.controls, tuning::GAMEPAD_DEADZONE,
+                                                         tuning::GAMEPAD_MAX_SPEED, scheme)
+                          : kinematics::DriveRequest{STOP, 0};
 
   if (awaitingRelease) {
     if (wanted.move == STOP) awaitingRelease = false;
