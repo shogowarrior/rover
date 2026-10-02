@@ -16,26 +16,9 @@ are out of scope. Say so and move on. Another reviewer covers those.
 
 ## The design you are reviewing against
 
-`src/main.cpp` wires a handful of classes together by reference. The ones on
-the path to the motors:
-
-- `Rover` (`src/Rover.{h,cpp}`) owns mode, move deadlines and the one path to
-  the motors, `Rover::drive`. It is pure logic, tested on the host.
-- `Rover::command` is how every external source asks for motion:
-  `RemoteControl::onCommand` (WebSocket JSON, parsed by `protocol::readCommand`)
-  and `GamepadSession::update` (PS3). `Explorer` asks through the
-  `Explorer::Motion` it returns to `Rover::update`.
-- `GamepadSession` (`src/GamepadSession.{h,cpp}`) holds the gamepad's rules
-  and is pure and host-tested (`test/test_gamepad`); `Gamepad` only carries
-  each report across from the Bluetooth task in a locked mailbox.
-- `DriveTrain` (the Adafruit shield) and `Scanner` (servo and sonars) sit
-  behind the `Motors` and `RangeScanner` interfaces in `src/Hardware.h`.
-- `Network` owns WiFi and ArduinoOTA; `RemoteControl` the WebSocket server.
-- `src/Timing.h` is how every time is compared: `timing::reached(now,
-  deadline)` for a moment in the future, `timing::since(now, then)` for an
-  age. `millis()` wraps every 49.7 days; a raw `now >= deadline`, or a
-  signed age, turns a move that should end into one that runs on, or a
-  silent source into a fresh one. Either spelled by hand is a finding.
+Read AGENTS.md first: Architecture, Invariants, How autonomy works, and the
+Conventions on time. Breaking any invariant there is a finding, and so is a
+time compared by hand rather than through `src/Timing.h`.
 
 ## What counts as a finding
 
@@ -64,10 +47,13 @@ uncommanded motion.
 move already running, at the same speed, only moves the deadline, except that
 every `tuning::MOTOR_REFRESH_MS` (500 ms) the pattern is written again: the
 Adafruit library does not report a lost I2C write, and the refresh is what
-repairs one while the rover moves. `release()` always writes. A change that
-skips a release, lets a change of move or speed pass as a repeat, or
-stretches the refresh far past a client's repeat interval leaves the wheels
-doing something other than what the rover reports.
+repairs one while the rover moves. `release()` always writes, and a release
+that ends motion is written once more `MOTOR_REFRESH_MS` later
+(`Rover::servicePendingRelease`), because a lost stop has no next command to
+repair it. A change that skips a release or its second write, lets a change
+of move or speed pass as a repeat, or stretches the refresh far past a
+client's repeat interval leaves the wheels doing something other than what
+the rover reports.
 
 The motors can be absent. `DriveTrain::begin()` probes the shield three
 times, then always binds the motors and attempts a release, whatever the
@@ -89,7 +75,10 @@ and confirm each one ends with the motors released:
   motors and keeps the mode (exploration carries on: it was not that
   client's to stop);
 - the client vanishes without closing — the WebSocket heartbeat (ping every
-  second, drop after two missed pongs) turns it into a disconnect;
+  second, drop after two missed pongs) turns it into a disconnect. Every
+  `WStype_DISCONNECTED` clears the slot's missed pongs
+  (`HeartbeatServer::forgetMissedPongs`): the library left them to the slot's
+  next client, which it then dropped about 0.6 s after it connected;
 - the AP drops — `Network::update` notices and calls `Rover::standDown`,
   which releases the motors and drops to manual, because no STOP could reach
   an exploring rover any more;
@@ -98,13 +87,16 @@ and confirm each one ends with the motors released:
   `GAMEPAD_SILENCE_MS` (500 ms) without a report as the stick released and
   sends one STOP if the pad was driving. `Gamepad::update` forgets a report
   older than that outright, so an ancient report never reads as fresh again.
-  A held stick is re-sent every `GAMEPAD_REFRESH_MS` (200 ms), a new speed in
-  the same direction at most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms), and a
-  release sends one STOP, never a stream that would pin an exploring rover
-  in manual;
+  It reads `millis()` under the mailbox lock, not `loop()`'s `now`: a report
+  that landed during the sonar ping is newer than that `now`, and its
+  unsigned age would wrap and wipe it as silence. A held stick is re-sent
+  every `GAMEPAD_REFRESH_MS` (200 ms), a new speed in the same direction at
+  most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms), and a release sends one
+  STOP, never a stream that would pin an exploring rover in manual;
 - an OTA flash starts — ArduinoOTA's `onStart` calls `Rover::standDown`, so
   the rover is stopped and in manual whether the upload then succeeds or
-  fails;
+  fails. The upload blocks the loop, so its `onProgress` callback calls
+  `Rover::servicePendingRelease` to make the stop's second write;
 - `loop()` stalls — the loop watchdog (`enableLoopWDT()`, 5 s) resets the
   board, and a non-power-on reset boots into manual. The wheels do not stop
   at the reset: the shield keeps its PWM, so they run on for about half a
