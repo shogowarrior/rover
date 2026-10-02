@@ -253,7 +253,7 @@ void test_resume_autonomous_hands_control_back(void) {
 void test_stop_keeps_the_mode(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(MOVE_FORWARD, 100, 500, 0);
-  rover->stop();
+  rover->stop(10);
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
 }
@@ -339,6 +339,72 @@ void test_held_move_is_rewritten_periodically(void) {
   TEST_ASSERT_EQUAL_INT(2, motors->driveCalls);
 }
 
+// A stop has no next command to repair it. Written only once, a lost release
+// left the wheels driving while telemetry said STOP, until some client sent
+// another command. Every way of stopping a moving rover writes it again.
+void test_a_lost_stop_is_written_again(void) {
+  typedef void (*StopAt)(uint32_t now);
+  const StopAt ways[] = {
+      [](uint32_t now) { rover->command(STOP, 0, 0, now); },
+      [](uint32_t now) { rover->command(MOVE_CODE_COUNT, 100, 500, now); },
+      [](uint32_t now) { rover->update(now); },  // the deadline, and so the deadman
+      [](uint32_t now) { rover->stop(now); },
+      [](uint32_t now) { rover->standDown(now); },
+  };
+  for (StopAt stopAt : ways) {
+    rover->begin(Rover::MODE_MANUAL, 0);
+    rover->command(MOVE_FORWARD, 100, 500, 0);
+    motors->releasesToLose = 1;
+    stopAt(500);
+    TEST_ASSERT_FALSE(rover->status().moving);
+    TEST_ASSERT_TRUE(motors->driving);  // lost on the bus
+    rover->update(500 + tuning::MOTOR_REFRESH_MS - 1);
+    TEST_ASSERT_TRUE(motors->driving);
+    rover->update(500 + tuning::MOTOR_REFRESH_MS);
+    TEST_ASSERT_FALSE(motors->driving);
+  }
+}
+
+// In autonomy the lost stop that matters is a cruise's, at an obstacle: the
+// wheels drove on through the sweep that follows, into what it stopped for.
+void test_a_lost_obstacle_stop_is_written_again(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = runUntilCruising(0);
+  motors->releasesToLose = 1;
+  scanner->setAll(15.0f);  // a wall, inside EXPLORE_STOP_CM
+  for (int i = 0; i < 200 && rover->status().moving; i++) rover->update(now += 5);
+  TEST_ASSERT_FALSE(rover->status().moving);
+  TEST_ASSERT_TRUE(motors->driving);  // lost on the bus
+  const int drivesSoFar = motors->driveCalls;
+  runFor(now, tuning::MOTOR_REFRESH_MS + 5);
+  TEST_ASSERT_EQUAL_INT(drivesSoFar, motors->driveCalls);  // the retry stopped it, not a new move
+  TEST_ASSERT_FALSE(motors->driving);
+}
+
+// Once, not forever: an idle rover costs no I2C.
+void test_a_stop_is_written_twice_and_no_more(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  const int atBoot = motors->releaseCalls;
+  runFor(0, 5000);
+  TEST_ASSERT_EQUAL_INT(atBoot, motors->releaseCalls);
+
+  rover->command(MOVE_FORWARD, 100, 500, 5000);
+  runFor(5000, 10000);
+  TEST_ASSERT_EQUAL_INT(atBoot + 2, motors->releaseCalls);
+}
+
+// The second write must never stop a move that started after the first.
+void test_a_new_move_cancels_the_second_write(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(MOVE_FORWARD, 100, 500, 0);
+  rover->command(STOP, 0, 0, 100);
+  rover->command(MOVE_LEFT, 100, 1500, 200);
+  rover->update(100 + tuning::MOTOR_REFRESH_MS);
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_TRUE(rover->status().moving);
+  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, motors->lastPattern->move);
+}
+
 void test_status_reports_a_missing_motor_driver(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   TEST_ASSERT_TRUE(rover->status().motorsReady);
@@ -369,6 +435,10 @@ int main(int, char**) {
   RUN_TEST(test_resume_restarts_a_halted_explorer);
   RUN_TEST(test_resume_while_exploring_changes_nothing);
   RUN_TEST(test_held_move_is_rewritten_periodically);
+  RUN_TEST(test_a_lost_stop_is_written_again);
+  RUN_TEST(test_a_lost_obstacle_stop_is_written_again);
+  RUN_TEST(test_a_stop_is_written_twice_and_no_more);
+  RUN_TEST(test_a_new_move_cancels_the_second_write);
   RUN_TEST(test_status_reports_a_missing_motor_driver);
   RUN_TEST(test_status_reports_what_the_wheels_are_doing);
   RUN_TEST(test_status_has_no_scan_until_every_bearing_is_measured);

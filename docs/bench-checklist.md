@@ -262,8 +262,8 @@ example 470 uF, rated 25 V or more) across the shield's motor power terminal.
 Suspect noise when the board resets as motors start or reverse, when
 telemetry shows `"motorsReady": false` after a reset, or when a wheel does
 not do what telemetry says. The firmware rewrites a held move every 500 ms
-(`tuning::MOTOR_REFRESH_MS`) to repair a lost I2C write; that is a patch,
-not a cure.
+(`tuning::MOTOR_REFRESH_MS`), and writes the stop that ends a move once more
+500 ms later, to repair a lost I2C write; that is a patch, not a cure.
 
 ## 9. Failsafes, end to end
 

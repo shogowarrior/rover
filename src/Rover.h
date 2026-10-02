@@ -15,7 +15,9 @@
 // class enforces is tested on the host (test/test_rover):
 //
 //   * Motors are released by deadline. drive() records when a move ends and
-//     update() releases the motors once it passes. Nothing waits.
+//     update() releases the motors once it passes. Nothing waits. A release
+//     that ended motion is written once more MOTOR_REFRESH_MS later, because
+//     a lost stop has no next command to repair it.
 //   * External input is clamped here, in drive(), the one path every source
 //     (WebSocket, gamepad, Explorer) reaches the motors through. Durations are
 //     capped at tuning::COMMAND_DURATION_MAX_MS, which makes that cap the
@@ -55,7 +57,7 @@ class Rover {
 
   // Release the motors, keeping the mode: the client driving the rover
   // disconnected. In autonomous mode exploration carries on.
-  void stop();
+  void stop(uint32_t now);
 
   // Release the motors and drop to manual: no STOP could reach the rover any
   // more (the WiFi link dropped), or its firmware is being replaced (an OTA
@@ -69,7 +71,7 @@ class Rover {
  private:
   void setMode(Mode mode, uint32_t now);
   void drive(MoveCode move, int speed, int durationMs, uint32_t now);
-  void release();
+  void release(uint32_t now);
 
   Motors& motors;
   Explorer explorer;
@@ -80,6 +82,11 @@ class Rover {
   bool moving = false;
   uint32_t moveDeadline = 0;     // meaningful only while moving
   uint32_t lastMotorWriteAt = 0; // meaningful only while moving
+
+  // The second write of a stop (see release()). Only ever set while idle:
+  // drive() clears it, so it can never stop a newer move.
+  bool releasePending = false;
+  uint32_t releasedAt = 0;  // meaningful only while releasePending
 };
 
 #endif

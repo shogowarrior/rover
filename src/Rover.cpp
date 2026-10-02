@@ -11,12 +11,17 @@ Rover::Rover(Motors& motors, RangeScanner& scanner) : motors(motors), explorer(s
 
 void Rover::begin(Mode initialMode, uint32_t now) {
   currentMode = initialMode;
-  release();
+  release(now);
   explorer.reset(now);
 }
 
 void Rover::update(uint32_t now) {
-  if (moving && reached(now, moveDeadline)) release();
+  if (moving && reached(now, moveDeadline)) release(now);
+
+  if (releasePending && reached(now, releasedAt + tuning::MOTOR_REFRESH_MS)) {
+    releasePending = false;
+    motors.release();
+  }
 
   if (currentMode == MODE_AUTONOMOUS) {
     const Explorer::Motion motion = explorer.update(now, !moving);
@@ -34,7 +39,7 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   if (move == RESUME_AUTONOMOUS) {
     if (currentMode == MODE_AUTONOMOUS) {
       if (explorer.phase() == Explorer::HALTED) {
-        release();
+        release(now);
         explorer.reset(now);
       }
       return;
@@ -47,16 +52,16 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   if (!isMoveCode(move)) {
     // An instruction we cannot read, from a client we do not control.
     // Stopping is the only safe interpretation.
-    release();
+    release(now);
     return;
   }
   drive(static_cast<MoveCode>(move), speed, durationMs, now);
 }
 
-void Rover::stop() { release(); }
+void Rover::stop(uint32_t now) { release(now); }
 
 void Rover::standDown(uint32_t now) {
-  release();
+  release(now);
   setMode(MODE_MANUAL, now);
 }
 
@@ -79,7 +84,7 @@ Rover::Status Rover::status() const {
 void Rover::setMode(Mode mode, uint32_t now) {
   if (mode == currentMode) return;
   currentMode = mode;
-  release();
+  release(now);
   explorer.reset(now);
 }
 
@@ -91,7 +96,7 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
 
   const MovePattern* pattern = findMovePattern(move);
   if (pattern == nullptr || move == STOP || speed == 0 || durationMs == 0) {
-    release();
+    release(now);
     return;
   }
 
@@ -111,11 +116,25 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   currentMove = move;
   currentSpeed = speed;
   moving = true;
+  // The wheels are driving again: a stop's second write still pending would
+  // now end this move early.
+  releasePending = false;
   moveDeadline = now + static_cast<uint32_t>(durationMs);
 }
 
-void Rover::release() {
+// Always writes: stopping is never skipped. A move repairs a lost write by
+// rewriting itself every MOTOR_REFRESH_MS, but a stop has no next command to
+// repair it. When the release burst was lost, the wheels drove on with
+// telemetry saying STOP: past the deadman, and into the obstacle a cruise had
+// stopped for. So a release that ends motion is written once more,
+// MOTOR_REFRESH_MS later, from update(). Once, not forever: an idle rover
+// costs no I2C.
+void Rover::release(uint32_t now) {
   motors.release();
+  if (moving) {
+    releasePending = true;
+    releasedAt = now;
+  }
   moving = false;
   currentMove = STOP;
 }

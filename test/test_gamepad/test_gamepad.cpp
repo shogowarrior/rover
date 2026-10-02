@@ -73,14 +73,18 @@ void test_held_stick_keeps_the_rover_moving(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, motors->lastPattern->move);
 }
 
+// Counted by its effect, not by motor releases: Rover writes a stop that ends
+// a move twice, to repair a lost I2C write. Every STOP takes control, so once
+// control is handed back a second STOP would show as a rover forced into
+// manual.
 void test_release_sends_one_stop(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   uint32_t now = hold(pad(0, -127, 0, 0, 0), 0, 500);
   now = hold(pad(0, 0, 0, 0, 0), now, 20);
   TEST_ASSERT_FALSE(motors->driving);
-  const int releases = motors->releaseCalls;
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
   hold(pad(0, 0, 0, 0, 0), now, 2000);
-  TEST_ASSERT_EQUAL_INT(releases, motors->releaseCalls);  // and nothing more
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->mode());  // and nothing more
 }
 
 // The library never reports a disconnect. Silence is the only sign the pad

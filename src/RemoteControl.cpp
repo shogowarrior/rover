@@ -68,7 +68,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
         // The operator has lost the ability to steer. Anything other than
         // stopping leaves the rover driving on its last instruction.
         driver = NO_CLIENT;
-        rover.stop();
+        rover.stop(millis());
       }
       break;
 

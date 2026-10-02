@@ -29,7 +29,8 @@ constexpr int COMMAND_DURATION_MAX_MS = 1500;
 
 // A held move is rewritten to the motors at least this often, even though the
 // wheels are already doing it, to repair a lost I2C write. Well above the
-// panel's 200 ms repeat, so most repeats cost no bus traffic.
+// panel's 200 ms repeat, so most repeats cost no bus traffic. A release that
+// ends motion is written once more, this long after, for the same reason.
 constexpr uint32_t MOTOR_REFRESH_MS = 500;
 
 // Duration of a command that names none: WebSocket JSON without "duration",

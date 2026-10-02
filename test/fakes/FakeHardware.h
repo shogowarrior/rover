@@ -20,13 +20,20 @@ class FakeMotors final : public Motors {
   }
 
   void release() override {
-    driving = false;
     releaseCalls++;
+    if (releasesToLose > 0) {
+      releasesToLose--;
+      return;  // lost on the bus: the wheels drive on
+    }
+    driving = false;
   }
 
   bool ready() const override { return isReady; }
 
   bool isReady = true;
+  // The next this many release() calls never reach the shield. The Adafruit
+  // library discards the I2C result, so the firmware is never told.
+  int releasesToLose = 0;
 
   const MovePattern* lastPattern = nullptr;
   uint8_t lastSpeed = 0;

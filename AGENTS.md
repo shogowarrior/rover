@@ -153,9 +153,13 @@ wheels and records `moveDeadline`; `Rover::update()`, every loop, releases them
 once it passes. A repeat of the move already running only moves the deadline,
 except that the pattern is rewritten every `tuning::MOTOR_REFRESH_MS` (500 ms)
 to repair an I2C write the bus lost, which the library never reports. A
-release always writes. There are no per-move tasks or timers: an earlier design
-spawned four FreeRTOS tasks per move, which raced on shared motor parameters
-and could exhaust the heap under a fast client.
+release always writes, and one that ends motion is written once more
+`MOTOR_REFRESH_MS` later. A stop has no next command to repair it: one lost
+burst left the wheels driving while telemetry said STOP, through the deadman
+and into the obstacle a cruise had stopped for. A new move cancels that second
+write, and an idle rover writes nothing. There are no per-move tasks or
+timers: an earlier design spawned four FreeRTOS tasks per move, which raced on
+shared motor parameters and could exhaust the heap under a fast client.
 
 **Every input is clamped in `Rover::drive()`, the one path to the motors.**
 WebSocket commands, the gamepad and Explorer all arrive there. Speed is clamped
