@@ -38,6 +38,9 @@ constexpr int MOTOR_SPEED_MAX = 255;
 // copies, and tools/check_protocol.py checks them.
 constexpr float DISTANCE_FAR_CM = 999.0f;
 
+// `value`, limited to lo..hi.
+int clampInt(int value, int lo, int hi);
+
 // Clamp a speed from an untrusted source into what the motors may be given
 // (tuning::MOTOR_SPEED_LIMIT, never above the driver's 255).
 int clampSpeed(int speed);

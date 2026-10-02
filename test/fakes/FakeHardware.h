@@ -61,18 +61,16 @@ class FakeScanner final : public RangeScanner {
     return range[servo];
   }
 
-  void setAll(float cm) {
-    for (int deg = 0; deg <= 180; deg++) range[deg] = cm;
-  }
+  void setAll(float cm) { setArc(0, SERVO_MAX_DEG, cm); }
 
   // Everything from `fromDeg` to `toDeg` inclusive.
   void setArc(int fromDeg, int toDeg, float cm) {
     for (int deg = fromDeg; deg <= toDeg; deg++) range[deg] = cm;
   }
 
-  int servo = 90;
+  int servo = SERVO_CENTRE_DEG;
   int pings = 0;
-  float range[181];
+  float range[SERVO_MAX_DEG + 1];
   const uint32_t* clock = nullptr;  // optional: stamps aims and pings
   std::vector<int> aims;
   std::vector<uint32_t> aimTimes;

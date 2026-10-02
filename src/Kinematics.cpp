@@ -10,15 +10,11 @@ namespace kinematics {
 static_assert(tuning::MOTOR_SPEED_LIMIT <= MOTOR_SPEED_MAX,
               "the speed limit must fit the motor driver's 0..255 range");
 
-namespace {
-
 int clampInt(int value, int lo, int hi) {
   if (value < lo) return lo;
   if (value > hi) return hi;
   return value;
 }
-
-}  // namespace
 
 int clampSpeed(int speed) { return clampInt(speed, 0, tuning::MOTOR_SPEED_LIMIT); }
 

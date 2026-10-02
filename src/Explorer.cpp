@@ -422,13 +422,12 @@ Explorer::Motion Explorer::retryAfterHalt(uint32_t now) {
 // ---------------------------------------------------------------------------
 
 void Explorer::aim(uint32_t now, int angleDeg) {
-  int target = 90 + params.servoDegPerBearing * angleDeg;
-  if (target < 0) target = 0;
-  if (target > 180) target = 180;
+  const int target =
+      kinematics::clampInt(SERVO_CENTRE_DEG + params.servoDegPerBearing * angleDeg, 0, SERVO_MAX_DEG);
 
   // Settle time grows with how far the servo swings; the first aim assumes
   // the worst case because nothing is known about where it points.
-  const int travel = sonar.servoDeg < 0 ? 180 : abs(target - sonar.servoDeg);
+  const int travel = sonar.servoDeg < 0 ? SERVO_MAX_DEG : abs(target - sonar.servoDeg);
   if (target != sonar.servoDeg) {
     scanner.aim(target);
     sonar.servoDeg = target;

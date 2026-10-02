@@ -8,7 +8,7 @@ Scanner::Scanner()
 
 void Scanner::begin() {
   servo.attach(pins::SERVO);
-  servo.write(90);
+  servo.write(SERVO_CENTRE_DEG);
 }
 
 void Scanner::aim(int servoDeg) { servo.write(servoDeg); }
