@@ -44,8 +44,9 @@ board booting. Move the wire to GPIO34 through a divider, or swap in an
 HC-SR04-compatible sonar that runs at 3.3 V so its echo needs no divider. See
 section 4 of the bench checklist.
 
-**Proportional mecanum drive.** Today the panel's stick picks one of eight
-fixed moves. Mecanum wheels can do better: for a wanted forward speed `vx`,
+**Proportional mecanum drive.** Today the panel's stick and the pad's pick
+one of a few fixed moves: eight translations, or under ADVANCED a pivot per
+quadrant. Mecanum wheels can do better: for a wanted forward speed `vx`,
 rightward speed `vy` and clockwise turn rate `w`,
 
 ```

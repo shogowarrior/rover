@@ -12,7 +12,8 @@ controller, and hand control back with one button.
   if it finds itself boxed in or its sensor hears nothing for three sweeps in
   a row.
 - **Browser panel.** A joystick, a speed slider and a live fan of the five
-  distances, in a page you open straight from disk.
+  distances, in a page you open straight from disk; and block programs, which
+  a simulator previews before they drive the rover.
 - **Keyboard client.** Drive and watch telemetry from a terminal.
 - **PS3 controller** over Bluetooth, optional.
 - **Fails safe.** Every command expires within 1.5 s, losing the driver or
@@ -54,7 +55,11 @@ default install path, `~/.platformio/penv/bin/pio`.
    password, see `src/config.example.h`.
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it), enter the rover's address and press
-   Connect. Or, from a terminal:
+   Connect. The header's Normal | Advanced toggle is the rover's control
+   scheme (below). The Drive tab has the joystick; the Program tab has block
+   programs and the simulator. The Program tab loads its block editor from
+   cdn.jsdelivr.net, so it needs the internet the first time (the browser may
+   keep a copy); driving never does. Or, from a terminal:
    ```
    pip install websockets
    python3 client/drive.py                   # or --host rover.local
@@ -73,15 +78,46 @@ stops within half a second.
 
 | | Browser panel | Keyboard (`drive.py`) | PS3 pad |
 |---|---|---|---|
-| Move | Joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
+| Move | Joystick, eight directions; under Advanced, pick Pivot or Pivot sideways and the stick's quadrant picks the pivot | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions; under Advanced, hold L1 (pivot) or R1 (pivot sideways) |
 | Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
 | Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
+| Control scheme | Normal \| Advanced, in the header | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
+| Programs | The Program tab | -- | -- |
 | Stop | Stop | space | Let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
 
 After a power-on the rover explores. After any other reset (an OTA flash, a
 crash, the watchdog) it starts in manual and waits, and it drops to manual
 if it loses WiFi or an OTA flash starts.
+
+The rover holds one **control scheme** for every controller. Normal drives
+the eight translations and the two rotations. Advanced adds the eight pivots,
+which nobody has checked on the bench yet ([docs/mecanum.md](docs/mecanum.md)).
+Changing the scheme stops a held stick, which then needs a fresh push.
+
+## Programs and the simulator
+
+The panel's Program tab builds programs from blocks: drive a move for a time
+or until a condition, read the sonar, wait, loop, branch. Load an example
+(Square, Strafe box, Patrol, Mecanum tour), or export a program to a file and
+import it again. **Preview** runs it on a simulated rover in a simulated room
+and sends nothing to the real one; **Run on rover** drives the rover with it,
+re-sending each move as a held control does. A press of any drive control,
+Stop, Autonomous, Stop program, losing the link or the page losing focus
+stops a program on the rover, and it never takes the rover back. Before
+driving a pivot on a rover that is not on Advanced, Run asks first.
+
+The simulator is a preview, not a promise: wheels that never slip, no inertia
+or motor lag, one sonar ray per ping, a chassis that stops dead on contact,
+and no exploring. Its readings are as old as the rover's, so a program that
+works in the preview does not rely on fresher ones. The numbers that describe
+this rover are estimates, at the top of
+[`extras/joystick/js/sim.js`](extras/joystick/js/sim.js), each with how to
+measure it on the bench: full wheel speed (`SIM_WHEEL_MAX_MPS`, 0.6 m/s), the
+duty below which the wheels do not turn (`SIM_DEADBAND_PWM`, 0), how hard a
+released wheel drags (`SIM_RELEASED_DRAG`, 0.25), the chassis and where its
+wheels sit (`SIM_CHASSIS`, `SIM_WHEEL`), and the sonar's reach and the angle
+past which a surface sends no echo (`SIM_SONAR`, 400 cm and 60 degrees).
 
 ## How it works
 
@@ -115,10 +151,11 @@ the design and the rules it keeps.
 ```
 ~/.platformio/penv/bin/pio test -e native     # unit tests on the host, no board needed
 python3 tools/check_protocol.py               # the clients agree with the firmware
+node --test extras/joystick/test/             # the browser panel and its simulator, in Node
 ```
 
-CI runs both of these and builds every board environment on each pull request
-and each push to `main`. What no test can know (which motor is on which
+CI runs all three, parses every client (Python and JavaScript), and builds
+every board environment on each pull request and each push to `main`. What no test can know (which motor is on which
 terminal, which way the servo turns) is covered by
 [docs/bench-checklist.md](docs/bench-checklist.md).
 
@@ -139,6 +176,8 @@ terminal, which way the servo turns) is covered by
   them through an ESP32 reset until the rebooted firmware releases them,
   about half a second, and for as long as the board fails to boot. Keep a
   way to cut the motor power within reach.
+- **Programs drive the real rover.** Preview a program first, keep Stop in
+  reach while it runs, and remember that the pivots are not bench-verified.
 - **Boot hazard.** The scanner's echo wire sits on GPIO12, a strapping pin
   that can stop the board booting. The fix is a wire; see the bench
   checklist.

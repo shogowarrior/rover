@@ -24,7 +24,9 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
   is flashed. Build after every firmware change, run the host tests after
   every change to the pure modules, run `tools/check_protocol.py` after
   changing a client or a value a client mirrors, and run the panel's tests
-  after changing the browser panel.
+  after changing the browser panel or a file in `src/` they read
+  (`MoveCodes.h`, `MovePatterns.cpp`, `ExploreParams` in `Explorer.h`,
+  `Tuning.h`, `Kinematics.h`, `Protocol.cpp`).
 
 ## Commands
 
@@ -86,7 +88,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Telemetry listener only |
 | `client/rover.ipynb` | Notebook experiments over the same link |
-| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
+| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). A Drive tab, and a Program tab of block programs with a simulator to preview them on. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
 | `partition.csv` | Two OTA app slots and no filesystem |
 | `docs/`, `images/` | Wiring, BOM, pinouts, the mecanum table, bench checklist, roadmap |
@@ -311,12 +313,28 @@ local file that connects out to `ws://<rover>:81` (the address field takes
 
 Chrome refuses module scripts from `file://`, so the panel is classic
 `<script src>` files loaded in order, sharing one global scope: no modules, no
-bundler, no packages. It reads like the firmware: small classes in `js/`
-(`Link` the WebSocket, `Driver` the controls and what to send, `ScanView`,
-`Readouts`, `Tabs`), every value mirrored from `src/` in `js/protocol.js`, and
-`js/app.js` as the composition root that builds and wires them. `joy.js` is a
-vendored third-party joystick: leave it unmodified. `test/` runs the real page
-in Node against a fake DOM, WebSocket and clock.
+bundler, no packages. Its one remote script is Blockly 13.3.0 from
+cdn.jsdelivr.net, for the Program tab: pinned, checked against its hash and
+deferred, so driving never waits for it or depends on it. The panel reads like
+the firmware: small classes in `js/`, wired by `js/app.js`, the composition
+root:
+
+- `Link` the WebSocket, `Driver` the controls and what to send, `ScanView`,
+  `Readouts`, `Tabs`;
+- `SchemeToggle` the rover's control scheme, `FamilySelector` the stick
+  family;
+- `ProgramRunner` and `RoverTarget` run a block program on the rover,
+  `RoverBlocks` and `BlockEditor` are its blocks on Blockly, `ProgramTab` the
+  tab;
+- `RoverSim`, `Room`, `SimSonar`, `SimClock` and `SimTarget` the simulator,
+  and `SimView` draws it.
+
+Every value mirrored from `src/` is in `js/protocol.js`, except the
+simulator's own copies, in `js/sim.js`. `joy.js` is a vendored third-party
+joystick: leave it unmodified. `test/` runs the real page in Node against a
+fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
+(`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
+(`mecanum.test.js`) on their own.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
@@ -325,7 +343,41 @@ same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
 below). Letting go, blurring the window or hiding the tab stops what the panel
 is driving and leaves an exploring rover alone. Its Drive and Program tabs
 switch only what is shown: switching sends nothing, and the scan, the readouts
-and the Stop and Autonomous buttons stay on screen on both.
+and the Stop and Autonomous buttons stay on screen on both, in the same place.
+
+**The scheme toggle** in the header shows only what telemetry reports, and
+stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
+configuration, never a command: it neither takes control nor stops an
+exploring rover. A change, from anyone, lets go of a held stick (one STOP, and
+only if the stick was driving), which drives again only from a fresh press; a
+held rotate button and a running program carry on. The family selector
+(Translate, Pivot, Pivot sideways) appears only under ADVANCED.
+
+**The Program tab** runs a block program on the rover, or previews it on the
+simulator. On the rover it needs a live link, and drives only through
+`Driver.program()`: each move is re-sent every `REPEAT_MS`, asking 400 ms,
+like a held control, and the operator's hands win over it. A drive press,
+blur, a hidden or closed page, the link lost, stale or disconnected, Stop,
+Autonomous, the tab's Stop program or a switch of target stops a run, and an
+abort sends STOP only if the program was driving. Its commands are paced
+(`COMMAND_GAP_MS` and `REPEAT_GAP_MS` in `js/program.js`), so no loop floods
+the rover; it acts only on fresh readings, and never takes no echo for a
+clear way; every loop yields. A drive lasts at most 60 s, a drive-until 30 s, a wait 600 s.
+The compiled code runs with the page's globals in reach, so a program loaded
+from anywhere goes through `RoverBlocks.sanitize()`, which drops block ids,
+and `RoverBlocks.harden()` keeps comments out of the code. On the rover, Run
+asks first when the editor holds several stacks, and when the program drives
+a pivot while the rover is not on ADVANCED. A program's own stop and start
+exploring are not presses: the Driver raises no event for them.
+
+**The simulator** holds no Link and no Driver: a preview sends nothing, and
+its telemetry never reaches the scan fan or the readouts. It follows the
+firmware's wheel table with ideal mecanum kinematics, `MOTOR_SPEED_LIMIT`, the
+400 ms deadline and the 200 ms re-send, the sweep's timing (so readings are as
+old as the rover's) and telemetry every 500 ms. It does not model exploring,
+wheel slip, inertia, motor lag, the sonar's beam width, or temperature, phase
+and halt. The numbers that describe this rover are estimates, in the
+calibration block of `js/sim.js` with how to measure each.
 
 ## The gamepad
 
@@ -354,7 +406,8 @@ a Bluetooth send from the loop task, and any client can flip the scheme as
 fast as it sends.
 Any client may change the scheme, so a change never redirects a held stick:
 the pad stops what it was driving and waits for the stick to come back to
-centre, so a toggle elsewhere can only ever stop it.
+centre, so a toggle elsewhere can only ever stop it. The panel's stick does
+the same, and waits for a fresh press.
 `kinematics::moveForStick` maps the stick for the pad; the panel carries a
 copy, and both are tested against `test/vectors/stick_moves.json`.
 [docs/mecanum.md](docs/mecanum.md) has the table and warns that none of it
@@ -410,7 +463,10 @@ shows how the operator passes one to an upload instead.
 - Behaviour constants go in `Tuning.h` (free of Arduino, so the tests share
   them), autonomy thresholds in `ExploreParams`, pins in `Pins.h`. A value a
   client mirrors names its copy in a comment, and `tools/check_protocol.py`
-  checks the copy.
+  checks the copy. The panel simulator's copies in
+  `extras/joystick/js/sim.js` (the wheel table, the sweep timing, the
+  telemetry interval) are checked by `extras/joystick/test/sim.test.js`
+  instead; `src/` does not name them yet.
 - Optional features are switches in `Features.h`, not commented-out code, and
   every setting keeps compiling (CI builds `car_wire_gamepad` for the gamepad
   path).

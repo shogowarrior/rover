@@ -110,9 +110,12 @@ eight; for example:
 
 The rows follow the reference table, so with `w` and `d` right, a pivot that
 travels against its name means a wrong row: fix it in
-`src/MovePatterns.cpp`, with its test in `test/test_move_patterns`. How far
-a pivot swings depends on how freely the released gearboxes coast; write
-what you see in mecanum.md.
+`src/MovePatterns.cpp`, with its test in `test/test_move_patterns`, and in
+`RoverSim.WHEELS` in `extras/joystick/js/sim.js`. How far a pivot swings is
+for the floor to show: with rollers that never slip, as the panel's
+simulator models them, no row needs a released wheel to turn, so the
+released gearboxes change nothing there, and slip and grip decide the rest.
+Write what you see in mecanum.md.
 
 ## 3. Scanner left and right (on the stand)
 

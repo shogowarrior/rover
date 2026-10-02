@@ -75,12 +75,13 @@ coast. The diagonals drive one diagonal pair the same way, which on mecanum
 wheels moves the rover at 45 degrees without turning it.
 
 Each pivot is half of a four-wheel move: one pair turns exactly as in that
-move, and the rover swings about the pair that coasts.
+move, and the rover swings round a point on the side of the pair that
+coasts (see below for where).
 
 - **Pivots (9 to 12)** drive one side as `MOVE_FORWARD` or `MOVE_BACKWARD`
   would. The name gives the side the rover pivots about and the way it
   travels: `PIVOT_RIGHT_FORWARD` drives the left pair forward, so the rover
-  moves forward with its nose turning right, about its right wheels.
+  moves forward with its nose turning right, round its right side.
 - **Sideways pivots (13 to 16)** drive one axle as `MOVE_RIGHT` or
   `MOVE_LEFT` would. `FORWARD` swings the front and `BACKWARD` the rear
   (DroneBot's `FRONT` and `REAR`), toward the side named:
@@ -99,12 +100,21 @@ swinging it. The rows now follow DroneBot's constants, and
 `test_move_patterns` checks both the constants and each pivot's direction
 against its name.
 
-How far a pivot really swings depends on how freely a released TT gearbox
-coasts, which only the bench can show. Autonomous exploration and the
-keyboard client never send codes 9 to 16, and neither do the panel and the
-gamepad under the NORMAL control scheme. Run the pivot step in
-[bench-checklist.md](bench-checklist.md) (section 2) before switching to
-ADVANCED (below).
+With ideal rollers that never slip, as the panel's simulator models them, no
+row needs a coasting wheel to turn, so how freely a released gearbox turns
+changes nothing. A pivot then moves the chassis at half its wheels' speed and
+turns it about a point beyond the coasting pair, not at it: half the
+wheelbase plus half the track from the chassis' centre, about 16 cm by the
+simulator's estimate of where this rover's wheels sit. On the floor, how the rollers slip and grip decides how far a pivot
+really swings, which only the bench can show.
+
+Autonomous exploration and the keyboard client never send codes 9 to 16, and
+neither do the panel's stick and the gamepad under the NORMAL control scheme.
+A program on the panel's Program tab can drive any of them (the Mecanum tour
+example drives all eight), so Run on the rover asks first whenever a program
+drives a pivot and the rover is not on ADVANCED; a preview never asks. Run
+the pivot step in [bench-checklist.md](bench-checklist.md) (section 2) before
+switching to ADVANCED (below), or saying yes.
 
 ## Control schemes
 
@@ -120,12 +130,15 @@ panel's toggle change it until the next reset, and telemetry reports it as
 | Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
 | Pivot (9 to 12) | -- | Hold L1, or pick Pivot on the panel |
 | Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways on the panel |
+| Program tab | Any motion; Run on the rover asks before a pivot | Any motion |
 | Gamepad LEDs | Player 1 | Player 2 |
 
-A scheme change never redirects a held stick: whatever a controller was
-driving stops, and it drives again only from a fresh push. The scheme is
-shared, so otherwise a toggle on one controller would turn the diagonal
-under another operator's thumb into a pivot.
+A scheme change never redirects a held stick: the stick stops what it was
+driving, and drives again only from a fresh push. The scheme is shared, so
+otherwise a toggle on one controller would turn the diagonal under another
+operator's thumb into a pivot. On the panel a held rotate button carries on,
+as it sends the same move under either scheme, and so does a running
+program, which the operator started.
 
 In a pivot family the stick's quadrant picks the move by its name: up and
 right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
@@ -135,6 +148,8 @@ exactly along an axis counts as right and forward. So in the pivot family
 side pushed; in the sideways family (R1, or Pivot sideways) up swings the
 front and down the rear, toward the side pushed. If the bench shows a row's
 wheels do not match its name, fix the row in `MovePatterns.cpp`, with its
-test, and the stick follows. `kinematics::moveForStick` does the mapping for
+test, and the stick follows. Fix the same row in `RoverSim.WHEELS` in
+[`extras/joystick/js/sim.js`](../extras/joystick/js/sim.js) too, or the
+panel's `test/sim.test.js` fails: the simulator previews with the table. `kinematics::moveForStick` does the mapping for
 the gamepad, the panel carries a copy, and both are tested against
 [`test/vectors/stick_moves.json`](../test/vectors/stick_moves.json).
