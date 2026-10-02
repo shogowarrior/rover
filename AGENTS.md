@@ -83,6 +83,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
 | `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
 | `test/fakes/` | Fake `Motors` and `RangeScanner` for the host tests |
+| `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does |
 | `test/vectors/` | Cases shared by the firmware's tests and the panel's (stick to move) |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |

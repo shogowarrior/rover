@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include "../fakes/FakeHardware.h"
+#include "../support/Loop.h"
 #include "GamepadSession.h"
 #include "Tuning.h"
 
@@ -30,12 +31,12 @@ GamepadReport pad(int lx, int ly, int l2, int r2, uint32_t reportedAt) {
 // for `ms`, running the rover alongside. Returns the new time.
 uint32_t hold(const GamepadReport& controls, uint32_t from, uint32_t ms) {
   uint32_t now = from;
-  for (; now < from + ms; now += 10) {
+  advance(now, ms, 10, [&controls](uint32_t t) {
     GamepadReport report = controls;
-    report.lastReportMs = now;
-    session->update(report, now);
-    rover->update(now);
-  }
+    report.lastReportMs = t;
+    session->update(report, t);
+    rover->update(t);
+  });
   return now;
 }
 

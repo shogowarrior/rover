@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../fakes/FakeHardware.h"
+#include "../support/Loop.h"
 #include "Explorer.h"
 
 // Autonomy, tested against a scripted world. FakeScanner holds a distance for
@@ -54,24 +55,25 @@ struct Harness {
   }
 
   void run(uint32_t ms) {
-    const uint32_t end = now + ms;
-    while (static_cast<int32_t>(now - end) < 0) {
-      if (moving && static_cast<int32_t>(now - busyUntil) >= 0) moving = false;
-      if (moving && lastMove == MOVE_FORWARD) {
-        if (forwardRunMs < closeForMs) closeIn(closingCmPerS * 0.005f);
-        forwardRunMs += 5;
-      }
-      const Explorer::Motion motion = explorer.update(now, !moving);
-      if (motion.requested) {
-        motions.push_back(motion);
-        motionTimes.push_back(now);
-        moving = motion.move != STOP && motion.durationMs > 0;
-        busyUntil = now + static_cast<uint32_t>(motion.durationMs);
-        if (motion.move != MOVE_FORWARD) forwardRunMs = 0;
-        lastMove = motion.move;
-        if (onMotion) onMotion(motion);
-      }
-      now += 5;
+    advance(now, ms, 5, [this](uint32_t) { step(); });
+  }
+
+  // One pass of the loop, at `now`.
+  void step() {
+    if (moving && timing::reached(now, busyUntil)) moving = false;
+    if (moving && lastMove == MOVE_FORWARD) {
+      if (forwardRunMs < closeForMs) closeIn(closingCmPerS * 0.005f);
+      forwardRunMs += 5;
+    }
+    const Explorer::Motion motion = explorer.update(now, !moving);
+    if (motion.requested) {
+      motions.push_back(motion);
+      motionTimes.push_back(now);
+      moving = motion.move != STOP && motion.durationMs > 0;
+      busyUntil = now + static_cast<uint32_t>(motion.durationMs);
+      if (motion.move != MOVE_FORWARD) forwardRunMs = 0;
+      lastMove = motion.move;
+      if (onMotion) onMotion(motion);
     }
   }
 
@@ -166,10 +168,7 @@ void test_first_sweep_measures_every_bearing_before_moving(void) {
 // the end of one sweep and the start of the next.
 void test_consecutive_sweeps_alternate_direction(void) {
   Harness h;
-  for (int i = 0; i < 400; i++) {
-    h.explorer.survey(h.now);
-    h.now += 5;
-  }
+  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
   TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 10);
   const int expected[10] = {20, 55, 90, 125, 160, 160, 125, 90, 55, 20};
   for (int i = 0; i < 10; i++) TEST_ASSERT_EQUAL_INT(expected[i], h.scanner.pingAngles[i]);

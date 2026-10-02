@@ -1,9 +1,10 @@
 #ifndef FAKE_HARDWARE_H
 #define FAKE_HARDWARE_H
 
-// Test doubles for the interfaces in src/Hardware.h, shared by the host test
-// suites (`#include "../fakes/FakeHardware.h"`). Not a suite itself: PlatformIO
-// only treats test/test_* directories as suites.
+// Test doubles for the interfaces in src/Hardware.h. test/fakes and
+// test/support hold headers the host test suites share
+// (`#include "../fakes/FakeHardware.h"`); neither is a suite, because
+// PlatformIO only treats test/test_* directories as suites.
 
 #include <vector>
 

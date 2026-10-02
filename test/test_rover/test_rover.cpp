@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include "../fakes/FakeHardware.h"
+#include "../support/Loop.h"
 #include "Rover.h"
 #include "Tuning.h"
 
@@ -15,14 +16,12 @@ FakeMotors* motors;
 FakeScanner* scanner;
 Rover* rover;
 
+void updateRover(uint32_t now) { rover->update(now); }
+
 // Runs rover.update() every 5 ms from `from` for `ms`, returning the new time.
 uint32_t runFor(uint32_t from, uint32_t ms) {
   uint32_t now = from;
-  const uint32_t end = from + ms;
-  while (static_cast<int32_t>(now - end) < 0) {
-    rover->update(now);
-    now += 5;
-  }
+  advance(now, ms, 5, updateRover);
   return now;
 }
 
@@ -30,12 +29,10 @@ uint32_t runFor(uint32_t from, uint32_t ms) {
 // needs one sweep, about a second), returning the time it did.
 uint32_t runUntilCruising(uint32_t from) {
   uint32_t now = from;
-  for (int i = 0; i < 1000; i++) {
-    rover->update(now);
-    if (motors->driving && motors->lastPattern->move == MOVE_FORWARD) return now;
-    now += 5;
-  }
-  TEST_FAIL_MESSAGE("exploration never drove forward");
+  const bool cruising = advanceUntil(now, 5000, 5, updateRover, [] {
+    return motors->driving && motors->lastPattern->move == MOVE_FORWARD;
+  });
+  TEST_ASSERT_TRUE_MESSAGE(cruising, "exploration never drove forward");
   return now;
 }
 
@@ -194,11 +191,7 @@ void test_a_command_takes_control_from_exploration(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_LEFT, motors->lastPattern->move);
 
   // Exploration does not drive again, however long the rover sits.
-  now = runFor(now, 500);
-  const int drivesSoFar = motors->driveCalls;
-  runFor(now, 20000);
-  TEST_ASSERT_EQUAL_INT(drivesSoFar, motors->driveCalls);
-  TEST_ASSERT_FALSE(motors->driving);
+  assertStaysStopped(runFor(now, 500));
 }
 
 // STOP takes control too. A STOP that only released the wheels and kept
@@ -262,13 +255,11 @@ void test_stop_keeps_the_mode(void) {
 // rover somewhere it cannot be stopped from.
 void test_losing_the_link_stops_exploration(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
-  uint32_t now = runUntilCruising(0);
+  const uint32_t now = runUntilCruising(0);
   rover->standDown(now);
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->mode());
-  const int drivesSoFar = motors->driveCalls;
-  runFor(now, 10000);
-  TEST_ASSERT_EQUAL_INT(drivesSoFar, motors->driveCalls);
+  assertStaysStopped(now);
 }
 
 // --- status ------------------------------------------------------------------
