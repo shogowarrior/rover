@@ -264,7 +264,7 @@ Explorer::Motion Explorer::escapeStuck(uint32_t now) {
   // counts -- that made the rover ping-pong at a wide low obstacle. Only the
   // driving before the stuck window counts as ground to reverse over.
   episode.reverseBudgetMs += static_cast<int32_t>(since(cruise.stuckReferenceAt, cruise.start));
-  if (episode.consecutiveStucks < 4) episode.consecutiveStucks++;
+  if (episode.consecutiveStucks < params.maxStuckMultiplier) episode.consecutiveStucks++;
   episode.escapeSteps = params.stuckTurnSteps * episode.consecutiveStucks;
   if (episode.committedDirection == 0) episode.committedDirection = alternateDirection();
   return startBackoff(now);
@@ -475,10 +475,10 @@ bool Explorer::roomToRotate() const {
 // +1 to turn left, -1 to turn right: whichever side has more open space.
 // Distances are capped so one far reading cannot outvote a nearer wall.
 int Explorer::chooseTurnDirection() {
-  const float cap = 150.0f;
+  const float cap = params.turnCompareCapCm;
   const float left = fminf(scan.cm[LEFT], cap) + fminf(scan.cm[FRONT_LEFT], cap);
   const float right = fminf(scan.cm[RIGHT], cap) + fminf(scan.cm[FRONT_RIGHT], cap);
-  if (fabsf(left - right) < 5.0f) return alternateDirection();
+  if (fabsf(left - right) < params.turnTieCm) return alternateDirection();
   return left > right ? +1 : -1;
 }
 
@@ -501,7 +501,7 @@ int Explorer::sidestepDirection() const {
   const bool tightRight = lateralCm(RIGHT) < params.rotateClearanceCm;
   if (tightLeft == tightRight) return 0;
   const float otherSide = tightLeft ? lateralCm(RIGHT) : lateralCm(LEFT);
-  if (otherSide < params.rotateClearanceCm + 5.0f) return 0;
+  if (otherSide < params.rotateClearanceCm + params.sidestepRoomMarginCm) return 0;
   return tightLeft ? -1 : +1;
 }
 

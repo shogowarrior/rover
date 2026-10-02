@@ -71,13 +71,19 @@ struct ExploreParams {
   int turnStepMs = 200;          // one rotation step; its angle is never assumed
   int turnSettleMs = 120;        // let the chassis stop before measuring
   int maxTurnSteps = 30;         // more than a full circle at any plausible rate
+  float turnCompareCapCm = 150;  // choosing a side: farther reads as this, so one
+                                 //   far echo cannot outvote a nearer wall
+  float turnTieCm = 5;           // sides within this of each other: alternate
   int commitReleaseMs = 1500;    // a cruise this long forgets the turn direction
   int backoffMaxMs = 300;
   int sidestepMs = 250;
   int maxSidesteps = 2;          // in a row, without a cruise between
+  float sidestepRoomMarginCm = 5;  // the other flank must clear rotateClearanceCm by this
   int stuckWindowMs = 1000;      // a front echo that has not changed by
   float stuckProgressCm = 3;     //   this much in this long means stuck
-  int stuckTurnSteps = 4;        // minimum escape turn, times consecutive stucks
+  int stuckTurnSteps = 4;        // minimum escape turn, times consecutive stucks...
+  int maxStuckMultiplier = 4;    //   counted up to this. Keep the product within
+                                 //   maxTurnSteps, or one escape halts boxed in
   float suspectNearCm = 60;      // an echo this close that vanishes within
   int suspectWindowMs = 1000;    //   this long is a deflection, not open space
   int silentSweepsToHalt = 3;    // sweeps in a row with no echo at all

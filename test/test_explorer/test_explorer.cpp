@@ -463,6 +463,11 @@ void test_long_cruise_forgets_the_turn_direction(void) {
 // each time, in the same direction. Resetting on every stuck made the rover
 // ping-pong in front of it.
 void test_repeated_stucks_turn_further_the_same_way(void) {
+  // The longest escape alone must fit inside a full circle of turning, or
+  // every escape at the cap would end halted "boxed in".
+  const ExploreParams params;
+  TEST_ASSERT_TRUE(params.stuckTurnSteps * params.maxStuckMultiplier <= params.maxTurnSteps);
+
   Harness h;
   h.scanner.setArc(60, 120, 150.0f);  // held after a short drive, every cruise
   h.closingCmPerS = 25.0f;
