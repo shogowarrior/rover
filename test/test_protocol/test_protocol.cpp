@@ -111,6 +111,34 @@ void test_halt_reason_is_reported(void) {
   TEST_ASSERT_EQUAL_STRING("boxed in", doc["halt"]);
 }
 
+// The two flags each carry their own value, false included. Serialised from
+// the wrong field, or as a constant, "motorsReady" hides the dead shield it
+// exists to report: telemetry names a move that never reaches the wheels.
+void test_flags_report_false(void) {
+  Rover::Status status = sampleStatus();
+  status.move = STOP;
+  status.moving = false;
+  status.motorsReady = true;
+  char out[protocol::TELEMETRY_MAX_BYTES];
+  size_t length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
+  JsonDocument doc;
+  TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+  TEST_ASSERT_EQUAL_STRING("STOP", doc["move"]);
+  TEST_ASSERT_TRUE(doc["moving"].is<bool>());
+  TEST_ASSERT_FALSE(doc["moving"].as<bool>());
+  TEST_ASSERT_TRUE(doc["motorsReady"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("NORMAL", doc["scheme"]);
+
+  status.move = MOVE_FORWARD;
+  status.moving = true;
+  status.motorsReady = false;
+  length = protocol::writeTelemetry(status, kinematics::SCHEME_NORMAL, 40.0f, out, sizeof(out));
+  TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+  TEST_ASSERT_TRUE(doc["moving"].as<bool>());
+  TEST_ASSERT_TRUE(doc["motorsReady"].is<bool>());
+  TEST_ASSERT_FALSE(doc["motorsReady"].as<bool>());
+}
+
 // The largest frame must fit RemoteControl's buffer, or telemetry silently
 // stops in exactly those states. Every field at its longest, whether or not
 // the states can occur together: the longest move name, the longest phase and
@@ -167,6 +195,15 @@ void test_other_messages_drive(void) {
   TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
 }
 
+// A message carrying "move" drives even when it also names a scheme.
+// Otherwise a client that sent its scheme with every command would have its
+// STOPs read as configuration: it could neither stop nor take control.
+void test_a_move_with_a_scheme_still_drives(void) {
+  const protocol::Message m = message("{\"move\":0,\"speed\":0,\"duration\":0,\"scheme\":\"ADVANCED\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
+}
+
 // Truncated JSON would reach every client as garbage. Better to send nothing.
 void test_too_small_a_buffer_writes_nothing(void) {
   char out[16];
@@ -181,10 +218,12 @@ int main(int, char**) {
   RUN_TEST(test_telemetry_carries_every_key_clients_read);
   RUN_TEST(test_distances_are_omitted_until_scanned);
   RUN_TEST(test_halt_reason_is_reported);
+  RUN_TEST(test_flags_report_false);
   RUN_TEST(test_longest_telemetry_fits);
   RUN_TEST(test_too_small_a_buffer_writes_nothing);
   RUN_TEST(test_scheme_message_sets_the_scheme);
   RUN_TEST(test_unknown_scheme_is_ignored);
   RUN_TEST(test_other_messages_drive);
+  RUN_TEST(test_a_move_with_a_scheme_still_drives);
   return UNITY_END();
 }
