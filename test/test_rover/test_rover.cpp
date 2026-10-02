@@ -362,7 +362,7 @@ void test_a_lost_obstacle_stop_is_written_again(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   uint32_t now = runUntilCruising(0);
   motors->releasesToLose = 1;
-  scanner->setAll(15.0f);  // a wall, inside EXPLORE_STOP_CM
+  scanner->setAll(tuning::EXPLORE_STOP_CM - 10);  // a wall, inside the stop distance
   for (int i = 0; i < 200 && rover->status().moving; i++) rover->update(now += 5);
   TEST_ASSERT_FALSE(rover->status().moving);
   TEST_ASSERT_TRUE(motors->driving);  // lost on the bus

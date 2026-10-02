@@ -236,7 +236,8 @@ void test_consecutive_sweeps_alternate_direction(void) {
   Harness h;
   advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
   TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 10);
-  const int expected[10] = {20, 55, 90, 125, 160, 160, 125, 90, 55, 20};
+  const int expected[10] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG,
+                            RIGHT_DEG, FRONT_RIGHT_DEG, FRONT_DEG, FRONT_LEFT_DEG, LEFT_DEG};
   for (int i = 0; i < 10; i++) TEST_ASSERT_EQUAL_INT(expected[i], h.scanner.pingAngles[i]);
 }
 
@@ -305,12 +306,13 @@ void test_obstacle_appearing_mid_cruise_stops_the_rover(void) {
 
 // Hysteresis: a cruise continues through readings between STOP and GO.
 void test_cruise_continues_between_the_stop_and_go_thresholds(void) {
+  const ExploreParams params;
   Harness h;
   bool closed = false;
   h.onMotion = [&](const Explorer::Motion& m) {
     if (m.move == MOVE_FORWARD && !closed) {
       closed = true;
-      h.scanner.setArc(60, 120, 32.0f);  // under GO (40), over STOP (25)
+      h.scanner.setArc(60, 120, (params.stopCm + params.goCm) / 2);
     }
   };
   h.run(2000);
@@ -497,6 +499,7 @@ void test_turn_direction_is_kept_until_the_way_is_clear(void) {
 // A long enough cruise forgets the committed direction: the corner it was
 // turning out of is behind the rover.
 void test_long_cruise_forgets_the_turn_direction(void) {
+  const ExploreParams params;
   Harness h;
   h.scanner.setArc(60, 120, 30.0f);
   h.scanner.setArc(121, 180, 25.0f);  // right close: commits to the left
@@ -506,7 +509,8 @@ void test_long_cruise_forgets_the_turn_direction(void) {
     if (stage == 0 && isRotation(m.move)) {
       stage = 1;
       h.scanner.setAll(200.0f);  // clear: cruise
-    } else if (stage == 1 && m.move == MOVE_FORWARD && h.forwardRunMs >= 1700) {
+    } else if (stage == 1 && m.move == MOVE_FORWARD &&
+               h.forwardRunMs >= static_cast<uint32_t>(params.commitReleaseMs + 200)) {
       stage = 2;  // after a long cruise, blocked with the left side closer
       h.scanner.setArc(60, 120, 30.0f);
       h.scanner.setArc(0, 59, 25.0f);
@@ -532,9 +536,9 @@ void test_repeated_stucks_turn_further_the_same_way(void) {
   h.scanner.setArc(60, 120, 150.0f);  // held after a short drive, every cruise
   h.closing(25.0f);
   h.closeForMs = 600;
-  // Three escapes of 4, 8 and 12 steps fit inside the 30-step circle; the
-  // fourth would pass it and halt the rover, after which a retry may start
-  // afresh in either direction.
+  // Three escapes, of one, two and three times stuckTurnSteps, fit inside the
+  // maxTurnSteps circle together; a fourth would pass it and halt the rover,
+  // after which a retry may start afresh in either direction.
   h.run(20000);
   std::vector<int> escapeTurns;
   MoveCode direction = STOP;
