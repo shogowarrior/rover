@@ -10,6 +10,13 @@ on:
 permissions:
   contents: read
 
+# Pinned once for both jobs. PlatformIO is pinned like the platform and
+# libraries in platformio.ini, so a new release cannot change the build under
+# an unchanged commit.
+env:
+  PYTHON_VERSION: '3.12'
+  PLATFORMIO_VERSION: '6.1.19'
+
 jobs:
   test:
     name: Unit tests (host)
@@ -18,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
       # The clients carry copies of the protocol, and a drifted copy fails
       # quietly on the robot (tools/check_protocol.py says what it compares).
       - name: Check clients against the wire protocol
@@ -37,7 +44,7 @@ jobs:
       # script the panel loads (joy.js included) and its tests.
       - name: Parse the clients
         run: |
-          python -m py_compile client/drive.py client/ws.py tools/check_protocol.py
+          python -m py_compile client/drive.py client/ws.py
           for script in extras/joystick/joy.js extras/joystick/js/*.js extras/joystick/test/*.js; do
             node --check "$script"
           done
@@ -53,10 +60,8 @@ jobs:
         with:
           path: ~/.platformio
           key: pio-native-${{ hashFiles('platformio.ini') }}
-      # Pinned like the platform and libraries in platformio.ini, so a new
-      # PlatformIO release cannot change the build under an unchanged commit.
       - name: Install PlatformIO
-        run: pip install platformio==6.1.19
+        run: pip install "platformio==$PLATFORMIO_VERSION"
       # The host-tested modules have no Arduino dependencies, so this needs no
       # toolchain and no config.h -- build_src_filter keeps the rest of src/ out.
       - name: Run tests
@@ -69,14 +74,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
           path: ~/.platformio
           key: pio-esp32-${{ hashFiles('platformio.ini') }}
       - name: Install PlatformIO
-        run: pip install platformio==6.1.19
+        run: pip install "platformio==$PLATFORMIO_VERSION"
       # src/config.h is gitignored because it holds real WiFi credentials, and
       # only src/Network.cpp includes it. The template compiles identically,
       # which is all a build check needs.
