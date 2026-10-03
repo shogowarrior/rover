@@ -24,7 +24,6 @@
  * Each is a reset, so it stops a preview in progress; a tap is not.
  */
 class SimView {
-  static SVG = "http://www.w3.org/2000/svg";
   // The room is drawn in centimetres, with y up as in the world.
   static CM = 100;
   // Room kept clear around the floor, in screen pixels: the badge sits above
@@ -154,21 +153,21 @@ class SimView {
 
   #build() {
     const ui = this.#ui;
-    const root = this.#html("div", { class: "sim" }, this.#slot);
+    const root = dom.html("div", { class: "sim" }, this.#slot);
 
     // The controls, in one row.
-    const bar = this.#html("div", { class: "sim-bar" }, root);
-    ui.room = this.#html("select", { class: "sim-room", "aria-label": "Room", title: "Room" }, bar);
-    for (const [key, { label }] of Object.entries(Room.PRESETS)) this.#html("option", { value: key }, ui.room, label);
+    const bar = dom.html("div", { class: "sim-bar" }, root);
+    ui.room = dom.html("select", { class: "sim-room", "aria-label": "Room", title: "Room" }, bar);
+    for (const [key, { label }] of Object.entries(Room.PRESETS)) dom.html("option", { value: key }, ui.room, label);
     ui.room.value = this.#target.roomKey;
     ui.room.addEventListener("change", () => {
       this.#target.setRoom(ui.room.value);
       this.#render();
     });
 
-    const speed = this.#html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
+    const speed = dom.html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
     ui.speeds = SimTarget.PLAYBACKS.map((rate) => {
-      const button = this.#html("button", { type: "button", title: `Play at ${rate} times real speed` }, speed, `${rate}×`);
+      const button = dom.html("button", { type: "button", title: `Play at ${rate} times real speed` }, speed, `${rate}×`);
       button.addEventListener("click", () => {
         this.#target.playback = rate;
         this.#target.paused = false;
@@ -189,81 +188,81 @@ class SimView {
     ui.more.setAttribute("aria-controls", "simMore");
 
     // The room.
-    ui.stage = this.#html("div", { class: "sim-stage" }, root);
+    ui.stage = dom.html("div", { class: "sim-stage" }, root);
     // A group, not an image: an image's contents are presentational, and the
     // rover inside it, a focusable button, would be announced as nothing.
-    ui.map = this.#svg("svg", { class: "sim-map", role: "group", "aria-label": "The simulated room from above, with the rover in it" }, ui.stage);
-    ui.world = this.#svg("g", { transform: "scale(1,-1)" }, ui.map);
-    ui.floor = this.#svg("g", {}, ui.world);
-    ui.trail = this.#svg("g", { class: "sim-trail" }, ui.world);
+    ui.map = dom.svg("svg", { class: "sim-map", role: "group", "aria-label": "The simulated room from above, with the rover in it" }, ui.stage);
+    ui.world = dom.svg("g", { transform: "scale(1,-1)" }, ui.map);
+    ui.floor = dom.svg("g", {}, ui.world);
+    ui.trail = dom.svg("g", { class: "sim-trail" }, ui.world);
     for (let band = 0; band < SimView.TRAIL_BANDS; band++) {
       const opacity = 0.08 + (0.72 * (SimView.TRAIL_BANDS - band)) / SimView.TRAIL_BANDS;
-      this.#trail.push(this.#svg("polyline", { opacity: opacity.toFixed(2), "vector-effect": "non-scaling-stroke" }, ui.trail));
+      this.#trail.push(dom.svg("polyline", { opacity: opacity.toFixed(2), "vector-effect": "non-scaling-stroke" }, ui.trail));
     }
-    ui.rayGroup = this.#svg("g", { class: "sim-rays" }, ui.world);
+    ui.rayGroup = dom.svg("g", { class: "sim-rays" }, ui.world);
     this.#rays = BEARINGS.map(() => ({
-      line: this.#svg("line", { "vector-effect": "non-scaling-stroke" }, ui.rayGroup),
-      dot: this.#svg("circle", { r: 0 }, ui.rayGroup),
+      line: dom.svg("line", { "vector-effect": "non-scaling-stroke" }, ui.rayGroup),
+      dot: dom.svg("circle", { r: 0 }, ui.rayGroup),
     }));
-    ui.bumps = this.#svg("g", { class: "sim-bumps" }, ui.world);
+    ui.bumps = dom.svg("g", { class: "sim-bumps" }, ui.world);
     this.#buildRover(ui.world);
-    ui.labels = this.#svg("g", { class: "sim-labels" }, ui.map);
+    ui.labels = dom.svg("g", { class: "sim-labels" }, ui.map);
 
-    const badge = this.#html("div", { class: "sim-badge" }, ui.stage);
-    this.#html("strong", {}, badge, "Idealised preview");
-    this.#html("span", {}, badge, "nothing is sent to the rover");
-    ui.scale = this.#html("div", { class: "sim-scale", "aria-hidden": "true" }, ui.stage);
-    ui.scaleBar = this.#html("span", { class: "sim-scale-bar" }, ui.scale);
-    this.#html("span", {}, ui.scale, "1 m");
+    const badge = dom.html("div", { class: "sim-badge" }, ui.stage);
+    dom.html("strong", {}, badge, "Idealised preview");
+    dom.html("span", {}, badge, "nothing is sent to the rover");
+    ui.scale = dom.html("div", { class: "sim-scale", "aria-hidden": "true" }, ui.stage);
+    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
+    dom.html("span", {}, ui.scale, "1 m");
 
     // What the rover is doing, and the latest word from the preview.
-    const foot = this.#html("div", { class: "sim-foot" }, root);
+    const foot = dom.html("div", { class: "sim-foot" }, root);
     this.#buildInset(foot);
-    const motion = this.#html("div", { class: "sim-motion" }, foot);
-    ui.move = this.#html("output", { class: "sim-move" }, motion, "STOP");
-    ui.twist = this.#html("span", { class: "sim-twist" }, motion, "standing still");
-    const said = this.#html("div", { class: "sim-said" }, foot);
-    ui.clock = this.#html("span", { class: "sim-clock" }, said, "0.0 s");
+    const motion = dom.html("div", { class: "sim-motion" }, foot);
+    ui.move = dom.html("output", { class: "sim-move" }, motion, "STOP");
+    ui.twist = dom.html("span", { class: "sim-twist" }, motion, "standing still");
+    const said = dom.html("div", { class: "sim-said" }, foot);
+    ui.clock = dom.html("span", { class: "sim-clock" }, said, "0.0 s");
     // When it was said, then what: a narrow view drops the time (sim.css).
-    ui.log = this.#html("span", { class: "sim-log", "aria-live": "polite" }, said);
-    ui.logAt = this.#html("span", { class: "sim-log-at" }, ui.log);
-    ui.logText = this.#html("span", { class: "sim-log-text" }, ui.log);
+    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite" }, said);
+    ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
+    ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
 
     // The key, under the rest when the view is tall enough for it (sim.css).
     ui.key = this.#buildKey(root, "sim-key inline");
 
     // Folded away until asked for: the less used controls, what the drag
     // setting means, the key and what "idealised" leaves out.
-    ui.panel = this.#html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings" }, root);
+    ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings" }, root);
     ui.panel.hidden = true;
-    const toggles = this.#html("div", { class: "sim-toggles" }, ui.panel);
-    ui.rays = this.#html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
+    const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
+    ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {
       this.#showRays = !this.#showRays;
       ui.rays.setAttribute("aria-pressed", String(this.#showRays));
       this.#render();
     });
-    ui.clearTrail = this.#html("button", { type: "button", class: "sim-switch" }, toggles, "Clear trail");
+    ui.clearTrail = dom.html("button", { type: "button", class: "sim-switch" }, toggles, "Clear trail");
     ui.clearTrail.addEventListener("click", () => {
       this.#target.clearTrail();
       this.#render();
     });
 
-    const drag = this.#html("label", { class: "sim-drag" }, ui.panel);
-    this.#html("span", { class: "label" }, drag, "Released-wheel drag");
-    ui.drag = this.#html("input", { type: "range", min: "0", max: "1", step: "0.05", "aria-describedby": "simDragWhat" }, drag);
+    const drag = dom.html("label", { class: "sim-drag" }, ui.panel);
+    dom.html("span", { class: "label" }, drag, "Released-wheel drag");
+    ui.drag = dom.html("input", { type: "range", min: "0", max: "1", step: "0.05", "aria-describedby": "simDragWhat" }, drag);
     ui.drag.value = String(this.#target.releasedDrag);
-    ui.dragOut = this.#html("output", { class: "sim-value" }, drag, this.#target.releasedDrag.toFixed(2));
+    ui.dragOut = dom.html("output", { class: "sim-value" }, drag, this.#target.releasedDrag.toFixed(2));
     ui.drag.addEventListener("input", () => {
       this.#target.releasedDrag = Number(ui.drag.value);
       ui.dragOut.textContent = Number(ui.drag.value).toFixed(2);
     });
-    this.#html("p", { class: "sim-about", id: "simDragWhat" }, ui.panel,
+    dom.html("p", { class: "sim-about", id: "simDragWhat" }, ui.panel,
       "How hard a wheel the shield has released resists turning: at 0 it turns freely, at 1 it holds like a " +
       "driven wheel. No move in the firmware's wheel table needs a released wheel to turn, so today this " +
       "changes nothing; it would for a row that did.");
     this.#buildKey(ui.panel, "sim-key");
-    this.#html("p", { class: "sim-about" }, ui.panel,
+    dom.html("p", { class: "sim-about" }, ui.panel,
       `Idealised: wheels that never slip, no inertia or motor lag, one ray per ping, and a chassis that stops ` +
       `dead on contact. Full speed is taken as ${SIM_WHEEL_MAX_MPS} m/s, an estimate until the bench measures ` +
       "it. The pivots follow the wheel table, which is not bench-verified yet.");
@@ -284,20 +283,20 @@ class SimView {
   // The key to the colours: the wheels as the rover and the inset show them,
   // the rays as the scan fan colours them.
   #buildKey(parent, className) {
-    const key = this.#html("div", { class: className }, parent);
-    const wheels = this.#html("div", { class: "sim-key-row" }, key);
-    this.#html("span", { class: "label" }, wheels, "Wheels");
+    const key = dom.html("div", { class: className }, parent);
+    const wheels = dom.html("div", { class: "sim-key-row" }, key);
+    dom.html("span", { class: "label" }, wheels, "Wheels");
     for (const [kind, text] of [["fwd", "forward"], ["back", "backward"], ["free", "released"]]) {
-      const item = this.#html("span", { class: "sim-key-item" }, wheels);
-      this.#html("i", { class: `sim-swatch wheel ${kind}`, "aria-hidden": "true" }, item);
-      this.#html("span", {}, item, text);
+      const item = dom.html("span", { class: "sim-key-item" }, wheels);
+      dom.html("i", { class: `sim-swatch wheel ${kind}`, "aria-hidden": "true" }, item);
+      dom.html("span", {}, item, text);
     }
-    const rays = this.#html("div", { class: "sim-key-row" }, key);
-    this.#html("span", { class: "label", title: "Each ray is drawn from where the rover was when it pinged" }, rays, "Sonar");
+    const rays = dom.html("div", { class: "sim-key-row" }, key);
+    dom.html("span", { class: "label", title: "Each ray is drawn from where the rover was when it pinged" }, rays, "Sonar");
     for (const [kind, text] of [["stop", `≤ ${STOP_CM}`], ["warn", `≤ ${GO_CM}`], ["live", "farther"], ["none", "no echo"]]) {
-      const item = this.#html("span", { class: "sim-key-item" }, rays);
-      this.#html("i", { class: `sim-swatch ray ${kind}`, "aria-hidden": "true" }, item);
-      this.#html("span", {}, item, text);
+      const item = dom.html("span", { class: "sim-key-item" }, rays);
+      dom.html("i", { class: `sim-swatch ray ${kind}`, "aria-hidden": "true" }, item);
+      dom.html("span", {}, item, text);
     }
     return key;
   }
@@ -309,29 +308,29 @@ class SimView {
     const hl = (SIM_CHASSIS.lengthM * SimView.CM) / 2;
     const hw = (SIM_CHASSIS.widthM * SimView.CM) / 2;
     const thin = { "vector-effect": "non-scaling-stroke" };
-    r.group = this.#svg("g", {
+    r.group = dom.svg("g", {
       class: "sim-rover", tabindex: "0", role: "button",
       "aria-label": "The rover. Drag it, or use the arrow keys, to set where it starts; Q and E turn it.",
     }, parent);
     // A faint halo, so the rover is easy to find on a phone, where the
     // chassis is a dozen pixels long; and a larger, invisible grip.
-    r.halo = this.#svg("circle", { class: "sim-halo", r: 20 }, r.group);
-    r.grip = this.#svg("circle", { class: "sim-grip", r: 30 }, r.group);
-    r.handleLine = this.#svg("line", { class: "sim-handle-line", x1: hl, y1: 0, x2: hl + 14, y2: 0, ...thin }, r.group);
-    this.#svg("rect", { class: "sim-plate", x: -hl, y: -hw, width: 2 * hl, height: 2 * hw, rx: 1.6, ...thin }, r.group);
-    this.#svg("rect", { class: "sim-deck", x: -hl + 3.2, y: -hw + 3.4, width: 2 * hl - 9, height: 2 * hw - 6.8, rx: 1, ...thin }, r.group);
+    r.halo = dom.svg("circle", { class: "sim-halo", r: 20 }, r.group);
+    r.grip = dom.svg("circle", { class: "sim-grip", r: 30 }, r.group);
+    r.handleLine = dom.svg("line", { class: "sim-handle-line", x1: hl, y1: 0, x2: hl + 14, y2: 0, ...thin }, r.group);
+    dom.svg("rect", { class: "sim-plate", x: -hl, y: -hw, width: 2 * hl, height: 2 * hw, rx: 1.6, ...thin }, r.group);
+    dom.svg("rect", { class: "sim-deck", x: -hl + 3.2, y: -hw + 3.4, width: 2 * hl - 9, height: 2 * hw - 6.8, rx: 1, ...thin }, r.group);
     const d = SIM_WHEEL.diameterM * SimView.CM;
     const w = SIM_WHEEL.widthM * SimView.CM;
-    r.wheels = RoverSim.WHEEL_AT.map(({ x, y }) => this.#svg("rect", {
+    r.wheels = RoverSim.WHEEL_AT.map(({ x, y }) => dom.svg("rect", {
       class: "sim-wheel", x: x * SimView.CM - d / 2, y: y * SimView.CM - w / 2, width: d, height: w, rx: 0.9, ...thin,
     }, r.group));
     // The heading: an arrow on the deck, and the sonar on the nose with the
     // way its servo points now.
-    this.#svg("path", { class: "sim-nose", d: `M${hl - 4.2} 0 L${hl - 9.5} 3.6 L${hl - 8.2} 0 L${hl - 9.5} -3.6 Z` }, r.group);
-    this.#svg("rect", { class: "sim-sensor", x: hl - 1.6, y: -2.3, width: 2.6, height: 4.6, rx: 0.6, ...thin }, r.group);
-    r.aim = this.#svg("line", { class: "sim-aim", x1: hl, y1: 0, x2: hl + 10, y2: 0, ...thin }, r.group);
-    r.handle = this.#svg("circle", { class: "sim-handle", cx: hl + 14, cy: 0, r: 2, ...thin }, r.group);
-    r.handleGrip = this.#svg("circle", { class: "sim-grip", cx: hl + 14, cy: 0, r: 8 }, r.group);
+    dom.svg("path", { class: "sim-nose", d: `M${hl - 4.2} 0 L${hl - 9.5} 3.6 L${hl - 8.2} 0 L${hl - 9.5} -3.6 Z` }, r.group);
+    dom.svg("rect", { class: "sim-sensor", x: hl - 1.6, y: -2.3, width: 2.6, height: 4.6, rx: 0.6, ...thin }, r.group);
+    r.aim = dom.svg("line", { class: "sim-aim", x1: hl, y1: 0, x2: hl + 10, y2: 0, ...thin }, r.group);
+    r.handle = dom.svg("circle", { class: "sim-handle", cx: hl + 14, cy: 0, r: 2, ...thin }, r.group);
+    r.handleGrip = dom.svg("circle", { class: "sim-grip", cx: hl + 14, cy: 0, r: 8 }, r.group);
 
     // A touch that starts on the rover moves the rover, not the page; a swipe
     // anywhere else on the room still scrolls it.
@@ -346,22 +345,21 @@ class SimView {
   // The four wheels again, large and nose up, with the way each turns: on a
   // phone the rover in the room is too small to read them from.
   #buildInset(parent) {
-    const inset = this.#svg("svg", { class: "sim-inset", viewBox: "-11.5 -14 23 28", role: "img", "aria-label": "The wheels now" }, parent);
-    this.#svg("rect", { class: "sim-plate", x: -7, y: -12, width: 14, height: 24, rx: 1.6 }, inset);
-    this.#svg("path", { class: "sim-nose", d: "M0 -10 L2.8 -6.2 L0 -7.2 L-2.8 -6.2 Z" }, inset);
+    const inset = dom.svg("svg", { class: "sim-inset", viewBox: "-11.5 -14 23 28", role: "img", "aria-label": "The wheels now" }, parent);
+    dom.svg("rect", { class: "sim-plate", x: -7, y: -12, width: 14, height: 24, rx: 1.6 }, inset);
+    dom.svg("path", { class: "sim-nose", d: "M0 -10 L2.8 -6.2 L0 -7.2 L-2.8 -6.2 Z" }, inset);
     // The table's order: front-left, front-right, rear-right, rear-left.
     this.#inset = [[-8.7, -7.2], [8.7, -7.2], [8.7, 7.2], [-8.7, 7.2]].map(([x, y]) => {
-      const wheel = this.#svg("g", { transform: `translate(${x} ${y})` }, inset);
-      const tyre = this.#svg("rect", { class: "sim-wheel", x: -2.3, y: -4.2, width: 4.6, height: 8.4, rx: 1.2 }, wheel);
-      const arrow = this.#svg("path", { class: "sim-arrow", d: "M0 -2.4 L1.9 0.6 L-1.9 0.6 Z" }, wheel);
+      const wheel = dom.svg("g", { transform: `translate(${x} ${y})` }, inset);
+      const tyre = dom.svg("rect", { class: "sim-wheel", x: -2.3, y: -4.2, width: 4.6, height: 8.4, rx: 1.2 }, wheel);
+      const arrow = dom.svg("path", { class: "sim-arrow", d: "M0 -2.4 L1.9 0.6 L-1.9 0.6 Z" }, wheel);
       return { tyre, arrow };
     });
   }
 
   #tool(parent, title, path, extraClass = "") {
-    const button = this.#html("button", { type: "button", class: `sim-tool ${extraClass}`.trim(), title, "aria-label": title }, parent);
-    const svg = this.#svg("svg", { class: "sim-icon", viewBox: "0 0 16 16", "aria-hidden": "true" }, button);
-    this.#svg("path", { d: path }, svg);
+    const button = dom.html("button", { type: "button", class: `sim-tool ${extraClass}`.trim(), title, "aria-label": title }, parent);
+    dom.svg("path", { d: path }, dom.svg("svg", { class: "sim-icon", viewBox: "0 0 16 16", "aria-hidden": "true" }, button));
     return button;
   }
 
@@ -382,22 +380,22 @@ class SimView {
     ui.labels.textContent = "";
     const thin = { "vector-effect": "non-scaling-stroke" };
 
-    this.#svg("rect", { class: "sim-floor", x: 0, y: 0, width: w, height: h }, ui.floor);
+    dom.svg("rect", { class: "sim-floor", x: 0, y: 0, width: w, height: h }, ui.floor);
     // A soft grid: every 50 cm, stronger every metre.
-    for (let x = 50; x < w; x += 50) this.#svg("line", { class: x % 100 ? "sim-grid" : "sim-grid major", x1: x, y1: 0, x2: x, y2: h, ...thin }, ui.floor);
-    for (let y = 50; y < h; y += 50) this.#svg("line", { class: y % 100 ? "sim-grid" : "sim-grid major", x1: 0, y1: y, x2: w, y2: y, ...thin }, ui.floor);
+    for (let x = 50; x < w; x += 50) dom.svg("line", { class: x % 100 ? "sim-grid" : "sim-grid major", x1: x, y1: 0, x2: x, y2: h, ...thin }, ui.floor);
+    for (let y = 50; y < h; y += 50) dom.svg("line", { class: y % 100 ? "sim-grid" : "sim-grid major", x1: 0, y1: y, x2: w, y2: y, ...thin }, ui.floor);
     for (const outline of room.outlines) {
       const { x, y, w: ow, h: oh } = outline;
-      this.#svg("rect", { class: "sim-outline", x: (x - ow / 2) * CM, y: (y - oh / 2) * CM, width: ow * CM, height: oh * CM, rx: 2, ...thin }, ui.floor);
+      dom.svg("rect", { class: "sim-outline", x: (x - ow / 2) * CM, y: (y - oh / 2) * CM, width: ow * CM, height: oh * CM, rx: 2, ...thin }, ui.floor);
       this.#label(outline.name, x, y, ow);
     }
     for (const obstacle of room.obstacles) {
       const points = obstacle.points.map((p) => `${(p.x * CM).toFixed(1)},${(p.y * CM).toFixed(1)}`).join(" ");
       if (!obstacle.closed) {
-        this.#svg("polyline", { class: "sim-wall", points, ...thin }, ui.floor);
+        dom.svg("polyline", { class: "sim-wall", points, ...thin }, ui.floor);
         continue;
       }
-      this.#svg("polygon", { class: "sim-box", points, ...thin }, ui.floor);
+      dom.svg("polygon", { class: "sim-box", points, ...thin }, ui.floor);
       if (!obstacle.label) continue;
       const xs = obstacle.points.map((p) => p.x);
       const ys = obstacle.points.map((p) => p.y);
@@ -412,7 +410,7 @@ class SimView {
 
   // A name on an obstacle, shown only while it fits inside it.
   #label(text, x, y, widthM) {
-    this.#svg("text", {
+    dom.svg("text", {
       class: "sim-label", x: (x * SimView.CM).toFixed(1), y: (-y * SimView.CM).toFixed(1),
       "text-anchor": "middle", "dominant-baseline": "central", "data-width": widthM * SimView.CM,
     }, this.#ui.labels, text);
@@ -606,9 +604,9 @@ class SimView {
     bumps.forEach((bump, i) => {
       let mark = this.#bumpMarks[i];
       if (!mark) {
-        mark = this.#svg("g", { class: "sim-bump" }, this.#ui.bumps);
-        this.#svg("circle", { r: 1, "vector-effect": "non-scaling-stroke" }, mark);
-        this.#svg("path", { d: "M-0.55 -0.55 L0.55 0.55 M-0.55 0.55 L0.55 -0.55", "vector-effect": "non-scaling-stroke" }, mark);
+        mark = dom.svg("g", { class: "sim-bump" }, this.#ui.bumps);
+        dom.svg("circle", { r: 1, "vector-effect": "non-scaling-stroke" }, mark);
+        dom.svg("path", { d: "M-0.55 -0.55 L0.55 0.55 M-0.55 0.55 L0.55 -0.55", "vector-effect": "non-scaling-stroke" }, mark);
         this.#bumpMarks.push(mark);
       }
       mark.setAttribute("transform", `translate(${(bump.x * 100).toFixed(1)} ${(bump.y * 100).toFixed(1)}) scale(${size.toFixed(2)})`);
@@ -685,23 +683,5 @@ class SimView {
     if (!ctm) return null;
     const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(ctm.inverse());
     return { x: point.x / SimView.CM, y: -point.y / SimView.CM };
-  }
-
-  /* --- elements ---------------------------------------------------------- */
-
-  #html(tag, attributes, parent, text) {
-    const el = document.createElement(tag);
-    for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
-    if (text !== undefined) el.textContent = text;
-    parent.appendChild(el);
-    return el;
-  }
-
-  #svg(tag, attributes, parent, text) {
-    const el = document.createElementNS(SimView.SVG, tag);
-    for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
-    if (text !== undefined) el.textContent = text;
-    parent.appendChild(el);
-    return el;
   }
 }

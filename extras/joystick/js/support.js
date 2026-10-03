@@ -6,6 +6,7 @@
  *   memory          best-effort storage for what the panel remembers
  *   clamp           a value kept within bounds
  *   abortableWait   a wait an AbortSignal ends at once
+ *   dom             HTML and SVG elements, built from attribute tables
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -94,6 +95,22 @@ function abortableWait(signal, start, cancel) {
     if (signal) signal.addEventListener("abort", onAbort, { once: true });
   });
 }
+
+// Elements built from an attribute table: each value set with setAttribute,
+// text (if given) as textContent, appended to parent (if given).
+const dom = (() => {
+  const fill = (element, attributes, parent, text) => {
+    for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, String(value));
+    if (text !== undefined) element.textContent = text;
+    if (parent) parent.appendChild(element);
+    return element;
+  };
+  return Object.freeze({
+    html: (tag, attributes = {}, parent = null, text) => fill(document.createElement(tag), attributes, parent, text),
+    svg: (tag, attributes = {}, parent = null, text) =>
+      fill(document.createElementNS("http://www.w3.org/2000/svg", tag), attributes, parent, text),
+  });
+})();
 
 // A press is the primary button alone. Right-click, middle-click and a Mac's
 // ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can

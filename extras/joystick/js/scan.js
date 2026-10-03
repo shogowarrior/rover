@@ -88,17 +88,17 @@ class ScanView {
     ];
     for (const ring of rings) {
       const r = ScanView.radiusFor(ring.cm);
-      this.#add("path", { class: `ring ${ring.kind}`.trim(), d: ScanView.#ringPath(r) });
+      dom.svg("path", { class: `ring ${ring.kind}`.trim(), d: ScanView.#ringPath(r) }, this.#svg);
       if (!ring.text) continue;
       const [x] = ScanView.#polar(90 + ring.side * FAN_HALF, r);
       const at = { x: x.toFixed(1), y: CY + 14, "text-anchor": "middle" };
-      this.#add("text", { class: `tick ${ring.kind}`.trim(), ...at }, ring.text);
+      dom.svg("text", { class: `tick ${ring.kind}`.trim(), ...at }, this.#svg, ring.text);
     }
 
     this.#views = BEARINGS.map((b) => ({
       key: b.key,
       screen: 90 + b.bearing,
-      wedge: this.#add("path", { class: "wedge", d: "" }),
+      wedge: dom.svg("path", { class: "wedge", d: "" }, this.#svg),
     }));
 
     // Each reading sits just past full reach and extends away from the fan, so
@@ -109,11 +109,11 @@ class ScanView {
       const outward = Math.cos((view.screen * Math.PI) / 180);
       const anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
       const at = { x: x.toFixed(1), "text-anchor": anchor };
-      view.reading = this.#add("text", { class: "reading", ...at, y: (y + 5).toFixed(1) }, "—");
-      this.#add("text", { class: "tick", ...at, y: (y - 10).toFixed(1) }, b.label);
+      view.reading = dom.svg("text", { class: "reading", ...at, y: (y + 5).toFixed(1) }, this.#svg, "—");
+      dom.svg("text", { class: "tick", ...at, y: (y - 10).toFixed(1) }, this.#svg, b.label);
     });
 
-    this.#add("circle", { cx: CX, cy: CY, r: 4, fill: "var(--dim)" });
+    dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--dim)" }, this.#svg);
   }
 
   #showDistance(view, cm) {
@@ -133,14 +133,6 @@ class ScanView {
     view.wedge.setAttribute("fill", noEcho ? "var(--dim)" : ScanView.colorFor(cm));
     view.wedge.setAttribute("opacity", noEcho ? "0.4" : "0.85");
     view.reading.textContent = noEcho ? "no echo" : `${Math.round(cm)}cm`;
-  }
-
-  #add(tag, attributes, text) {
-    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, String(value));
-    if (text !== undefined) el.textContent = text;
-    this.#svg.appendChild(el);
-    return el;
   }
 
   static #polar(screenDeg, r) {

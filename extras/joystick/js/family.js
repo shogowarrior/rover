@@ -71,8 +71,6 @@ class FamilySelector {
     Object.freeze({ corner: "downRight", x: 1, yUp: -1 }),
   ]);
 
-  static #SVG = "http://www.w3.org/2000/svg";
-
   #ui;
   #buttons = new Map(); // family -> its segment
   #corners = []; // per corner: { x, yUp, hint, path, text }
@@ -173,15 +171,13 @@ class FamilySelector {
   // moveForStick(). Hidden from assistive technology: the words beside it
   // say it.
   static #icon(family, x, yUp) {
-    const svg = document.createElementNS(FamilySelector.#SVG, "svg");
-    svg.setAttribute("class", "glyph");
-    svg.setAttribute("viewBox", "0 0 16 16");
-    svg.setAttribute("aria-hidden", "true");
-    const path = svg.appendChild(document.createElementNS(FamilySelector.#SVG, "path"));
     const sx = x < 0 ? -1 : 1;
     const sy = yUp < 0 ? -1 : 1;
-    path.setAttribute("transform", `matrix(${sx} 0 0 ${sy} ${sx < 0 ? 16 : 0} ${sy < 0 ? 16 : 0})`);
-    path.setAttribute("d", family ? FamilySelector.ICONS[family] : "");
+    const svg = dom.svg("svg", { class: "glyph", viewBox: "0 0 16 16", "aria-hidden": "true" });
+    const path = dom.svg("path", {
+      transform: `matrix(${sx} 0 0 ${sy} ${sx < 0 ? 16 : 0} ${sy < 0 ? 16 : 0})`,
+      d: family ? FamilySelector.ICONS[family] : "",
+    }, svg);
     return { svg, path };
   }
 
