@@ -50,8 +50,8 @@ class RoverBlocks {
   // The block colours, one per toolbox category. Mid-tones that hold the
   // blocks' white 12 px text at 4.5:1 or better and still read on the
   // panel's near-black. Red is the panel's stop red (--stop in
-  // css/panel.css), and only the stop block wears it: anywhere else it would
-  // stop meaning anything.
+  // css/panel.css; panel.test.js checks the copy), and only the stop block
+  // wears it: anywhere else it would stop meaning anything.
   static PALETTE = Object.freeze({
     motion: "#237d70",
     sensors: "#3674b5",
@@ -567,11 +567,10 @@ class RoverBlocks {
   // PALETTE. Blockly paints the workspace from these; program.css styles the
   // rest (the toolbox pills, menus, tooltips, the running block's glow).
   static #defineTheme(Blockly) {
-    const token = (name, fallback) => {
-      const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return value || fallback;
-    };
-    const ink = token("--readout", "#f1f3f6");
+    // Every name read here is declared on :root, which panel.test.js checks:
+    // no fallback, and so no second copy of a colour to drift.
+    const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const ink = token("--readout");
     const style = (colour) => ({
       colourPrimary: colour,
       colourSecondary: RoverBlocks.#mix(colour, "#ffffff", 0.25),
@@ -594,20 +593,20 @@ class RoverBlocks {
       },
       categoryStyles: Object.fromEntries(Object.entries(P).map(([key, colour]) => [`${key}_category`, { colour }])),
       componentStyles: {
-        workspaceBackgroundColour: token("--case", "#0b0d11"),
-        toolboxBackgroundColour: token("--panel", "#151920"),
+        workspaceBackgroundColour: token("--case"),
+        toolboxBackgroundColour: token("--panel"),
         toolboxForegroundColour: ink,
-        flyoutBackgroundColour: token("--raised", "#1f242c"),
+        flyoutBackgroundColour: token("--raised"),
         flyoutForegroundColour: ink,
         flyoutOpacity: 1,
-        scrollbarColour: token("--dim", "#9aa4b1"),
+        scrollbarColour: token("--dim"),
         scrollbarOpacity: 0.35,
         insertionMarkerColour: "#ffffff",
         insertionMarkerOpacity: 0.25,
-        markerColour: token("--live", "#4db8a8"),
-        cursorColour: token("--live", "#4db8a8"),
+        markerColour: token("--live"),
+        cursorColour: token("--live"),
       },
-      fontStyle: { family: token("--sans", "system-ui, sans-serif"), weight: "600", size: 12 },
+      fontStyle: { family: token("--sans"), weight: "600", size: 12 },
       startHats: false,
     });
   }
@@ -785,6 +784,7 @@ class BlockEditor {
       trashcan: true,
       horizontalLayout: narrow,
       toolboxPosition: "start",
+      // --raised-hi in css/panel.css, which panel.test.js checks.
       grid: { spacing: 24, length: 2, colour: "#2b323c", snap: true },
       zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },

@@ -369,6 +369,8 @@ class Driver {
   // that pressed it.
   #buildJoy() {
     const joy = new JoyStick(this.#stick.id, {
+      // The page's teal, --live in css/panel.css, which takes it from here;
+      // panel.test.js checks the two agree.
       internalFillColor: "#4db8a8",
       internalStrokeColor: "#1c1e21",
       externalStrokeColor: "#383c42",

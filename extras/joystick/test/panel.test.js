@@ -2028,13 +2028,24 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 });
 
 // The scripts read the stylesheet's tokens by name: blocks.js's Blockly
-// theme through token(), which falls back silently on a name that is gone,
+// theme through token(), which reads nothing at all for a name that is gone,
 // and the scan's and the simulator's SVG fills through var(), which leave a
-// wedge or a ray unfilled. joy.js, outside js/, draws in its own colours.
-test("every CSS token a script reads is declared on :root in css/panel.css", () => {
-  const declared = new Set(cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"))
+// wedge or a ray unfilled. Three colours cannot be read so, and are copied:
+// joy.js paints the stick's knob from drive.js (and the page takes its teal
+// from there), and Blockly takes the stop block's red and the grid's colour
+// as plain values. Each copy must be its token's value.
+test("every CSS token a script reads is declared on :root in css/panel.css, and the copies agree", () => {
+  const root = new Map(cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"))
     .filter((rule) => rule.selector === ":root")
-    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:/g)].map(([, name]) => name)));
+    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
+  const declared = new Set(root.keys());
+  const script = (file) => fs.readFileSync(path.join(PANEL_ROOT, "js", file), "utf8");
+  const { RoverBlocks } = require("../js/blocks.js");
+  for (const [what, copy, token] of [
+    ["drive.js's stick knob", (script("drive.js").match(/\binternalFillColor:\s*"([^"]*)"/) || [])[1], "--live"],
+    ["blocks.js's stop block", RoverBlocks.PALETTE.stop, "--stop"],
+    ["blocks.js's workspace grid", (script("blocks.js").match(/\bgrid:\s*\{[^}]*\bcolour:\s*"([^"]*)"/) || [])[1], "--raised-hi"],
+  ]) check(copy !== undefined && copy.toLowerCase() === (root.get(token) || "").toLowerCase(), `${what} is ${copy}, but ${token} is ${root.get(token)}`);
   const readers = new Map(); // token -> the scripts that read it
   const js = path.join(PANEL_ROOT, "js");
   for (const file of fs.readdirSync(js).filter((name) => name.endsWith(".js"))) {
