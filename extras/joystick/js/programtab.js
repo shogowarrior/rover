@@ -148,11 +148,8 @@ class ProgramTab {
     for (const button of this.#segments.values()) button.remove();
     this.#segments.clear();
     for (const kind of kinds) {
-      const button = document.createElement("button");
-      button.type = "button";
+      const button = segment(targetChoice, () => this.#choose(kind));
       button.textContent = ProgramTab.LABELS[kind] || kind;
-      button.addEventListener("click", () => this.#choose(kind));
-      targetChoice.appendChild(button);
       this.#segments.set(kind, button);
     }
     targetChoice.hidden = kinds.length < 2;
@@ -310,7 +307,7 @@ class ProgramTab {
     const editor = this.#editor;
     const readiness = target.ready();
 
-    for (const [k, button] of this.#segments) button.setAttribute("aria-pressed", String(k === kind));
+    pressSegment(this.#segments, kind);
 
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;

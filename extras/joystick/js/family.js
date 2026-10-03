@@ -83,13 +83,10 @@ class FamilySelector {
     this.#ui = { group, label, hints, caveat };
 
     for (const { family, label: name } of FamilySelector.OPTIONS) {
-      const button = document.createElement("button");
-      button.type = "button";
+      const button = segment(choice, () => this.#choose(family));
       button.dataset.family = family;
       button.appendChild(FamilySelector.#icon(family, 1, 1).svg);
       button.appendChild(FamilySelector.#span("name", name));
-      button.addEventListener("click", () => this.#choose(family));
-      choice.appendChild(button);
       this.#buttons.set(family, button);
     }
 
@@ -143,9 +140,7 @@ class FamilySelector {
   #render() {
     const { group, label, hints, caveat } = this.#ui;
     group.hidden = !this.#offered;
-    for (const [family, button] of this.#buttons) {
-      button.setAttribute("aria-pressed", String(family === this.#family));
-    }
+    pressSegment(this.#buttons, this.#family);
     label.textContent = this.#awaitingPress
       ? FamilySelector.PRESS_AGAIN
       : FamilySelector.OPTIONS.find((option) => option.family === this.#family).label;

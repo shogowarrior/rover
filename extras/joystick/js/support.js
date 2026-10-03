@@ -7,6 +7,8 @@
  *   clamp           a value kept within bounds
  *   abortableWait   a wait an AbortSignal ends at once
  *   dom             HTML and SVG elements, built from attribute tables
+ *   segment, pressSegment
+ *                   a segmented control's buttons, and which one is pressed
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -111,6 +113,21 @@ const dom = (() => {
       fill(document.createElementNS("http://www.w3.org/2000/svg", tag), attributes, parent, text),
   });
 })();
+
+// A segment of a segmented control (the page's .segmented): a button in
+// group that calls onPick when clicked. The caller gives it its content.
+function segment(group, onPick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.addEventListener("click", onPick);
+  group.appendChild(button);
+  return button;
+}
+
+// Mark the segment keyed `pressed` as pressed, and every other as not.
+function pressSegment(buttons, pressed) {
+  for (const [key, button] of buttons) button.setAttribute("aria-pressed", String(key === pressed));
+}
 
 // A press is the primary button alone. Right-click, middle-click and a Mac's
 // ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can

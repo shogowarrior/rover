@@ -62,12 +62,9 @@ class SchemeToggle {
     this.#link = link;
     this.#group = group;
     for (const { scheme, label } of SchemeToggle.OPTIONS) {
-      const button = document.createElement("button");
-      button.type = "button";
+      const button = segment(choice, () => this.#choose(scheme));
       button.textContent = label;
       button.dataset.scheme = scheme;
-      button.addEventListener("click", () => this.#choose(scheme));
-      choice.appendChild(button);
       this.#buttons.set(scheme, button);
     }
     this.#render();
@@ -150,9 +147,9 @@ class SchemeToggle {
       : this.#stale
         ? "Telemetry has stopped: the scheme cannot be changed until the rover reports it again."
         : "";
+    pressSegment(this.#buttons, this.#scheme);
     for (const [scheme, button] of this.#buttons) {
       button.disabled = !known || this.#stale;
-      button.setAttribute("aria-pressed", String(scheme === this.#scheme));
       if (scheme === this.#pending) button.dataset.pending = "yes";
       else delete button.dataset.pending;
     }

@@ -166,15 +166,16 @@ class SimView {
     });
 
     const speed = dom.html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
-    ui.speeds = SimTarget.PLAYBACKS.map((rate) => {
-      const button = dom.html("button", { type: "button", title: `Play at ${rate} times real speed` }, speed, `${rate}×`);
-      button.addEventListener("click", () => {
+    ui.speeds = new Map(SimTarget.PLAYBACKS.map((rate) => {
+      const button = segment(speed, () => {
         this.#target.playback = rate;
         this.#target.paused = false;
         this.#render();
       });
-      return button;
-    });
+      button.textContent = `${rate}×`;
+      button.setAttribute("title", `Play at ${rate} times real speed`);
+      return [rate, button];
+    }));
     ui.pause = this.#tool(bar, "Pause the preview", "M5 3.5v9M11 3.5v9", "sim-pause");
     ui.pause.addEventListener("click", () => {
       this.#target.paused = !this.#target.paused;
@@ -493,9 +494,7 @@ class SimView {
 
     // The playback.
     ui.pause.setAttribute("aria-pressed", String(target.paused));
-    ui.speeds.forEach((button, i) => {
-      button.setAttribute("aria-pressed", String(!target.paused && SimTarget.PLAYBACKS[i] === target.playback));
-    });
+    pressSegment(ui.speeds, target.paused ? null : target.playback);
   }
 
   // The motion in words and numbers, the clock, and the latest thing the
