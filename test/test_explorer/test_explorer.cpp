@@ -483,14 +483,18 @@ void test_turn_needs_the_front_clear_beyond_go_twice_in_a_row(void) {
   };
   TEST_ASSERT_TRUE(advanceUntil(h.now, 3000, 5, [&h](uint32_t) { h.step(); }, [&] { return turning; }));
 
-  // The first look after the step reads clear, and every look after it the wall.
-  h.scanner.setArc(60, 120, 200.0f);
-  const int pings = h.scanner.pings;
-  TEST_ASSERT_TRUE(advanceUntil(h.now, 1000, 5, [&h](uint32_t) { h.step(); }, [&] { return h.scanner.pings > pings; }));
-  h.scanner.setArc(60, 120, 30.0f);
+  // One look reads clear and the next the wall, twice over: two clear looks,
+  // but never two in a row. Every look after them reads the wall.
+  const size_t aims = h.scanner.aims.size();
+  for (int clear = 0; clear < 2; clear++) {
+    for (float cm : {200.0f, 30.0f}) {
+      h.scanner.setArc(60, 120, cm);
+      const int pings = h.scanner.pings;
+      TEST_ASSERT_TRUE(advanceUntil(h.now, 1000, 5, [&h](uint32_t) { h.step(); }, [&] { return h.scanner.pings > pings; }));
+    }
+  }
 
   // No sweep starts: it would aim at the outer bearings first.
-  const size_t aims = h.scanner.aims.size();
   h.run(1500);
   for (size_t i = aims; i < h.scanner.aims.size(); i++) {
     const int aim = h.scanner.aims[i];
