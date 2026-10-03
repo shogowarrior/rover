@@ -66,6 +66,24 @@ could not build the firmware or run the host tests: its network policy
 blocked the PlatformIO registry. It changed nothing they cover; CI builds
 and tests them on the PR.
 
+A second thread, on top of the first one's branch, did F5 from the owner's
+second message that evening: themes and the Options gear, after Word
+Finder's (features.md, F5, says what carried over and what did not):
+
+- six looks, three themes (Console, the panel's own colours and the
+  default; Field, the most contrast; Blueprint) each Dark and Light, every
+  colour a token in `css/looks.css`, worn as `<html data-look>`;
+- `LookPicker` (`js/look.js`, loaded in `<head>` so the first paint is in
+  the remembered look): the gear in the header opens Options, a non-modal
+  `Popover` with a tile per look, so Stop stays one press;
+- the stick, Blockly's theme and the browser bar repaint on a change;
+- `test/looks.test.js`: every look has every token, and every pairing of ink
+  and surface the page draws meets its contrast. It found the red echo
+  wedge under 3:1, now drawn whole.
+
+Panel tests and the protocol check pass. Its container could not build the
+firmware either (same registry block); it changed no firmware.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -109,6 +127,14 @@ and the next thread's task names that branch.
    unfinished.
 
 ## Open, not started
+
+- F5's checks for the owner, which need a real screen (features.md, F5):
+  the six looks on a laptop and a tablet, the gear and tiles by touch and by
+  keyboard, the browser bar's colour on a phone, and a look picked while
+  holding the stick.
+- The gear sits at the end of the header's first group, which on a wide
+  screen is mid-header. F3's header rework (step 4) should give it the
+  header's right end; nothing depends on where it sits.
 
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s

@@ -322,8 +322,9 @@ its family names and the move names telemetry reports (`js/mecanum.js`), and
 the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
-(`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
-(`mecanum.test.js`) on their own. `test/firmware.js` reads what they check
+(`program.test.js`), the simulator (`sim.test.js`), the stick mapping
+(`mecanum.test.js`) and the looks' tokens and contrast (`looks.test.js`) on
+their own. `test/firmware.js` reads what they check
 against in `src/` and `test/vectors/`, `test/css.js` reads the stylesheets
 as they check them, and `test/harness.js` sets the time limit an
 asynchronous test runs under, so one that never ends fails by name.
@@ -367,13 +368,17 @@ again when the look changes, in the new look's `--live`, `--case` and
 `--faint` (`js/drive.js`).
 
 **The look.** The page's colours are `css/looks.css`'s: six looks, three
-themes in Dark and Light, worn as `<html data-look>`. The gear at the end of
-the header opens Options, where `js/look.js` offers them and remembers the
+themes in Dark and Light, worn as `<html data-look>`. The gear in the
+header opens Options, where `js/look.js` offers them and remembers the
 choice; it loads in `<head>`, so the page is drawn in that look from the
 first paint. The popover is not modal: Stop stays one press while it is
-open. What takes a colour as a plain value (joy.js's canvas, Blockly's
-theme, the browser's `theme-color`) is given it again on a change, through
-`lookToken()`; everything else follows through `var()`.
+open. On an upright phone under 440 px the mode pill gives way to the gear;
+Autonomous at the foot lights while the rover explores. What takes a colour
+as a plain value (joy.js's canvas, Blockly's theme, the browser's
+`theme-color`) is given it again on a change, through `lookToken()`;
+everything else follows through `var()`. `test/looks.test.js` holds every
+look to the same tokens and to the contrast each pairing of ink and surface
+needs, so a new colour is a token in every look, never a literal.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is

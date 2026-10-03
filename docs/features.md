@@ -1,7 +1,8 @@
 # Requested features: the next work
 
 The owner's requests for the browser panel and the controls, from
-2026-10-03. Steps 1 to 3 of the [order of work](#order-of-work) are done; the
+2026-10-03. Steps 1 to 3 of the [order of work](#order-of-work) are done, and
+so is [F5](#f5-themes-and-options), from a second message that evening; the
 rest is not started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
@@ -42,6 +43,12 @@ please work on the stuff needed for project 1st and then we can do the features 
 The screenshot that came with it shows the Program tab on a wide screen
 (about 1626 CSS px) with no rover connected.
 
+A second message followed at 22:28 UTC, while steps 1 to 3 were in review:
+
+```text
+also remind the thread to make inwdows collapsible wherever needed. keeping mind that it will mostly be landscope mode in either laptop or ipad like device seo mifght as well use more width. check with word-finder and add the support for themes and options like the gear stuff it uses. see if it helps. talk to the word-finder project to see how it does that
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -69,6 +76,11 @@ The screenshot that came with it shows the Program tab on a wide screen
 | please work on the stuff needed for project 1st and then we can do the features requested/ | Done in that order: these docs came first, then the work below in its [order](#order-of-work) |
 | you can creat a separate doc for it which handoff cna refer to. | This file |
 | goal and project instructions are different | Two files: [project/goal.md](project/goal.md) and [project/instructions.md](project/instructions.md) |
+| also remind the thread to make inwdows collapsible wherever needed. | [F3](#f3-one-layout-for-both-tabs), "Also asked" |
+| keeping mind that it will mostly be landscope mode in either laptop or ipad like device seo mifght as well use more width. | [F3](#f3-one-layout-for-both-tabs), "Also asked" |
+| check with word-finder and add the support for themes and options like the gear stuff it uses. | Done: [F5](#f5-themes-and-options) |
+| see if it helps. | [F5](#f5-themes-and-options): what carried over, and what did not and why |
+| talk to the word-finder project to see how it does that | Done: [F5](#f5-themes-and-options), "Where it came from" |
 
 ## Order of work
 
@@ -90,6 +102,9 @@ The screenshot that came with it shows the Program tab on a wide screen
 6. [F3h](#f3h-both-sticks-shown-disabled-by-scheme): the biggest change to the
    Drive tab's arbitration.
 7. [F4](#f4-other-buttons).
+
+[F5](#f5-themes-and-options), themes and the Options gear, came later and
+was done beside steps 1 to 3, by its own thread, on top of their branch.
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1280 and about 1600 px (see the handoff for how, without the desktop
@@ -351,6 +366,12 @@ bar's two cells aligned to the two columns above, and a written spec
 ([F3f](#f3f-consistency-rules)) applied everywhere. F2 makes this possible by
 shortening the Program toolbar. Recompute `--stick` against the single
 column.
+
+**Also asked** (the second message): "make inwdows collapsible wherever
+needed", and, since the panel "will mostly be landscope mode in either laptop
+or ipad like device", "use more width". Both are taken up with the rest of
+F3 in step 4: a pane that is not always needed folds away, and the wide
+layout is designed for a laptop or a tablet on its side first.
 
 **Ask the owner.** Is a slightly narrower Program editor at 1280 px fine in
 exchange for one column width on both tabs? *(default: yes)*
@@ -826,6 +847,67 @@ nothing else), alongside the existing blur and Stop tests.
 tab as `client/drive.py` does, both are tested as above, and the README's
 control table lists them.
 
+## F5. Themes and Options
+
+**Asked:** "check with word-finder and add the support for themes and
+options like the gear stuff it uses. see if it helps. talk to the
+word-finder project to see how it does that"
+
+**Where it came from.** Word Finder's code (`BeeBeRBaB/word-finder` at
+`71d24bf`) and its project's own account of it. There, seven fixed palettes,
+each Light and Dark, are one radio set of 14 tiles in Settings, under a gear
+in the header; its owner chose no palette option and no follow-the-system
+mode. A pick sets attributes on `<html>` that select a block of custom
+properties, a classic script in `<head>` puts the remembered look on before
+the first paint, `theme-color` is read from the tokens again on each change,
+and a script holds every look to WCAG AA.
+
+**Done.** All of that, in the panel's shape:
+- Three themes, each Dark and Light: Console, the panel's own colours,
+  unchanged and the default; Field, the most contrast, for glare or a
+  bright room; and Blueprint, tinted navy or pale blue. Six tiles in one
+  radio set, each a miniature of the panel in its look's colours, drawn by
+  CSS alone (no `:has()`, which Firefox lacked before 121).
+- Every colour is a token in `css/looks.css`, one block per look, keyed by
+  `data-look` on `<html>`. `js/look.js` loads in `<head>` and puts on the
+  remembered look (`rover.look` in localStorage, prefixed because Chrome
+  gives every `file://` page one storage origin). A storage that throws, or
+  an id no look has, gives the default.
+- The gear (`#options`) in the header opens Options (`#optionsPanel`), the
+  tiles under Theme. On an upright phone narrower than 440 px the mode pill
+  gives way to it, as on a phone on its side: Autonomous at the foot lights
+  while the rover explores.
+- What takes a colour as a plain value is given it again on a change:
+  joy.js's stick (built again, letting go of a held stick first, one STOP
+  only if it was driving), Blockly's theme and the browser's `theme-color`.
+- `test/looks.test.js` holds every look to the same tokens and each pairing
+  of ink and surface the page draws to its contrast: text 4.5:1, marks 3:1,
+  Field's ink 7:1. It found the scan's red echo wedge under 3:1 on the card
+  at 85% opacity, so an echo's wedge is drawn whole now.
+
+**Not carried over, and why.**
+- Word Finder's Settings is a modal pane, the page behind it inert. Options
+  is a `Popover`, not modal, like the File menu: Stop stays one press while
+  it is open, where behind a modal pane's backdrop the press would only
+  close the pane.
+- Its game options (board, difficulty, sound) have no counterpart here. The
+  setting that matters, the scheme, already shows in the header, and a menu
+  would hide it ([Menu or explicit](#menu-or-explicit-every-control)).
+  Options holds the look for now, and is where a later setting goes.
+- Its service worker and module scripts, and the lessons that came with
+  them: the panel is classic scripts opened from `file://`.
+
+**Tests.** `test/looks.test.js` as above; `panel.test.js` for the tiles,
+the remembered look and its fallbacks, the popover staying non-modal with
+Stop one press, and a look change under a held stick;
+`program.test.js` for Blockly's theme in every look.
+
+**Checks for the owner,** which need a real screen: the six looks on a
+laptop and a tablet (Field Light in sunlight; the light looks' dark amber),
+the gear and tiles by touch, the tiles' focus ring by keyboard, the browser
+bar's colour on a phone, a `<select>`'s list in a light look, and a look
+picked while holding the stick.
+
 ## Menu or explicit: every control
 
 | Control | Where | Menu? | Why |
@@ -850,6 +932,7 @@ control table lists them.
 | Simulator settings | simulator bar | already one | a `Popover`, like the File menu |
 | Simulator fold | Program tab, phone | no | a disclosure |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
+| Options (gear) | header | yes | the look: set once, moves nothing ([F5](#f5-themes-and-options)) |
 
 ## Open from earlier work
 
