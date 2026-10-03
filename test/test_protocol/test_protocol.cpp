@@ -96,10 +96,11 @@ std::string jsonText(JsonVariantConst value) {
 }  // namespace
 
 void test_command_fields_are_read(void) {
-  const protocol::Command command = message("{\"move\":4,\"speed\":120,\"duration\":400}").command;
-  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, command.move);
-  TEST_ASSERT_EQUAL_INT(120, command.speed);
-  TEST_ASSERT_EQUAL_INT(400, command.durationMs);
+  const protocol::Message m = message("{\"move\":4,\"speed\":120,\"duration\":400}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, m.command.move);
+  TEST_ASSERT_EQUAL_INT(120, m.command.speed);
+  TEST_ASSERT_EQUAL_INT(400, m.command.durationMs);
 }
 
 void test_missing_fields_default_to_stopping(void) { assertDefaultsToStop("{}"); }
@@ -170,17 +171,9 @@ void test_unknown_scheme_is_ignored(void) {
   TEST_ASSERT_EQUAL_INT(protocol::Message::IGNORE, message("{\"scheme\":\"advanced\"}").kind);
 }
 
-// Anything else is a drive command, with the usual stop-on-garbage defaults,
-// including a scheme that is not a string.
-void test_other_messages_drive(void) {
-  protocol::Message m = message("{\"move\":1,\"speed\":90,\"duration\":300}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
-  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, m.command.move);
-  TEST_ASSERT_EQUAL_INT(90, m.command.speed);
-  m = message("{\"scheme\":1}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
-  TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
-}
+// Anything else is a drive command, with the usual stop-on-garbage defaults:
+// a scheme that is not a string makes no scheme message.
+void test_other_messages_drive(void) { assertDefaultsToStop("{\"scheme\":1}"); }
 
 // A message carrying "move" drives even when it also names a scheme.
 // Otherwise a client that sent its scheme with every command would have its
