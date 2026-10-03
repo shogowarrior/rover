@@ -702,6 +702,39 @@ test("speed slider re-speeds a held move (throttled)", () => {
   check(ws.moves().every((m) => m.duration === 400), "400 ms moves");
 });
 
+// The slider is the operator's speed cap, and the stick sends a share of it:
+// its deflection, out of 100, measured from the centre and capped at full.
+// joy.js clamps each axis on its own, so a full diagonal reaches 141.
+test("stick speed is its deflection times the slider, capped at the slider, and nothing inside the deadzone", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  page.$("speed").value = "128";
+  page.fire(page.$("speed"), "input");
+  const reach = page.canvas.width / 4; // joy.js's full travel (pushTo)
+  const s = stickTouch(page);
+  const last = () => ws.moves().slice(-1)[0];
+  s.start(); s.move(0, -reach);
+  check(last().move === CODES.MOVE_FORWARD && last().speed === 128, `full push ${NAMES[last().move]}@${last().speed}`);
+  page.clock.advance(300);
+  s.move(reach, -reach);
+  check(last().move === CODES.MOVE_DIAGONAL45 && last().speed === 128, `full diagonal ${NAMES[last().move]}@${last().speed}, not over the slider`);
+  page.clock.advance(300);
+  s.move(0, -reach / 2);
+  check(last().move === CODES.MOVE_FORWARD && Math.abs(last().speed - 64) <= 2, `half push ${NAMES[last().move]}@${last().speed}`);
+  s.end();
+  page.clock.advance(300);
+
+  // Just inside the deadzone, nothing; just outside it, its share.
+  const deadzone = page.evalIn("Driver.DEADZONE");
+  const mark = count(ws);
+  s.start(); s.move((reach * (deadzone - 2)) / 100, 0);
+  page.clock.advance(1000);
+  check(count(ws) === mark, `a ${deadzone - 2}/100 push sent ${names(ws, mark)}`);
+  s.move((reach * (deadzone + 2)) / 100, 0);
+  const share = Math.round(((deadzone + 2) / 100) * 128);
+  check(last().move === CODES.MOVE_RIGHT && Math.abs(last().speed - share) <= 2, `a ${deadzone + 2}/100 push ${NAMES[last().move]}@${last().speed}, not ${share}`);
+  s.end();
+});
+
 test("blocked localStorage does not stop the panel", () => {
   for (const storage of ["throws", "null"]) {
     const page = loadPage({ storage });
