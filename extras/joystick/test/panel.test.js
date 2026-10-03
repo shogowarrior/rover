@@ -627,8 +627,7 @@ test("telemetry: the page shows every frame in test/vectors/telemetry.json", () 
     check(page.$("move").textContent === frame.move, `${name}: move ${page.$("move").textContent}`);
     check(page.$("temp").textContent === `${frame.temperature.toFixed(1)}°C`, `${name}: temperature ${page.$("temp").textContent}`);
     const fault = page.$("motorsFault");
-    check(fault.hidden === (frame.motorsReady !== false) && fault.dataset.ready === (frame.motorsReady ? "yes" : "no"),
-      `${name}: shield warning hidden ${fault.hidden}, ready ${fault.dataset.ready}`);
+    check(shield(fault) === (frame.motorsReady ? "hidden/yes" : "shown/no"), `${name}: shield warning ${shield(fault)}`);
     for (const { key, wedge, reading } of scanBearings(page)) {
       const cm = frame[key];
       const want = cm === undefined ? "—" : cm >= FAR_CM ? "no echo" : `${Math.round(cm)}cm`;
@@ -691,33 +690,37 @@ test("blocked localStorage does not stop the panel", () => {
 
 /* --- motorsReady ----------------------------------------------------------- */
 
+// The shield warning, and its data-ready, which the header's motors pill
+// keys on: "shown/no", "hidden/yes" or "hidden/unknown".
+const shield = (fault) => `${fault.hidden ? "hidden" : "shown"}/${fault.dataset.ready}`;
+
 test("motorsReady: false shows the shield warning; missing or true does not", () => {
   const page = loadPage();
   const fault = page.$("motorsFault");
   check(fault !== null, "#motorsFault exists");
-  check(fault.hidden === true, "hidden at load");
+  check(shield(fault) === "hidden/unknown", `at load: ${shield(fault)}`);
   check(fault.getAttribute("role") === "alert", "announced as an alert");
   check(/Motor shield not found/.test(fault.children.map((c) => c.textContent).join(" ")), "says what is wrong");
 
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ motorsReady: undefined })); // no motorsReady key at all: older firmware
-  check(fault.hidden === true, "missing key is unknown, not false");
+  check(shield(fault) === "hidden/unknown", `missing key is unknown, not false: ${shield(fault)}`);
   ws.serverMsg(telemetry({ motorsReady: true }));
-  check(fault.hidden === true, "true: hidden");
+  check(shield(fault) === "hidden/yes", `true: ${shield(fault)}`);
   ws.serverMsg(telemetry({ motorsReady: false }));
-  check(fault.hidden === false, "false: shown");
+  check(shield(fault) === "shown/no", `false: ${shield(fault)}`);
   for (const junk of ["not json", "null", "42", "[]"]) ws.serverMsg(junk);
-  check(fault.hidden === false, "frames that are not objects change nothing");
+  check(shield(fault) === "shown/no", `frames that are not objects change nothing: ${shield(fault)}`);
   for (const odd of ["false", 0, null, "no"]) {
     ws.serverMsg(telemetry({ motorsReady: false }));
     ws.serverMsg(telemetry({ motorsReady: odd }));
-    check(fault.hidden === true, `motorsReady ${JSON.stringify(odd)} is not an explicit false`);
+    check(shield(fault) === "hidden/unknown", `motorsReady ${JSON.stringify(odd)} is not an explicit false: ${shield(fault)}`);
   }
   ws.serverMsg(telemetry({ motorsReady: false }));
   ws.serverMsg(telemetry({ motorsReady: undefined }));
-  check(fault.hidden === true, "a frame without the key hides it again");
+  check(shield(fault) === "hidden/unknown", `a frame without the key hides it again: ${shield(fault)}`);
   ws.serverMsg(telemetry({ motorsReady: true, mode: "MANUAL" }));
-  check(fault.hidden === true, "rebooted with the shield: hidden");
+  check(shield(fault) === "hidden/yes", `rebooted with the shield: ${shield(fault)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -726,7 +729,7 @@ test("motorsReady: the warning goes with its link, and controls still send", () 
   const fault = page.$("motorsFault");
   let ws = connectOpen(page);
   ws.serverMsg(telemetry({ mode: "MANUAL", motorsReady: false }));
-  check(fault.hidden === false, "shown");
+  check(shield(fault) === "shown/no", `shown: ${shield(fault)}`);
   // Nothing is disabled: the operator can still drive, stop and resume.
   press(page, page.$("cw"), 3);
   lift(page, page.$("cw"), 3);
@@ -735,16 +738,16 @@ test("motorsReady: the warning goes with its link, and controls still send", () 
   check(names(ws).join() === "ROTATE_CLOCKWISE,STOP,STOP,RESUME_AUTONOMOUS", `sent ${names(ws)}`);
 
   ws.serverDrop();
-  check(fault.hidden === true, "cleared when the link drops");
+  check(shield(fault) === "hidden/unknown", `cleared when the link drops: ${shield(fault)}`);
   check(/Lost the link/.test(page.$("note").textContent), "link note unaffected");
 
   ws = connectOpen(page);
   ws.serverMsg(telemetry({ motorsReady: false }));
-  check(fault.hidden === false, "shown again on the new link");
+  check(shield(fault) === "shown/no", `shown again on the new link: ${shield(fault)}`);
   page.fire(page.$("connect"), "click"); // deliberate disconnect
-  check(fault.hidden === true, "cleared on disconnect");
+  check(shield(fault) === "hidden/unknown", `cleared on disconnect: ${shield(fault)}`);
   page.clock.advance(100);
-  check(fault.hidden === true, "still clear after the close event");
+  check(shield(fault) === "hidden/unknown", `still clear after the close event: ${shield(fault)}`);
 
   // Replaced by Enter: late telemetry from the old socket must not raise it.
   const ws1 = connectOpen(page);
