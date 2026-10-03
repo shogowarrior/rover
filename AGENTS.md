@@ -297,9 +297,10 @@ reference; in short:
 ## The browser control panel
 
 `extras/joystick/joystick.html` opens directly from disk; the rover cannot
-serve it. `partition.csv` gives the whole flash to `nvs`, `otadata` and two OTA
-app slots, leaving no SPIFFS or LittleFS partition for web assets. Adding one
-means repartitioning, which needs a USB erase and breaks OTA, so the panel is a
+serve it. `partition.csv` holds `nvs`, `otadata` and two 1.8 MB OTA app
+slots, leaves the last 320 KB of the 4 MB flash unallocated, and has no
+SPIFFS or LittleFS partition for web assets. Adding one means a new partition
+table, which only a USB flash can write (OTA never does), so the panel is a
 local file that connects out to `ws://<rover>:81` (the address field takes
 `host` or `host:port`).
 
