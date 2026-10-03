@@ -2,28 +2,36 @@
    look. js/look.js names the looks and puts the chosen one on <html> as
    data-look; with none named, :root takes the default, Console Dark. A tile
    in the options popover sets data-look on its own preview, which then
-   paints in that look's tokens. Every block declares the same tokens. The
-   rest of the tokens (type, space, sizes, layout) are the same in every
-   look, in css/panel.css.
+   paints in that look's tokens. Every block declares the same tokens, and
+   the first says what each is for. The rest of the tokens (type, space,
+   sizes, layout) are the same in every look, in css/panel.css.
 
-   Three signal hues, each with one job. Teal is the accent: the operator's
-   own controls and the rover doing well (linked, a clear way, exploring).
-   joy.js paints the stick's knob in it (js/drive.js reads --live), so the
-   stick and the page agree in every look. Amber is caution: something
+   Three themes, each Dark and Light. Console is the slate instrument
+   console. Field is for glare or a bright room: the most contrast, its ink
+   at 7:1 and its rules strong. Blueprint is tinted: deep navy, or pale blue
+   drafting paper.
+
+   Three signal hues, each with one job, in every look. Teal is the accent:
+   the operator's own controls and the rover doing well (linked, a clear
+   way, exploring). joy.js paints the stick's knob in it (js/drive.js reads
+   --live), so the stick and the page agree. Amber is caution: something
    closing in, a fault. Red is Stop and danger and nothing else -- anywhere
-   else it would stop meaning anything. Every text colour holds 4.5:1 on the
-   surfaces it is used on. */
+   else it would stop meaning anything -- and one red in every look. A light
+   look darkens its teal and amber until they hold as text on its surfaces.
+   test/looks.test.js holds every look to the contrast each pairing of ink
+   and surface needs. */
 
 :root,
 [data-look="console-dark"] {
   color-scheme: dark;
 
-  /* surfaces, darkest first */
+  /* surfaces, from the page up: the page, a card, a control, a hovered
+     one, and the chosen segment, raised out of its track */
   --case: #0b0d11;
-  --panel: #151920;
+  --panel: #15181f;
   --raised: #1f242c;
   --raised-hi: #2b323c;
-  --chosen: #39414d; /* the chosen segment, raised out of its track */
+  --chosen: #39414d;
   --rule: #2a3039;
   --shade: rgb(0 0 0 / 0.5);
 
@@ -37,16 +45,23 @@
   --on-live: #062420;
   --live-ink: #86d9cc; /* teal text on a teal tint */
   --live-soft: rgb(77 184 168 / 0.16);
-  --live-glow: rgb(77 184 168 / 0.08);
+  /* the haze behind the scan and the wide dock's stick: none in a dark
+     look, where it lit the ground under the scan's red STOP wedge (drawn
+     at 0.85) below 3:1 */
+  --live-glow: rgb(77 184 168 / 0);
   --warn: #ffb547;
   --warn-soft: rgb(255 181 71 / 0.12);
   --stop: #d23c37;
   --stop-hi: #bb302b;
   --on-fill: #ffffff; /* text on a saturated fill: Stop, a block's menu */
   --on-stop: var(--on-fill);
-  --stop-ink: #ff7a6e; /* red text on a dark surface */
+  --stop-ink: #ff7a6e; /* red text on a surface */
   --stop-soft: rgb(210 60 55 / 0.16);
   --stop-glow: rgb(210 60 55 / 0.32);
+
+  /* art drawn for a light ground (Blockly's zoom and trash icons), as this
+     look shows it */
+  --light-art: invert(1) brightness(0.85);
 
   /* the simulator's room (css/sim.css): its grid and the rover's halo and
      deck in the ink, faint; the rover's plate; a backward wheel */
@@ -56,4 +71,204 @@
   --sim-deck: rgb(241 243 246 / 0.2);
   --sim-plate: #3a424e;
   --sim-back: #a594f9;
+}
+
+[data-look="console-light"] {
+  color-scheme: light;
+
+  --case: #e8ecf0;
+  --panel: #f8f9fb;
+  --raised: #dfe4ea;
+  --raised-hi: #d0d7df;
+  --chosen: #ffffff;
+  --rule: #c8d0d9;
+  --shade: rgb(16 24 34 / 0.18);
+
+  --readout: #12171e;
+  --dim: #4b5664;
+  --faint: #a4adb8;
+
+  --live: #006b5f;
+  --on-live: #ffffff;
+  --live-ink: #00544a;
+  --live-soft: rgb(77 184 168 / 0.2);
+  --live-glow: rgb(77 184 168 / 0.1);
+  --warn: #865900;
+  --warn-soft: rgb(255 181 71 / 0.24);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff;
+  --on-stop: var(--on-fill);
+  --stop-ink: #b02a23;
+  --stop-soft: rgb(210 60 55 / 0.12);
+  --stop-glow: rgb(210 60 55 / 0.28);
+
+  --light-art: none;
+
+  --sim-grid: rgb(18 23 30 / 0.06);
+  --sim-grid-major: rgb(18 23 30 / 0.12);
+  --sim-halo: rgb(18 23 30 / 0.05);
+  --sim-deck: rgb(18 23 30 / 0.22);
+  --sim-plate: #c3ccd6;
+  --sim-back: #6447d1;
+}
+
+[data-look="field-dark"] {
+  color-scheme: dark;
+
+  --case: #000000;
+  --panel: #0a0a0a;
+  --raised: #1c1c1c;
+  --raised-hi: #2e2e2e;
+  --chosen: #424242;
+  --rule: #6b6b6b;
+  --shade: rgb(0 0 0 / 0.7);
+
+  --readout: #ffffff;
+  --dim: #c4c4c4;
+  --faint: #5e5e5e;
+
+  --live: #45dcc5;
+  --on-live: #000000;
+  --live-ink: #8ef0e0;
+  --live-soft: rgb(69 220 197 / 0.18);
+  --live-glow: rgb(69 220 197 / 0);
+  --warn: #ffc247;
+  --warn-soft: rgb(255 194 71 / 0.16);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff;
+  --on-stop: var(--on-fill);
+  --stop-ink: #ff8a7f;
+  --stop-soft: rgb(210 60 55 / 0.22);
+  --stop-glow: rgb(210 60 55 / 0.4);
+
+  --light-art: invert(1);
+
+  --sim-grid: rgb(255 255 255 / 0.08);
+  --sim-grid-major: rgb(255 255 255 / 0.16);
+  --sim-halo: rgb(255 255 255 / 0.07);
+  --sim-deck: rgb(255 255 255 / 0.3);
+  --sim-plate: #3d3d3d;
+  --sim-back: #b9a9ff;
+}
+
+[data-look="field-light"] {
+  color-scheme: light;
+
+  --case: #ebebeb;
+  --panel: #ffffff;
+  --raised: #e0e0e0;
+  --raised-hi: #cccccc;
+  --chosen: #ffffff;
+  --rule: #6e6e6e;
+  --shade: rgb(0 0 0 / 0.22);
+
+  --readout: #000000;
+  --dim: #383838;
+  --faint: #8f8f8f;
+
+  --live: #005c51;
+  --on-live: #ffffff;
+  --live-ink: #00443b;
+  --live-soft: rgb(0 150 130 / 0.16);
+  --live-glow: rgb(0 150 130 / 0.06);
+  --warn: #785000;
+  --warn-soft: rgb(255 176 32 / 0.28);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff;
+  --on-stop: var(--on-fill);
+  --stop-ink: #9d241e;
+  --stop-soft: rgb(210 60 55 / 0.12);
+  --stop-glow: rgb(210 60 55 / 0.3);
+
+  --light-art: none;
+
+  --sim-grid: rgb(0 0 0 / 0.08);
+  --sim-grid-major: rgb(0 0 0 / 0.16);
+  --sim-halo: rgb(0 0 0 / 0.06);
+  --sim-deck: rgb(0 0 0 / 0.35);
+  --sim-plate: #bdbdbd;
+  --sim-back: #5634cc;
+}
+
+[data-look="blueprint-dark"] {
+  color-scheme: dark;
+
+  --case: #050d19;
+  --panel: #0a1628;
+  --raised: #12233b;
+  --raised-hi: #1b3150;
+  --chosen: #274268;
+  --rule: #1f3658;
+  --shade: rgb(0 4 12 / 0.6);
+
+  --readout: #e6efff;
+  --dim: #92a9c9;
+  --faint: #3a5479;
+
+  --live: #4fd0bd;
+  --on-live: #03211c;
+  --live-ink: #8fe6d8;
+  --live-soft: rgb(79 208 189 / 0.16);
+  --live-glow: rgb(79 208 189 / 0);
+  --warn: #ffbf5e;
+  --warn-soft: rgb(255 191 94 / 0.13);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff;
+  --on-stop: var(--on-fill);
+  --stop-ink: #ff8578;
+  --stop-soft: rgb(210 60 55 / 0.18);
+  --stop-glow: rgb(210 60 55 / 0.34);
+
+  --light-art: invert(1) brightness(0.85);
+
+  --sim-grid: rgb(140 190 255 / 0.07);
+  --sim-grid-major: rgb(140 190 255 / 0.15);
+  --sim-halo: rgb(230 239 255 / 0.05);
+  --sim-deck: rgb(230 239 255 / 0.2);
+  --sim-plate: #2b4369;
+  --sim-back: #b4a4ff;
+}
+
+[data-look="blueprint-light"] {
+  color-scheme: light;
+
+  --case: #e4edf8;
+  --panel: #f3f7fc;
+  --raised: #d7e3f2;
+  --raised-hi: #c6d6eb;
+  --chosen: #fbfdff;
+  --rule: #b2c6df;
+  --shade: rgb(8 28 60 / 0.18);
+
+  --readout: #0b2142;
+  --dim: #3c5577;
+  --faint: #9db2cf;
+
+  --live: #006a5e;
+  --on-live: #ffffff;
+  --live-ink: #00534a;
+  --live-soft: rgb(40 175 155 / 0.18);
+  --live-glow: rgb(40 175 155 / 0.08);
+  --warn: #855900;
+  --warn-soft: rgb(255 181 71 / 0.26);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff;
+  --on-stop: var(--on-fill);
+  --stop-ink: #ae2822;
+  --stop-soft: rgb(210 60 55 / 0.12);
+  --stop-glow: rgb(210 60 55 / 0.28);
+
+  --light-art: none;
+
+  --sim-grid: rgb(30 90 180 / 0.1);
+  --sim-grid-major: rgb(30 90 180 / 0.2);
+  --sim-halo: rgb(11 33 66 / 0.05);
+  --sim-deck: rgb(11 33 66 / 0.24);
+  --sim-plate: #b9cbe3;
+  --sim-back: #5b42cf;
 }

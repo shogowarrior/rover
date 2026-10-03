@@ -1,5 +1,5 @@
 /* The Program tab: its toolbar, the block editor and the simulator's place
-   beside it, the console under them, and the dark dress for Blockly's own
+   beside it, the console under them, and the look's dress for Blockly's own
    parts. joystick.html links this after panel.css, whose tokens it uses;
    programtab.js and blocks.js set the attributes it keys on.
 
@@ -462,9 +462,10 @@
   opacity: 1 !important;
 }
 
-/* Blockly's zoom and trashcan icons are drawn for a light workspace. */
+/* Blockly's zoom and trashcan icons are drawn for a light workspace: a dark
+   look turns them light (--light-art, css/looks.css). */
 .blocklyZoom > image,
-.blocklyTrash > image { filter: invert(1) brightness(0.85); opacity: 0.4; }
+.blocklyTrash > image { filter: var(--light-art); opacity: 0.4; }
 
 @media (hover: hover) {
   .blocklyZoom > image:hover,
