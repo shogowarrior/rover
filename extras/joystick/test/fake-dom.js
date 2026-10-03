@@ -47,6 +47,14 @@ function makeClock() {
 
 /* --- elements ------------------------------------------------------------- */
 
+// An element's inline style: a script sets plain properties directly
+// (el.style.width) and custom ones through setProperty, as in a browser.
+class Style_ {
+  #custom = {};
+  setProperty(name, value) { this.#custom[name] = String(value); }
+  getPropertyValue(name) { return this.#custom[name] || ""; }
+}
+
 class Node_ {
   constructor(tag, doc) {
     this.tagName = tag.toUpperCase();
@@ -57,7 +65,7 @@ class Node_ {
     this.listeners = {};
     this.captureListeners = {};
     this.dataset = {};
-    this.style = {};
+    this.style = new Style_();
     this._text = "";
     this.hidden = false;
     this.offsetLeft = 0;

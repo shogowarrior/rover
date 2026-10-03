@@ -70,16 +70,16 @@ class ProgramTab {
     this.#ask = ask;
     this.#ui = ui;
 
-    // The simulator's view has a place only if there is a simulator. On a
-    // phone, where the view sits under the editor, it starts folded away
-    // unless a preview is what the operator last chose.
+    // The simulator's view has a place only if there is a simulator. It
+    // starts folded away, leaving the editor the room, unless a preview is
+    // what the operator last chose.
     const simulator = targetSwitch.kinds.includes("simulator");
     ui.simPane.hidden = !simulator;
     ui.stage.dataset.sim = simulator ? "yes" : "no";
     this.#expandSim(targetSwitch.kind === "simulator");
     targetSwitch.onChange((kind) => {
       this.#outcome = null;
-      // On a phone the view is folded away; previewing is when it is wanted.
+      // Previewing is when the view is wanted: unfold it.
       if (kind === "simulator") this.#expandSim(true);
       this.#update();
     });

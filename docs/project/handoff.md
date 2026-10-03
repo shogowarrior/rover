@@ -66,13 +66,36 @@ could not build the firmware or run the host tests: its network policy
 blocked the PlatformIO registry. It changed nothing they cover; CI builds
 and tests them on the PR.
 
+The same thread then did step 4, F3 with F3a to F3e, in a PR of its own
+(features.md says what each part measured):
+
+- one right-column width, `--rail` (`clamp(320px, 30vw, 460px)`), beside
+  both tabs, shared by the address, the note, the scan, the readouts and
+  Autonomous, so the tab switch moves nothing;
+- the foot bar's cells under the columns: Stop under the left pane, at most
+  480 px, Autonomous under the rail, both 56 px;
+- the scan's card says "No rover connected: its scan shows here" until the
+  rover's first frame (`ScanView.clear()`);
+- on the Program tab, the simulator's view beside the editor as tall as its
+  room needs (`--room-aspect`, set by `SimView`), the console under it, and
+  a fold strip, so the view folds away on every layout and the editor takes
+  the width; it starts folded unless the target is the simulator;
+- the simulator's bar at 44 px on every layout, the spec's one control
+  height.
+
+The owner's later ask (landscape on a laptop or an iPad first, more of the
+width, windows that fold where needed) is in it: measured at 1024 x 768 and
+1180 x 820 as well as 1280 and 1600. The right column does not fold: F3c
+keeps it on screen. Panel tests 200/200 and the protocol check pass. Still
+open from F3b: the tab and scheme labels overflow at 480 x 320.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F4) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 3 are done, so the next thread
-starts at 4:
+when it is done. Do them in this order; 1 to 4 are done, so the next thread
+starts at 5:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -83,7 +106,7 @@ starts at 4:
    settings popover), one Rover | Simulator target switch.
 3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
    simulator's 1x / 2x / 4x as a list only in a narrow view.
-4. F3 with F3a to F3e: one layout for both tabs.
+4. **Done.** F3 with F3a to F3e: one layout for both tabs.
 5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
    both tabs, with or without a rover.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly

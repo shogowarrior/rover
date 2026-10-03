@@ -339,16 +339,24 @@ exploring rover alone. Its Drive and Program tabs switch only what is shown,
 with one exception: leaving the Drive tab lets go of a held stick (one STOP,
 only if it was driving), which hidden could be neither steered nor centred.
 A held rotate button carries on. The scan, the readouts and the Stop and
-Autonomous buttons stay on screen on both tabs. Stop and Autonomous stay in
-the same place; the scan gives the Program tab room, as a strip above it on
-a phone and a narrower column beside it on a wide screen.
+Autonomous buttons stay on screen on both tabs, connected or not: until the
+rover's first frame the scan's card says no rover is connected, at its full
+size, and after a link goes it keeps the last scan, dimmed. Stop and
+Autonomous stay in the same place; on a phone the scan gives the Program tab
+room as a strip above it.
 
 The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
 the left thumb, rotate, speed and Stop under the right, and the scan takes
 what height is left; on a wide screen (960 px by 521 px and up) the open tab
-fills the left, the scan and readouts a column on the right, and Stop and
-Autonomous a bar across the foot, Stop under the controls. No ancestor of the
+fills the left, and the rail, one width (`--rail`) beside both tabs, holds
+the address, the note, the scan and the readouts on the right, so the tab
+switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
+under the left pane (at most 480 px) and Autonomous under the rail. The
+Program tab puts the simulator's view beside the editor, as tall as its
+room needs at its width (`SimView` sets `--room-aspect` on `#simSlot`), and
+the console under it; the view folds away to a strip on every layout, and
+starts folded unless the target is the simulator. No ancestor of the
 stick may be positioned, transformed, filtered or contained: joy.js places a
 touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
 for it. Any move of the stick's box on the screen under a held stick lets go

@@ -2,8 +2,15 @@
  * The scan fan: the rover's five ultrasonic bearings drawn where it measures
  * them, as wedges that reach out to the distance each one reads.
  *
- *   new ScanView(svg)   lays the fan out in the empty <svg>.
+ *   new ScanView(svg)   lays the fan out in the empty <svg>, with nothing
+ *                       to draw yet.
  *   show(data)          draws a telemetry object's distances.
+ *   clear()             draws none: no frame has come over the link yet.
+ *
+ * svg[data-empty] is "yes" from clear(), and as built, until the next
+ * show(): the page's empty state keys on it (panel.css). A frame without
+ * distances is not empty: the rover sends none until it has measured every
+ * bearing once.
  *
  * Nothing here touches the DOM until a ScanView is built, so the file also
  * loads in Node, for BEARINGS.
@@ -56,10 +63,17 @@ class ScanView {
   constructor(svg) {
     this.#svg = svg;
     this.#build();
+    this.clear();
   }
 
   show(data) {
     for (const view of this.#views) this.#showDistance(view, data[view.key]);
+    this.#svg.dataset.empty = "no";
+  }
+
+  clear() {
+    this.show({});
+    this.#svg.dataset.empty = "yes";
   }
 
   // Lay the fan out from the constants above, so a threshold that moves in the

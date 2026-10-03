@@ -82,8 +82,10 @@ The screenshot that came with it shows the Program tab on a wide screen
    `js/targetswitch.js`).
 3. **Done.** [F2](#f2-file-actions-in-one-menu): it shortens the Program
    toolbar, which was what held the right column narrow.
-4. [F3](#f3-one-layout-for-both-tabs) and F3a to F3e: one right-column width,
-   the foot bar aligned to the columns, the simulator view fixed.
+4. **Done.** [F3](#f3-one-layout-for-both-tabs) and F3a to F3e: one
+   right-column width, the foot bar aligned to the columns, the simulator
+   view fixed, and the owner's later ask: landscape first, more of the
+   width, panes that fold.
 5. [F1](#f1-a-simulator-for-the-drive-tab), then
    [F3g](#f3g-normal-and-advanced-on-both-tabs), which builds on F1's target
    switch.
@@ -263,10 +265,13 @@ then. Narrower still, the room's name takes a row of its own. The widths
 421 px of the bar in the one-column layout and 349 px in the wide one, the
 room's own row below 340 and 304. So the bar is one row from 340 px (390 px
 phones and up) and at 1280 to 1600 px, and two rows on a 375 px phone, at
-480 x 320 and at 960 x 540, with every room's name in full.
+480 x 320 and at 960 x 540, with every room's name in full. (F3 made the
+tools one size on every layout, so the widths are 421 and 340 everywhere:
+see F3e.)
 
 At 1280 and 1600 px the toolbar is one row at today's right-column width (it
-took two at 1280); F3 re-checks it at the new one. On an upright phone it
+took two at 1280); F3 re-checked it at the new one: one row from 1024 to
+1600 px. On an upright phone it
 still takes three rows (the switch, Run and Stop program, the menu), until
 F1 moves the switch to the header.
 
@@ -359,6 +364,24 @@ exchange for one column width on both tabs? *(default: yes)*
 one above or below it, on both tabs, and the stick never moves on a tab
 switch, a link change or a target switch.
 
+**Done** (step 4). One `--rail`, `clamp(320px, 30vw, 460px)`, beside both
+tabs (320 px at 1024, 384 at 1280, 460 at 1600), used by the address and
+Connect, the note, the fault, the scan and the readouts, and Autonomous, all
+from one left edge; the shell's grid is the same beside both tabs, and
+`--stick` budgets that one rail. Measured in the headless shell at
+1024 x 768, 1180 x 820, 1280 x 800, 1440 x 900 and 1600 x 900: every part
+of the right column shares one x and width on both tabs, both tabs' content
+starts 142 px down, and the stick's box is the same before and after a tab
+switch, a target switch, a fold and a link coming and going. The phone
+layouts (375 x 812, 480 x 320, 812 x 375, 768 x 1024) measure as before
+but for the console's place and the empty state.
+
+The owner then asked for landscape on a laptop or an iPad first, more of
+the width, and windows that fold where needed. The rail takes 30% of the
+width rather than a fixed share per tab, the simulator's view folds on
+every layout (F3e), and the right column does not fold, because F3c keeps
+it on screen at all times.
+
 ### F3a. Stop and Autonomous
 
 **Asked:** "there big stop/autonomous at the bottom with biggest buttons."
@@ -387,6 +410,11 @@ tall, Stop still the most prominent control; the phone bar is unchanged; and
 `panel.test.js`'s Stop tests (always sends STOP, on every tab, named apart
 from Stop program) pass.
 
+**Done** (step 4). Stop starts at the left pane's edge, 480 px wide at every
+wide size measured, and Autonomous fills the cell under the rail; both are
+56 px tall. Stop keeps its red fill and glow, Autonomous its raised fill,
+lit while the rover explores. The phone bar is unchanged.
+
 ### F3b. The top rows
 
 **Asked:** "drive/program at the top"
@@ -410,6 +438,14 @@ no switch label overflows its button (`scrollWidth <= clientWidth`) at
 375 x 812 and 480 x 320, and the tab tests (arrow keys, leaving Drive lets go
 of a held stick) pass. Until F1 lands, the header holds the switches that
 exist; F1 adds Rover | Simulator and checks this again.
+
+**Done** (step 4), but for 480 x 320. Both tabs' content starts at the
+same height on every layout, and no label overflows at 375 x 812,
+812 x 375 or any wide size. At 480 x 320 "Program", "Normal" and
+"Advanced" still overflow: the middle column there is 101 px, a segment 50,
+and "Program" needs more even with its padding cut to 4 px. Fixing it
+takes a narrower stick or right column at that size, a layout change of its
+own, so it stays open below.
 
 ### F3c. The right column at all times
 
@@ -449,6 +485,15 @@ leave the screen. `panel.test.js`
 gains a test for the empty state; its tests for a new link starting from
 nothing and a lost link keeping the dimmed scan still pass.
 
+**Done** (step 4). Until the rover's first frame the scan's card says "No
+rover connected: its scan shows here" over the fan's empty rings, at the
+card's full size, on both tabs and at every width but the smallest cards
+(under 189 x 90 px, where the readings go too). `ScanView.clear()` marks it
+(`svg[data-empty]`), and panel.css shows it only while no link is up: with
+a link up and its first frame to come, the link pill says so. A link that
+goes keeps its last scan, dimmed, as before. The column's width never
+changes with the link.
+
 ### F3d. One right-column width
 
 **Asked:** "its a bit confusing what goes into the right with the size
@@ -473,6 +518,10 @@ editor? *(default: the middle of that clamp)*
 address, the note, the fault, the scan, the readouts and Autonomous, at 1280
 and about 1600 px; and the scan card is the same height on both tabs, with
 no empty row under the readouts taller than 24 px.
+
+**Done** (step 4). One width, as F3 says. The scan fills the column beside
+both tabs, 459 px tall at 1280 x 800 and 559 at 1600 x 900 on either tab,
+with the readouts at the column's foot and no empty row.
 
 ### F3e. The simulator view fills its pane
 
@@ -517,6 +566,31 @@ room; `panel.test.js`'s `#simSlot` placement tests.
 Program tab (and on the Drive tab once F1 lands), the room fills its stage's width or height with no empty band above
 or below it taller than 24 px, and on a phone the view fits above the dock
 without moving it.
+
+**Done** (step 4) on the Program tab; the Drive tab's view and the phone
+check are F1's. In the wide layout the view sits beside the editor, after
+its fold strip, and takes 44% of the pane (`clamp(260px, 44cqw, 560px)`:
+280 px at 1024, 364 at 1280, 472 at 1600). SimView puts the room's aspect
+(`--room-aspect`) and its margins (`--room-pad-x`, `--room-pad-y`, from
+`SimView.PAD`) on `#simSlot`, and sim.css gives the stage the height the
+room needs at the view's width. The console sits under the view and takes
+what is left, at least 120 px, its log as tall as that allows; where the
+column is too short, the stage gives way and the room fits its height.
+Measured for all four rooms from 1024 x 768 to 1600 x 900, the room fills
+its stage's width or height, with only SimView's own margins above and
+below it (19 and 23 px: the badge and the scale bar). The settings hang
+from the bar over the console, so a corridor's short view still has room
+for them. The key stays in the settings on a wide screen: under the status
+it cost the room its height.
+
+The view folds on every layout now, for the owner's "collapsible wherever
+needed": beside the editor its heading is a strip down its side, and
+folded, only the strip stays, the editor takes the width (580 px instead of
+288 at 1024 x 768) and the console goes under the editor. It starts folded
+unless the target is the simulator, as it always did on a phone, and
+choosing the simulator unfolds it. The simulator's bar is 44 px tall on
+every layout (the spec's one control height), so the bar is one row from
+1280 px and two at 1024 and 1180, with every room's name in full.
 
 ### F3f. Consistency rules
 
@@ -574,7 +648,7 @@ phone the bar stays as today: Autonomous | Stop, Stop under the right thumb.
 *Control heights.* One height for every ordinary control on every layout:
 `--tap`, 44 px, the touch floor. That covers buttons, segmented controls,
 selects, the address field, menu buttons, the Program toolbar and the
-simulator's bar (32 px on wide today). The exceptions are larger, never
+simulator's bar (44 px on wide too since F3). The exceptions are larger, never
 smaller: the foot bar's Stop and Autonomous, the Drive tab's rotate buttons
 (held controls, as today) and Blockly's own controls.
 
@@ -861,7 +935,9 @@ waits for the owner.
   app's browser pane dismisses unseen. They ask in the page now.
 - At 480 x 320 on its side, the middle column is 101 px wide and the tab and
   scheme labels overflow their buttons. Found while verifying the last
-  branch's landscape layout. Taken up by F3b's done-when.
+  branch's landscape layout. F3b took it up and left it: cutting the
+  segments' padding is not enough, and the fix is a narrower stick or right
+  column at that size.
 - `client/ws.py` prints a raw traceback when the rover is unreachable, where
   `client/drive.py` prints one clean line.
 - No stand-in rover or project verify recipe is committed. The one used to
