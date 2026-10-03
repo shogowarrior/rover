@@ -1,8 +1,8 @@
 /**
- * A button and the popup it opens: the Program tab's File menu, and the
- * simulator's settings. While it is open its button says so
- * (aria-expanded); Escape closes it with the focus back on its button, and a
- * press anywhere outside it closes it.
+ * A button and the popup it opens: the Program tab's File menu, the
+ * simulator's settings, and the page's Options. While it is open its button
+ * says so (aria-expanded); Escape closes it with the focus back on its
+ * button, and a press anywhere outside it closes it.
  *
  *   new Popover(button, panel, { menu })
  *     button  what opens and closes it.

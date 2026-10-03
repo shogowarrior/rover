@@ -325,6 +325,10 @@
 
 .blocklyMainBackground { stroke: none; }
 
+/* The grid, in the look's colour. Blockly draws its lines once, with a
+   stroke attribute it never changes, and a style rule outranks that. */
+#programWorkspace pattern[id^="blocklyGridPattern"] line { stroke: var(--raised-hi); }
+
 .blocklyToolbox {
   padding: var(--s-3) var(--s-2);
   border-right: 1px solid var(--rule);

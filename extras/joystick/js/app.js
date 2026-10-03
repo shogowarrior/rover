@@ -8,11 +8,14 @@
  * one file declares at top level is visible to every file after it, and a
  * second top-level declaration of the same name stops that whole second
  * file from loading. So each file declares at top level only what it offers
- * the others, and keeps the rest inside its class:
+ * the others, and keeps the rest inside its class. The first two load in
+ * <head>, the rest at the foot of <body>, after the vendored joy.js:
  *
  *   support.js       what the parts share: Listeners, memory, dom, segment,
  *                    pressSegment, clamp, radians, degrees, abortableWait,
  *                    isPrimaryPress, reportFault
+ *   look.js          LookPicker, lookToken: the page's looks, the one in
+ *                    force, and the tiles that pick one
  *   protocol.js      the firmware's constants: move codes, scheme and mode names,
  *                    speed limits, the port, distances and timing
  *   mecanum.js       the motions, moveForStick() for the stick families, and
@@ -349,3 +352,25 @@ if (targets.simulator) {
     }
   });
 }
+
+/* --- the look ------------------------------------------------------------ */
+
+// The page's colours, picked under the gear (look.js has already put the
+// remembered look on <html>). Picking one sends nothing. The Options popover
+// is not modal: Stop stays one press while it is open, and the press that
+// reaches Stop closes it.
+const lookPicker = new LookPicker(byId("lookChoice"));
+new Popover(byId("options"), byId("optionsPanel"));
+
+// Whatever took the look's colours as plain values when it was built takes
+// the new look's: the browser's own bar (theme-color), the stick's knob,
+// which joy.js paints into its canvas, and the block editor's Blockly theme.
+// Anything styled with var() follows by itself.
+const themeColor = document.querySelector('meta[name="theme-color"]');
+const paintBrowserBar = () => themeColor.setAttribute("content", lookToken("--case"));
+paintBrowserBar();
+lookPicker.onChange(() => {
+  paintBrowserBar();
+  driver.restyle();
+  programTab.restyle();
+});
