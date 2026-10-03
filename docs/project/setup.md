@@ -19,16 +19,28 @@ each file whole.
    `main`.
 3. **Goal:** paste [goal.md](goal.md).
 4. **Project instructions:** paste [instructions.md](instructions.md).
-5. **Environment setup script:** paste [environment.sh](environment.sh). It
-   installs `jq`, Node 22 and PlatformIO. Without `jq` the repo's secrets
-   guard blocks every tool call, and a thread cannot install it from inside.
-   The script fails loudly instead, which stops the thread from starting.
-6. **Network access:** if the environment restricts hosts, allow the
-   distribution's apt mirrors, `pypi.org`, `files.pythonhosted.org`,
-   `api.registry.platformio.org`, `dl.registry.platformio.org`,
-   `deb.nodesource.com`, `registry.npmjs.org`, `cdn.playwright.dev`,
-   `playwright.download.prss.microsoft.com`, GitHub, and `cdn.jsdelivr.net`
-   (the panel loads Blockly from it).
+5. **Environment.** The setup script belongs to a cloud environment, not to
+   the Project. Environments are shared by every Project that picks them, so
+   make one for the rover rather than editing Default (word-finder may use
+   it):
+   - At claude.ai/code, click the cloud icon above the message box, open
+     **Cloud**, and click **Add cloud environment**.
+   - **Name:** `rover`.
+   - **Setup script:** paste [environment.sh](environment.sh). It installs
+     `jq`, Node 22 and PlatformIO. Without `jq` the repo's secrets guard
+     blocks every tool call, and a thread cannot install it from inside, so
+     the script fails loudly instead. It runs as root on Ubuntu 24.04, once;
+     every thread then starts from that cached result, until the script or
+     the network setting changes (or after about 7 days).
+   - **Network access:** **Custom**, allowing the distribution's apt
+     mirrors, `pypi.org`, `files.pythonhosted.org`,
+     `api.registry.platformio.org`, `dl.registry.platformio.org`,
+     `deb.nodesource.com`, `registry.npmjs.org`, `cdn.playwright.dev`,
+     `playwright.download.prss.microsoft.com`, GitHub, and
+     `cdn.jsdelivr.net` (the panel loads Blockly from it). **Full** also
+     works.
+6. **Point the Project at it:** in the Project, open **Project settings >
+   Environment** and pick `rover`.
 7. **Start it.** A new Project waits for your first message (only an
    account's very first Project starts by itself). Send:
 
