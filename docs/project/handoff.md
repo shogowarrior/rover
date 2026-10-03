@@ -1,8 +1,7 @@
 # Handoff
 
-Where the project stands, how a thread picks it up, and what is next. Read
-AGENTS.md and CLAUDE.md first; they are binding. Update this file at the end
-of every thread.
+Where the project stands, what to work on now, and how a thread picks it up.
+AGENTS.md and CLAUDE.md are binding. Update this file in every thread's PR.
 
 ## Where things stand
 
@@ -21,7 +20,7 @@ As of 2026-10-03, `main` holds a finished review and refactor (165 commits,
   test table (`test_guard.py`), and added `tools/check_protocol.py`, the
   panel's Node tests against a fake DOM, and the shared cases in
   `test/vectors/`;
-- wrote AGENTS.md, the bench checklist and [ROADMAP.md](ROADMAP.md) (more
+- wrote AGENTS.md, the bench checklist and [ROADMAP.md](../ROADMAP.md) (more
   sonars, an IMU for heading hold, Kalman filtering and mapping, all for
   later).
 
@@ -32,46 +31,52 @@ stand-in rover, and the Python clients through a terminal. It found the
 motor-fault card cut mid-sentence on a phone on its side, fixed in
 `b3a8530` to `385df4d`, after which `/code-review` rounds ran until one came
 back clean. Nothing has run on the robot yet:
-[bench-checklist.md](bench-checklist.md) is how.
+[bench-checklist.md](../bench-checklist.md) is how.
+
+## Current work
+
+The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
+quotes them verbatim and maps each to an item (F1-F4) with today's code, the
+binding rules, a proposal, the owner's questions with defaults, tests, and
+when it is done. Do them in this order:
+
+1. Write the layout and interaction spec (F3f) into features.md, and send it
+   to the owner with every "Ask the owner" question in features.md, in one
+   message. Carry on with the marked defaults without waiting, and record the
+   answers in features.md as they come.
+2. Shared parts, each tested: the in-page ask dialog in place of every
+   `window.confirm()`, one menu helper (shared with the simulator's settings
+   popover), one Rover | Simulator target switch.
+3. F2: Export, Import, Clear and the examples in one menu.
+4. F3 with F3a to F3e: one layout for both tabs.
+5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
+   both tabs, with or without a rover.
+6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
+   disabled.
+7. F4: other buttons (PS3 Cross as STOP, keyboard keys).
+
+**One thread at a time,** each on one item or a few related ones: each item
+builds on the one before, and every thread edits this file and features.md.
+Start the next thread only after the previous one's PR is merged.
+
+**Where a thread starts:** `main`, unless its task names a branch. A thread
+that cannot merge its PR says so in its report and its PR, naming the branch,
+and the next thread's task names that branch.
 
 ## Starting a thread
 
-1. If this is a cloud Project thread, its setup is in
-   [claude-project.md](claude-project.md): the environment script, the git
-   identity, the PlatformIO cache, and the one-line proof that the hooks
-   work. A thread on the owner's Mac needs none of it.
-2. Read [features.md](features.md): the goal's detail.
-3. In the first thread of a goal, write the layout spec (features.md F3f) and
-   send it to the owner with every "Ask the owner" question in features.md,
-   in one message. Carry on with the marked defaults without waiting, and
-   record the answers in features.md as they come.
-
-**Where the next thread starts:** `main`, unless its task names a branch. A
-thread that cannot merge its PR says so in its report and its PR, naming the
-branch, and the project conversation names that branch in the next thread's
-task.
-
-## Next
-
-The owner's requests of 2026-10-03, all in [features.md](features.md), in
-its order of work:
-
-1. The layout and interaction spec (F3f), written first and sent to the
-   owner with every question; work carries on with the defaults without
-   waiting.
-2. Shared parts: the in-page ask dialog in place of every `window.confirm()`,
-   one menu helper, one target switch.
-3. F2, the file actions in one menu.
-4. F3 and F3a to F3e: one layout for both tabs.
-5. F1, a simulator for the Drive tab; then F3g, Normal | Advanced on both
-   tabs.
-6. F3h, both sticks shown, disabled by scheme.
-7. F4, other buttons.
+1. A cloud thread's setup is in the Project instructions
+   ([instructions.md](instructions.md)): the git identity, the PlatformIO
+   cache, and the one-line proof that the hooks work. A thread on the owner's
+   Mac needs none of it.
+2. Read [features.md](../features.md) for the item you are on.
+3. Before the PR merges, update this file: what changed, what is next, what is
+   unfinished.
 
 ## Open, not started
 
 - Small panel and client items listed under "Open from earlier work" in
-  [features.md](features.md): the three remaining `confirm()` calls, label
+  [features.md](../features.md): the three remaining `confirm()` calls, label
   overflow at 480 x 320, `client/ws.py`'s traceback, and no committed
   stand-in rover.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud
@@ -92,7 +97,7 @@ Never change these silently:
   255 on the 3S pack: cap `tuning::MOTOR_SPEED_LIMIT` or add a regulator
   (ROADMAP.md, "Now").
 - **The pivot rows.** Codes 9 to 16 follow DroneBot's table but are not
-  bench-verified ([mecanum.md](mecanum.md)).
+  bench-verified ([mecanum.md](../mecanum.md)).
 - **The secrets guard's reach.** It does not see what command substitution
   such as `$(find src ...)` expands to; AGENTS.md's rule is the real
   protection. Any change to the guard follows CLAUDE.md's copy, prove, move
@@ -113,7 +118,7 @@ There:
 - `node --test extras/joystick/test/` runs the real page against a fake DOM,
   WebSocket and clock, and covers behaviour.
 - For layout, use Playwright's chromium headless shell only, as
-  [claude-project.md](claude-project.md) says, measuring at 375, 1280 and
+  [claude-project.md](setup.md) says, measuring at 375, 1280 and
   about 1600 px (the owner's screen).
 - To exercise the panel end to end, run a stand-in rover: a WebSocket server
   on `127.0.0.1:8181` that logs every frame, answers `{"scheme": ...}`,

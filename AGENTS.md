@@ -92,7 +92,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). A Drive tab, and a Program tab of block programs with a simulator to preview them on. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
 | `partition.csv` | Two OTA app slots and no filesystem |
-| `docs/`, `images/` | Wiring, BOM, pinouts, the mecanum table, bench checklist, roadmap; `handoff.md` (where the work stands, what is next), `features.md` (the owner's requested features), `claude-project.md` (running the repo as a Claude Project) |
+| `docs/`, `images/` | Wiring, BOM, pinouts, the mecanum table, bench checklist, roadmap; `features.md` (the owner's requested features); `docs/project/`: `handoff.md` (where the work stands, what to work on now) and the Claude Project's goal, instructions and environment script (`setup.md` says where each goes) |
 
 ## Architecture
 

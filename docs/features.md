@@ -1,7 +1,7 @@
 # Requested features: the next work
 
 The owner's requests for the browser panel and the controls, from
-2026-10-03. Nothing here is started. [handoff.md](handoff.md) says where the
+2026-10-03. Nothing here is started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
 Every bullet and clause the owner wrote is quoted below and mapped to an
@@ -45,9 +45,9 @@ The screenshot that came with it shows the Program tab on a wide screen
 
 | The owner's words | Where |
 |---|---|
-| i asked the watch game session to help. create documents needed for putting this in a claude project. | Done: [claude-project.md](claude-project.md), [handoff.md](handoff.md), this file |
-| work with it to see what you need. it might not be done with setting those up so please check with it. | Done: it had set up nothing for rover, and described word-finder's Project, which these docs follow. Its one suggestion for the repo is an owner decision in [handoff.md](handoff.md) |
-| create a handoff as needed. | Done: [handoff.md](handoff.md) |
+| i asked the watch game session to help. create documents needed for putting this in a claude project. | Done: [project/](project/setup.md) (the goal, instructions, environment script and handoff), this file |
+| work with it to see what you need. it might not be done with setting those up so please check with it. | Done: it had set up nothing for rover, and described word-finder's Project, which these docs follow. Its one suggestion for the repo is an owner decision in [project/handoff.md](project/handoff.md) |
+| create a handoff as needed. | Done: [project/handoff.md](project/handoff.md) |
 | add simualtor for the drive mode also so we can see how the controls work. just like the simulator for program (in blockly). | [F1](#f1-a-simulator-for-the-drive-tab) |
 | export/import/clear in a single dropdown. | [F2](#f2-file-actions-in-one-menu) |
 | check if other things can be put in dropdown too. there can be multiple based on what is needed. | [F2](#f2-file-actions-in-one-menu) (which menus, and how many), [Menu or explicit](#menu-or-explicit-every-control) |
@@ -64,10 +64,10 @@ The screenshot that came with it shows the Program tab on a wide screen
 | drive mode should have both the joysticks visible but disabled based on on normal/advanced/ | [F3h](#f3h-both-sticks-shown-disabled-by-scheme) |
 | please make it consistent (the joysticks bullet) | [F3h](#f3h-both-sticks-shown-disabled-by-scheme), "Consistent means" |
 | check if other buttons can be used too | [F4](#f4-other-buttons) |
-| All this requests can go to your handoff and make sure nothing is dropepd. from my requests. i dont want to waste time on figureing out what got missed. | This table; [handoff.md](handoff.md) points here |
+| All this requests can go to your handoff and make sure nothing is dropepd. from my requests. i dont want to waste time on figureing out what got missed. | This table; [project/handoff.md](project/handoff.md) points here |
 | please work on the stuff needed for project 1st and then we can do the features requested/ | Done in that order: these docs are the first change, and nothing below is started |
 | you can creat a separate doc for it which handoff cna refer to. | This file |
-| goal and project instructions are different | [claude-project.md](claude-project.md) keeps them as two texts |
+| goal and project instructions are different | Two files: [project/goal.md](project/goal.md) and [project/instructions.md](project/instructions.md) |
 
 ## Order of work
 
