@@ -89,8 +89,16 @@ class Node_ {
   dispatchEvent(e) { return dispatch(this, e); }
   focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
   getContext() { return fakeContext(); }
-  // As in a browser, an element with no layout box has no rects.
+  // As in a browser, an element with no layout box has no rects, and an
+  // empty bounding rect. Laid out, it sits at the sum of its own and its
+  // ancestors' offsets: a test moves one by changing offsetLeft/offsetTop.
   getClientRects() { return this.rendered ? [{}] : []; }
+  getBoundingClientRect() {
+    let left = 0;
+    let top = 0;
+    if (this.rendered) for (let n = this; n; n = n.offsetParent) { left += n.offsetLeft; top += n.offsetTop; }
+    return { left, top, width: this.clientWidth, height: this.clientHeight };
+  }
 }
 
 function fakeContext() {

@@ -131,7 +131,8 @@
      custom property cannot fall back by being declared twice: an svh it
      held would only fail where used, leaving the stick unsized. */
   --svh: 1vh;
-  /* joy.js reads the stick's size once, when the page loads, so --stick
+  /* joy.js sizes the stick as it is built, and the Driver builds it again
+     whenever --stick changes, letting go of a stick held then. So --stick
      must not depend on anything that settles later (a web font, a
      scrollbar); the viewport is enough. */
   --stick: clamp(148px, min(54vw, 25 * var(--svh)), 236px);
@@ -825,9 +826,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* The well joy.js draws its ring and knob in, with a notch on each axis.
    joy.js sizes its canvas from this box as it is built. The box is always
-   --stick, never stretched by the canvas: turn the phone or resize the
-   window and the Driver sees the box change and builds the stick again at
-   its size (js/drive.js). */
+   --stick, never stretched by the canvas, so the Driver sees it take a new
+   size and builds the stick again at it. A resize or a turned phone that
+   moves or resizes the box under a held stick lets go of it (js/drive.js). */
 #stick {
   display: grid;
   place-items: center;

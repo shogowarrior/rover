@@ -336,10 +336,13 @@ fills the left, the scan and readouts a column on the right, and Stop and
 Autonomous a bar across the foot, Stop under the controls. No ancestor of the
 stick may be positioned, transformed, filtered or contained: joy.js places a
 touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
-for it. joy.js sizes its canvas once, as it is built, so when the stick's box
-settles at a new size (a phone turned, a window resized) the Driver builds it
-again, letting go of a stick held then as a scheme change does. The stick's
-teal is joy.js's own (`js/drive.js`), and the theme's accent follows it.
+for it. A window resize or a turned phone that moves or resizes the stick's box
+under a held stick lets go of it at once, as a scheme change does: a thumb
+resting where it was would otherwise steer the moved stick another way. (A
+375 px phone turned on its side moves the stick and keeps its size.) joy.js
+sizes its canvas once, as it is built, so when the box settles at a new size
+the Driver builds the stick again. The stick's teal is joy.js's own
+(`js/drive.js`), and the theme's accent follows it.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is

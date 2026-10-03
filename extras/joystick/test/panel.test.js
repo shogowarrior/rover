@@ -1235,7 +1235,8 @@ test("tabs: the last tab comes back, with the stick sized before it was hidden",
 /* --- the stick follows its box's size ------------------------------------ */
 
 // joy.js sizes its canvas once, as it is built; the Driver builds it again
-// when the stick's box settles at a new size. These need the page's
+// when the stick's box settles at a new size, and lets go of a held stick
+// when a window resize moves or resizes its box. The rebuilds need the page's
 // ResizeObserver, which loadPage gives with frames.
 
 // The box as a resize leaves it, the observer's callbacks, and the settling
@@ -1253,13 +1254,18 @@ test("stick: a resize rebuilds the canvas at the new size once it settles, and s
   const first = page.canvas;
   check(first.width === 352 && first.height === 352, `built at ${first.width}x${first.height}`);
 
-  // A window edge dragged: a burst of sizes, rebuilt once, at the last.
-  for (const size of [300, 260, 230]) {
+  // A window edge dragged for longer than REFIT_MS, a new size every half of
+  // it: nothing is rebuilt until the last size has held for REFIT_MS, and
+  // then once, at that size.
+  const refitMs = page.evalIn("Driver.REFIT_MS");
+  for (const size of [300, 280, 260, 230]) {
     resizeStick(page, size, false);
-    page.clock.advance(page.evalIn("Driver.REFIT_MS") / 4);
+    page.clock.advance(refitMs / 2);
+    check(page.canvas === first, `rebuilt while the size was still changing, at ${page.canvas.width}`);
   }
-  check(page.canvas === first, "not rebuilt while the size is still changing");
-  page.clock.advance(page.evalIn("Driver.REFIT_MS"));
+  page.clock.advance(refitMs / 2 - 1);
+  check(page.canvas === first, `rebuilt before the last size had held for REFIT_MS, at ${page.canvas.width}`);
+  page.clock.advance(1);
   const [second] = stickCanvases(page);
   check(stickCanvases(page).length === 1 && second !== first && first.parentNode === null, `one new canvas in place of the old: ${stickCanvases(page).length}`);
   check(second.width === 230 && second.height === 230, `rebuilt at ${second.width}x${second.height}`);
@@ -1356,6 +1362,125 @@ test("stick: a rebuild under a held stick sends one STOP, then nothing until a f
     const after = names(ws, mark);
     check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a rebuild ${after}`);
   }
+});
+
+// A resize of the window that leaves the stick's box at (left, top), its
+// size unchanged: a phone turned, where 54vw upright is 54vmin on its side.
+// joy.js measures a thumb against where the box is now.
+function moveStick(page, left, top) {
+  page.$("stick").offsetLeft = left;
+  page.$("stick").offsetTop = top;
+  page.fire(page.win, "resize", { bubbles: false });
+}
+
+test("stick: a resize that moves the stick under a held stick sends one STOP at once, then nothing until a fresh press", () => {
+  // By touch, on a phone turned: the stick moves up under a thumb holding
+  // it forward, and the thumb, resting where it was, is now behind its
+  // centre. Before, that drove the rover backward with no STOP between.
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    page.clock.advance(250);
+    check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
+    let mark = count(ws);
+    moveStick(page, 8, -100);
+    check(names(ws, mark).join() === "STOP" && ws.sentAt[count(ws) - 1] === page.clock.now(), `turned under the thumb ${names(ws, mark)}`);
+    check(page.canvas.width === 230, "the same size: no rebuild");
+    mark = count(ws);
+    thumb.move(0, -50); thumb.move(0, -60);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the thumb resting on the moved stick sent ${names(ws, mark)}`);
+    thumb.end();
+    check(count(ws) === mark, `lifting it sent ${names(ws, mark)}`);
+    // A fresh press is measured where the stick is now.
+    const fresh = stickTouch(page, 1);
+    fresh.start(); fresh.move(0, -50 - 100);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh press drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // By mouse, a window resized under a held button.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { touch: false });
+    const m = mouseStick(page);
+    m.down(); m.move(95, 0);
+    check(names(ws).join() === "MOVE_RIGHT", `mouse ${names(ws)}`);
+    let mark = count(ws);
+    moveStick(page, 150, 0);
+    check(names(ws, mark).join() === "STOP", `moved under the mouse ${names(ws, mark)}`);
+    mark = count(ws);
+    m.move(95, 0);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the mouse still down sent ${names(ws, mark)}`);
+    m.up();
+    check(count(ws) === mark, `the mouseup sent ${names(ws, mark)}`);
+    const fresh = mouseStick(page);
+    fresh.down(); fresh.move(150, -95);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh click drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // A resize that leaves the stick where it was (a phone's address bar
+  // coming or going) lets go of nothing; a thumb resting on a stick it was
+  // not deflecting is let go of without a STOP.
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    moveStick(page, 0, 0);
+    page.clock.advance(1000);
+    check(names(ws).length >= 5 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove on through a resize that moved nothing ${names(ws)}`);
+    thumb.end();
+    const mark = count(ws);
+    const resting = stickTouch(page, 1);
+    resting.start();
+    moveStick(page, 0, 40);
+    resting.move(0, -50);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `a centred stick let go of sent ${names(ws, mark)}`);
+  }
+
+  // A held rotate button drives on, and an exploring rover idle under a
+  // resize is left alone.
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    press(page, page.$("cw"), 4);
+    const mark = count(ws);
+    moveStick(page, 0, -100);
+    page.clock.advance(1000);
+    const after = names(ws, mark);
+    check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a move ${after}`);
+  }
+  {
+    const { page, ws } = connected(telemetry());
+    moveStick(page, 0, -100);
+    page.clock.advance(1000);
+    check(count(ws) === 0, `an idle resize sent ${names(ws)}`);
+  }
+});
+
+test("stick: a resize that changes the stick's size lets go of a held stick at once, not when the size settles", () => {
+  const page = loadPage({ frames: true });
+  const ws = connectOpen(page);
+  const thumb = stickTouch(page, 0);
+  thumb.start(); thumb.move(0, -50);
+  page.clock.advance(250);
+  const mark = count(ws);
+  // The window's resize event comes with the new size, before the observer
+  // has settled on it.
+  resizeStick(page, 180, false);
+  page.fire(page.win, "resize", { bubbles: false });
+  check(names(ws, mark).join() === "STOP" && ws.sentAt[count(ws) - 1] === page.clock.now(), `resized under the thumb ${names(ws, mark)}`);
+  page.clock.advance(page.evalIn("Driver.REFIT_MS"));
+  check(page.canvas.width === 180, `rebuilt at ${page.canvas.width}`);
+  check(names(ws, mark).join() === "STOP", `the rebuild sent ${names(ws, mark)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 /* --- mirrored constants -------------------------------------------------- */

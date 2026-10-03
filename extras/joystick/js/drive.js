@@ -14,9 +14,10 @@
  *               out: a Link;
  *     stick     the joystick's container. joy.js sizes its canvas from it
  *               as it is built, so it must be laid out (not in a hidden
- *               tab) when the Driver is built. When its size changes, the
- *               stick is built again at the new size, letting go of a
- *               stick held then (one STOP, only if it was driving);
+ *               tab) when the Driver is built. A window resize or a phone
+ *               turned that moves or resizes it under a held stick lets go
+ *               of that stick at once (one STOP, only if it was driving);
+ *               a new size also has the stick built again at that size;
  *     cw, ccw   the rotate buttons;
  *     speed     the speed slider (0..SPEED_MAX), and speedOut its readout.
  *
@@ -121,6 +122,7 @@ class Driver {
   #speed;
   #stick;
   #joy = null; // the JoyStick drawn in the stick now
+  #pressedOn = null; // the stick's box on screen at its last primary press (#stickBox)
   #family = FAMILY_TRANSLATE;
 
   // What is held, per input. Tracked separately so that lifting one thumb
@@ -311,7 +313,7 @@ class Driver {
   #wireStick(stick) {
     this.#stick = stick;
     this.#buildJoy();
-    this.#refitOnResize();
+    this.#followLayout();
 
     Driver.#suppressMenu(stick);
 
@@ -324,14 +326,16 @@ class Driver {
     // mouseup a context menu took -- and its next move report drove the rover
     // again, knocking it out of autonomous mode if it was exploring. Capture
     // phase, so this decides before joy.js sees the press.
-    stick.addEventListener("mousedown", (event) => {
-      this.#held.stickArmed = isPrimaryPress(event);
-      if (this.#held.stickArmed) this.#manualInputListeners.emit();
-    }, true);
-    stick.addEventListener("touchstart", () => {
+    const arm = () => {
       this.#held.stickArmed = true;
+      this.#pressedOn = this.#stickBox();
       this.#manualInputListeners.emit();
+    };
+    stick.addEventListener("mousedown", (event) => {
+      if (isPrimaryPress(event)) arm();
+      else this.#held.stickArmed = false;
     }, true);
+    stick.addEventListener("touchstart", arm, true);
 
     // joy.js reports a release only on touchend. A touch the system takes away
     // -- an edge-swipe gesture, a notification shade, an alert -- ends in
@@ -368,16 +372,38 @@ class Driver {
     this.#joy = joy;
   }
 
-  // A window resized or a phone turned changes the box's size (--stick), and
-  // a canvas left at the old one spread over the rotate buttons and the speed
-  // slider. Once the size has held for REFIT_MS, the stick is built again.
-  #refitOnResize() {
+  // A window resized or a phone turned can move the stick's box, resize it
+  // (--stick), or both.
+  //
+  // Moved or resized under a held stick, the thumb or mouse resting where it
+  // was on the screen rests elsewhere on the stick, and joy.js's next report
+  // turns one motion into another: a 375 x 812 phone turned on its side moves
+  // the box and keeps its size (54vw upright is 54vmin on its side), and a
+  // thumb that held it forward drove the rover backward, with no STOP
+  // between. So the stick is let go at once, as a scheme change lets go of
+  // it. A resize that leaves the box where it was lets go of nothing.
+  //
+  // Resized, the box also needs a new canvas: one left at the old size
+  // spread over the rotate buttons and the speed slider. Once the size has
+  // held for REFIT_MS, the stick is built again.
+  #followLayout() {
+    window.addEventListener("resize", () => {
+      const held = this.#held;
+      if ((held.stick || held.stickArmed) && this.#stickBox() !== this.#pressedOn) this.releaseStick();
+    });
     if (typeof ResizeObserver !== "function") return;
     let settle = null;
     new ResizeObserver(() => {
       clearTimeout(settle);
       settle = setTimeout(() => this.#refit(), Driver.REFIT_MS);
     }).observe(this.#stick);
+  }
+
+  // Where the stick's box is on the screen, and its size: what a thumb or a
+  // mouse resting on it is measured against.
+  #stickBox() {
+    const { left, top, width, height } = this.#stick.getBoundingClientRect();
+    return `${left},${top},${width},${height}`;
   }
 
   // A hidden tab's box has no size, and shown again it has the size it had:
