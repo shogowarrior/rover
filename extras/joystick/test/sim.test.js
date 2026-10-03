@@ -8,7 +8,9 @@
 // counter-clockwise. World: x right, y up, heading counter-clockwise from +x.
 "use strict";
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+// Time-limited: a preview awaits its runner's end, which a regression could
+// leave unsettled (harness.js).
+const { test } = require("./harness.js");
 
 const protocol = require("../js/protocol.js");
 const { MOTIONS, motionNamed } = require("../js/mecanum.js");

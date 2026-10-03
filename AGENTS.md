@@ -315,7 +315,8 @@ joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
 (`mecanum.test.js`) on their own. `test/firmware.js` reads what they check
-against in `src/` and `test/vectors/`.
+against in `src/` and `test/vectors/`, and `test/harness.js` sets the time
+limit an asynchronous test runs under, so one that never ends fails by name.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms. `REPEAT_MS` must stay well under

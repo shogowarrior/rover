@@ -10,6 +10,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
+const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
 
@@ -19,11 +20,11 @@ function check(cond, what) {
   if (cond) passes++;
   else failed.push(what);
 }
-// A time limit turns a program that never ends into a failure, by name,
-// rather than a run that hangs: CI sets no limit of its own. node:test runs a
-// file's tests one after another, so they can share `failed`.
+// Under harness.js's time limit, so a program that never ends fails by name
+// rather than hanging the run. node:test runs a file's tests one after
+// another, so they can share `failed`.
 function test(name, fn) {
-  nodeTest.test(name, { timeout: 20000 }, async () => {
+  harness.test(name, async () => {
     failed = [];
     await fn();
     assert.deepEqual(failed, [], `${failed.length} check(s) failed:\n  ${failed.join("\n  ")}`);
