@@ -7,41 +7,25 @@
 // Rover frame, as in sim.js: x out of the nose, y out of the left side, w
 // counter-clockwise. World: x right, y up, heading counter-clockwise from +x.
 "use strict";
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
-const REPO = path.join(__dirname, "..", "..", "..");
-const PANEL = path.join(__dirname, "..");
 const protocol = require("../js/protocol.js");
 const { MOTIONS, motionNamed } = require("../js/mecanum.js");
 const sim = require("../js/sim.js");
 const { ProgramRunner } = require("../js/program.js");
 const { RoverSim, Room, SimSonar, SimTarget, SIM_WHEEL_MAX_MPS, SIM_DEADBAND_PWM, SIM_CHASSIS } = sim;
 const { RoverBlocks } = require("../js/blocks.js");
+// The panel's own BEARINGS: the simulator takes them as they are, and never
+// keeps a copy.
+const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all } = require("./fake-dom.js");
+const { src, CODES } = require("./firmware.js");
 
-
-const src = (file) => fs.readFileSync(path.join(REPO, "src", file), "utf8");
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
 const sign = (v) => (Math.abs(v) < 1e-9 ? 0 : Math.sign(v));
 const deg = (rad) => (rad * 180) / Math.PI;
-
-// Move codes by name, from src/MoveCodes.h itself.
-const CODES = {};
-for (const [, name, value] of src("MoveCodes.h").matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*,/gm)) CODES[name] = Number(value);
-
-// The panel's own BEARINGS, read from scan.js: the simulator takes them as
-// they are, and never keeps a copy.
-function panelBearings() {
-  const ctx = vm.createContext({});
-  vm.runInContext(`${fs.readFileSync(path.join(PANEL, "js", "scan.js"), "utf8")}\nglobalThis.__bearings = BEARINGS;`, ctx);
-  return JSON.parse(JSON.stringify(ctx.__bearings)); // out of the vm's realm
-}
-const BEARINGS = panelBearings();
 
 // Advance a target by `realMs` of frames, letting a program's promises settle
 // between frames as the page's event loop would.

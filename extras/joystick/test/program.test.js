@@ -4,9 +4,6 @@
 //
 //   node --test extras/joystick/test/
 "use strict";
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const { ProgramRunner, RoverTarget } = require("../js/program.js");
@@ -834,15 +831,6 @@ test("examples: the motion menu lists all eighteen motions once, the pivots last
 });
 
 /* --- checking a program before it is loaded (blocks.js) -------------------- */
-
-// The scan's bearings, read from scan.js as the page has them: the sanitizer
-// checks a sensor block's bearing against them. scan.js draws, so it does not
-// load in Node itself.
-globalThis.BEARINGS = (() => {
-  const ctx = vm.createContext({});
-  vm.runInContext(`${fs.readFileSync(path.join(__dirname, "..", "js", "scan.js"), "utf8")}\nglobalThis.__bearings = BEARINGS;`, ctx);
-  return JSON.parse(JSON.stringify(ctx.__bearings));
-})();
 
 // state with every block's id removed, by the same walk as blocksIn().
 function withoutIds(state) {

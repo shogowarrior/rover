@@ -1,5 +1,5 @@
 {
-  "about": "Stick deflection to mecanum move, shared by kinematics::moveForStick (test/test_kinematics) and the panel's copy in extras/joystick/js/mecanum.js (extras/joystick/test/mecanum.test.js). x is positive to the right, yUp positive pushed away from the driver. Translation uses eight 45-degree sectors; a pivot family uses the quadrant, and a push exactly on an axis counts as right and forward. A case's \"why\" names the bug it pins.",
+  "about": "Stick deflection to mecanum move, shared by kinematics::moveForStick (test/test_kinematics) and the panel's copy in extras/joystick/js/mecanum.js (extras/joystick/test/mecanum.test.js, and through the page's stick in extras/joystick/test/panel.test.js). x is positive to the right, yUp positive pushed away from the driver. Translation uses eight 45-degree sectors; a pivot family uses the quadrant, and a push exactly on an axis counts as right and forward. A case's \"why\" names the bug it pins.",
   "cases": [
     {"x": 0, "yUp": 100, "family": "TRANSLATE", "move": "MOVE_FORWARD"},
     {"x": 0, "yUp": -100, "family": "TRANSLATE", "move": "MOVE_BACKWARD"},

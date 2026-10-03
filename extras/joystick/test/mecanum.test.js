@@ -2,30 +2,15 @@
 // test/vectors/stick_moves.json, the file test/test_kinematics checks
 // kinematics::moveForStick against, and the motion table against
 // src/MoveCodes.h.
-//
-// Expected moves are named in the vectors and resolved to codes by reading
-// src/MoveCodes.h here, not through protocol.js: protocol.js is the panel's
-// copy of those codes, which tools/check_protocol.py checks on its own.
 "use strict";
-const fs = require("node:fs");
-const path = require("node:path");
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-
-const REPO = path.join(__dirname, "..", "..", "..");
 const mecanum = require("../js/mecanum.js");
+const { vectors, CODES, NAMES } = require("./firmware.js");
 
-// Move codes by name, from the enum in src/MoveCodes.h.
-function firmwareCodes() {
-  const header = fs.readFileSync(path.join(REPO, "src", "MoveCodes.h"), "utf8");
-  const codes = {};
-  for (const [, name, value] of header.matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*,/gm)) codes[name] = Number(value);
-  return codes;
-}
-const CODES = firmwareCodes();
-const NAMES = Object.fromEntries(Object.entries(CODES).map(([name, code]) => [code, name]));
-const VECTORS = JSON.parse(fs.readFileSync(path.join(REPO, "test", "vectors", "stick_moves.json"), "utf8"));
+const VECTORS = vectors("stick_moves.json");
 
+// Every test file's CODES comes from this one read of the header.
 test("src/MoveCodes.h reads as twenty codes, 0 to 19", () => {
   assert.deepEqual(Object.values(CODES).sort((a, b) => a - b), [...Array(20).keys()]);
 });

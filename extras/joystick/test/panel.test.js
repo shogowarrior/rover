@@ -11,8 +11,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const { loadPage, all, PANEL_ROOT } = require("./fake-dom.js");
-
-const REPO = path.join(__dirname, "..", "..", "..");
+const { src, vectors, CODES, NAMES } = require("./firmware.js");
 
 let failed = null; // the running test's failed checks
 let passes = 0;
@@ -29,11 +28,6 @@ function test(name, fn) {
 }
 nodeTest.after(() => console.log(`panel.test.js: ${passes} checks passed`));
 
-// Codes, straight from the firmware header (not from the panel).
-const CODES = {};
-for (const [, n, v] of fs.readFileSync(path.join(REPO, "src", "MoveCodes.h"), "utf8").matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*,/gm)) CODES[n] = Number(v);
-const NAME = Object.fromEntries(Object.entries(CODES).map(([k, v]) => [v, k]));
-
 /* --- helpers ------------------------------------------------------------- */
 
 function connectOpen(page, host = "10.0.0.7") {
@@ -43,7 +37,7 @@ function connectOpen(page, host = "10.0.0.7") {
   ws.serverOpen();
   return ws;
 }
-const names = (ws, from = 0) => ws.moves().slice(from).map((m) => NAME[m.move]);
+const names = (ws, from = 0) => ws.moves().slice(from).map((m) => NAMES[m.move]);
 const count = (ws) => ws.sent.length;
 
 // A thumb on the stick's canvas as it is now; (dx, dy) is from its centre.
@@ -1374,7 +1368,6 @@ test("mirrored constants match the firmware (check_protocol.py's regex)", () => 
   const page = loadPage();
   for (const [n, value] of Object.entries(consts)) check(page.evalIn(n) === value, `the page's ${n} is ${value}`);
 
-  const src = (f) => fs.readFileSync(path.join(REPO, "src", f), "utf8");
   const num = (text, re) => Number(text.match(re)[1]);
   check(consts.STOP_CM === num(src("Tuning.h"), /EXPLORE_STOP_CM\s*=\s*([\d.]+)/), "STOP_CM");
   check(consts.GO_CM === num(src("Tuning.h"), /EXPLORE_GO_CM\s*=\s*([\d.]+)/), "GO_CM");
@@ -1728,7 +1721,7 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 });
 
 test("schemes: each quadrant of each family sends the move test/vectors/stick_moves.json gives it", () => {
-  const vectors = JSON.parse(fs.readFileSync(path.join(REPO, "test", "vectors", "stick_moves.json"), "utf8")).cases;
+  const { cases: stickCases } = vectors("stick_moves.json");
   const runs = [["NORMAL", "TRANSLATE"], ["ADVANCED", "TRANSLATE"], ["ADVANCED", "PIVOT"], ["ADVANCED", "PIVOT_SIDEWAYS"]];
   for (const [scheme, family] of runs) {
     const page = loadPage();
@@ -1736,7 +1729,7 @@ test("schemes: each quadrant of each family sends the move test/vectors/stick_mo
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme }));
     if (scheme === "ADVANCED") page.fire(familyButton(page, family), "click");
     check(page.evalIn("driver.family") === family, `${scheme}/${family}: driver ${page.evalIn("driver.family")}`);
-    const cases = vectors.filter((c) => c.family === family);
+    const cases = stickCases.filter((c) => c.family === family);
     check(cases.length >= 5, `${family}: ${cases.length} cases`);
     const s = stickTouch(page, 0);
     for (const { x, yUp, move } of cases) {

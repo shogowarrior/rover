@@ -314,7 +314,8 @@ simulator's own copies, in `js/sim.js`. `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
-(`mecanum.test.js`) on their own.
+(`mecanum.test.js`) on their own. `test/firmware.js` reads what they check
+against in `src/` and `test/vectors/`.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
