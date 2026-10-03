@@ -19,10 +19,13 @@ function check(cond, what) {
   if (cond) passes++;
   else failed.push(what);
 }
+// A time limit turns a program that never ends into a failure, by name,
+// rather than a run that hangs: CI sets no limit of its own. node:test runs a
+// file's tests one after another, so they can share `failed`.
 function test(name, fn) {
-  nodeTest.test(name, () => {
+  nodeTest.test(name, { timeout: 20000 }, async () => {
     failed = [];
-    fn();
+    await fn();
     assert.deepEqual(failed, [], `${failed.length} check(s) failed:\n  ${failed.join("\n  ")}`);
   });
 }
@@ -1986,17 +1989,6 @@ test("schemes: the pivots' corner labels are short and tell each family's four m
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const BLOCKLY = "https://cdn.jsdelivr.net/npm/blockly@13.3.0/blockly.min.js";
 
-// test(), for a test that waits on promises: the runner's are real ones. A
-// time limit turns a program that never ends into a failure, by name, rather
-// than a run that hangs: CI sets no limit of its own.
-function testAsync(name, fn) {
-  nodeTest.test(name, { timeout: 20000 }, async () => {
-    failed = [];
-    await fn();
-    assert.deepEqual(failed, [], `${failed.length} check(s) failed:\n  ${failed.join("\n  ")}`);
-  });
-}
-
 // Time passes in small steps, with telemetry every 500 ms, and the program's
 // promises settle between the steps, as they would in a browser.
 async function liveForAsync(page, ws, ms, { step = 50, frames = true } = {}) {
@@ -2096,7 +2088,7 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(page.$("simSlot") !== null && all(page.$("programTab")).includes(page.$("simSlot")), "#simSlot is in the Program tab");
 });
 
-testAsync("program: with an editor, Run follows the link, and a run highlights, locks the editor and ends with STOP", async () => {
+test("program: with an editor, Run follows the link, and a run highlights, locks the editor and ends with STOP", async () => {
   const page = loadPage();
   standInEditor(page);
   check(page.$("programOffline").hidden, "no offline message");
@@ -2148,7 +2140,7 @@ testAsync("program: with an editor, Run follows the link, and a run highlights, 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's Stop, link loss and a stale link each stop it", async () => {
+test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's Stop, link loss and a stale link each stop it", async () => {
   const cases = [
     // [what, act, the reason, what goes out after it]
     ["a rotate press", (page) => press(page, page.$("ccw"), 3), /^the rover was driven by hand\.$/, "ROTATE_COUNTERCLOCKWISE"],
@@ -2198,7 +2190,7 @@ testAsync("program: a manual press, blur, a hidden page, Stop, Autonomous, the t
   check(names(ws).slice(-1).join() === "STOP", `stale: ${names(ws)}`);
 });
 
-testAsync("program: start exploring hands over, its own stop is obeyed, and neither stops the program", async () => {
+test("program: start exploring hands over, its own stop is obeyed, and neither stops the program", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ mode: "MANUAL" }));
@@ -2222,7 +2214,7 @@ testAsync("program: start exploring hands over, its own stop is obeyed, and neit
   check(ended(page).outcome === "stopped" && count(ws) === mark, `stopping it sent ${names(ws, mark)}`);
 });
 
-testAsync("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
+test("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ mode: "MANUAL" }));
@@ -2291,7 +2283,7 @@ testAsync("program: switching the target mid-run stops the program, and the choi
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: a loop of stops, of stops and explores, or of very short drives cannot flood the rover", async () => {
+test("program: a loop of stops, of stops and explores, or of very short drives cannot flood the rover", async () => {
   // Each STOP costs the rover a change of mode and a write of all four motors
   // over I2C, and nothing in the firmware slows a client down. Unpaced, the
   // first of these sent about 200 a second.
@@ -2316,7 +2308,7 @@ testAsync("program: a loop of stops, of stops and explores, or of very short dri
   }
 });
 
-testAsync("program: Run is off with nothing to run, and asks before running several stacks on the rover", async () => {
+test("program: Run is off with nothing to run, and asks before running several stacks on the rover", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ mode: "MANUAL" }));
@@ -2365,7 +2357,7 @@ testAsync("program: Run is off with nothing to run, and asks before running seve
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: Run on the rover asks before it drives a pivot unless the rover reports ADVANCED; a preview never asks", async () => {
+test("program: Run on the rover asks before it drives a pivot unless the rover reports ADVANCED; a preview never asks", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   // Telemetry that keeps the scheme as given: a frame without one makes the
@@ -2440,7 +2432,7 @@ testAsync("program: Run on the rover asks before it drives a pivot unless the ro
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: its own stop and start exploring are no press: a stick let go of still asks for one", async () => {
+test("program: its own stop and start exploring are no press: a stick let go of still asks for one", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   const caption = page.$("stickLabel");
@@ -2468,7 +2460,7 @@ testAsync("program: its own stop and start exploring are no press: a stick let g
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: the Program tab is marked while a program drives the rover, not while it previews", async () => {
+test("program: the Program tab is marked while a program drives the rover, not while it previews", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ mode: "MANUAL" }));
@@ -2494,7 +2486,7 @@ testAsync("program: the Program tab is marked while a program drives the rover, 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-testAsync("program: the simulator's word reaches the console while a preview runs, and says where it starts", async () => {
+test("program: the simulator's word reaches the console while a preview runs, and says where it starts", async () => {
   const page = loadPage();
   if (!page.evalIn("'simulator' in targets")) return;
   const sim = page.evalIn("targets.simulator");
