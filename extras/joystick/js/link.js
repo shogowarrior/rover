@@ -146,9 +146,10 @@ class Link {
     });
   }
 
+  // #dropSocket() takes the link down, cause "disconnect", while there is a
+  // socket to drop; with none, the link is down already.
   disconnect() {
     this.#dropSocket();
-    this.#setState("down", "disconnect");
     this.note("Disconnected.");
   }
 

@@ -7,8 +7,7 @@
  *     storageKey  where the last tab chosen is remembered.
  *
  *   select(tab, { focus })  show tab's panel and hide the others.
- *   selected                the selected tab element.
- *   onChange(fn)            fn(tab, panel) after the operator (or select())
+ *   onChange(fn)           fn(tab, panel) after the operator (or select())
  *                           shows another tab.
  *
  * A click selects a tab; with focus on the tablist, the arrow keys move to the
@@ -51,10 +50,6 @@ class Tabs {
     const remembered = tabs.find((tab) => tab.id === memory.recall(storageKey));
     const marked = tabs.find((tab) => tab.getAttribute("aria-selected") === "true");
     this.#show(remembered || marked || tabs[0]);
-  }
-
-  get selected() {
-    return this.#selected;
   }
 
   onChange(fn) {
