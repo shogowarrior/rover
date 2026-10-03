@@ -1470,6 +1470,26 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     visibility: hidden;
   }
 
+  /* The motor fault takes the scan's place (the rule for every phone,
+     above), and here that place is only what the head and the readouts
+     leave: under 60 px at 568 x 320. At the card's own height the page grew
+     by 120 px, and the stick, centred in the dock that spans every row, slid
+     half below the screen. So the card keeps to two lines -- the fault and
+     the start of why; the phone held upright shows all of it. The stick
+     then stays within 2 px. A halt reason wrapping in the readouts as well
+     still moves it (up to 19 px at 568 x 320), and the Driver lets go of a
+     stick held through that (js/drive.js). */
+  .shell:has(#motorsFault:not([hidden])) .fault {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    padding: var(--s-2) var(--s-3);
+  }
+
+  .shell:has(#motorsFault:not([hidden])) .fault strong { display: inline; }
+
   .status { flex-wrap: wrap; }
 
   .stickPad { align-self: center; }
