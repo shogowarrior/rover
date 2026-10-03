@@ -100,14 +100,13 @@ function fakeContext() {
   };
 }
 
-// Listener exceptions are reported, not propagated, as in a browser.
+// Listener exceptions are reported, not propagated, as in a browser. An event
+// bubbles through the target's ancestors as they are when it fires, so one
+// on a node taken out of the page (a stick canvas rebuilt under a thumb)
+// never reaches the document, as in a browser.
 function dispatch(target, e) {
   const path = [];
   for (let n = target; n; n = n.parentNode) path.push(n);
-  if (target.ownerDocument && !path.includes(target.ownerDocument) && target !== target.ownerDocument && target.tagName !== "#WINDOW") {
-    // elements attached under <html> bubble to document
-    path.push(target.ownerDocument);
-  }
   const bubbles = e.bubbles !== false;
   for (let i = 0; i < path.length; i++) {
     if (i > 0 && !bubbles) break;

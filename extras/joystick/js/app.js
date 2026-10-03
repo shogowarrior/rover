@@ -68,7 +68,7 @@ const readouts = new Readouts({
 });
 
 // Built while the Drive tab is still showing, before the tabs restore the one
-// last chosen: joy.js sizes the stick from its container once, here, and a
+// last chosen: joy.js sizes the stick from its container as it is built, and a
 // hidden container has no size.
 const driver = new Driver({
   link,

@@ -13,8 +13,10 @@
  *     link      anything with send(obj) returning false when nothing went
  *               out: a Link;
  *     stick     the joystick's container. joy.js sizes its canvas from it
- *               once, when the Driver is built, so it must be laid out (not
- *               in a hidden tab) then;
+ *               as it is built, so it must be laid out (not in a hidden
+ *               tab) when the Driver is built. When its size changes, the
+ *               stick is built again at the new size, letting go of a
+ *               stick held then (one STOP, only if it was driving);
  *     cw, ccw   the rotate buttons;
  *     speed     the speed slider (0..SPEED_MAX), and speedOut its readout.
  *
@@ -113,9 +115,14 @@
 class Driver {
   // Stick deflection, out of 100, below which the stick counts as centred.
   static DEADZONE = 12;
+  // How long the stick's box keeps one size before the stick is rebuilt at
+  // it: a window being dragged, or a phone turning, has settled by then.
+  static REFIT_MS = 200;
 
   #link;
   #speed;
+  #stick;
+  #joy = null; // the JoyStick drawn in the stick now
   #family = FAMILY_TRANSLATE;
 
   // What is held, per input. Tracked separately so that lifting one thumb
@@ -314,15 +321,12 @@ class Driver {
     control.addEventListener("contextmenu", (event) => event.preventDefault());
   }
 
+  // Every listener here is on the stick's box, not on joy.js's canvas, so
+  // each goes on working for a canvas built again (#refit).
   #wireStick(stick) {
-    new JoyStick(stick.id, {
-      internalFillColor: "#4db8a8",
-      internalStrokeColor: "#1c1e21",
-      externalStrokeColor: "#383c42",
-      internalLineWidth: 2,
-      externalLineWidth: 2,
-      autoReturnToCenter: true,
-    }, (status) => this.#onStick(status));
+    this.#stick = stick;
+    this.#buildJoy();
+    this.#refitOnResize();
 
     Driver.#suppressMenu(stick);
 
@@ -359,6 +363,53 @@ class Driver {
       // joy.js's internals.
       this.releaseStick();
     });
+  }
+
+  // joy.js draws its canvas at the box's size as it is built, and never
+  // looks again. Only the newest JoyStick drives: one a refit replaced still
+  // listens on the document, and would go on reporting the thumb or mouse
+  // that pressed it.
+  #buildJoy() {
+    const joy = new JoyStick(this.#stick.id, {
+      internalFillColor: "#4db8a8",
+      internalStrokeColor: "#1c1e21",
+      externalStrokeColor: "#383c42",
+      internalLineWidth: 2,
+      externalLineWidth: 2,
+      autoReturnToCenter: true,
+    }, (status) => {
+      if (joy === this.#joy) this.#onStick(status);
+    });
+    this.#joy = joy;
+  }
+
+  // A window resized or a phone turned changes the box's size (--stick), and
+  // a canvas left at the old one spread over the rotate buttons and the speed
+  // slider. Once the size has held for REFIT_MS, the stick is built again.
+  #refitOnResize() {
+    if (typeof ResizeObserver !== "function") return;
+    let settle = null;
+    new ResizeObserver(() => {
+      clearTimeout(settle);
+      settle = setTimeout(() => this.#refit(), Driver.REFIT_MS);
+    }).observe(this.#stick);
+  }
+
+  // A hidden tab's box has no size, and shown again it has the size it had:
+  // neither needs a new canvas. A new JoyStick starts unpressed, so a stick
+  // held now is let go first, as a scheme change lets go of it: one STOP if
+  // it was driving, and nothing more until a fresh press.
+  #refit() {
+    const { clientWidth: width, clientHeight: height } = this.#stick;
+    if (width === 0 || height === 0 || (width === this.#joy.GetWidth() && height === this.#joy.GetHeight())) return;
+    if (this.#held.stick || this.#held.stickArmed) this.releaseStick();
+    // A mouse still pressing the old JoyStick would have it measure its
+    // removed canvas, and throw, on every move: hand it the ending it listens
+    // for, as touchcancel does. (A touch on a removed canvas reaches the
+    // document no more.)
+    document.dispatchEvent(new Event("mouseup"));
+    for (const old of [...this.#stick.children]) if (old.tagName === "CANVAS") old.remove();
+    this.#buildJoy();
   }
 
   // joy.js reports x and y as strings in -100..100, with y already inverted so

@@ -824,17 +824,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .stickArea > * { grid-area: 1 / 1; }
 
 /* The well joy.js draws its ring and knob in, with a notch on each axis.
-   joy.js sizes its canvas from this box once, at load; turn the phone or
-   resize the window across a layout and --stick changes but the canvas does
-   not. So the box grows to a larger canvas and centres a smaller one, and
-   the well stays round the ring joy.js draws. */
+   joy.js sizes its canvas from this box as it is built. The box is always
+   --stick, never stretched by the canvas: turn the phone or resize the
+   window and the Driver sees the box change and builds the stick again at
+   its size (js/drive.js). */
 #stick {
   display: grid;
   place-items: center;
   width: var(--stick);
   height: var(--stick);
-  min-width: max-content;
-  min-height: max-content;
   border-radius: 50%;
   background:
     linear-gradient(var(--faint), var(--faint)) 50% var(--s-2) / 2px var(--notch) no-repeat,

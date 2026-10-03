@@ -46,9 +46,10 @@ function connectOpen(page, host = "10.0.0.7") {
 const names = (ws, from = 0) => ws.moves().slice(from).map((m) => NAME[m.move]);
 const count = (ws) => ws.sent.length;
 
+// A thumb on the stick's canvas as it is now; (dx, dy) is from its centre.
 function stickTouch(page, id = 0) {
   const c = page.canvas;
-  const touch = (dx, dy) => ({ identifier: id, target: c, pageX: 115 + dx, pageY: 115 + dy });
+  const touch = (dx, dy) => ({ identifier: id, target: c, pageX: c.width / 2 + dx, pageY: c.height / 2 + dy });
   return {
     start(dx = 0, dy = 0) { page.fire(c, "touchstart", { targetTouches: [touch(dx, dy)], changedTouches: [touch(dx, dy)] }); },
     move(dx, dy) { page.fire(c, "touchmove", { targetTouches: [touch(dx, dy)], changedTouches: [touch(dx, dy)] }); },
@@ -391,7 +392,7 @@ function mouseStick(page) {
   const c = page.canvas;
   return {
     down(extra = {}) { page.fire(c, "mousedown", { button: 0, ...extra }); },
-    move(dx, dy) { page.fire(page.doc, "mousemove", { pageX: 115 + dx, pageY: 115 + dy }); },
+    move(dx, dy) { page.fire(page.doc, "mousemove", { pageX: c.width / 2 + dx, pageY: c.height / 2 + dy }); },
     up() { page.fire(page.doc, "mouseup", { button: 0 }); },
   };
 }
@@ -1226,6 +1227,136 @@ test("tabs: the last tab comes back, with the stick sized before it was hidden",
     check(shown(blocked) === "tabDrive", `${storage}: ${shown(blocked)}`);
     blocked.fire(blocked.$("tabProgram"), "click");
     check(shown(blocked) === "tabProgram" && blocked.errors.length === 0, `${storage}: switched, errors ${blocked.errors}`);
+  }
+});
+
+/* --- the stick follows its box's size ------------------------------------ */
+
+// joy.js sizes its canvas once, as it is built; the Driver builds it again
+// when the stick's box settles at a new size. These need the page's
+// ResizeObserver, which loadPage gives with frames.
+
+// The box as a resize leaves it, the observer's callbacks, and the settling
+// time after the last of them.
+function resizeStick(page, size, settle = true) {
+  page.$("stick").clientWidth = size;
+  page.$("stick").clientHeight = size;
+  page.resized();
+  if (settle) page.clock.advance(page.evalIn("Driver.REFIT_MS"));
+}
+const stickCanvases = (page) => page.$("stick").children.filter((n) => n.tagName === "CANVAS");
+
+test("stick: a resize rebuilds the canvas at the new size once it settles, and sends nothing", () => {
+  const page = loadPage({ frames: true, stickSize: 352 });
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry()); // exploring: any frame would take control
+  const first = page.canvas;
+  check(first.width === 352 && first.height === 352, `built at ${first.width}x${first.height}`);
+
+  // A window edge dragged: a burst of sizes, rebuilt once, at the last.
+  for (const size of [300, 260, 230]) {
+    resizeStick(page, size, false);
+    page.clock.advance(page.evalIn("Driver.REFIT_MS") / 4);
+  }
+  check(page.canvas === first, "not rebuilt while the size is still changing");
+  page.clock.advance(page.evalIn("Driver.REFIT_MS"));
+  const [second] = stickCanvases(page);
+  check(stickCanvases(page).length === 1 && second !== first && first.parentNode === null, `one new canvas in place of the old: ${stickCanvases(page).length}`);
+  check(second.width === 230 && second.height === 230, `rebuilt at ${second.width}x${second.height}`);
+  check(page.joy.GetWidth() === 230, "the JoyStick drawing it is the new one");
+
+  // Hidden behind the Program tab the box has no size, and shown again it
+  // has the one it had: neither is a new canvas.
+  page.fire(page.$("tabProgram"), "click");
+  resizeStick(page, 230);
+  page.fire(page.$("tabDrive"), "click");
+  resizeStick(page, 230);
+  check(page.canvas === second, "not rebuilt for a tab switch");
+  page.clock.advance(1000);
+  check(count(ws) === 0, `an idle rebuild sent ${names(ws)}`);
+
+  // The new canvas drives, by touch.
+  const s = stickTouch(page, 0);
+  s.start(); s.move(0, -50);
+  s.end();
+  check(names(ws).join() === "MOVE_FORWARD,STOP", `the new canvas drove ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The held move goes on until the size settles, and the rebuild ends it with
+// one STOP, at once.
+function stoppedByRebuild(page, ws, from, move) {
+  const sent = names(ws, from);
+  return sent.pop() === "STOP" && sent.every((n) => n === move) && ws.sentAt[count(ws) - 1] === page.clock.now();
+}
+
+test("stick: a rebuild under a held stick sends one STOP, then nothing until a fresh press", () => {
+  // By touch: the thumb stays on the old canvas, and moves on it.
+  {
+    const page = loadPage({ frames: true });
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    page.clock.advance(250);
+    check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
+    let mark = count(ws);
+    resizeStick(page, 180);
+    check(stoppedByRebuild(page, ws, mark, "MOVE_FORWARD"), `rebuilt under the thumb ${names(ws, mark)}`);
+    check(page.canvas.width === 180, `rebuilt at ${page.canvas.width}`);
+    mark = count(ws);
+    thumb.move(30, -60); thumb.move(0, -80);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the thumb on the old canvas sent ${names(ws, mark)}`);
+    thumb.end();
+    check(count(ws) === mark, `lifting it sent ${names(ws, mark)}`);
+    const fresh = stickTouch(page, 1);
+    fresh.start(); fresh.move(0, -50);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh press drove ${names(ws, mark)}`);
+    // The old JoyStick still listens on the document, and still holds the
+    // first thumb's identifier: another finger given it, lifting elsewhere,
+    // must not stop the stick the new thumb holds.
+    page.fire(page.$("cw"), "touchend", { targetTouches: [], changedTouches: [{ identifier: 0 }] });
+    check(names(ws, mark).join() === "MOVE_FORWARD", `the old JoyStick's report stopped the new stick: ${names(ws, mark)}`);
+    fresh.end();
+    check(names(ws, mark).join() === "MOVE_FORWARD,STOP", `the fresh press let go of ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // By mouse, held through the rebuild and let go of after it.
+  {
+    const page = loadPage({ frames: true, touch: false });
+    const ws = connectOpen(page);
+    ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    const m = mouseStick(page);
+    m.down(); m.move(95, 0);
+    check(names(ws).join() === "MOVE_RIGHT", `mouse ${names(ws)}`);
+    let mark = count(ws);
+    resizeStick(page, 300);
+    check(stoppedByRebuild(page, ws, mark, "MOVE_RIGHT"), `rebuilt under the mouse ${names(ws, mark)}`);
+    mark = count(ws);
+    m.move(90, -20);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the mouse still down sent ${names(ws, mark)}`);
+    m.up();
+    check(count(ws) === mark, `the mouseup sent ${names(ws, mark)}`);
+    const fresh = mouseStick(page);
+    fresh.down(); fresh.move(0, -95);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh click drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // A held rotate button drives on: a rebuild lets go of the stick alone.
+  {
+    const page = loadPage({ frames: true });
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    press(page, page.$("cw"), 4);
+    const mark = count(ws);
+    resizeStick(page, 200);
+    page.clock.advance(1000);
+    const after = names(ws, mark);
+    check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a rebuild ${after}`);
   }
 });
 
