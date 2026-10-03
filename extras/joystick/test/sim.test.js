@@ -871,7 +871,9 @@ test("every example that steers by the sonar previews in every room for a minute
   assert.deepEqual(SENSING.map((e) => e.name), ["Patrol"], "the sensing examples");
   for (const example of SENSING) {
     for (const room of Object.keys(Room.PRESETS)) {
-      const { target, end } = await previewFor(exampleProgram(example.state), room, 60000);
+      // 50 ms frames, a normal frame (under STALL_MS) that the next test
+      // shows previews exactly as 8 ms ones do, at a sixth of the turns.
+      const { target, end } = await previewFor(exampleProgram(example.state), room, 60000, { frameMs: 50 });
       const what = `${example.name} in ${Room.PRESETS[room].label}`;
       assert.deepEqual(end, { outcome: "stopped", reason: "the preview is over" }, `${what}: ran the whole minute`);
       const { trail, bumps } = target.state;
@@ -884,20 +886,23 @@ test("every example that steers by the sonar previews in every room for a minute
 });
 
 test("a program previews the same at any frame rate and any playback", async () => {
-  // The Patrol example: forward while the way is clear, else turn.
+  // The Patrol example: forward while the way is clear, else turn, for long
+  // enough to drive, stop at something and turn.
+  const SPAN_MS = 10000;
   const patrol = exampleProgram(RoverBlocks.EXAMPLES.find((e) => e.id === "patrol").state);
   const preview = async (playback, frameMs) => {
-    const { target } = await previewFor(patrol, "course", 20000, { playback, frameMs });
-    // Each stops at the first frame past 20 s; compare the first 20 s.
+    const { target } = await previewFor(patrol, "course", SPAN_MS, { playback, frameMs });
+    // Each stops at the first frame past the span; compare the span.
     const { trail, log } = target.state;
     return {
-      path: trail.filter((p) => p.at <= 20000).map((p) => `${p.at} ${p.x.toFixed(6)} ${p.y.toFixed(6)}`),
-      log: log.filter((l) => l.at <= 20000).map((l) => `${l.at} ${l.text}`),
+      path: trail.filter((p) => p.at <= SPAN_MS).map((p) => `${p.at} ${p.x.toFixed(6)} ${p.y.toFixed(6)}`),
+      log: log.filter((l) => l.at <= SPAN_MS).map((l) => `${l.at} ${l.text}`),
     };
   };
   const reference = await preview(1, 8);
   assert.ok(reference.path.length > 50, "it went somewhere");
-  for (const [playback, frameMs] of [[1, 33], [4, 8], [4, 33], [2, 16]]) {
+  // 50 ms is the frame the test above previews every room with.
+  for (const [playback, frameMs] of [[1, 33], [4, 8], [4, 33], [2, 16], [4, 50]]) {
     const other = await preview(playback, frameMs);
     assert.deepEqual(other.log, reference.log, `${playback}x, ${frameMs} ms frames: what it said`);
     assert.deepEqual(other.path, reference.path, `${playback}x, ${frameMs} ms frames: the path`);
