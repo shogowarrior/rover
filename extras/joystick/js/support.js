@@ -5,6 +5,7 @@
  *   reportFault     report an error without throwing it
  *   memory          best-effort storage for what the panel remembers
  *   clamp           a value kept within bounds
+ *   abortableWait   a wait an AbortSignal ends at once
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -73,6 +74,27 @@ function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
 }
 
+// A wait that start(done) begins and that ends when start calls done(). If
+// the signal aborts first, it rejects with the signal's reason and undoes the
+// wait with cancel(handle): how a Stop ends a program's sleep at once.
+function abortableWait(signal, start, cancel) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => {
+      cancel(handle);
+      reject(signal.reason);
+    };
+    const handle = start(() => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      resolve();
+    });
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 // A press is the primary button alone. Right-click, middle-click and a Mac's
 // ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can
 // open a context menu, which takes the release with it and leaves the input
@@ -81,4 +103,4 @@ function isPrimaryPress(event) {
   return event.button === 0 && !event.ctrlKey;
 }
 
-if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp };
+if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp, abortableWait };

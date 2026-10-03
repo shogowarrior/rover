@@ -994,22 +994,11 @@ class SimTarget {
   // milliseconds on a page: a program loop that only yields still lets time
   // run.
   sleep(ms, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal && signal.aborted) {
-        reject(signal.reason);
-        return;
-      }
-      const onAbort = () => {
-        this.#clock.clear(id);
-        reject(signal.reason);
-      };
-      const id = this.#clock.set(Math.max(SimTarget.STEP_MS, Number(ms) || 0), () => {
-        if (signal) signal.removeEventListener("abort", onAbort);
-        resolve();
-      });
-      if (signal) signal.addEventListener("abort", onAbort, { once: true });
-      this.#wakeListeners.emit();
-    });
+    const wait = abortableWait(signal,
+      (done) => this.#clock.set(Math.max(SimTarget.STEP_MS, Number(ms) || 0), done),
+      (id) => this.#clock.clear(id));
+    if (!(signal && signal.aborted)) this.#wakeListeners.emit();
+    return wait;
   }
 
   /* --- the simulator's own controls --- */
