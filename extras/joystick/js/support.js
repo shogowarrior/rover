@@ -5,6 +5,8 @@
  *   reportFault     report an error without throwing it
  *   memory          best-effort storage for what the panel remembers
  *   clamp           a value kept within bounds
+ *   radians, degrees
+ *                   an angle in degrees as radians, and back
  *   abortableWait   a wait an AbortSignal ends at once
  *   dom             HTML and SVG elements, built from attribute tables
  *   segment, pressSegment
@@ -77,6 +79,17 @@ function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
 }
 
+// An angle in degrees as radians, and radians as degrees: the panel's
+// radians() in src/Explorer.cpp. Written out at each use, the two look alike
+// at a glance, and nothing said which way a line meant to go.
+function radians(deg) {
+  return (deg * Math.PI) / 180;
+}
+
+function degrees(rad) {
+  return (rad * 180) / Math.PI;
+}
+
 // A wait that start(done) begins and that ends when start calls done(). If
 // the signal aborts first, it rejects with the signal's reason and undoes the
 // wait with cancel(handle): how a Stop ends a program's sleep at once.
@@ -135,4 +148,4 @@ function isPrimaryPress(event) {
   return event.button === 0 && !event.ctrlKey;
 }
 
-if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp, abortableWait };
+if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp, radians, degrees, abortableWait };

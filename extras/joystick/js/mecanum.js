@@ -31,7 +31,7 @@ const FAMILIES = Object.freeze([FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SID
 // Stick deflection angle in degrees, in [0, 360): 0 is right, 90 is up
 // (forward). yUp is positive when the stick is pushed away from the driver.
 function stickAngleDeg(x, yUp) {
-  let angle = (Math.atan2(yUp, x) * 180) / Math.PI;
+  let angle = degrees(Math.atan2(yUp, x));
   if (angle < 0) angle += 360;
   return angle;
 }

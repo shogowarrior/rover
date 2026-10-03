@@ -27,7 +27,7 @@ const { src, CODES, telemetry } = require("./firmware.js");
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
 const sign = (v) => (Math.abs(v) < 1e-9 ? 0 : Math.sign(v));
-const deg = (rad) => (rad * 180) / Math.PI;
+const { radians, degrees } = require("../js/support.js");
 
 // Advance a target by `realMs` of frames, letting a program's promises settle
 // between frames as the page's event loop would.
@@ -134,7 +134,7 @@ test("each diagonal moves at its named angle, measured as the stick's from right
     [protocol.MOVE_DIAGONAL225, 225], [protocol.MOVE_DIAGONAL315, 315]]) {
     const { vx, vy, w } = RoverSim.unitTwist(move, 0.25);
     // The stick's frame: right is the rover's -y, forward its +x.
-    const stickAngle = (deg(Math.atan2(vx, -vy)) + 360) % 360;
+    const stickAngle = (degrees(Math.atan2(vx, -vy)) + 360) % 360;
     near(stickAngle, angle, 1e-6, `code ${move}'s heading`);
     assert.equal(w, 0, `code ${move} does not turn`);
     near(Math.hypot(vx, vy), Math.SQRT1_2, 1e-6, `code ${move} moves at 1/sqrt 2 of wheel speed`);
@@ -231,13 +231,13 @@ test("a ray meets the nearest surface, at the angle off its normal", () => {
   assert.equal(straight.obstacle, "the wall");
   const slanted = room.rayCast({ x: 1, y: 1 }, Math.PI / 6);
   near(slanted.distance, 1 / Math.cos(Math.PI / 6), 1e-9, "at 30 degrees");
-  near(deg(slanted.incidence), 30, 1e-9, "30 degrees off the normal");
+  near(degrees(slanted.incidence), 30, 1e-9, "30 degrees off the normal");
   assert.equal(room.rayCast({ x: -1, y: 1 }, Math.PI), null, "a ray that meets nothing");
 
   const course = Room.preset("course");
   const box = course.rayCast({ x: 3.0, y: 1.0 }, 0); // at the box turned 45 degrees
   assert.equal(box.obstacle, "the angled box");
-  near(deg(box.incidence), 45, 1e-9, "its face is at 45 degrees");
+  near(degrees(box.incidence), 45, 1e-9, "its face is at 45 degrees");
   near(box.distance, 3.8 - 0.25 * Math.SQRT2 - 3.0, 1e-9, "to its near corner's faces");
 });
 
@@ -251,7 +251,7 @@ test("no echo beyond 400 cm or off a surface met more than 60 degrees off its no
   const box = Room.preset("box");
   // Facing nearly along the bottom wall: square-on readings echo, glancing
   // ones do not.
-  const along = { x: 1, y: 0.3, heading: (-20 * Math.PI) / 180 };
+  const along = { x: 1, y: 0.3, heading: radians(-20) };
   assert.equal(SimSonar.measure(box, along, 0), protocol.FAR_CM, "70 degrees off the normal");
   const steep = SimSonar.measure(box, along, -35); // 55 degrees off
   assert.ok(steep < protocol.FAR_CM && steep > 0, `55 degrees off echoes: ${steep}`);
@@ -1079,7 +1079,7 @@ test("the view: a bearing to the rover's left reads, and is drawn, on its left",
   const frame = sim.telemetry().data;
   const readings = BEARINGS.map((b) => frame[b.key]);
   assert.deepEqual([...readings].sort((a, b) => a - b), readings, `nearest on the left, left to right: ${readings}`);
-  near(frame.distanceLeft, (0.3 / Math.sin((70 * Math.PI) / 180)) * 100, 0.1, "distanceLeft: the top wall, 70 degrees left");
+  near(frame.distanceLeft, (0.3 / Math.sin(radians(70))) * 100, 0.1, "distanceLeft: the top wall, 70 degrees left");
 
   page.fire(button("1×"), "click"); // anything that draws
   const rays = all(byClass("sim-rays")[0]).filter((n) => n.tagName === "LINE");

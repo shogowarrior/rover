@@ -106,7 +106,7 @@ class ScanView {
     BEARINGS.forEach((b, i) => {
       const view = this.#views[i];
       const [x, y] = ScanView.#polar(view.screen, R_MAX + 12);
-      const outward = Math.cos((view.screen * Math.PI) / 180);
+      const outward = Math.cos(radians(view.screen));
       const anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
       const at = { x: x.toFixed(1), "text-anchor": anchor };
       view.reading = dom.svg("text", { class: "reading", ...at, y: (y + 5).toFixed(1) }, this.#svg, "—");
@@ -136,7 +136,7 @@ class ScanView {
   }
 
   static #polar(screenDeg, r) {
-    const rad = (screenDeg * Math.PI) / 180;
+    const rad = radians(screenDeg);
     return [ScanView.CX + r * Math.cos(rad), ScanView.CY - r * Math.sin(rad)];
   }
 

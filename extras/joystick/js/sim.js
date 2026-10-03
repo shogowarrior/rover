@@ -418,8 +418,8 @@ class Room {
   // A box as an obstacle: centre, size and an optional turn in degrees;
   // extra may give it a label to draw on it.
   static box(name, { x, y, w, h, deg = 0 }, extra = {}) {
-    const c = Math.cos((deg * Math.PI) / 180);
-    const s = Math.sin((deg * Math.PI) / 180);
+    const c = Math.cos(radians(deg));
+    const s = Math.sin(radians(deg));
     const points = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]
       .map(([px, py]) => ({ x: x + c * px - s * py, y: y + s * px + c * py }));
     return Object.freeze({ name, points, closed: true, ...extra });
@@ -687,7 +687,7 @@ class SimSonar {
     const hit = room.rayCast(origin, angle);
     if (!hit) return FAR_CM;
     const cm = hit.distance * 100;
-    if (cm > SIM_SONAR.rangeCm || hit.incidence > (SIM_SONAR.maxIncidenceDeg * Math.PI) / 180) return FAR_CM;
+    if (cm > SIM_SONAR.rangeCm || hit.incidence > radians(SIM_SONAR.maxIncidenceDeg)) return FAR_CM;
     return Math.round(cm * 10) / 10;
   }
 
@@ -695,7 +695,7 @@ class SimSonar {
   // sensor, along the bearing. SimView draws this same ray, so what it draws
   // is what was measured.
   static ray(pose, bearingDeg) {
-    return { origin: RoverSim.toWorld(pose, RoverSim.SENSOR_AT), angle: pose.heading + (bearingDeg * Math.PI) / 180 };
+    return { origin: RoverSim.toWorld(pose, RoverSim.SENSOR_AT), angle: pose.heading + radians(bearingDeg) };
   }
 
   #bearings; // the panel's BEARINGS, left to right

@@ -478,7 +478,7 @@ class SimView {
 
     // The rover, and its wheels by direction.
     const { pose, wheels } = state;
-    const headingDeg = (pose.heading * 180) / Math.PI;
+    const headingDeg = degrees(pose.heading);
     this.#rover.group.setAttribute("transform", `translate(${(pose.x * CM).toFixed(2)} ${(pose.y * CM).toFixed(2)}) rotate(${headingDeg.toFixed(2)})`);
     const turn = (direction) => (direction > 0 ? "fwd" : direction < 0 ? "back" : "free");
     wheels.forEach((direction, i) => {
@@ -486,7 +486,7 @@ class SimView {
       this.#inset[i].tyre.setAttribute("data-turn", turn(direction));
       this.#inset[i].arrow.setAttribute("data-turn", turn(direction));
     });
-    const aim = (state.aimedBearing * Math.PI) / 180;
+    const aim = radians(state.aimedBearing);
     const hl = (SIM_CHASSIS.lengthM * CM) / 2;
     this.#rover.aim.setAttribute("x2", (hl + 12 * Math.cos(aim)).toFixed(2));
     this.#rover.aim.setAttribute("y2", (12 * Math.sin(aim)).toFixed(2));
@@ -517,7 +517,7 @@ class SimView {
     ui.twist.textContent = !motion
       ? state.mode === MODE_AUTONOMOUS ? "exploring is not simulated" : resting
       : state.stalled ? `${percent}, pushing against ${state.contact || "something"}`
-      : `${percent} · ${Math.hypot(vx, vy).toFixed(2)} m/s · ${Math.round((w * 180) / Math.PI)}°/s`;
+      : `${percent} · ${Math.hypot(vx, vy).toFixed(2)} m/s · ${Math.round(degrees(w))}°/s`;
     ui.move.dataset.stalled = state.stalled ? "yes" : "no";
 
     ui.clock.textContent = `${this.#target.paused ? "paused · " : ""}${(state.now / 1000).toFixed(1)} s`;
@@ -667,7 +667,7 @@ class SimView {
 
   #nudge(event) {
     const step = SimView.NUDGE_CM / SimView.CM;
-    const turn = (SimView.TURN_DEG * Math.PI) / 180;
+    const turn = radians(SimView.TURN_DEG);
     const by = {
       ArrowLeft: [-step, 0, 0], ArrowRight: [step, 0, 0], ArrowUp: [0, step, 0], ArrowDown: [0, -step, 0],
       q: [0, 0, turn], Q: [0, 0, turn], e: [0, 0, -turn], E: [0, 0, -turn],

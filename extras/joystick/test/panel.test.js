@@ -13,6 +13,7 @@ const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
+const { degrees } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
 let passes = 0;
@@ -931,7 +932,7 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
     for (let x = b.x0; x <= b.x1; x += 0.5) {
       for (let y = b.y0; y <= b.y1; y += 0.5) {
         const r = Math.hypot(x - CX, CY - y);
-        const ang = (Math.atan2(CY - y, x - CX) * 180) / Math.PI;
+        const ang = degrees(Math.atan2(CY - y, x - CX));
         if (r < RMIN || r > RMAX) continue;
         for (const brg of g("BEARINGS")) if (Math.abs(ang - (90 + brg.bearing)) <= HW) hits++;
       }

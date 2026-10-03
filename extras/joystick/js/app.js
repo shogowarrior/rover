@@ -11,7 +11,8 @@
  * the others, and keeps the rest inside its class:
  *
  *   support.js     what the parts share: Listeners, memory, dom, segment,
- *                  pressSegment, clamp, abortableWait, isPrimaryPress, reportFault
+ *                  pressSegment, clamp, radians, degrees, abortableWait,
+ *                  isPrimaryPress, reportFault
  *   protocol.js    every value mirrored from the firmware
  *   mecanum.js     the motions, moveForStick() for the stick families, and
  *                  heldMotion() for a program's
