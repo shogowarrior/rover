@@ -271,9 +271,11 @@ reference; in short:
 
 - **Client to rover:** `{"move": <code>, "speed": 0..255, "duration": <ms>}`.
   A missing or mistyped field defaults to STOP, speed 0 and 750 ms, so a
-  malformed command stops the rover. Frames over 256 bytes and invalid JSON are
-  ignored. Move codes are in `src/MoveCodes.h`: 0 `STOP` to 18
-  `ROTATE_COUNTERCLOCKWISE`, and 19 `RESUME_AUTONOMOUS`.
+  malformed command stops the rover. Frames over `protocol::COMMAND_MAX_BYTES`
+  (256 bytes) and invalid JSON are ignored, and `test_longest_command_fits`
+  checks that the longest a client sends fits. Move codes are in
+  `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, and 19
+  `RESUME_AUTONOMOUS`.
 - **Client to rover, configuration:** `{"scheme": "NORMAL" | "ADVANCED"}`
   (no `move`) sets the control scheme below. It is not a command: it neither
   takes control nor stops anything, so a client may send it while the rover

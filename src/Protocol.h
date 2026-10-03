@@ -54,6 +54,12 @@ Message readMessage(JsonVariantConst json);
 // "NORMAL" or "ADVANCED".
 const char* schemeName(kinematics::ControlScheme scheme);
 
+// The longest client message RemoteControl reads; a longer frame is ignored
+// unread. Every real client sends well under 100 bytes, so anything bigger is
+// not a command, and parsing it would only cost heap.
+// test_longest_command_fits checks the longest a client sends against this.
+constexpr size_t COMMAND_MAX_BYTES = 256;
+
 // RemoteControl's buffer for one telemetry frame, terminator included. A frame
 // that does not fit is not sent at all, so telemetry would freeze in exactly
 // the states that outgrow it. test_longest_telemetry_fits checks the worst

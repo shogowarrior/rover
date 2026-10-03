@@ -109,6 +109,22 @@ void test_wrongly_typed_fields_default_to_stopping(void) {
   assertDefaultsToStop("{\"move\":\"1\",\"speed\":64.5,\"duration\":\"long\"}");
 }
 
+// RemoteControl ignores a message longer than COMMAND_MAX_BYTES unread, so
+// the longest a client sends must fit: each field at the longest value the
+// rover acts on, spaced as Python's json.dumps writes it (drive.py), and a
+// scheme beside the move, which still drives.
+void test_longest_command_fits(void) {
+  char longest[protocol::COMMAND_MAX_BYTES + 1];
+  const int length = snprintf(longest, sizeof(longest),
+                              "{\"move\": %d, \"speed\": %d, \"duration\": %d, \"scheme\": \"ADVANCED\"}",
+                              MOVE_CODE_COUNT - 1, kinematics::MOTOR_SPEED_MAX, tuning::COMMAND_DURATION_MAX_MS);
+  TEST_ASSERT_TRUE(length > 0);
+  TEST_ASSERT_TRUE(static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
+  const protocol::Message m = message(longest);
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(tuning::COMMAND_DURATION_MAX_MS, m.command.durationMs);
+}
+
 // Every frame in test/vectors/telemetry.json, written from the status it
 // describes: each key it holds, and no other. Between them the frames pin
 // that the distances appear only once every bearing has been measured
@@ -197,6 +213,7 @@ int main(int, char**) {
   RUN_TEST(test_command_fields_are_read);
   RUN_TEST(test_missing_fields_default_to_stopping);
   RUN_TEST(test_wrongly_typed_fields_default_to_stopping);
+  RUN_TEST(test_longest_command_fits);
   RUN_TEST(test_telemetry_frames_match_the_vectors);
   RUN_TEST(test_longest_telemetry_fits);
   RUN_TEST(test_too_small_a_buffer_writes_nothing);

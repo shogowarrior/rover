@@ -6,10 +6,6 @@
 
 namespace {
 
-// Every real client sends well under 100 bytes. Anything bigger is not a
-// command, and parsing it would only cost heap.
-constexpr size_t MAX_COMMAND_BYTES = 256;
-
 // Ping every client each second and drop one that misses two pongs in a row.
 // Browsers and the Python websockets library answer automatically.
 //
@@ -83,7 +79,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
 }
 
 void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t length) {
-  if (length > MAX_COMMAND_BYTES) {
+  if (length > protocol::COMMAND_MAX_BYTES) {
     Serial.printf("[%u] Ignored a %u-byte message\n", client, static_cast<unsigned>(length));
     return;
   }
