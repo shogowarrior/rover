@@ -377,7 +377,10 @@ page's globals in reach, so a program loaded from anywhere goes through
 `RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
 keeps comments out of the code. On the rover, Run asks first when the editor
 holds several stacks, and when the program drives a pivot while the rover is
-not on ADVANCED. A program's own stop and start exploring are not presses:
+not on ADVANCED. It asks in the page, in a `<dialog>`, never with
+`window.confirm()`: desktop Chrome blurs the window as its own dialog
+closes, and the blur stopped the run just confirmed. A program's own stop
+and start exploring are not presses:
 the Driver raises no event for them.
 
 **The simulator** holds no Link and no Driver: a preview sends nothing, and

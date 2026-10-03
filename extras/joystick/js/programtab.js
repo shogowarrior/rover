@@ -12,7 +12,8 @@
  *     ui          the tab's elements, by name: targetChoice, run, runLabel,
  *                 stop, examples, exportButton, importButton, importFile,
  *                 clear, stage, hint, offline, simPane, simToggle, state,
- *                 log.
+ *                 log; and ask, the <dialog> Run asks in, with its askText,
+ *                 askRun and askCancel.
  *     storageKey  where the chosen target is remembered.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
@@ -31,7 +32,11 @@
  *
  * Run on the rover asks first when the editor holds more than one stack of
  * blocks, and when the program drives a pivot while the rover is not on the
- * ADVANCED scheme. A preview never asks: it sends nothing.
+ * ADVANCED scheme. A preview never asks: it sends nothing. It asks in the
+ * page, in ui.ask, and never with window.confirm(): desktop Chrome gives its
+ * own dialog the focus and sends the window a blur once it has closed, by
+ * when the run had started, so the blur stood it down (app.js) and every
+ * run the operator confirmed stopped at once.
  *
  * The tab's Stop only asks the runner to abort; app.js wires it, with every
  * other way a program is stopped. Nothing here sends to the rover: a program
@@ -70,7 +75,9 @@ class ProgramTab {
     // folded away unless a preview is what the operator last chose.
     this.#expandSim(this.#kind === "simulator");
 
-    ui.run.addEventListener("click", () => this.#run());
+    ui.run.addEventListener("click", () => this.#run().catch(reportFault));
+    ui.askRun.addEventListener("click", () => ui.ask.close("run"));
+    ui.askCancel.addEventListener("click", () => ui.ask.close("cancel"));
     ui.examples.addEventListener("change", () => this.#loadExample());
     ui.exportButton.addEventListener("click", () => this.#export());
     ui.importButton.addEventListener("click", () => ui.importFile.click());
@@ -178,24 +185,28 @@ class ProgramTab {
 
   /* --- running ----------------------------------------------------------- */
 
-  #run() {
+  async #run() {
+    if (!this.#canRun()) return;
     const editor = this.#editor;
-    if (!editor || editor.empty || this.#runner.state !== "idle") return;
     const target = this.#targets[this.#kind];
     // Run runs every stack on the canvas, top to bottom, as Blockly does: a
     // drive dragged out to look at and left lying there would drive the real
     // rover after the program. A preview only shows it.
     const stacks = editor.stacks;
     if (target.kind === "rover" && stacks > 1 &&
-        !confirm(`The editor holds ${stacks} separate stacks of blocks. Run runs every one, top to bottom, ` +
-          `so a block left lying loose drives the rover too. Run all ${stacks} on the rover?`)) return;
+        !(await this.#ask(`The editor holds ${stacks} separate stacks of blocks. Run runs every one, top to bottom, ` +
+          `so a block left lying loose drives the rover too. Run all ${stacks} on the rover?`))) return;
     // The NORMAL scheme keeps the pivots (codes 9 to 16) off the stick and the
     // pad, because nobody has watched one on the bench yet (docs/mecanum.md);
     // a program could drive all eight without a word, the Mecanum tour
     // example among them. Under ADVANCED the operator has already chosen
     // them, so it does not ask again.
     const pivots = target.kind === "rover" && this.#scheme !== SCHEME_ADVANCED ? editor.pivots : [];
-    if (pivots.length > 0 && !confirm(ProgramTab.#pivotQuestion(pivots, this.#scheme))) return;
+    if (pivots.length > 0 && !(await this.#ask(ProgramTab.#pivotQuestion(pivots, this.#scheme)))) return;
+    // The page lived on while it asked: it runs only if Run still could, on
+    // the target the answer was for. (A link lost meanwhile is the runner's
+    // to refuse, below.)
+    if (!this.#canRun() || this.#targets[this.#kind] !== target) return;
     let program;
     try {
       program = editor.compile();
@@ -210,6 +221,30 @@ class ProgramTab {
     // the strip already says why, from the target itself.
     this.#runner.run(program, target).then((end) => {
       if (end.outcome === "refused") this.#appendLog({ text: `Not run: ${end.reason}`, tone: "failed" });
+    });
+  }
+
+  // Whether Run can start anything: a program in the editor, nothing
+  // running, and no question already waiting for its answer.
+  #canRun() {
+    const editor = this.#editor;
+    return Boolean(editor) && !editor.empty && this.#runner.state === "idle" && !this.#ui.ask.open;
+  }
+
+  // Ask in ui.ask, the page's <dialog>. True only for Run on rover: Cancel,
+  // Escape or anything else that closes it is a no. Escape closes it with no value,
+  // which would leave the last answer standing, so that is cleared first.
+  #ask(question) {
+    const { ask, askText } = this.#ui;
+    askText.textContent = question;
+    ask.returnValue = "";
+    return new Promise((resolve) => {
+      const answered = () => {
+        ask.removeEventListener("close", answered);
+        resolve(ask.returnValue === "run");
+      };
+      ask.addEventListener("close", answered);
+      ask.showModal();
     });
   }
 

@@ -2351,6 +2351,26 @@ function standInEditor(page, program = "await api.step('b1'); await api.drive(MO
   `);
 }
 
+// The Program tab's question (#programAsk): every one it asks, in order, as
+// the operator read it; the one open now, or null; and an answer to it --
+// "run", "cancel", or "escape", which closes it with no answer at all.
+function questionsAsked(page) {
+  const dialog = page.$("programAsk");
+  const asked = [];
+  const showModal = dialog.showModal;
+  dialog.showModal = function () {
+    asked.push(page.$("programAskText").textContent);
+    return showModal.call(this);
+  };
+  return asked;
+}
+const openQuestion = (page) => (page.$("programAsk").open ? page.$("programAskText").textContent : null);
+async function answer(page, how) {
+  if (how === "escape") page.$("programAsk").close();
+  else page.fire(page.$(how === "run" ? "programAskRun" : "programAskCancel"), "click");
+  await flush();
+}
+
 test("program: the scripts load in order, and Blockly is the one remote script, pinned and deferred", () => {
   const page = loadPage();
   const order = page.allScripts;
@@ -2643,21 +2663,20 @@ test("program: Run is off with nothing to run, and asks before running several s
   check(page.evalIn("runner.state") === "idle" && count(ws) === 0, "and pressing it anyway runs nothing");
 
   // Run runs every stack on the canvas, so on the rover it asks first.
-  page.evalIn(`
-    __editor.empty = false; __editor.stacks = 3; programTab.refresh();
-    globalThis.__asked = [];
-    globalThis.__answer = false;
-    globalThis.confirm = (question) => { __asked.push(question); return __answer; };
-  `);
+  page.evalIn("__editor.empty = false; __editor.stacks = 3; programTab.refresh();");
+  const asked = questionsAsked(page);
   check(page.$("programRun").disabled === false, "Run on again");
   page.fire(page.$("programRun"), "click");
   await flush();
-  check(page.evalIn("__asked.length") === 1 && /holds 3 separate stacks/.test(page.evalIn("__asked[0]")) && /loose drives the rover/.test(page.evalIn("__asked[0]")), `asked ${page.evalIn("__asked")}`);
-  check(page.evalIn("runner.state") === "idle" && count(ws) === 0, "declined: nothing ran, nothing sent");
-  page.evalIn("__answer = true;");
+  check(asked.length === 1 && openQuestion(page) === asked[0], `asked ${asked}`);
+  check(/holds 3 separate stacks/.test(asked[0]) && /loose drives the rover/.test(asked[0]), `asked ${asked[0]}`);
+  check(page.evalIn("runner.state") === "idle" && count(ws) === 0, "nothing runs while it asks");
+  await answer(page, "cancel");
+  check(openQuestion(page) === null && page.evalIn("runner.state") === "idle" && count(ws) === 0, "declined: nothing ran, nothing sent");
   page.fire(page.$("programRun"), "click");
   await flush();
-  check(page.evalIn("__asked.length") === 2 && page.evalIn("runner.state") === "running", "confirmed: it runs");
+  await answer(page, "run");
+  check(asked.length === 2 && page.evalIn("runner.state") === "running", "confirmed: it runs");
   await liveForAsync(page, ws, 700);
   check(names(ws).join() === "MOVE_FORWARD,MOVE_FORWARD,MOVE_FORWARD,STOP", `sent ${names(ws)}`);
 
@@ -2665,14 +2684,14 @@ test("program: Run is off with nothing to run, and asks before running several s
   page.evalIn("__editor.stacks = 1;");
   page.fire(page.$("programRun"), "click");
   await liveForAsync(page, ws, 700);
-  check(page.evalIn("__asked.length") === 2, "one stack: not asked");
+  check(asked.length === 2, "one stack: not asked");
   check(page.evalIn("runner.state") === "idle" && /Done on the rover/.test(page.$("programState").textContent), `state ${page.$("programState").textContent}`);
   if (page.evalIn("'simulator' in targets")) {
     page.evalIn("__editor.stacks = 3;");
     page.fire(segments(page)[1], "click");
     page.fire(page.$("programRun"), "click");
     await flush();
-    check(page.evalIn("__asked.length") === 2 && page.evalIn("runner.target && runner.target.kind") === "simulator", "a preview of three stacks: not asked");
+    check(asked.length === 2 && page.evalIn("runner.target && runner.target.kind") === "simulator", "a preview of three stacks: not asked");
     page.fire(page.$("programStop"), "click");
     await flush();
   }
@@ -2683,36 +2702,31 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   const page = loadPage();
   const ws = connectOpen(page);
   standInEditor(page, "await api.drive(PIVOT_RIGHT_FORWARD, 50, 0.5);");
-  page.evalIn(`
-    __editor.pivots = ["Pivot right, forward"];
-    globalThis.__asked = [];
-    globalThis.__answer = false;
-    globalThis.confirm = (question) => { __asked.push(question); return __answer; };
-  `);
-  const asked = () => page.evalIn("__asked.length");
-  const question = () => page.evalIn("__asked[__asked.length - 1]");
-  const run = async () => {
+  page.evalIn(`__editor.pivots = ["Pivot right, forward"];`);
+  const questions = questionsAsked(page);
+  const asked = () => questions.length;
+  const question = () => questions[questions.length - 1];
+  const run = async (how) => {
     page.fire(page.$("programRun"), "click");
     await flush();
+    if (openQuestion(page) !== null) await answer(page, how);
   };
 
   // NORMAL: asked, naming the pivot and the scheme; declined, nothing runs.
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-  await run();
+  await run("cancel");
   check(asked() === 1, `asked ${asked()} times`);
   check(/drives a pivot \(Pivot right, forward\)/.test(question()) && /on the bench/.test(question()) && /NORMAL scheme/.test(question()), `asked ${question()}`);
   check(page.evalIn("runner.state") === "idle" && count(ws) === 0, `declined: nothing ran, sent ${names(ws)}`);
 
   // Accepted: it drives the pivot, re-sent like any held move.
-  page.evalIn("__answer = true;");
-  await run();
+  await run("run");
   await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
   check(asked() === 2 && names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
 
   // A scheme the rover has not reported: asked too, and it says so.
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: undefined }));
-  page.evalIn("__answer = false;");
-  await run();
+  await run("cancel");
   check(asked() === 3 && /has not said which control scheme/.test(question()), `unknown: ${question()}`);
   check(page.evalIn("runner.state") === "idle", "declined");
 
@@ -2742,6 +2756,70 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
     await flush();
     check(count(ws) === mark, `the preview sent ${names(ws, mark)}`);
   }
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: Run asks in the page, so a run the operator confirmed drives on", async () => {
+  // Desktop Chrome gives window.confirm() the focus and sends the window a
+  // blur once it has closed, after the run has started: the blur stood the
+  // run down at once, a twitch of the wheels and "lost focus". The stand-in
+  // behaves so, and must never be asked.
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  standInEditor(page, "await api.drive(PIVOT_RIGHT_FORWARD, 50, 0.5);");
+  page.evalIn(`
+    __editor.stacks = 2; __editor.pivots = ["Pivot right, forward"];
+    globalThis.__confirmed = 0;
+    globalThis.confirm = () => {
+      __confirmed++;
+      Promise.resolve().then(() => window.dispatchEvent({ type: "blur", bubbles: false }));
+      return true;
+    };
+  `);
+  const asked = questionsAsked(page);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  await answer(page, "run"); // the stacks
+  await answer(page, "run"); // the pivot
+  check(asked.length === 2 && page.evalIn("__confirmed") === 0, `asked ${asked.length} in the page, ${page.evalIn("__confirmed")} with confirm()`);
+  check(page.evalIn("runner.state") === "running", `running: ${page.$("programState").textContent}`);
+  await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
+  check(names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
+  check(page.$("programState").textContent === "Done on the rover.", `state ${page.$("programState").textContent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: Escape is no answer, one question at a time, and a link gone meanwhile runs nothing", async () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  standInEditor(page);
+  page.evalIn("__editor.stacks = 2;");
+  const asked = questionsAsked(page);
+  const runIt = async () => {
+    page.fire(page.$("programRun"), "click");
+    await flush();
+  };
+
+  // A yes, then Escape: the dialog keeps the last answer it was closed
+  // with, and Escape closes it with none, so the yes must not carry over.
+  await runIt();
+  await answer(page, "run");
+  await liveForAsync(page, ws, 700);
+  check(page.$("programState").textContent === "Done on the rover.", `the yes ran: ${page.$("programState").textContent}`);
+  const mark = count(ws);
+  await runIt();
+  await answer(page, "escape");
+  await liveForAsync(page, ws, 500);
+  check(asked.length === 2 && page.evalIn("runner.state") === "idle" && count(ws) === mark, `Escape ran it: sent ${names(ws, mark)}`);
+
+  // While a question waits, Run asks nothing more and runs nothing.
+  await runIt();
+  await runIt();
+  check(asked.length === 3 && page.evalIn("runner.state") === "idle", `asked ${asked.length} times`);
+
+  // The link goes while it asks: a yes then runs nothing, and says why.
+  ws.serverDrop();
+  await answer(page, "run");
+  check(page.evalIn("runner.state") === "idle" && count(ws) === mark, `ran on a link that went: ${names(ws, mark)}`);
+  check(logLines(page).at(-1) === "Not run: Connect to the rover to run a program on it.", `log ${logLines(page).at(-1)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

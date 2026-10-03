@@ -350,6 +350,44 @@
 .programLog li[data-tone="bump"] { color: var(--warn); }
 .programLog li[data-tone="bump"]::before { content: "×"; color: var(--warn); }
 
+/* --- the question Run asks ------------------------------------------------- */
+
+/* A modal <dialog> (joystick.html says why not window.confirm()). Run on
+   rover is filled like the toolbar's Run; Cancel, which has the focus, is
+   the plain one. */
+.programAsk {
+  max-width: min(32rem, calc(100vw - 2 * var(--gutter)));
+  padding: var(--s-5) var(--s-6);
+  color: var(--readout);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-pop);
+}
+
+.programAsk::backdrop { background: var(--shade); }
+
+.programAsk p {
+  margin: 0 0 var(--s-5);
+  font-size: var(--t-md);
+  line-height: var(--lh-loose);
+}
+
+.programAskButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-3);
+}
+
+.programAsk .run {
+  color: var(--on-live);
+  background: var(--live);
+}
+
+@media (hover: hover) {
+  .programAsk .run:hover { background: var(--live); filter: brightness(1.1); }
+}
+
 /* --- Blockly, dressed for the panel ---------------------------------------- */
 
 /* The theme (blocks.js) colours the workspace, flyout and scrollbars; these

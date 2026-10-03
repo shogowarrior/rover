@@ -64,6 +64,7 @@ class Node_ {
     this.offsetTop = 0;
     this._clientWidth = 0;
     this._clientHeight = 0;
+    if (this.tagName === "DIALOG") { this.open = false; this.returnValue = ""; }
   }
   get id() { return this.attributes.id || ""; }
   set id(v) { this.attributes.id = v; }
@@ -88,6 +89,17 @@ class Node_ {
   removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((g) => g !== f); }
   dispatchEvent(e) { return dispatch(this, e); }
   focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
+  // A <dialog>, as a browser's: showModal() opens it; close(value) shuts an
+  // open one, setting returnValue when given one, and "close" follows as a
+  // task of its own. Escape is a close() with no value, which leaves
+  // returnValue as it was.
+  showModal() { if (this.tagName !== "DIALOG" || this.open) throw new Error("showModal() on a closed <dialog> only"); this.open = true; }
+  close(value) {
+    if (!this.open) return;
+    this.open = false;
+    if (value !== undefined) this.returnValue = String(value);
+    setImmediate(() => dispatch(this, { type: "close", bubbles: false }));
+  }
   getContext() { return fakeContext(); }
   // As in a browser, an element with no layout box has no rects, and an
   // empty bounding rect. Laid out, it sits at the sum of its own and its

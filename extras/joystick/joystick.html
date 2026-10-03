@@ -257,6 +257,21 @@
     </div>
   </main>
 
+  <!-- The question Run on the rover asks first, when it has to
+       (programtab.js says when). In the page, never window.confirm():
+       desktop Chrome gives its own dialog the focus and sends the window a
+       blur once it has closed, after the run has started, and the blur
+       stood the run down at once. Outside the tabs, so no hidden tab can
+       hide it while it is open; Cancel has the focus, so a reflexive Enter
+       runs nothing. -->
+  <dialog class="programAsk" id="programAsk" aria-label="Run on the rover?" aria-describedby="programAskText">
+    <p id="programAskText"></p>
+    <div class="programAskButtons">
+      <button type="button" id="programAskCancel" autofocus>Cancel</button>
+      <button type="button" class="run" id="programAskRun">Run on rover</button>
+    </div>
+  </dialog>
+
   <!-- Classic scripts, run in this order and sharing one global scope:
        Chrome refuses module scripts from file://, where this page is opened.
        See js/app.js. -->

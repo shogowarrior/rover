@@ -228,6 +228,10 @@ const programTab = new ProgramTab({
     simToggle: byId("simToggle"),
     state: byId("programState"),
     log: byId("programLog"),
+    ask: byId("programAsk"),
+    askText: byId("programAskText"),
+    askRun: byId("programAskRun"),
+    askCancel: byId("programAskCancel"),
   },
 });
 
