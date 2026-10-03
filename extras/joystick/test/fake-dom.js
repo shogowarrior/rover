@@ -72,7 +72,7 @@ class Node_ {
   set textContent(v) { this._text = String(v); }
   // As in a browser, an element inside a hidden (display: none) ancestor has
   // no layout box and measures 0. joy.js sizes its canvas from its container
-  // once, when it is built, so a stick built while its tab is hidden is lost.
+  // as it is built, so a stick built while its tab is hidden is drawn at 0.
   get rendered() { for (let n = this; n && n.tagName !== "#DOCUMENT"; n = n.parentNode) if (n.hidden) return false; return true; }
   get clientWidth() { return this.rendered ? this._clientWidth : 0; }
   set clientWidth(v) { this._clientWidth = v; }

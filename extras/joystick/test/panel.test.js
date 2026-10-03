@@ -372,8 +372,10 @@ test("mouse-driven stick: hovering a rotate button mid-drag does not stop it", (
   check(names(ws, mark).join() === "STOP", `mouseup ${names(ws, mark)}`);
 });
 
-/* --- review round 2: the stick latches, primary presses only, repeat phase --- */
+/* --- the stick latches, primary presses only, repeat phase ---------------- */
 
+// A mouse on the stick's canvas; (dx, dy) is from its centre. joy.js follows
+// a drag on the document, as it does the release.
 function mouseStick(page) {
   const c = page.canvas;
   return {
@@ -1627,8 +1629,8 @@ function lastCompoundMatches(selector, node) {
 }
 
 test("schemes: the stick hints cannot take a touch from joy.js, and nothing above the stick is positioned", () => {
-  // Every stylesheet the page links, not only this stream's: a rule in any
-  // of them can reach the stick's ancestors.
+  // Every stylesheet the page links, not only panel.css: a rule in any of
+  // them can reach the stick's ancestors.
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const sheets = [...html.matchAll(/<link\b[^>]*>/g)].map(([tag]) => tag)
     .filter((tag) => /\brel=["']?stylesheet\b/.test(tag))
