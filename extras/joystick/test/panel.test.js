@@ -2065,9 +2065,9 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
 // joy.js paints the stick's knob from drive.js (and the page takes its teal
 // from there), and Blockly takes the stop block's red and the grid's colour
 // as plain values. Each copy must be its token's value.
-test("every CSS token a script reads is declared on :root in css/panel.css, and the copies agree", () => {
-  const root = new Map(cssRules(panelCss())
-    .filter((rule) => rule.selector === ":root")
+test("every CSS token a script reads is declared on :root, in css/looks.css or css/panel.css, and the copies agree", () => {
+  const root = new Map([stylesheet("looks.css"), panelCss()].flatMap((css) => cssRules(css))
+    .filter((rule) => rule.selector.split(",").some((selector) => selector.trim() === ":root"))
     .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
   const declared = new Set(root.keys());
   const script = (file) => fs.readFileSync(path.join(PANEL_ROOT, "js", file), "utf8");

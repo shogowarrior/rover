@@ -1,0 +1,50 @@
+/* The panel's looks: every colour the page paints, as tokens, one block per
+   look. js/look.js names the looks and puts the chosen one on <html> as
+   data-look; with none named, :root takes the default, Console Dark. A tile
+   in the options popover sets data-look on its own preview, which then
+   paints in that look's tokens. Every block declares the same tokens. The
+   rest of the tokens (type, space, sizes, layout) are the same in every
+   look, in css/panel.css.
+
+   Three signal hues, each with one job. Teal is the accent: the operator's
+   own controls and the rover doing well (linked, a clear way, exploring).
+   joy.js paints the stick's knob in it (js/drive.js reads --live), so the
+   stick and the page agree in every look. Amber is caution: something
+   closing in, a fault. Red is Stop and danger and nothing else -- anywhere
+   else it would stop meaning anything. Every text colour holds 4.5:1 on the
+   surfaces it is used on. */
+
+:root,
+[data-look="console-dark"] {
+  color-scheme: dark;
+
+  /* surfaces, darkest first */
+  --case: #0b0d11;
+  --panel: #151920;
+  --raised: #1f242c;
+  --raised-hi: #2b323c;
+  --chosen: #39414d; /* the chosen segment, raised out of its track */
+  --rule: #2a3039;
+  --shade: rgb(0 0 0 / 0.5);
+
+  /* ink */
+  --readout: #f1f3f6;
+  --dim: #9aa4b1;
+  --faint: #4a525d; /* marks, never text */
+
+  /* signals */
+  --live: #4db8a8;
+  --on-live: #062420;
+  --live-ink: #86d9cc; /* teal text on a teal tint */
+  --live-soft: rgb(77 184 168 / 0.16);
+  --live-glow: rgb(77 184 168 / 0.08);
+  --warn: #ffb547;
+  --warn-soft: rgb(255 181 71 / 0.12);
+  --stop: #d23c37;
+  --stop-hi: #bb302b;
+  --on-fill: #ffffff; /* text on a saturated fill: Stop, a block's menu */
+  --on-stop: var(--on-fill);
+  --stop-ink: #ff7a6e; /* red text on a dark surface */
+  --stop-soft: rgb(210 60 55 / 0.16);
+  --stop-glow: rgb(210 60 55 / 0.32);
+}
