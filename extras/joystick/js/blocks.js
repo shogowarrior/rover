@@ -20,9 +20,10 @@
  *   BlockEditor   one Blockly workspace with those blocks, saved as it
  *                 changes.
  */
-if (typeof module !== "undefined" && typeof ProgramRunner === "undefined") {
+if (typeof module !== "undefined") {
   // program.js puts protocol.js and mecanum.js on the global object too.
-  Object.assign(globalThis, require("./program.js"));
+  if (typeof ProgramRunner === "undefined") Object.assign(globalThis, require("./program.js"));
+  if (typeof BEARINGS === "undefined") Object.assign(globalThis, require("./scan.js"));
 }
 
 class RoverBlocks {
@@ -831,4 +832,4 @@ class BlockEditor {
   }
 }
 
-if (typeof module !== "undefined") module.exports = { RoverBlocks, BlockEditor };
+if (typeof module !== "undefined") module.exports = { RoverBlocks };

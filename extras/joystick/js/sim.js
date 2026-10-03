@@ -1349,8 +1349,5 @@ class SimTarget {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = {
-    SIM_WHEEL_MAX_MPS, SIM_DEADBAND_PWM, SIM_RELEASED_DRAG, SIM_CHASSIS, SIM_WHEEL, SIM_SONAR,
-    RoverSim, Room, SimSonar, SimClock, SimTarget,
-  };
+  module.exports = { SIM_WHEEL_MAX_MPS, SIM_DEADBAND_PWM, SIM_CHASSIS, RoverSim, Room, SimSonar, SimTarget };
 }

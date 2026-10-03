@@ -49,12 +49,6 @@ test("moveForStick matches every case in test/vectors/stick_moves.json", () => {
   assert.deepEqual(wrong, []);
 });
 
-test("moveForStick translates by default", () => {
-  for (const { x, yUp, family } of VECTORS.cases.filter((c) => c.family === "TRANSLATE")) {
-    assert.equal(mecanum.moveForStick(x, yUp), mecanum.moveForStick(x, yUp, family));
-  }
-});
-
 test("a pivot family always picks from its own four moves, by quadrant", () => {
   const families = {
     PIVOT: ["PIVOT_RIGHT_FORWARD", "PIVOT_LEFT_FORWARD", "PIVOT_RIGHT_BACKWARD", "PIVOT_LEFT_BACKWARD"],

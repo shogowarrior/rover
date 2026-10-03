@@ -36,7 +36,7 @@ function stickAngleDeg(x, yUp) {
 
 // The move a deflected stick asks for. The caller rejects a centred stick
 // first: this always returns a motion.
-function moveForStick(x, yUp, family = FAMILY_TRANSLATE) {
+function moveForStick(x, yUp, family) {
   // A pivot family has four motions, one per quadrant. Axis-aligned pushes
   // (x or yUp exactly 0) count as right and forward.
   const right = x >= 0;
@@ -118,6 +118,6 @@ function motionNamed(name) {
 if (typeof module !== "undefined") {
   module.exports = {
     FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS, FAMILIES,
-    stickAngleDeg, moveForStick, MOTIONS, motionFor, motionNamed,
+    moveForStick, MOTIONS, motionFor, motionNamed,
   };
 }

@@ -4,6 +4,9 @@
  *
  *   new ScanView(svg)   lays the fan out in the empty <svg>.
  *   show(data)          draws a telemetry object's distances.
+ *
+ * Nothing here touches the DOM until a ScanView is built, so the file also
+ * loads in Node, for BEARINGS.
  */
 
 // The five bearings Explorer sweeps (ExploreParams in src/Explorer.h), in
@@ -172,3 +175,5 @@ class ScanView {
     return `M${xy(ScanView.#polar(90 + FAN_HALF, r))} A${R} ${R} 0 0 1 ${xy(ScanView.#polar(90 - FAN_HALF, r))}`;
   }
 }
+
+if (typeof module !== "undefined") module.exports = { BEARINGS };
