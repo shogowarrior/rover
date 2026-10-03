@@ -80,6 +80,22 @@ void test_held_stick_keeps_the_rover_moving(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, motors->lastPattern->move);
 }
 
+// A held stick is re-sent every GAMEPAD_REFRESH_MS, each command asking for
+// DEFAULT_MOVE_DURATION_MS and no more: the wheels stop that long after the
+// last one the session sent. The other tests keep the session fed or end the
+// move with a STOP, so neither number showed.
+void test_held_stick_is_resent_at_the_refresh_rate_for_the_default_duration(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  uint32_t now = 0;
+  const uint32_t held = 5 * tuning::GAMEPAD_REFRESH_MS;
+  advance(now, held, 10, [](uint32_t t) { session->update(pad(0, -127, 0, 0, t), t); });
+  const uint32_t lastSent = held - tuning::GAMEPAD_REFRESH_MS;  // and the four before it
+  rover->update(lastSent + tuning::DEFAULT_MOVE_DURATION_MS - 1);
+  TEST_ASSERT_TRUE(motors->driving);
+  rover->update(lastSent + tuning::DEFAULT_MOVE_DURATION_MS);
+  TEST_ASSERT_FALSE(motors->driving);
+}
+
 // Counted by its effect, not by motor releases: Rover writes a stop that ends
 // a move twice, to repair a lost I2C write. Every STOP takes control, so once
 // control is handed back a second STOP would show as a rover forced into
@@ -337,6 +353,7 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_resting_pad_leaves_exploration_alone);
   RUN_TEST(test_held_stick_keeps_the_rover_moving);
+  RUN_TEST(test_held_stick_is_resent_at_the_refresh_rate_for_the_default_duration);
   RUN_TEST(test_release_sends_one_stop);
   RUN_TEST(test_silent_pad_stops_what_it_drove);
   RUN_TEST(test_ancient_report_is_not_fresh);
