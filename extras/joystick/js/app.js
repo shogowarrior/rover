@@ -326,7 +326,7 @@ if (targets.simulator) {
       if (!simulator.state.atStart) {
         programTab.note("The preview goes on from where the last one left the simulated rover: Reset, in the simulator's bar, starts it over.");
       }
-      stopListening = simulator.onLog((text) => programTab.note(`Simulator: ${text}`, text.startsWith("bumped") ? "bump" : "info"));
+      stopListening = simulator.onLog(({ text, tone }) => programTab.note(`Simulator: ${text}`, tone));
     } else if (state === "idle" && stopListening) {
       stopListening();
       stopListening = null;

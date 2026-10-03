@@ -528,7 +528,7 @@ class SimView {
       this.#drawn.said = last;
       ui.logAt.textContent = last ? `${(last.at / 1000).toFixed(1)} s ` : "";
       ui.logText.textContent = last ? last.text : "";
-      ui.log.dataset.tone = last && last.text.startsWith("bumped") ? "bump" : "";
+      ui.log.dataset.tone = last && last.tone === "bump" ? "bump" : "";
       ui.log.dataset.empty = last ? "no" : "yes";
     }
   }

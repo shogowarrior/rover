@@ -364,7 +364,7 @@ test("the chassis stops at a wall, and says what it bumped into", async () => {
   const target = new SimTarget({ bearings: BEARINGS, room: "box" });
   target.place({ x: 1, y: 1, heading: 0 });
   const said = [];
-  target.onLog((text) => said.push(text));
+  target.onLog((entry) => said.push(entry));
   target.hold(protocol.MOVE_FORWARD, 255);
   await run(target, 3000);
   const { pose, bumps, twist, stalled } = target.state;
@@ -372,7 +372,10 @@ test("the chassis stops at a wall, and says what it bumped into", async () => {
   near(pose.y, 1, 1e-9, "no slide");
   assert.equal(stalled, true, "pushing against it");
   assert.deepEqual(twist, { vx: 0, vy: 0, w: 0 }, "and not moving");
-  assert.deepEqual(said, ["bumped into the wall"], "once, however long it pushes");
+  // Its tone says it was a bump, whatever the words: the console and the
+  // view's caption read that, not the text.
+  assert.deepEqual(said, [{ text: "bumped into the wall", tone: "bump" }], "once, however long it pushes");
+  assert.equal(target.state.log.at(-1).tone, "bump", "and the view's log says so too");
   assert.equal(bumps.length, 1);
   near(bumps[0].x, 2, 0.002, "the mark is on the wall");
   // The firmware cannot tell: it still reports the move.
@@ -407,7 +410,7 @@ test("a rover wedged in a corner marks each place once, however long it pushes",
   const target = new SimTarget({ bearings: BEARINGS, room: "box" });
   target.playback = 4;
   const said = [];
-  target.onLog((text) => said.push(text));
+  target.onLog(({ text }) => said.push(text));
   const runner = new ProgramRunner();
   runner.run(async (api) => {
     for (;;) {
@@ -672,13 +675,13 @@ test("release() stops only what the program drives; stop() always stops", async 
 test("explore() says it is not simulated, reports AUTONOMOUS and stands still", async () => {
   const target = new SimTarget({ bearings: BEARINGS, room: "living" });
   const said = [];
-  target.onLog((text) => said.push(text));
+  target.onLog((entry) => said.push(entry));
   target.hold(protocol.MOVE_FORWARD, 128);
   await run(target, 300);
   target.explore();
   const pose = target.state.pose;
   await run(target, 2000);
-  assert.deepEqual(said, ["exploring is not simulated: the real rover would start exploring here"]);
+  assert.deepEqual(said, [{ text: "exploring is not simulated: the real rover would start exploring here", tone: "info" }]);
   assert.deepEqual(target.state.pose, pose, "it stands still");
   assert.equal(target.state.held, null);
   assert.equal(target.telemetry().data.mode, "AUTONOMOUS");
@@ -1119,6 +1122,8 @@ test("the view: one mark per bump, gone with the trail; and where the next previ
   page.fire(button("1×"), "click"); // anything that draws
   assert.equal(sim.state.bumps.length, 1);
   assert.equal(byClass("sim-bump").length, 1, "one mark drawn");
+  const caption = byClass("sim-log")[0];
+  assert.equal(caption.dataset.tone, "bump", "the caption is in the bump's colour");
   assert.match(twist(), /goes on from here/, "stopped away from its start");
   const listening = sim.onTelemetry(() => {}); // as a running program is
   page.fire(button("1×"), "click");
@@ -1131,6 +1136,9 @@ test("the view: one mark per bump, gone with the trail; and where the next previ
   page.fire(byClass("sim-tool").find((b) => (b.getAttribute("title") || "").startsWith("Reset")), "click");
   page.fire(button("1×"), "click");
   assert.equal(twist(), "standing still", "back at its start");
+  sim.explore(); // said, but not a bump
+  page.fire(button("1×"), "click");
+  assert.equal(caption.dataset.tone, "", `in plain colour: ${byClass("sim-log-text")[0].textContent}`);
   assert.deepEqual(page.errors, []);
 });
 

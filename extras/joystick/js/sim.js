@@ -834,8 +834,9 @@ class SimSonar {
  *   releasedDrag       see SIM_RELEASED_DRAG
  *   setScheme(name)    as the rover takes {"scheme": name}
  *   clearTrail()       forget the path and the bump marks
- *   onLog(fn)          fn(text) when the preview has something to say: a
- *                      bump, or that exploring is not simulated
+ *   onLog(fn)          fn({text, tone}), as ProgramRunner's, when the preview
+ *                      has something to say: a bump (tone "bump"), or that
+ *                      exploring is not simulated ("info")
  *   idle, onWake(fn)   whether the preview needs no time to pass, and fn()
  *                      when something starts that does
  *   state              a snapshot for drawing
@@ -1276,7 +1277,7 @@ class SimTarget {
     }
     this.#bumps.push({ x: at.x, y: at.y, obstacle, at: now, times: 1 });
     if (this.#bumps.length > SimTarget.BUMP_MARKS) this.#bumps.splice(0, this.#bumps.length - SimTarget.BUMP_MARKS);
-    this.#say(`bumped into ${obstacle}`);
+    this.#say(`bumped into ${obstacle}`, "bump");
   }
 
   // The keys src/Protocol.cpp writes, with these exceptions: no
@@ -1336,10 +1337,12 @@ class SimTarget {
     this.#contact = null;
   }
 
-  #say(text) {
-    this.#log.push({ text, at: this.#clock.now });
+  // The tone travels with the words, so no reader has to tell a bump by how
+  // it is worded.
+  #say(text, tone = "info") {
+    this.#log.push({ text, tone, at: this.#clock.now });
     if (this.#log.length > SimTarget.LOG_LINES) this.#log.shift();
-    this.#logListeners.emit(text);
+    this.#logListeners.emit({ text, tone });
   }
 }
 
