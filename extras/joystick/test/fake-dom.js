@@ -97,11 +97,12 @@ class Node_ {
     list[t] = (list[t] || []).filter((g) => g !== f);
   }
   dispatchEvent(e) { return dispatch(this, e); }
-  // While a modal <dialog> is open the rest of the page is inert: focus()
-  // on anything outside it does nothing.
+  // As in a browser, focus() does nothing on an element with no layout box
+  // or a disabled one, and, while a modal <dialog> is open, on anything
+  // outside it: the rest of the page is inert.
   focus() {
     const doc = this.ownerDocument;
-    if (!doc || (doc.__modal && !doc.__modal.contains(this))) return;
+    if (!doc || !this.rendered || this.disabled || (doc.__modal && !doc.__modal.contains(this))) return;
     doc.activeElement = this;
   }
   // A <dialog>, as a browser's: showModal() opens it, makes the rest of the
@@ -136,7 +137,9 @@ class Node_ {
     if (this.tagName === "INPUT" && this.getAttribute("type") === "file") this.pickerOpened = (this.pickerOpened || 0) + 1;
     dispatch(this, { type: "click", bubbles: true, preventDefault() {} });
   }
+  // As in a browser, an element with no layout box scrolls nowhere.
   scrollIntoView(options) {
+    if (!this.rendered) return;
     this.scrolledIntoView = (this.scrolledIntoView || 0) + 1;
     this.scrollOptions = options;
   }

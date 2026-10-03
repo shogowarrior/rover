@@ -1165,7 +1165,8 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 /* Every layout but the side-by-side one (the media query below, negated). */
 @media (max-width: 959.98px), (max-height: 520.98px) {
   /* Opened near the foot of the screen, a popup scrolls into view clear of
-     the Stop bar over it (popover.js), rather than hide under it. */
+     the Stop bar over it (popover.js), rather than hide under it. A phone on
+     its side has no bar there: see its block. */
   .menu,
   .sim-more { scroll-margin-bottom: calc(var(--tap-lg) + 2 * var(--s-3) + env(safe-area-inset-bottom, 0px)); }
 
@@ -1525,6 +1526,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    columns, with its middle left empty for them. --stick is 54vmin, what
    the portrait layout's never exceeds, so a stick sized there still fits. */
 @media (orientation: landscape) and (max-height: 520px) {
+  /* Stop is a column at the side, not a bar across the foot: a margin for
+     one would push a popup's own button off the top of so short a screen. */
+  .menu,
+  .sim-more { scroll-margin-bottom: 0; }
+
   :root {
     --stick: clamp(140px, 54vmin, 240px);
     --side: clamp(150px, 22vw, 260px);

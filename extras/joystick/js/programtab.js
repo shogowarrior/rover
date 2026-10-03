@@ -43,7 +43,7 @@
  */
 class ProgramTab {
   static RUN_LABELS = Object.freeze({ rover: "Run on rover", simulator: "Preview" });
-  static EMPTY = "Nothing to run yet: drag blocks in, or load an example.";
+  static EMPTY = "Nothing to run yet: drag blocks in, or load an example from the File menu.";
   static LOG_LINES = 200;
   // What the File menu's items do, and why one cannot now (F3f: disabled,
   // with a title that says why).

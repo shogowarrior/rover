@@ -1196,7 +1196,8 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
 });
 
 test("the view: its settings open from their button, and Escape or a press outside folds them away", () => {
-  const { page, byClass } = pageWithView();
+  // On its tab: hidden, nothing can take the focus.
+  const { page, byClass } = pageWithView({ stored: { "rover.tab": "tabProgram" } });
   const more = byClass("sim-tool").find((b) => b.getAttribute("aria-controls") === "simMore");
   const panel = page.$("simMore");
   const press = (target) => {

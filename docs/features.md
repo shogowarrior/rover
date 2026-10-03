@@ -596,8 +596,8 @@ through one shared helper (`AskDialog`): the question as its text, a
 confirm button that names the action ("Run on rover", "Replace", "Clear",
 "Delete"), Cancel focused so a reflexive Enter does nothing, and Escape or
 Cancel answering no. Blockly's own questions go through it too; only its
-prompt for a new variable's name, which needs a text field, stays Blockly's
-own in-page dialog. No `window.confirm()`, `alert()` or `prompt()`. A question is asked only before
+prompts for a variable's name (new or renamed), which need a text field, and
+its note that a name is taken stay Blockly's own in-page dialogs. No `window.confirm()`, `alert()` or `prompt()`. A question is asked only before
 something costly to undo: driving the rover in a way the operator may not
 expect, or replacing or removing the program in the editor. Never before
 Stop.

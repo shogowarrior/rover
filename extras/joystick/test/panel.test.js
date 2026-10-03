@@ -2741,6 +2741,9 @@ test("program: Run is off with nothing to run, and asks before running several s
   page.evalIn("__editor.empty = true; __editor.stacks = 0; programTab.refresh();");
   check(page.$("programRun").disabled === true, "Run off on an empty editor");
   check(/^Nothing to run yet/.test(page.$("programRun").title) && /^Nothing to run yet/.test(page.$("programState").textContent), `says why: ${page.$("programState").textContent}`);
+  // The examples are out of sight in the File menu: both lines say so.
+  check(/an example from the File menu\.$/.test(page.$("programState").textContent) && /an example in the File menu\.$/.test(page.$("programHint").textContent),
+    `says where the examples are: ${page.$("programState").textContent} / ${page.$("programHint").textContent}`);
   page.fire(page.$("programRun"), "click");
   await flush();
   check(page.evalIn("runner.state") === "idle" && count(ws) === 0, "and pressing it anyway runs nothing");
@@ -2914,7 +2917,8 @@ test("program: Escape is no answer, one question at a time, and a link gone mean
 });
 
 test("program: the File menu holds the examples, Import, Export and Clear, and opens and closes as a menu does", () => {
-  const page = loadPage();
+  // On its tab: hidden, nothing can take the focus or scroll.
+  const page = loadPage({ stored: { "rover.tab": "tabProgram" } });
   const button = page.$("programMenu");
   const menu = page.$("programMenuList");
   check(button.getAttribute("aria-haspopup") === "menu" && button.getAttribute("aria-controls") === "programMenuList", "a menu button for its menu");
@@ -2986,7 +2990,8 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   page.evalIn(`globalThis.__exported = [];
     globalThis.Blob = class { constructor(parts) { __exported.push(parts.join("")); } };
     globalThis.URL = { createObjectURL: () => "blob:program", revokeObjectURL() {} };`);
-  page.fire(page.$("programExport"), "click");
+  // A mouse lands on the item's word, not the item.
+  page.fire(page.$("programExport").children.find((c) => c.tagName === "SPAN"), "click");
   check(page.evalIn("__exported.join()") === "{}", `Export saved the program: ${page.evalIn("__exported.join()")}`);
   check(menu.hidden && page.doc.activeElement === button, "and the menu closed, back on its button");
 
@@ -3009,10 +3014,16 @@ test("program: an item that asks leaves the focus on the File button once answer
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { stored: { "rover.tab": "tabProgram" } });
   standInEditor(page);
   const button = page.$("programMenu");
-  for (const [name, item, how] of [["an example", () => exampleItems(page)[1], "escape"], ["Clear", () => page.$("programClear"), "cancel"], ["Clear", () => page.$("programClear"), "yes"]]) {
+  // Enter on an item clicks the item; a mouse clicks the word on it.
+  const word = (item) => item.children.find((c) => c.tagName === "SPAN");
+  for (const [name, item, how, at] of [
+    ["an example", () => exampleItems(page)[1], "escape", (b) => b],
+    ["Clear", () => page.$("programClear"), "cancel", word],
+    ["Clear", () => page.$("programClear"), "yes", (b) => b],
+  ]) {
     page.fire(button, "keydown", { key: "ArrowDown" });
     item().focus();
-    page.fire(item(), "click"); // as Enter on it would
+    page.fire(at(item()), "click");
     await flush();
     check(page.$("ask").open && page.doc.activeElement === page.$("askNo"), `${name}: asked, Cancel focused`);
     await answer(page, how);
@@ -3076,6 +3087,15 @@ test("program: the File menu opens over the page but under the Stop bar, and on 
     .find((r) => /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
   const popups = margin ? margin.selector.split(",").map((part) => part.trim()) : [];
   check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot: ${popups}`);
+  // A phone on its side has Stop at the side: a margin there pushed the File
+  // button off the top of the screen as its menu opened.
+  const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) {") || []).find((r) => /scroll-margin-bottom/.test(r.body));
+  const sidePopups = side ? side.selector.split(",").map((part) => part.trim()) : [];
+  check(sidePopups.includes(".menu") && sidePopups.includes(".sim-more") && /scroll-margin-bottom:\s*0\s*;/.test(side.body), `no margin on a phone on its side: ${side && side.body}`);
+  // The simulator's box clips its room without being a scroll container,
+  // which would swallow the settings' margin before the window scrolled.
+  const slot = cssRules(stylesheet("program.css")).filter((r) => r.selector === "#simSlot").map((r) => r.body).join("");
+  check(/overflow:\s*clip\s*;/.test(slot), `#simSlot clips, not scrolls: ${slot}`);
 });
 
 test("program: an example, Import and Clear ask in the page before they replace a program, never with confirm()", async () => {

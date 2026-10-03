@@ -54,6 +54,12 @@ fixed: the focus lost to the page after a question an item asked, a press on
 the block editor not closing a menu (Blockly stops its presses), room names
 cut short in a narrow simulator bar, disabled items not saying why, Clear's
 undo key (Cmd+Z on a Mac), and Blockly's delete question with OK focused.
+A second round found: the simulator's settings still opening under the Stop
+bar on a phone (its box was a scroll container, which swallowed the scroll
+margin), the same margin pushing the File button off a phone on its side,
+the empty editor not saying the examples are in the File menu, and tests a
+browser would fail but the fake DOM passed (a click on an item's word, focus
+in a hidden tab).
 
 Panel tests 197/197 and the protocol check pass. That thread's container
 could not build the firmware or run the host tests: its network policy
