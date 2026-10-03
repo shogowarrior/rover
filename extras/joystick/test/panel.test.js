@@ -2060,15 +2060,20 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 // showed the lines after its ellipsis. Measured in a browser at 480 x 320 to
 // 812 x 375 (css/panel.css says what it found).
 test("motorsReady: the fault beside a landscape stick takes no height of its own, and no fault card clamps its lines", () => {
+  const besideStick = (selector) =>
+    /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(selector.trim());
   // Only in the landscape block: anywhere else, the upright phone's card too
   // would shrink to two lines.
-  const beside = (mediaRules(LANDSCAPE_PHONE) || [])
-    .filter((r) => r.selector.split(",").some((s) =>
-      /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(s.trim())));
+  const beside = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(",").some(besideStick));
   check(beside.length === 1, `the Drive tab's fault card, in the landscape block: ${beside.map((r) => r.selector)}`);
   const body = beside.length === 1 ? beside[0].body : "";
   check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
-  const clamped = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
+  // And only beside the stick: the Program tab's card, contained, fell to its
+  // floor and scrolled inside a page that scrolls.
+  const rules = cssRules(panelCss());
+  const contained = rules.filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:/.test(r.body));
+  check(contained.every((r) => r.selector.split(",").every(besideStick)), `contained beyond the Drive tab: ${contained.map((r) => r.selector)}`);
+  const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
