@@ -143,6 +143,9 @@ CASES = [
     # --- Bash: recursive grep ----------------------------------------------
     ("grep -rn src/", "B", bash("grep -rn WIFI src/")),
     ("grep -rn .", "B", bash("grep -rn WIFI .")),
+    # r anywhere in a cluster of short flags, not only first.
+    ("grep -nr src", "B", bash("grep -nr WIFI src")),
+    ("grep -ir .", "B", bash("grep -ir WIFI .")),
     ("grep -rn client", "A", bash("grep -rn WIFI client")),
     ("grep -r no operand", "B", bash("grep -r WIFI")),
     ("grep -e client", "A", bash("grep -rn -e WIFI client")),
@@ -178,6 +181,8 @@ CASES = [
     ("after heredoc", "B", bash("cat > f <<EOF\nhi\nEOF\ngrep -r x src")),
     ("here-string", "A", bash("grep x <<< src")),
     ("comment grep", "A", bash("echo hi # grep -r x src")),
+    # A # inside a word starts no comment, so the operand after it counts.
+    ("# inside a word", "B", bash("grep -r a#b " + P + "/src", cwd="/elsewhere")),
     ("escaped newline", "B", bash("grep -r \\\n x src")),
     # Which arguments are operands: -e and -f take the pattern, so the first
     # argument is then an operand too.
@@ -195,6 +200,7 @@ CASES = [
     # --- Bash: rg ----------------------------------------------------------
     ("rg src", "A", bash("rg WIFI src")),
     ("rg -u", "B", bash("rg -u WIFI src")),
+    ("rg -nu", "B", bash("rg -nu WIFI src")),
     ("rg --no-ignore .", "B", bash("rg --no-ignore WIFI .")),
     ("rg -uu client", "A", bash("rg -uu x client")),
     ("rg --unrestricted none", "B", bash("rg --unrestricted x")),
@@ -245,6 +251,7 @@ CASES = [
     ("strings elf", "B", bash("strings .pio/build/car_wire/firmware.elf")),
     ("xxd bin", "B", bash("xxd firmware.bin")),
     ("objdump -s o", "B", bash("objdump -s .pio/build/x/src/Network.cpp.o")),
+    ("strings o in its directory", "B", bash("strings Network.cpp.o", cwd=P + "/.pio/build/car_wire/src")),
     ("objdump -S", "A", bash("objdump -S firmware.elf")),
     ("readelf -x", "B", bash("readelf -x .rodata firmware.elf")),
     ("readelf -S", "A", bash("readelf -S firmware.elf")),
@@ -252,6 +259,7 @@ CASES = [
     ("nm | head", "A", bash("nm firmware.elf | head")),
     ("cat bin", "B", bash("cat .pio/build/car_wire/firmware.bin")),
     ("head -c elf", "B", bash("head -c 100 firmware.elf")),
+    ("tail -c elf", "B", bash("tail -c 4000 .pio/build/car_wire/firmware.elf")),
     ("base64 bin", "B", bash("base64 firmware.bin")),
     ("cat idedata", "A", bash("cat .pio/build/car_wire/idedata.json")),
     ("cat wildcard products", "B", bash("cat .pio/build/*/firmware*")),
