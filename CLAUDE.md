@@ -67,6 +67,17 @@ guard blocks every call, and the build check says what it skipped.
   for every rule, run by CI and by the build hook: a change to the guard
   that lets one case through, or blocks one it should allow, fails there.
 
+  **Never edit `guard-secrets.sh` in place.** It runs before every tool call
+  and fails closed, so a guard that does not parse blocks every tool,
+  including the ones that would fix it. An apostrophe in a comment inside
+  its single-quoted awk program once did exactly that, and only the operator,
+  from a terminal, could restore it. Make the change in a copy, prove the copy
+  with `sh -n <copy>` and
+  `python3 .claude/hooks/test_guard.py --guard <copy> --shell /bin/sh`, then
+  replace the file in one step (`mv <copy> .claude/hooks/guard-secrets.sh`).
+  Merging a branch that changes the guard follows the same rule: prove the
+  incoming file (`git show <branch>:.claude/hooks/guard-secrets.sh`) first.
+
 ## Skills
 
 - **`/flash`** builds, checks the transport is reachable (the USB port, or a
