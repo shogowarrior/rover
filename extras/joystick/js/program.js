@@ -32,8 +32,10 @@
  * In Node there is no page: the panel's own scripts that this one reads are
  * loaded onto the global object first, as mecanum.js does.
  */
-if (typeof module !== "undefined" && typeof Listeners === "undefined") {
-  Object.assign(globalThis, require("./support.js"), require("./protocol.js"), require("./mecanum.js"));
+if (typeof module !== "undefined") {
+  if (typeof Listeners === "undefined") Object.assign(globalThis, require("./support.js"));
+  if (typeof MOVE_FORWARD === "undefined") Object.assign(globalThis, require("./protocol.js"));
+  if (typeof motionFor === "undefined") Object.assign(globalThis, require("./mecanum.js"));
 }
 
 /**

@@ -1,5 +1,6 @@
 /**
- * The mecanum motions, and how a stick deflection picks one.
+ * The mecanum motions, how a stick deflection picks one, and the motion a
+ * program may hold (heldMotion, the Target's hold() rule).
  *
  * moveForStick() is the panel's copy of kinematics::moveForStick in
  * src/Kinematics.cpp, which maps the gamepad's stick, so the pad and the panel
@@ -10,12 +11,13 @@
  * No DOM here: this file also loads in Node, for the tests.
  */
 
-// In the page, protocol.js has already declared the move codes, and classic
-// scripts share one scope. Node has no page: there the codes are loaded from
-// protocol.js onto the global object, where this file's bare names find them,
-// before anything below reads one.
-if (typeof module !== "undefined" && typeof MOVE_FORWARD === "undefined") {
-  Object.assign(globalThis, require("./protocol.js"));
+// In the page, support.js and protocol.js have already declared clamp() and
+// the move codes, and classic scripts share one scope. Node has no page:
+// there each is loaded onto the global object, where this file's bare names
+// find them, before anything below reads one.
+if (typeof module !== "undefined") {
+  if (typeof clamp === "undefined") Object.assign(globalThis, require("./support.js"));
+  if (typeof MOVE_FORWARD === "undefined") Object.assign(globalThis, require("./protocol.js"));
 }
 
 // Which family of motions a stick deflection selects: kinematics::StickFamily,
@@ -115,9 +117,20 @@ function motionNamed(name) {
   return MOTIONS.find((motion) => motion.name === name);
 }
 
+// The {move, speed} a program holds: a motion code, and a finite speed rounded
+// and kept within 0..SPEED_MAX. Anything else is a RangeError naming the
+// caller (the Driver's program(), the simulator's hold()).
+function heldMotion(caller, move, speed) {
+  if (!motionFor(move)) throw new RangeError(`${caller} takes a motion code, 1 to 18, not ${move}`);
+  if (typeof speed !== "number" || !Number.isFinite(speed)) {
+    throw new RangeError(`${caller} takes a speed, 0 to ${SPEED_MAX}, not ${speed}`);
+  }
+  return { move, speed: clamp(Math.round(speed), 0, SPEED_MAX) };
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     FAMILY_TRANSLATE, FAMILY_PIVOT, FAMILY_PIVOT_SIDEWAYS, FAMILIES,
-    moveForStick, MOTIONS, motionFor, motionNamed,
+    moveForStick, MOTIONS, motionFor, motionNamed, heldMotion,
   };
 }

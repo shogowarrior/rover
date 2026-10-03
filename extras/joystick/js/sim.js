@@ -938,11 +938,7 @@ class SimTarget {
   }
 
   hold(move, speed) {
-    if (!motionFor(move)) throw new RangeError(`hold() takes a motion code, 1 to 18, not ${move}`);
-    if (typeof speed !== "number" || !Number.isFinite(speed)) {
-      throw new RangeError(`hold() takes a speed, 0 to ${SPEED_MAX}, not ${speed}`);
-    }
-    this.#held = { move, speed: Math.min(SPEED_MAX, Math.max(0, Math.round(speed))) };
+    this.#held = heldMotion("hold()", move, speed);
     this.#commandRover(this.#held.move, this.#held.speed);
     this.#wakeListeners.emit();
   }

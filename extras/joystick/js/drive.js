@@ -186,11 +186,7 @@ class Driver {
   }
 
   program(move, speed) {
-    if (!motionFor(move)) throw new RangeError(`program() takes a motion code, 1 to 18, not ${move}`);
-    if (typeof speed !== "number" || !Number.isFinite(speed)) {
-      throw new RangeError(`program() takes a speed, 0 to ${SPEED_MAX}, not ${speed}`);
-    }
-    this.#held.program = { move, speed: Math.min(SPEED_MAX, Math.max(0, Math.round(speed))) };
+    this.#held.program = heldMotion("program()", move, speed);
     this.#steer();
   }
 
