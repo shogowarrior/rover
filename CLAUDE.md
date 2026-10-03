@@ -42,7 +42,12 @@ guard blocks every call, and the build check says what it skipped.
   host tests, the protocol check and the panel tests, and after a change
   under `.claude/hooks/` `python3 .claude/hooks/test_guard.py`, yourself
   after any change made through Bash (sed, a heredoc, a script, the `mv`
-  that puts a proven guard in place).
+  that puts a proven guard in place). To run exactly what an edit would,
+  against the template where the checkout has no `src/config.h` (a
+  worktree, where a bare `pio run` stops at the `#error` in
+  `src/Network.cpp`), hand the hook the file you changed, from the
+  checkout's root:
+  `printf '{"tool_input":{"file_path":"%s"}}' "$PWD/src/Rover.cpp" | .claude/hooks/build-check.sh`.
 - **PreToolUse, `.claude/hooks/guard-secrets.sh`.** Runs before every tool
   call, built in or MCP (Serena, the browser panes, the terminal panel), and
   blocks one that would touch `src/config.h`:
