@@ -434,23 +434,20 @@ void test_front_reading_that_grows_is_not_stuck(void) {
 }
 
 // A sensor that dies mid-cruise hears nothing at every look. It must not keep
-// renewing the lease until the cruise cap.
+// renewing the lease until the cruise cap: silentCruiseLooks silent looks in
+// a row end the cruise, so only the ones before the last renew it. Counted,
+// not timed: a time limit loose enough for the weave's servo moves let the
+// rover drive blind for twice as many looks.
 void test_sensor_dying_mid_cruise_stops_within_a_weave(void) {
   Harness h;
-  uint32_t diedAt = 0;
+  int renewals = -1;  // the forward that starts the cruise renews nothing
   h.onMotion = [&](const Explorer::Motion& m) {
-    if (m.move == MOVE_FORWARD && diedAt == 0) {
-      diedAt = h.now;
-      h.scanner.setAll(-1.0f);
-    }
+    if (m.move != MOVE_FORWARD) return;
+    if (renewals < 0) h.scanner.setAll(-1.0f);  // dies as the cruise starts
+    renewals++;
   };
   h.run(30000);
-  TEST_ASSERT_TRUE(diedAt > 0);
-  uint32_t lastForward = 0;
-  for (size_t i = 0; i < h.motions.size(); i++) {
-    if (h.motions[i].move == MOVE_FORWARD) lastForward = h.motionTimes[i];
-  }
-  TEST_ASSERT_TRUE(lastForward - diedAt < 1000);
+  TEST_ASSERT_EQUAL_INT(ExploreParams().silentCruiseLooks - 1, renewals);
   TEST_ASSERT_EQUAL_STRING("sensor silent", h.explorer.haltReason());
 }
 
