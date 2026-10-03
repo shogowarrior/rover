@@ -667,6 +667,18 @@ void test_flank_too_close_to_rotate_strafes_away_first(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_RIGHT, h.firstMotion());
 }
 
+// ...but only toward a flank with room to spare. One that clears the corners'
+// swing by less than sidestepRoomMarginCm leaves the rover no room to rotate
+// once it has strafed there: a wasted strafe toward a wall.
+void test_no_sidestep_toward_a_flank_without_room_to_spare(void) {
+  Harness h;
+  h.scanner.setArc(60, 120, 30.0f);
+  h.scanner.setArc(0, 30, 12.0f);     // left wall ~11 cm to the side
+  h.scanner.setArc(150, 180, 19.0f);  // right ~18 cm: past 16, inside 16 + 5
+  h.run(3000);
+  TEST_ASSERT_EQUAL_INT(0, static_cast<int>(h.strafes().size()));
+}
+
 // Converging on a wall with the way ahead clear: step away from it.
 void test_converging_on_a_wall_steps_away_from_it(void) {
   Harness h;
@@ -1140,6 +1152,7 @@ int main(int, char**) {
   RUN_TEST(test_no_optional_rotation_where_there_is_no_room);
   // sidestepping
   RUN_TEST(test_flank_too_close_to_rotate_strafes_away_first);
+  RUN_TEST(test_no_sidestep_toward_a_flank_without_room_to_spare);
   RUN_TEST(test_converging_on_a_wall_steps_away_from_it);
   RUN_TEST(test_sidestep_that_went_the_wrong_way_flips_direction);
   RUN_TEST(test_pinned_sidestep_does_not_flip_direction);
