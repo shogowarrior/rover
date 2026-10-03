@@ -126,12 +126,14 @@ class ScanView {
     }
 
     // A no-echo reading is not a measurement. Show it at full reach but faded,
-    // so "nothing came back" never reads as a confirmed clear path.
+    // so "nothing came back" never reads as a confirmed clear path. An echo
+    // is drawn whole: a red wedge any fainter falls under 3:1 on the card
+    // (test/looks.test.js).
     const noEcho = cm >= FAR_CM;
     const r = noEcho ? ScanView.R_MAX : ScanView.radiusFor(cm);
     view.wedge.setAttribute("d", ScanView.#wedgePath(view.screen, r));
     view.wedge.setAttribute("fill", noEcho ? "var(--dim)" : ScanView.colorFor(cm));
-    view.wedge.setAttribute("opacity", noEcho ? "0.4" : "0.85");
+    view.wedge.setAttribute("opacity", noEcho ? "0.4" : "1");
     view.reading.textContent = noEcho ? "no echo" : `${Math.round(cm)}cm`;
   }
 

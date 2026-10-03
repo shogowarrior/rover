@@ -28,7 +28,7 @@
   /* surfaces, from the page up: the page, a card, a control, a hovered
      one, and the chosen segment, raised out of its track */
   --case: #0b0d11;
-  --panel: #15181f;
+  --panel: #151920;
   --raised: #1f242c;
   --raised-hi: #2b323c;
   --chosen: #39414d;
@@ -45,10 +45,8 @@
   --on-live: #062420;
   --live-ink: #86d9cc; /* teal text on a teal tint */
   --live-soft: rgb(77 184 168 / 0.16);
-  /* the haze behind the scan and the wide dock's stick: none in a dark
-     look, where it lit the ground under the scan's red STOP wedge (drawn
-     at 0.85) below 3:1 */
-  --live-glow: rgb(77 184 168 / 0);
+  /* the haze behind the scan and the wide dock's stick */
+  --live-glow: rgb(77 184 168 / 0.08);
   --warn: #ffb547;
   --warn-soft: rgb(255 181 71 / 0.12);
   --stop: #d23c37;
@@ -212,7 +210,7 @@
   --on-live: #03211c;
   --live-ink: #8fe6d8;
   --live-soft: rgb(79 208 189 / 0.16);
-  --live-glow: rgb(79 208 189 / 0);
+  --live-glow: rgb(79 208 189 / 0.08);
   --warn: #ffbf5e;
   --warn-soft: rgb(255 191 94 / 0.13);
   --stop: #d23c37;

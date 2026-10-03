@@ -800,6 +800,13 @@ body[data-link="connecting"] .lamp { animation: pending 600ms ease-in-out infini
 body[data-link="down"] :is(.modePill, .motorsPill),
 body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 
+/* An upright phone's row also holds the gear, and three pills beside it
+   ran out of room: the mode pill gives way to the Autonomous button at the
+   foot, lit while the rover explores, as it does on a phone on its side. */
+@media (max-width: 439.98px) {
+  .modePill { display: none; }
+}
+
 /* readouts.js reports "MANUAL" and "AUTONOMOUS"; the pill says them in
    sentence case. */
 .modePill output {

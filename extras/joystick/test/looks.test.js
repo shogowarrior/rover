@@ -13,10 +13,10 @@ const { test } = require("./harness.js");
 const { PANEL_ROOT } = require("./fake-dom.js");
 const { stylesheet, cssRules } = require("./css.js");
 
-// Three themes, each Dark and Light, in the order the options show them.
-// The first is the default, and its block is also :root's, so the page
-// paints in it before anything has set data-look.
-const LOOKS = ["console-dark", "console-light", "field-dark", "field-light", "blueprint-dark", "blueprint-light"];
+// The looks the options offer, in their order (js/look.js). The first is
+// the default, and its block is also :root's, so the page paints in it
+// before anything has set data-look.
+const LOOKS = require("../js/look.js").LookPicker.LOOKS.map((look) => look.id);
 const DEFAULT_SELECTOR = `:root,\n[data-look="${LOOKS[0]}"]`;
 
 /* --- the audit ----------------------------------------------------------- */
@@ -32,7 +32,7 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 
 // Where the panel paints text or a meaningful mark in a token, and on what:
 // [foreground, backgrounds, minimum contrast, where]. "--a over --b" is the
-// tint --a composited over --b; "--x at 0.85" is --x drawn at that opacity.
+// tint --a composited over --b; "--x at 0.95" is --x drawn at that opacity.
 // A disabled control's faded text is exempt (WCAG 1.4.3), and is left out.
 // A rule that paints a token on a surface not listed here adds its pair.
 //
@@ -63,9 +63,9 @@ const AUDIT = [
     "the focus ring, the slider's thumb, the stick's knob, the scan's rover, the stick's and families' icons, a pressed tool, a forward wheel"],
   ["--warn at 0.95", ["--live-glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
-  ["--live at 0.85", ["--live-glow over --panel"], MARK, "the scan's wedge, clear"],
-  ["--warn at 0.85", ["--live-glow over --panel"], MARK, "the scan's wedge, closing in"],
-  ["--stop at 0.85", ["--live-glow over --panel"], MARK, "the scan's wedge, inside STOP"],
+  ["--live", ["--live-glow over --panel"], MARK, "the scan's wedge, clear"],
+  ["--warn", ["--live-glow over --panel"], MARK, "the scan's wedge, closing in"],
+  ["--stop", ["--live-glow over --panel"], MARK, "the scan's wedge, inside STOP"],
   ["--case", ["--live", "--sim-back"], MARK, "the stick knob's edge, the arrow on a turning wheel"],
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
@@ -150,7 +150,8 @@ test("looks.css holds the six looks, in the options' order, the default first an
   // One place for a look's colours: a block anywhere else would win or lose
   // by the order the stylesheets load in.
   for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
-    assert.doesNotMatch(stylesheet(file), /data-look/, `${file} keys on a look`);
+    const keyed = cssRules(stylesheet(file)).filter((rule) => /\[data-look\b/.test(rule.selector));
+    assert.deepEqual(keyed.map((rule) => rule.selector), [], `${file} keys on a look`);
   }
 });
 
