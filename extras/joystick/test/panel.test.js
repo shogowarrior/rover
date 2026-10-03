@@ -1951,6 +1951,22 @@ function cssRules(css) {
   return [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
 }
 
+function panelCss() {
+  return fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8");
+}
+
+// The rules inside one @media block of css/panel.css, found by its opening
+// as written, or null when there is no such block.
+const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
+function mediaRules(opening) {
+  const css = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
+  const start = css.indexOf(opening);
+  if (start < 0) return null;
+  let end = start + opening.length;
+  for (let depth = 1; depth > 0 && end < css.length; end++) depth += css[end] === "{" ? 1 : css[end] === "}" ? -1 : 0;
+  return cssRules(css.slice(start + opening.length, end - 1));
+}
+
 // A declaration that makes an element the containing block of positioned
 // descendants, and so the offsetParent of one of them: a position other
 // than static, or a transform, filter, perspective, containment and the
@@ -2042,12 +2058,14 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 // showed the lines after its ellipsis. Measured in a browser at 480 x 320 to
 // 812 x 375 (css/panel.css says what it found).
 test("motorsReady: the fault beside a landscape stick takes no height of its own, and no fault card clamps its lines", () => {
-  const rules = cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"));
-  const beside = rules.filter((r) => r.selector.includes("#driveTab") && /#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
-  check(beside.length === 1, `the Drive tab's fault card: ${beside.map((r) => r.selector)}`);
+  // Only in the landscape block: anywhere else, the upright phone's card too
+  // would shrink to two lines.
+  const beside = (mediaRules(LANDSCAPE_PHONE) || [])
+    .filter((r) => r.selector.includes("#driveTab") && /#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
+  check(beside.length === 1, `the Drive tab's fault card, in the landscape block: ${beside.map((r) => r.selector)}`);
   const body = beside.length === 1 ? beside[0].body : "";
   check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
-  const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
+  const clamped = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
@@ -2059,7 +2077,7 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
 // from there), and Blockly takes the stop block's red and the grid's colour
 // as plain values. Each copy must be its token's value.
 test("every CSS token a script reads is declared on :root in css/panel.css, and the copies agree", () => {
-  const root = new Map(cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"))
+  const root = new Map(cssRules(panelCss())
     .filter((rule) => rule.selector === ":root")
     .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
   const declared = new Set(root.keys());
@@ -2318,14 +2336,9 @@ test("schemes: the caption and the pivot caveat change nothing's height above th
 
   // The phone on its side has the family's row above the stick: there the
   // caveat keeps its line while hidden, as long as the selector shows.
-  const css = fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const query = "@media (orientation: landscape) and (max-height: 520px) {";
-  const start = css.indexOf(query);
-  let end = start + query.length;
-  for (let depth = 1; depth > 0 && end < css.length; end++) depth += css[end] === "{" ? 1 : css[end] === "}" ? -1 : 0;
-  const kept = cssRules(css.slice(start + query.length, end - 1))
+  const kept = (mediaRules(LANDSCAPE_PHONE) || [])
     .find((rule) => rule.selector.split(",").some((s) => /\.caveat\[hidden\]$/.test(s.trim())));
-  check(start >= 0 && kept && /visibility:\s*hidden/.test(kept.body) && !/display:\s*none/.test(kept.body),
+  check(kept && /visibility:\s*hidden/.test(kept.body) && !/display:\s*none/.test(kept.body),
     `the landscape layout keeps the hidden caveat's line: ${kept && kept.selector} { ${kept && kept.body.trim()} }`);
 });
 
