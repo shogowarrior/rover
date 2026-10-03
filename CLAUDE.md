@@ -117,6 +117,14 @@ panel instead. `.claude/launch.json` defines the `panel` preview: it runs
 - Background agents running in parallel cannot share the one pane, so they
   use a headless script.
 - Never use a headed browser MCP: it opens windows on the operator's screen.
+- The only browser an agent may launch is Playwright's
+  `chrome-headless-shell`. Never launch a full Chrome app, headless or not,
+  by Playwright, raw CDP or a spawn: Google Chrome, or the "Google Chrome for
+  Testing.app" in Playwright's cache. macOS registers each app bundle that
+  launches in the operator's Notifications settings. Two round-4 agents
+  probing focus with a headless Chrome for Testing left two entries there.
+  If a check needs a real, focused browser window (blur around `confirm()`,
+  say), report it as a manual check for the operator instead.
 
 ## Permissions
 
