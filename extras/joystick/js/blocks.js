@@ -642,8 +642,8 @@ class RoverBlocks {
  *                      Error (with blockId, when one block is to blame) if a
  *                      block cannot be turned into code.
  *   empty              true when the workspace has no blocks.
- *   stacks             how many separate stacks of blocks it holds. Run runs
- *                      every one, top to bottom, loose blocks included.
+ *   stacks             how many separate stacks of blocks will run: Run runs
+ *                      every enabled one, top to bottom, loose blocks included.
  *   pivots             the pivot motions (codes 9 to 16) its enabled drive
  *                      blocks name, each once, as MOTIONS labels them: what
  *                      the NORMAL scheme keeps off the stick and the pad.
@@ -709,11 +709,13 @@ class BlockEditor {
   }
 
   get empty() {
-    return this.stacks === 0;
+    return this.#workspace.getTopBlocks(false).length === 0;
   }
 
+  // A disabled stack never runs (Blockly writes no code for it), so it is not
+  // counted: Run asks about loose stacks only when more than one will run.
   get stacks() {
-    return this.#workspace.getTopBlocks(false).length;
+    return this.#workspace.getTopBlocks(false).filter((block) => block.isEnabled()).length;
   }
 
   // A disabled block never runs, so its pivot is not counted.
