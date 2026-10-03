@@ -254,8 +254,10 @@ until the operator decides. (The shield itself is fine: it drives motors from
 Measure the pack at the shield's motor power terminal, then pick one:
 
 - **Cap the duty:** set `MOTOR_SPEED_LIMIT` to about 120, roughly 5.9 V from a
-  full pack. Every source is clamped to it, so the panel's slider above 120
-  simply drives at 120.
+  full pack, in src/Tuning.h and in its copy, the panel simulator's clamp, in
+  [extras/joystick/js/protocol.js](../extras/joystick/js/protocol.js)
+  (`tools/check_protocol.py` fails until the two match). Every source is
+  clamped to it, so the panel's slider above 120 simply drives at 120.
 - **Regulate the supply:** feed the motors from a 6 V buck regulator and keep
   255. The same duty then gives about half the voltage, so raise
   `EXPLORE_SPEED` (64) and `GAMEPAD_MAX_SPEED` (50) by about two times, or
