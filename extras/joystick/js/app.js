@@ -170,7 +170,9 @@ driver.onManualInput(() => familySelector.awaitPress(false));
 
 /* --- tabs ---------------------------------------------------------------- */
 
-// Choosing a tab is not driving: nothing here reaches the Driver or the Link.
+// Choosing a tab is not driving: the Tabs reach neither the Driver nor the
+// Link. Only leaving the Drive tab under a held stick sends anything (see the
+// Program tab's block, below).
 const tabs = new Tabs([byId("tabDrive"), byId("tabProgram")], { storageKey: "rover.tab" });
 
 /* --- program targets ----------------------------------------------------- */
@@ -256,9 +258,17 @@ runner.onState((state, { kind }) => {
   }
 });
 
+// Leaving the Drive tab lets go of a held stick (one STOP, only if it was
+// driving): hidden, the stick can no longer be steered or centred, since
+// joy.js throws on every move of a canvas with no layout, and the last move
+// went on repeating until the thumb lifted. A held rotate button carries on,
+// as it has nothing to steer and its release still arrives; a program or an
+// exploring rover is left alone.
+//
 // Blockly sizes its workspace from its container, and a hidden tab has no
-// size: fit it again whenever the tab is shown. Switching tabs stops nothing.
+// size: fit it again whenever the tab is shown.
 tabs.onChange((tab) => {
+  if (tab.id !== "tabDrive") driver.releaseStick();
   if (tab.id === "tabProgram") programTab.shown();
 });
 

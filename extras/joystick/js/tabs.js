@@ -15,10 +15,12 @@
  * previous or next tab (wrapping round), Home and End to the first and last,
  * and selecting follows focus. Only the selected tab is in the Tab order.
  *
- * Switching tabs is not driving: it sends nothing and changes nothing held.
- * A control held while its tab is hidden stays held until it is let go, and
- * its release still arrives: joy.js listens for it on the document, and a
- * touch keeps delivering to the element it started on.
+ * Switching tabs is not driving: Tabs sends nothing and changes nothing
+ * held. What a switch does to a held control is its listener's call: app.js
+ * lets go of a held stick as the Drive tab hides, since a hidden stick
+ * cannot be steered or centred. A held rotate button stays held until it is
+ * let go, and its release still arrives: a touch keeps delivering to the
+ * element it started on.
  */
 class Tabs {
   #tabs;

@@ -323,8 +323,10 @@ The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
 below). Letting go, blurring the window or hiding the tab stops what the panel
 is driving and leaves an exploring rover alone. Its Drive and Program tabs
-switch only what is shown: switching sends nothing, and the scan, the readouts
-and the Stop and Autonomous buttons stay on screen on both. Stop and Autonomous
+switch only what is shown, with one exception: leaving the Drive tab lets go
+of a held stick (one STOP, only if it was driving), which hidden could be
+neither steered nor centred. A held rotate button carries on. The scan, the
+readouts and the Stop and Autonomous buttons stay on screen on both tabs. Stop and Autonomous
 stay in the same place; the scan gives the Program tab room, as a strip above
 it on a phone and a narrower column beside it on a wide screen.
 

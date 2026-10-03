@@ -1240,6 +1240,56 @@ test("tabs: switching leaves a held control driving, and Stop and Autonomous on 
   check(page.$("programTab").tagName === "SECTION", "#programTab is a section");
 });
 
+// In a browser, joy.js throws on every move of a canvas with no layout (its
+// offsetParent is null), so a stick held as the Drive tab hid could neither
+// be steered nor centred: its last move repeated until the thumb lifted.
+test("tabs: leaving the Drive tab lets go of a held stick: one STOP, then nothing until a fresh press", () => {
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    page.clock.advance(250);
+    check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
+    let mark = count(ws);
+    page.fire(page.$("tabProgram"), "click");
+    check(names(ws, mark).join() === "STOP" && ws.sentAt[count(ws) - 1] === page.clock.now(), `the switch sent ${names(ws, mark)}`);
+    mark = count(ws);
+    thumb.move(0, 0); thumb.move(0, 50);
+    page.clock.advance(1000);
+    thumb.end();
+    check(count(ws) === mark, `the thumb on the hidden stick sent ${names(ws, mark)}`);
+    page.fire(page.$("tabDrive"), "click");
+    const fresh = stickTouch(page, 1);
+    fresh.start(); fresh.move(0, -50);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh press drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // A stick pressed but centred has nothing to stop, and an exploring rover
+  // explores on; a held rotate button drives on under the stick.
+  {
+    const { page, ws } = connected(telemetry());
+    const thumb = stickTouch(page, 0);
+    thumb.start();
+    page.fire(page.$("tabProgram"), "click");
+    page.clock.advance(1000);
+    check(count(ws) === 0, `a centred stick sent ${names(ws)}`);
+  }
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    press(page, page.$("cw"), 4);
+    const mark = count(ws);
+    page.fire(page.$("tabProgram"), "click");
+    page.clock.advance(1000);
+    const after = names(ws, mark);
+    check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through the switch ${after}`);
+  }
+});
+
 test("tabs: the last tab comes back, with the stick sized before it was hidden", () => {
   const page = loadPage({ stored: { "rover.tab": "tabProgram" } });
   check(shown(page) === "tabProgram" && page.$("driveTab").hidden && !page.$("programTab").hidden, `restored ${shown(page)}`);
