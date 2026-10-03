@@ -63,7 +63,7 @@ and `w` is where heading hold plugs in later. The
 walks through the same maths.
 
 **Time echoes without waiting.** `Scanner::measureCm()` busy-waits up to
-about 30 ms per ping, the longest pause in `loop()`. Instead, record
+about 30 ms per ping, the longest routine pause in `loop()`. Instead, record
 `micros()` on both edges of the echo in a GPIO interrupt, or let the ESP32's
 MCPWM capture unit do it (ESP-IDF v4.4, which this project's Arduino core is
 built on, has an
