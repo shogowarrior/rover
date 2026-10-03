@@ -13,6 +13,7 @@ const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
+const { stylesheet, cssRules, blockRules } = require("./css.js");
 const { degrees } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
@@ -1943,31 +1944,11 @@ test("schemes: the family selector is offered under ADVANCED only; corner hints 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// Every rule in a stylesheet, { selector, body }, with comments gone. A rule
-// inside @media or @container is read as a rule of its own: the at-rule's
-// braces are skipped over, not taken for a rule's.
-function cssRules(css) {
-  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  return [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
-}
-
-function panelCss() {
-  return fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8");
-}
-
-// The opening of the phone-on-its-side block, as css/panel.css writes it.
+// The phone-on-its-side block's opening, as css/panel.css writes it, and the
+// rules inside one @media block of panel.css (css.js).
 const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
-
-// The rules inside one @media block of css/panel.css, found by its opening
-// as written, or null when there is no such block.
-function mediaRules(opening) {
-  const css = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
-  const start = css.indexOf(opening);
-  if (start < 0) return null;
-  let end = start + opening.length;
-  for (let depth = 1; depth > 0 && end < css.length; end++) depth += css[end] === "{" ? 1 : css[end] === "}" ? -1 : 0;
-  return cssRules(css.slice(start + opening.length, end - 1));
-}
+const panelCss = () => stylesheet("panel.css");
+const mediaRules = (opening) => blockRules(panelCss(), opening);
 
 // A declaration that makes an element the containing block of positioned
 // descendants, and so the offsetParent of one of them: a position other
@@ -2430,37 +2411,43 @@ const segments = (page) => page.$("programTarget").children;
 function standInEditor(page, program = "await api.step('b1'); await api.drive(MOVE_FORWARD, 50, 0.5); await api.log('hi');") {
   page.evalIn(`
     globalThis.__editor = {
-      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0,
+      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, loaded: [], cleared: 0,
       compile() { return async (api) => { ${program} }; },
       onChange() { return () => {}; },
       highlight(id) { this.highlighted.push(id); },
       setReadOnly(on) { this.readOnly.push(on); },
       resize() { this.resized++; },
-      select() {}, save() { return {}; }, load() {}, clear() {},
+      load(state) { this.loaded.push(state); },
+      clear() { this.cleared++; },
+      select() {}, save() { return {}; },
     };
     programTab.attachEditor(__editor);
   `);
 }
 
-// The Program tab's question (#programAsk): every one it asks, in order, as
-// the operator read it; the one open now, or null; and an answer to it --
-// "run", "cancel", or "escape", which closes it with no answer at all.
+// The page's question (#ask): every one it asks, in order, as the operator
+// read it; the one open now, or null; and an answer to it -- "yes" (the
+// button that names the action), "cancel", or "escape", which closes it
+// with no answer at all.
 function questionsAsked(page) {
-  const dialog = page.$("programAsk");
+  const dialog = page.$("ask");
   const asked = [];
   const showModal = dialog.showModal;
   dialog.showModal = function () {
-    asked.push(page.$("programAskText").textContent);
+    asked.push(page.$("askText").textContent);
     return showModal.call(this);
   };
   return asked;
 }
-const openQuestion = (page) => (page.$("programAsk").open ? page.$("programAskText").textContent : null);
+const openQuestion = (page) => (page.$("ask").open ? page.$("askText").textContent : null);
 async function answer(page, how) {
-  if (how === "escape") page.$("programAsk").close();
-  else page.fire(page.$(how === "run" ? "programAskRun" : "programAskCancel"), "click");
+  if (how === "escape") page.$("ask").close();
+  else page.fire(page.$(how === "yes" ? "askYes" : "askNo"), "click");
   await flush();
 }
+// The File menu's example items, and every item and the button that opens it.
+const exampleItems = (page) => page.$("programExamples").children.filter((n) => n.getAttribute("role") === "menuitem");
+const fileMenu = (page) => [page.$("programMenu"), ...exampleItems(page), page.$("programImport"), page.$("programExport"), page.$("programClear")];
 
 test("program: the scripts load in order, and Blockly is the one remote script, pinned and deferred", () => {
   const page = loadPage();
@@ -2489,7 +2476,7 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(!offline.hidden, "the offline message shows");
   check(/could not load/.test(words) && /cdn\.jsdelivr\.net/.test(words) && /internet the first time/.test(words) && /Driving works without it/.test(words), `it says why: ${words}`);
   check(/could not load/.test(page.$("programState").textContent), `state: ${page.$("programState").textContent}`);
-  const off = () => ["programRun", "programStop", "programExamples", "programImport", "programClear", "programExport"].filter((id) => page.$(id).disabled !== true);
+  const off = () => [page.$("programRun"), page.$("programStop"), ...fileMenu(page)].filter((b) => b.disabled !== true).map((b) => b.id || b.textContent);
   check(off().length === 0, `enabled without an editor: ${off()}`);
 
   // A live link changes nothing here...
@@ -2529,7 +2516,7 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   check(page.$("programRun").disabled === true, "Run off without a link");
   check(/Connect to the rover/.test(page.$("programRun").title) && /Connect to the rover/.test(page.$("programState").textContent), `says why: ${page.$("programRun").title}`);
   check(page.$("programRunLabel").textContent === "Run on rover", `label ${page.$("programRunLabel").textContent}`);
-  check(["programExamples", "programImport", "programClear", "programExport"].every((id) => page.$(id).disabled === false), "the file tools work offline");
+  check(exampleItems(page).length === 4 && fileMenu(page).every((b) => b.disabled === false), "the File menu works offline");
 
   // Not connected: pressing Run anyway is refused, and nothing is sent.
   page.fire(page.$("programRun"), "click");
@@ -2545,7 +2532,8 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   await flush();
   check(page.evalIn("runner.state") === "running", "running");
   check(page.$("programRun").disabled === true && page.$("programStop").disabled === false, "Run off, Stop on");
-  check(page.$("programExamples").disabled && page.$("programImport").disabled && page.$("programClear").disabled, "no editing tools mid-run");
+  check([...exampleItems(page), page.$("programImport"), page.$("programClear")].every((b) => b.disabled), "no editing tools mid-run");
+  check(!page.$("programMenu").disabled && !page.$("programExport").disabled, "Export works mid-run");
   check(page.$("programState").dataset.tone === "running" && /Running on the rover/.test(page.$("programState").textContent), "says so");
 
   // Switching tabs stops nothing.
@@ -2655,22 +2643,6 @@ test("program: start exploring hands over, its own stop is obeyed, and neither s
 
 test("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
-  // The simulator, if its scripts registered one; otherwise a stand-in,
-  // registered as the simulator's block in app.js would.
-  page.evalIn(`
-    if (!("simulator" in targets)) {
-      targets.simulator = {
-        kind: "simulator", ready: () => ({ ok: true, why: "" }),
-        hold() {}, release() {}, stop() {}, explore() {},
-        telemetry: () => ({ data: null, fresh: true }), onTelemetry: () => () => {}, onLost: () => () => {},
-        sleep: (ms, signal) => new Promise((resolve, reject) => {
-          const timer = setTimeout(resolve, ms);
-          signal.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); });
-        }),
-      };
-      programTab.refresh();
-    }
-  `);
   standInEditor(page);
   check(segments(page).map((b) => b.textContent).join() === "Rover,Simulator", `segments ${segments(page).map((b) => b.textContent)}`);
   check(!page.$("programTarget").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
@@ -2678,13 +2650,16 @@ test("program: switching the target mid-run stops the program, and the choice is
 
   startProgram(page);
   await liveForAsync(page, ws, 300);
+  page.fire(segments(page)[0], "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running", "choosing the target already chosen is no switch");
   const mark = count(ws);
   page.fire(segments(page)[1], "click");
   await flush();
   const end = ended(page);
   check(end && end.outcome === "stopped" && /switched to the simulator/.test(end.reason), `ended ${JSON.stringify(end)}`);
   check(names(ws, mark).join() === "STOP", `sent ${names(ws, mark)}`);
-  check(page.evalIn("programTab.kind") === "simulator" && page.store["rover.programTarget"] === "simulator", "chosen and remembered");
+  check(page.evalIn("targetSwitch.kind") === "simulator" && page.store["rover.programTarget"] === "simulator", "chosen and remembered");
   check(page.$("programRunLabel").textContent === "Preview" && page.$("programRun").disabled === false, "Preview, ready whatever the link");
   check(segments(page)[1].getAttribute("aria-pressed") === "true", "pressed");
 
@@ -2713,10 +2688,27 @@ test("program: switching the target mid-run stops the program, and the choice is
   await flush();
   check(page.evalIn("runner.state") === "idle" && /Stopped: Autonomous was pressed/.test(page.$("programState").textContent), `the panel's Autonomous: ${page.$("programState").textContent}`);
   check(names(ws, handed).join() === "RESUME_AUTONOMOUS", `and the rover was handed to its own exploring: ${names(ws, handed)}`);
+  // How the last run ended belongs to its target: a switch clears it.
+  page.fire(segments(page)[0], "click");
+  check(page.$("programState").textContent === "Ready to run on the rover.", `after a switch: ${page.$("programState").textContent}`);
+
+  // On a phone the view starts folded away under the rover; switching to
+  // the simulator unfolds it, since previewing is when it is wanted.
+  const folded = loadPage();
+  check(folded.$("programSim").dataset.collapsed === "yes", "folded under the rover");
+  folded.fire(segments(folded)[1], "click");
+  check(folded.$("programSim").dataset.collapsed === "no", "unfolded on the simulator");
 
   const again = loadPage({ stored: { "rover.programTarget": "simulator" } });
-  const sim = again.evalIn("'simulator' in targets");
-  check(again.evalIn("programTab.kind") === (sim ? "simulator" : "rover"), "remembered, when the simulator is there to choose");
+  check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
+  check(loadPage({ stored: { "rover.programTarget": "moon" } }).evalIn("targetSwitch.kind") === "rover", "a kind it does not offer is the rover");
+  // With only the rover there is nothing to switch.
+  const roverOnly = again.evalIn(`(() => {
+    const group = document.createElement("div");
+    const only = new TargetSwitch({ group, targets: { rover: targets.rover }, storageKey: "rover.programTarget" });
+    return { hidden: group.hidden, kind: only.kind, kinds: only.kinds.join() };
+  })()`);
+  check(roverOnly.hidden && roverOnly.kind === "rover" && roverOnly.kinds === "rover", `the rover alone: ${JSON.stringify(roverOnly)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2766,7 +2758,7 @@ test("program: Run is off with nothing to run, and asks before running several s
   check(openQuestion(page) === null && page.evalIn("runner.state") === "idle" && count(ws) === 0, "declined: nothing ran, nothing sent");
   page.fire(page.$("programRun"), "click");
   await flush();
-  await answer(page, "run");
+  await answer(page, "yes");
   check(asked.length === 2 && page.evalIn("runner.state") === "running", "confirmed: it runs");
   await liveForAsync(page, ws, 700);
   check(names(ws).join() === "MOVE_FORWARD,MOVE_FORWARD,MOVE_FORWARD,STOP", `sent ${names(ws)}`);
@@ -2811,7 +2803,7 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   check(page.evalIn("runner.state") === "idle" && count(ws) === 0, `declined: nothing ran, sent ${names(ws)}`);
 
   // Accepted: it drives the pivot, re-sent like any held move.
-  await run("run");
+  await run("yes");
   await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
   check(asked() === 2 && names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
 
@@ -2869,8 +2861,8 @@ test("program: Run asks in the page, so a run the operator confirmed drives on",
   const asked = questionsAsked(page);
   page.fire(page.$("programRun"), "click");
   await flush();
-  await answer(page, "run"); // the stacks
-  await answer(page, "run"); // the pivot
+  await answer(page, "yes"); // the stacks
+  await answer(page, "yes"); // the pivot
   check(asked.length === 2 && page.evalIn("__confirmed") === 0, `asked ${asked.length} in the page, ${page.evalIn("__confirmed")} with confirm()`);
   check(page.evalIn("runner.state") === "running", `running: ${page.$("programState").textContent}`);
   await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
@@ -2892,7 +2884,7 @@ test("program: Escape is no answer, one question at a time, and a link gone mean
   // A yes, then Escape: the dialog keeps the last answer it was closed
   // with, and Escape closes it with none, so the yes must not carry over.
   await runIt();
-  await answer(page, "run");
+  await answer(page, "yes");
   await liveForAsync(page, ws, 700);
   check(page.$("programState").textContent === "Done on the rover.", `the yes ran: ${page.$("programState").textContent}`);
   const mark = count(ws);
@@ -2908,9 +2900,206 @@ test("program: Escape is no answer, one question at a time, and a link gone mean
 
   // The link goes while it asks: a yes then runs nothing, and says why.
   ws.serverDrop();
-  await answer(page, "run");
+  await answer(page, "yes");
   check(page.evalIn("runner.state") === "idle" && count(ws) === mark, `ran on a link that went: ${names(ws, mark)}`);
   check(logLines(page).at(-1) === "Not run: Connect to the rover to run a program on it.", `log ${logLines(page).at(-1)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: the File menu holds the examples, Import, Export and Clear, and opens and closes as a menu does", () => {
+  const page = loadPage();
+  const button = page.$("programMenu");
+  const menu = page.$("programMenuList");
+  check(button.getAttribute("aria-haspopup") === "menu" && button.getAttribute("aria-controls") === "programMenuList", "a menu button for its menu");
+  check(menu.getAttribute("role") === "menu" && menu.hidden && button.getAttribute("aria-expanded") === "false", "closed at first");
+  check(button.disabled === true && /could not load/.test(button.title), `off without an editor, saying why: ${button.title}`);
+  const items = () => menu.querySelectorAll('[role="menuitem"]');
+  const words = (b) => all(b).map((n) => n.textContent).join(" ").trim();
+  check(items().map(words).join() === "Square,Strafe box,Patrol,Mecanum tour,Import…,Export,Clear", `items ${items().map(words)}`);
+  check(menu.querySelectorAll('[role="separator"]').length === 2, "the examples, then the file, then Clear apart");
+
+  standInEditor(page);
+  const focused = () => words(page.doc.activeElement) || page.doc.activeElement.id;
+  const key = (target, k) => page.fire(target, "keydown", { key: k });
+  check(button.disabled === false, "on with an editor");
+  page.fire(button, "click");
+  check(!menu.hidden && button.getAttribute("aria-expanded") === "true" && focused() === "Square", `opened on the first item: ${focused()}`);
+  check(menu.scrolledIntoView === 1, "scrolled into view as it opened, clear of the Stop bar on a phone");
+  check(key(page.doc.activeElement, "ArrowDown").defaultPrevented, "Down moves in the menu, not the page");
+  check(focused() === "Strafe box", `Down: ${focused()}`);
+  key(page.doc.activeElement, "End");
+  check(focused() === "Clear", `End: ${focused()}`);
+  key(page.doc.activeElement, "ArrowDown");
+  check(focused() === "Square", `Down wraps: ${focused()}`);
+  key(page.doc.activeElement, "ArrowUp");
+  check(focused() === "Clear", `Up wraps: ${focused()}`);
+  key(page.doc.activeElement, "Home");
+  check(focused() === "Square", `Home: ${focused()}`);
+  key(page.doc.activeElement, "Escape");
+  check(menu.hidden && button.getAttribute("aria-expanded") === "false" && page.doc.activeElement === button, "Escape closes it, back on the button");
+
+  // An item that cannot act stays, disabled, and the keys pass it by.
+  page.evalIn("__editor.empty = true; programTab.refresh();");
+  check(page.$("programClear").disabled && !page.$("programClear").hidden, "nothing to clear: Clear disabled, still there");
+  check(key(button, "ArrowUp").defaultPrevented, "Up on the button opens the menu, and scrolls nothing");
+  check(!menu.hidden && focused() === "Export", `Up on the button opens on the last that can act: ${focused()}`);
+  key(page.doc.activeElement, "Tab");
+  check(menu.hidden && button.getAttribute("aria-expanded") === "false", "Tab closes it");
+  page.evalIn("__editor.empty = false; programTab.refresh();");
+
+  // A press inside leaves it open; outside, it closes, and the focus goes
+  // where the press put it.
+  key(button, "ArrowDown");
+  page.fire(menu, "pointerdown");
+  check(!menu.hidden, "a press inside: still open");
+  page.fire(page.$("programRun"), "pointerdown");
+  check(menu.hidden && page.doc.activeElement !== button, "a press outside closes it");
+  page.fire(button, "click");
+  page.fire(button, "click");
+  check(menu.hidden, "its button closes it again");
+
+  // An item does its action, and closes the menu.
+  page.fire(button, "click");
+  page.fire(page.$("programExport"), "pointerdown");
+  check(!menu.hidden, "a press on an item is inside");
+  page.evalIn(`globalThis.__exported = [];
+    globalThis.Blob = class { constructor(parts) { __exported.push(parts.join("")); } };
+    globalThis.URL = { createObjectURL: () => "blob:program", revokeObjectURL() {} };`);
+  page.fire(page.$("programExport"), "click");
+  check(page.evalIn("__exported.join()") === "{}", `Export saved the program: ${page.evalIn("__exported.join()")}`);
+  check(menu.hidden && page.doc.activeElement === button, "and the menu closed, back on its button");
+
+  // One popup at a time, however it was opened: the simulator's settings
+  // close as the menu opens, and the menu as they open.
+  const [more] = page.$("simSlot").querySelectorAll('[aria-controls="simMore"]');
+  page.fire(more, "click");
+  check(!page.$("simMore").hidden, "the simulator's settings open");
+  key(button, "ArrowDown");
+  check(!menu.hidden && page.$("simMore").hidden && more.getAttribute("aria-expanded") === "false", "the menu opened, and closed them");
+  page.fire(more, "click");
+  check(menu.hidden && button.getAttribute("aria-expanded") === "false" && !page.$("simMore").hidden, "they opened, and closed the menu");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {
+  // Nothing may cover Stop. The menu hangs over the editor and the
+  // simulator, and opened near the foot of a phone it scrolls up clear of
+  // the bar stuck there rather than hide under it.
+  const zIndex = (selector) => {
+    const rule = cssRules(panelCss()).find((r) => r.selector === selector && /z-index/.test(r.body));
+    return rule && Number(/z-index:\s*(\d+)/.exec(rule.body)[1]);
+  };
+  check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".actions"), `the menu at ${zIndex(".menu")}, the Stop bar at ${zIndex(".actions")}`);
+  const margin = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [])
+    .find((r) => r.selector === ".menu" && /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
+  check(margin !== undefined, "a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot");
+});
+
+test("program: an example, Import and Clear ask in the page before they replace a program, never with confirm()", async () => {
+  // Desktop Chrome blurs the window after its own dialog, and the desktop
+  // app's browser pane dismisses native dialogs unseen: none of these may
+  // use one.
+  const page = loadPage();
+  standInEditor(page);
+  page.evalIn("globalThis.__confirmed = 0; globalThis.confirm = () => { __confirmed++; return true; };");
+  const asked = questionsAsked(page);
+  const editor = () => page.evalIn("({ loaded: __editor.loaded.length, cleared: __editor.cleared })");
+  const pick = (name) => page.fire(exampleItems(page).find((b) => b.textContent === name), "click");
+
+  // An example over a program: asked, and no keeps the program.
+  pick("Patrol");
+  await flush();
+  check(asked.length === 1 && /Replace the program in the editor with the "Patrol" example\?/.test(asked[0]), `asked ${asked}`);
+  check(page.$("askYes").textContent === "Replace" && page.$("ask").getAttribute("aria-label") === "Replace the program?", "the yes names the action");
+  await answer(page, "cancel");
+  check(editor().loaded === 0, "declined: kept");
+  pick("Patrol");
+  await flush();
+  await answer(page, "yes");
+  check(editor().loaded === 1 && logLines(page).at(-1) === 'Loaded the "Patrol" example.', `loaded: ${logLines(page).at(-1)}`);
+
+  // An empty editor has nothing to lose: not asked.
+  page.evalIn("__editor.empty = true; programTab.refresh();");
+  pick("Square");
+  await flush();
+  check(asked.length === 2 && editor().loaded === 2, "an empty editor: loaded without a question");
+  page.evalIn("__editor.empty = false; programTab.refresh();");
+
+  // Import opens the picker from the press itself, then reads the file; a
+  // program over a program is asked about.
+  const fileInput = page.$("programFile");
+  page.fire(page.$("programImport"), "click");
+  check(fileInput.pickerOpened === 1, "the press opened the file picker");
+  const choose = async (name, text) => {
+    fileInput.files = [{ name, size: text.length, text: async () => text }];
+    page.fire(fileInput, "change");
+    await flush();
+  };
+  await choose("mine.json", '{"blocks":{}}');
+  check(asked.length === 3 && /Replace the program in the editor with mine\.json\?/.test(asked[2]), `asked ${asked[2]}`);
+  await answer(page, "escape");
+  check(editor().loaded === 2, "Escape: kept");
+  await choose("mine.json", '{"blocks":{}}');
+  await answer(page, "yes");
+  check(editor().loaded === 3 && logLines(page).at(-1) === "Imported mine.json.", `imported: ${logLines(page).at(-1)}`);
+  await choose("notes.txt", "not a program");
+  check(asked.length === 4 && editor().loaded === 3 && /Kept the program you had\. This file is not JSON/.test(logLines(page).at(-1)), `not JSON: ${logLines(page).at(-1)}`);
+
+  // Clear: asked, with Undo named; Escape keeps every block.
+  page.fire(page.$("programClear"), "click");
+  await flush();
+  check(asked.length === 5 && /Remove every block\? Undo \(Ctrl\+Z\) brings them back\./.test(asked[4]), `asked ${asked[4]}`);
+  check(page.$("askYes").textContent === "Clear", "the yes says Clear");
+  await answer(page, "escape");
+  check(editor().cleared === 0, "Escape: nothing cleared");
+  page.fire(page.$("programClear"), "click");
+  await flush();
+  await answer(page, "yes");
+  check(editor().cleared === 1, "cleared");
+
+  check(page.evalIn("__confirmed") === 0, `confirm() was called ${page.evalIn("__confirmed")} times`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: a question that waits keeps the editor's tools from acting under a program that started meanwhile", async () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  standInEditor(page);
+  const asked = questionsAsked(page);
+  const fileInput = page.$("programFile");
+  const tools = {
+    example: () => page.fire(exampleItems(page)[0], "click"),
+    import: () => {
+      fileInput.files = [{ name: "mine.json", size: 2, text: async () => "{}" }];
+      page.fire(fileInput, "change");
+    },
+    clear: () => page.fire(page.$("programClear"), "click"),
+  };
+  for (const [name, use] of Object.entries(tools)) {
+    use();
+    await flush();
+    check(openQuestion(page) !== null, `${name}: asked`);
+    // Nothing runs while it asks, not even a program Run would not ask about.
+    page.fire(page.$("programRun"), "click");
+    await flush();
+    check(page.evalIn("runner.state") === "idle" && openQuestion(page) === asked.at(-1), `${name}: Run ran under the question`);
+    // A program starts while it asks (here, behind the dialog's back): a
+    // yes then changes nothing in the locked editor.
+    startProgram(page, "await api.wait(5);");
+    await flush();
+    await answer(page, "yes");
+    check(page.evalIn("__editor.loaded.length") === 0 && page.evalIn("__editor.cleared") === 0, `${name}: changed the editor under a running program`);
+    page.evalIn("runner.abort('done')");
+    await liveForAsync(page, ws, 200);
+  }
+  check(asked.length === 3, `asked ${asked.length}`);
+
+  // One question at a time: another is no at once, and the first still waits.
+  tools.example();
+  await flush();
+  const second = page.evalIn("globalThis.__second = null; ask.ask({ title: 'x', text: 'y', yes: 'z' }).then((v) => { __second = v; }); 0");
+  await flush();
+  check(second === 0 && page.evalIn("__second") === false && openQuestion(page) === asked[3], "a second question is no, and the first stays");
+  await answer(page, "cancel");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3003,7 +3192,7 @@ test("every part's on...(fn) returns a function that unsubscribes fn", () => {
   const kinds = page.evalIn(`[
     link.onState(() => {}), link.onTelemetry(() => {}), driver.onManualInput(() => {}), driver.onStandDown(() => {}),
     schemeToggle.onChange(() => {}), familySelector.onChange(() => {}), tabs.onChange(() => {}),
-    runner.onState(() => {}), runner.onLog(() => {}), runner.onHighlight(() => {}), programTab.onTargetChange(() => {}),
+    runner.onState(() => {}), runner.onLog(() => {}), runner.onHighlight(() => {}), targetSwitch.onChange(() => {}),
     targets.rover.onTelemetry(() => {}), targets.rover.onLost(() => {}),
   ].map((unsubscribe) => typeof unsubscribe)`);
   check(kinds.every((kind) => kind === "function"), `returned ${kinds}`);

@@ -170,15 +170,17 @@ class SimView {
 
     const speed = dom.html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
     ui.speeds = new Map(SimTarget.PLAYBACKS.map((rate) => {
-      const button = segment(speed, () => {
-        this.#target.playback = rate;
-        this.#target.paused = false;
-        this.#render();
-      });
+      const button = segment(speed, () => this.#play(rate));
       button.textContent = `${rate}×`;
       button.setAttribute("title", `Play at ${rate} times real speed`);
       return [rate, button];
     }));
+    // The same choice as a list, for a bar too narrow to show the buttons
+    // beside the room's name: sim.css shows one or the other. While paused
+    // it shows the speed a choice resumes at; Pause says it is paused.
+    ui.speedPick = dom.html("select", { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" }, bar);
+    for (const rate of SimTarget.PLAYBACKS) dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
+    ui.speedPick.addEventListener("change", () => this.#play(Number(ui.speedPick.value)));
     ui.pause = this.#tool(bar, "Pause the preview", "M5 3.5v9M11 3.5v9", "sim-pause");
     ui.pause.addEventListener("click", () => {
       this.#target.paused = !this.#target.paused;
@@ -188,8 +190,6 @@ class SimView {
       "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6");
     ui.reset.addEventListener("click", () => this.#target.reset());
     ui.more = this.#tool(bar, "Rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3");
-    ui.more.setAttribute("aria-expanded", "false");
-    ui.more.setAttribute("aria-controls", "simMore");
 
     // The room.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);
@@ -238,7 +238,6 @@ class SimView {
     // Folded away until asked for: the less used controls, what the drag
     // setting means, the key and what "idealised" leaves out.
     ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings" }, root);
-    ui.panel.hidden = true;
     const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
     ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {
@@ -271,17 +270,8 @@ class SimView {
       `dead on contact. Full speed is taken as ${SIM_WHEEL_MAX_MPS} m/s, an estimate until the bench measures ` +
       "it. The pivots follow the wheel table, which is not bench-verified yet.");
 
-    ui.more.addEventListener("click", () => this.#openPanel(ui.panel.hidden));
     // Escape, or a press anywhere else, folds it away again.
-    ui.panel.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      this.#openPanel(false);
-      ui.more.focus();
-    });
-    document.addEventListener("pointerdown", (event) => {
-      if (ui.panel.hidden || !event.target || !event.target.closest) return;
-      if (!event.target.closest(".sim-more") && event.target.closest("button") !== ui.more) this.#openPanel(false);
-    });
+    new Popover(ui.more, ui.panel);
   }
 
   // The key to the colours: the wheels as the rover and the inset show them,
@@ -366,9 +356,10 @@ class SimView {
     return button;
   }
 
-  #openPanel(open) {
-    this.#ui.panel.hidden = !open;
-    this.#ui.more.setAttribute("aria-expanded", String(open));
+  #play(rate) {
+    this.#target.playback = rate;
+    this.#target.paused = false;
+    this.#render();
   }
 
   /* --- the room ---------------------------------------------------------- */
@@ -501,6 +492,7 @@ class SimView {
     // The playback.
     ui.pause.setAttribute("aria-pressed", String(target.paused));
     pressSegment(ui.speeds, target.paused ? null : target.playback);
+    ui.speedPick.value = String(target.playback);
   }
 
   // The motion in words and numbers, the clock, and the latest thing the

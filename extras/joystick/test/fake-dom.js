@@ -99,6 +99,18 @@ class Node_ {
     if (value !== undefined) this.returnValue = String(value);
     setImmediate(() => dispatch(this, { type: "close", bubbles: false }));
   }
+  // As in a browser, click() fires a click that bubbles. A file <input>'s
+  // picker is the browser's: here a test counts the clicks (pickerOpened)
+  // and fires "change" itself.
+  click() {
+    if (this.tagName === "INPUT" && this.getAttribute("type") === "file") this.pickerOpened = (this.pickerOpened || 0) + 1;
+    dispatch(this, { type: "click", bubbles: true, preventDefault() {} });
+  }
+  scrollIntoView() { this.scrolledIntoView = (this.scrolledIntoView || 0) + 1; }
+  contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
+  matches(selector) { return parseSelector(selector)(this); }
+  closest(selector) { const test = parseSelector(selector); for (let n = this; n && n.tagName !== "#DOCUMENT"; n = n.parentNode) if (test(n)) return n; return null; }
+  querySelectorAll(selector) { const test = parseSelector(selector); return all(this).slice(1).filter(test); }
   getContext() { return fakeContext(); }
   // As in a browser, an element with no layout box has no rects, and an
   // empty bounding rect. Laid out, it sits at the sum of its own and its
@@ -112,6 +124,27 @@ class Node_ {
   }
 }
 
+// A test for one compound selector -- a tag, #id, .class, [attr] or
+// [attr="value"], in any combination -- which is all the panel asks of
+// matches(), closest() and querySelectorAll(). Anything more (a combinator,
+// a list, a pseudo-class) throws, rather than match the wrong elements.
+function parseSelector(selector) {
+  const parts = [];
+  const re = /^(?:([a-zA-Z][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\])/;
+  let rest = selector.trim();
+  while (rest) {
+    const m = rest.match(re);
+    if (!m) throw new Error(`fake-dom: unsupported selector "${selector}"`);
+    const [, tag, id, cls, attr, value] = m;
+    if (tag) parts.push((n) => n.tagName === tag.toUpperCase());
+    else if (id) parts.push((n) => n.id === id);
+    else if (cls) parts.push((n) => (n.getAttribute("class") || "").split(/\s+/).includes(cls));
+    else parts.push((n) => (value === undefined ? n.hasAttribute(attr) : n.getAttribute(attr) === value));
+    rest = rest.slice(m[0].length);
+  }
+  return (n) => typeof n.getAttribute === "function" && parts.every((test) => test(n));
+}
+
 function fakeContext() {
   const noop = () => {};
   return {
@@ -123,8 +156,10 @@ function fakeContext() {
 // Listener exceptions are reported, not propagated, as in a browser. An event
 // bubbles through the target's ancestors as they are when it fires, so one
 // on a node taken out of the page (a stick canvas rebuilt under a thumb)
-// never reaches the document, as in a browser.
+// never reaches the document, as in a browser. Its target is the node it was
+// fired at, unless the test gave it another.
 function dispatch(target, e) {
+  if (e.target === undefined) e.target = target;
   const path = [];
   for (let n = target; n; n = n.parentNode) path.push(n);
   const bubbles = e.bubbles !== false;

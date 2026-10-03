@@ -4,88 +4,93 @@
  * hands it to a ProgramRunner, on the target the switch picks, and shows what
  * the runner says.
  *
- *   new ProgramTab({ runner, targets, examples, ui, storageKey })
- *     runner      a ProgramRunner (program.js).
- *     targets     the registry, {kind: Target}: "rover" always, "simulator"
- *                 when the simulator's scripts loaded. refresh() re-reads it.
- *     examples    [{id, name, state}] for the Examples menu (blocks.js).
- *     ui          the tab's elements, by name: targetChoice, run, runLabel,
- *                 stop, examples, exportButton, importButton, importFile,
- *                 clear, stage, hint, offline, simPane, simToggle, state,
- *                 log; and ask, the <dialog> Run asks in, with its askText,
- *                 askRun and askCancel.
- *     storageKey  where the chosen target is remembered.
+ *   new ProgramTab({ runner, targetSwitch, examples, ask, ui })
+ *     runner        a ProgramRunner (program.js).
+ *     targetSwitch  the TargetSwitch that picks the target (targetswitch.js).
+ *     examples      [{id, name, state}] for the File menu (blocks.js).
+ *     ask           the page's AskDialog (ask.js), for every question here.
+ *     ui            the tab's elements, by name: run, runLabel, stop, the
+ *                   File menu's button and list (menu, menuList), examples
+ *                   (the group its examples go in), exportButton,
+ *                   importButton, importFile, clear, stage, hint, offline,
+ *                   simPane, simToggle, state, log.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
  *   editorUnavailable(why)  there will be no editor: say why in its place and
  *                           keep Run off. Driving does not need it.
  *   refresh()               re-check whether the chosen target is ready (the
- *                           link changed), and re-read the registry.
+ *                           link changed).
  *   shown()                 the tab has just been shown: fit the editor to it.
  *   setScheme(scheme)       the rover's control scheme, as telemetry reports
  *                           it (SchemeToggle), or null while unknown.
  *   note(text, tone)        add a line to the console, for what the runner
  *                           does not say itself (app.js: the simulator's
  *                           word). tone as the runner's log lines, or "bump".
- *   kind                    the chosen target's kind.
- *   onTargetChange(fn)      fn(kind, previous) when the operator switches.
  *
  * Run on the rover asks first when the editor holds more than one stack of
  * blocks, and when the program drives a pivot while the rover is not on the
- * ADVANCED scheme. A preview never asks: it sends nothing. It asks in the
- * page, in ui.ask, and never with window.confirm(): desktop Chrome gives its
- * own dialog the focus and sends the window a blur once it has closed, by
- * when the run had started, so the blur stood it down (app.js) and every
- * run the operator confirmed stopped at once.
+ * ADVANCED scheme. A preview never asks: it sends nothing. Loading an
+ * example or a file over a program, and Clear, ask too. Every question is
+ * the AskDialog's, never window.confirm() (ask.js says why).
+ *
+ * The File menu holds what is used now and then and moves nothing: the
+ * examples, Import, Export and Clear. Run, Stop program and the switch stay
+ * on the toolbar, one press each.
  *
  * The tab's Stop only asks the runner to abort; app.js wires it, with every
  * other way a program is stopped. Nothing here sends to the rover: a program
  * reaches it only through the runner and the rover's Target.
  */
 class ProgramTab {
-  static LABELS = Object.freeze({ rover: "Rover", simulator: "Simulator" });
   static RUN_LABELS = Object.freeze({ rover: "Run on rover", simulator: "Preview" });
   static EMPTY = "Nothing to run yet: drag blocks in, or load an example.";
   static LOG_LINES = 200;
 
   #runner;
-  #targets;
-  #examples;
+  #targetSwitch;
+  #ask;
   #ui;
-  #storageKey;
+  #exampleItems = []; // the File menu's example buttons
   #editor = null;
   #editorWhy = "Loading the block editor…";
-  #kind = "rover";
-  #kinds = ""; // the registry's kinds as last rendered
-  #segments = new Map(); // kind -> its button
   #outcome = null; // how the last run ended: {tone, text}, until something changes
   #scheme = null; // the rover's control scheme, as last reported, or null
-  #targetListeners = new Listeners();
 
-  constructor({ runner, targets, examples, ui, storageKey }) {
+  constructor({ runner, targetSwitch, examples, ask, ui }) {
     this.#runner = runner;
-    this.#targets = targets;
-    this.#examples = examples;
+    this.#targetSwitch = targetSwitch;
+    this.#ask = ask;
     this.#ui = ui;
-    this.#storageKey = storageKey;
 
-    const remembered = memory.recall(storageKey);
-    if (remembered && remembered in targets) this.#kind = remembered;
-    // On a phone, where the simulator's view sits under the editor, it starts
-    // folded away unless a preview is what the operator last chose.
-    this.#expandSim(this.#kind === "simulator");
+    // The simulator's view has a place only if there is a simulator. On a
+    // phone, where the view sits under the editor, it starts folded away
+    // unless a preview is what the operator last chose.
+    const simulator = targetSwitch.kinds.includes("simulator");
+    ui.simPane.hidden = !simulator;
+    ui.stage.dataset.sim = simulator ? "yes" : "no";
+    this.#expandSim(targetSwitch.kind === "simulator");
+    targetSwitch.onChange((kind) => {
+      this.#outcome = null;
+      // On a phone the view is folded away; previewing is when it is wanted.
+      if (kind === "simulator") this.#expandSim(true);
+      this.#update();
+    });
+
+    new Popover(ui.menu, ui.menuList, { menu: true });
+    for (const example of examples) {
+      const item = dom.html("button", { type: "button", role: "menuitem" }, ui.examples, example.name);
+      item.addEventListener("click", () => this.#loadExample(example).catch(reportFault));
+      this.#exampleItems.push(item);
+    }
 
     ui.run.addEventListener("click", () => this.#run().catch(reportFault));
-    ui.askRun.addEventListener("click", () => ui.ask.close("run"));
-    ui.askCancel.addEventListener("click", () => ui.ask.close("cancel"));
-    ui.examples.addEventListener("change", () => this.#loadExample());
     ui.exportButton.addEventListener("click", () => this.#export());
+    // The file picker opens only from the press itself (user activation),
+    // so from here, not after anything asynchronous.
     ui.importButton.addEventListener("click", () => ui.importFile.click());
-    ui.importFile.addEventListener("change", () => this.#import());
-    ui.clear.addEventListener("click", () => this.#clear());
+    ui.importFile.addEventListener("change", () => this.#import().catch(reportFault));
+    ui.clear.addEventListener("click", () => this.#clear().catch(reportFault));
     ui.simToggle.addEventListener("click", () => this.#expandSim(ui.simToggle.getAttribute("aria-expanded") !== "true"));
-
-    for (const example of examples) dom.html("option", { value: example.id }, ui.examples, example.name);
 
     runner.onState((state, detail) => this.#onRunnerState(state, detail));
     runner.onLog((entry) => this.#appendLog(entry));
@@ -93,15 +98,7 @@ class ProgramTab {
       if (this.#editor) this.#editor.highlight(id);
     });
 
-    this.refresh();
-  }
-
-  get kind() {
-    return this.#kind;
-  }
-
-  onTargetChange(fn) {
-    return this.#targetListeners.add(fn);
+    this.#update();
   }
 
   attachEditor(editor) {
@@ -120,7 +117,6 @@ class ProgramTab {
   }
 
   refresh() {
-    this.#renderTargets();
     this.#update();
   }
 
@@ -136,43 +132,6 @@ class ProgramTab {
     this.#appendLog({ text, tone });
   }
 
-  /* --- the target switch ------------------------------------------------- */
-
-  // One segment per registered target. With only the rover there is nothing
-  // to switch, and no simulator to show.
-  #renderTargets() {
-    const kinds = Object.keys(this.#targets);
-    if (kinds.join() === this.#kinds) return;
-    this.#kinds = kinds.join();
-    if (!kinds.includes(this.#kind)) this.#kind = kinds[0];
-
-    const { targetChoice, simPane, stage } = this.#ui;
-    for (const button of this.#segments.values()) button.remove();
-    this.#segments.clear();
-    for (const kind of kinds) {
-      const button = segment(targetChoice, () => this.#choose(kind));
-      button.textContent = ProgramTab.LABELS[kind] || kind;
-      this.#segments.set(kind, button);
-    }
-    targetChoice.hidden = kinds.length < 2;
-
-    const simulator = "simulator" in this.#targets;
-    simPane.hidden = !simulator;
-    stage.dataset.sim = simulator ? "yes" : "no";
-  }
-
-  #choose(kind) {
-    const previous = this.#kind;
-    if (kind === previous) return;
-    this.#kind = kind;
-    memory.remember(this.#storageKey, kind);
-    this.#outcome = null;
-    // On a phone the view is folded away; previewing is when it is wanted.
-    if (kind === "simulator") this.#expandSim(true);
-    this.#update();
-    this.#targetListeners.emit(kind, previous);
-  }
-
   #expandSim(open) {
     this.#ui.simToggle.setAttribute("aria-expanded", String(open));
     this.#ui.simPane.dataset.collapsed = open ? "no" : "yes";
@@ -183,13 +142,13 @@ class ProgramTab {
   async #run() {
     if (!this.#canRun()) return;
     const editor = this.#editor;
-    const target = this.#targets[this.#kind];
+    const target = this.#targetSwitch.target;
     // Run runs every stack on the canvas, top to bottom, as Blockly does: a
     // drive dragged out to look at and left lying there would drive the real
     // rover after the program. A preview only shows it.
     const stacks = editor.stacks;
     if (target.kind === "rover" && stacks > 1 &&
-        !(await this.#ask(`The editor holds ${stacks} separate stacks of blocks. Run runs every one, top to bottom, ` +
+        !(await this.#askToRun(`The editor holds ${stacks} separate stacks of blocks. Run runs every one, top to bottom, ` +
           `so a block left lying loose drives the rover too. Run all ${stacks} on the rover?`))) return;
     // The NORMAL scheme keeps the pivots (codes 9 to 16) off the stick and the
     // pad, because nobody has watched one on the bench yet (docs/mecanum.md);
@@ -197,11 +156,11 @@ class ProgramTab {
     // example among them. Under ADVANCED the operator has already chosen
     // them, so it does not ask again.
     const pivots = target.kind === "rover" && this.#scheme !== SCHEME_ADVANCED ? editor.pivots : [];
-    if (pivots.length > 0 && !(await this.#ask(ProgramTab.#pivotQuestion(pivots, this.#scheme)))) return;
+    if (pivots.length > 0 && !(await this.#askToRun(ProgramTab.#pivotQuestion(pivots, this.#scheme)))) return;
     // The page lived on while it asked: it runs only if Run still could, on
     // the target the answer was for. (A link lost meanwhile is the runner's
     // to refuse, below.)
-    if (!this.#canRun() || this.#targets[this.#kind] !== target) return;
+    if (!this.#canRun() || this.#targetSwitch.target !== target) return;
     let program;
     try {
       program = editor.compile();
@@ -223,25 +182,11 @@ class ProgramTab {
   // running, and no question already waiting for its answer.
   #canRun() {
     const editor = this.#editor;
-    return Boolean(editor) && !editor.empty && this.#runner.state === "idle" && !this.#ui.ask.open;
+    return Boolean(editor) && !editor.empty && this.#runner.state === "idle" && !this.#ask.open;
   }
 
-  // Ask in ui.ask, the page's <dialog>. True only for Run on rover: Cancel,
-  // Escape or anything else that closes it is a no. Escape closes it with
-  // no value, which would leave the last answer standing, so that is
-  // cleared first.
-  #ask(question) {
-    const { ask, askText } = this.#ui;
-    askText.textContent = question;
-    ask.returnValue = "";
-    return new Promise((resolve) => {
-      const answered = () => {
-        ask.removeEventListener("close", answered);
-        resolve(ask.returnValue === "run");
-      };
-      ask.addEventListener("close", answered);
-      ask.showModal();
-    });
+  #askToRun(text) {
+    return this.#ask.ask({ title: "Run on the rover?", text, yes: "Run on rover" });
   }
 
   static #pivotQuestion(pivots, scheme) {
@@ -268,14 +213,24 @@ class ProgramTab {
     this.#update();
   }
 
-  /* --- the editor's file tools ------------------------------------------- */
+  /* --- the File menu ----------------------------------------------------- */
 
-  #loadExample() {
-    const select = this.#ui.examples;
-    const example = this.#examples.find((e) => e.id === select.value);
-    select.value = "";
-    if (!example || !this.#editor) return;
-    if (!this.#editor.empty && !confirm(`Replace the program in the editor with the "${example.name}" example?`)) return;
+  // Whether the editor may be changed: it is there, and no program runs.
+  // Checked again after every question and file read, since the page lived
+  // on meanwhile.
+  #canEdit() {
+    return Boolean(this.#editor) && this.#runner.state === "idle";
+  }
+
+  // Before replacing a program, ask; an empty editor has nothing to lose.
+  #askToReplace(what) {
+    if (this.#editor.empty) return Promise.resolve(true);
+    return this.#ask.ask({ title: "Replace the program?", text: `Replace the program in the editor with ${what}?`, yes: "Replace" });
+  }
+
+  async #loadExample(example) {
+    if (!this.#canEdit()) return;
+    if (!(await this.#askToReplace(`the "${example.name}" example`)) || !this.#canEdit()) return;
     try {
       this.#editor.load(example.state);
       this.#appendLog({ text: `Loaded the "${example.name}" example.`, tone: "info" });
@@ -304,7 +259,7 @@ class ProgramTab {
     const input = this.#ui.importFile;
     const file = input.files && input.files[0];
     input.value = ""; // so the same file can be picked again
-    if (!file || !this.#editor) return;
+    if (!file || !this.#canEdit()) return;
     try {
       if (file.size > 2 * 1024 * 1024) throw new Error("This file is too big to be a rover program.");
       let state;
@@ -313,7 +268,8 @@ class ProgramTab {
       } catch {
         throw new Error("This file is not JSON, so not a rover program.");
       }
-      if (!this.#editor.empty && !confirm(`Replace the program in the editor with ${file.name}?`)) return;
+      if (!this.#canEdit()) return;
+      if (!(await this.#askToReplace(file.name)) || !this.#canEdit()) return;
       this.#editor.load(state);
       this.#appendLog({ text: `Imported ${file.name}.`, tone: "info" });
     } catch (err) {
@@ -321,33 +277,35 @@ class ProgramTab {
     }
   }
 
-  #clear() {
-    if (!this.#editor || this.#editor.empty) return;
-    if (!confirm("Remove every block? Undo (Ctrl+Z) brings them back.")) return;
-    this.#editor.clear();
+  async #clear() {
+    if (!this.#canEdit() || this.#editor.empty) return;
+    const yes = await this.#ask.ask({ title: "Clear the program?", text: "Remove every block? Undo (Ctrl+Z) brings them back.", yes: "Clear" });
+    if (yes && this.#canEdit()) this.#editor.clear();
   }
 
   /* --- what the tab shows ------------------------------------------------ */
 
   #update() {
     const ui = this.#ui;
-    const kind = this.#kind;
-    const target = this.#targets[kind];
+    const kind = this.#targetSwitch.kind;
+    const readiness = this.#targetSwitch.target.ready();
     const state = this.#runner.state;
     const idle = state === "idle";
     const editor = this.#editor;
-    const readiness = target.ready();
-
-    pressSegment(this.#segments, kind);
 
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;
     ui.run.disabled = !editor || empty || !idle || !readiness.ok;
     ui.run.title = !editor ? this.#editorWhy : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : "";
     ui.stop.disabled = state !== "running";
-    ui.examples.disabled = !editor || !idle;
-    ui.importButton.disabled = !editor || !idle;
-    ui.clear.disabled = !editor || !idle;
+
+    // Without an editor no item can act, so neither can the menu.
+    const canEdit = this.#canEdit();
+    ui.menu.disabled = !editor;
+    ui.menu.title = editor ? "" : this.#editorWhy;
+    for (const item of this.#exampleItems) item.disabled = !canEdit;
+    ui.importButton.disabled = !canEdit;
+    ui.clear.disabled = !canEdit || empty;
     ui.exportButton.disabled = !editor;
     ui.hint.hidden = !editor || !editor.empty;
 

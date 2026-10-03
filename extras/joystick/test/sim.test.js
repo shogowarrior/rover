@@ -23,6 +23,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { src, CODES, telemetry } = require("./firmware.js");
+const { stylesheet, cssRules, blockRules } = require("./css.js");
 
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -1133,6 +1134,55 @@ test("the view: paused, Pause is pressed and no playback speed is", () => {
   assert.equal(sim.paused, false, "a speed plays");
   assert.deepEqual(pressed(), [4]);
   assert.equal(pause.getAttribute("aria-pressed"), "false");
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: a narrow bar offers the playback speed as a list, the same choice as the buttons", () => {
+  const { page, sim, byClass, button } = pageWithView();
+  const list = byClass("sim-speed-pick")[0];
+  assert.equal(list.tagName, "SELECT");
+  assert.deepEqual(list.children.map((o) => o.getAttribute("value")), SimTarget.PLAYBACKS.map(String));
+  page.fire(button("2×"), "click");
+  assert.equal(list.value, "2", "a button's choice shows in the list");
+  page.fire(byClass("sim-pause")[0], "click");
+  list.value = "4";
+  page.fire(list, "change");
+  assert.equal(sim.playback, 4);
+  assert.equal(sim.paused, false, "a choice from the list plays, as a button's does");
+  assert.equal(button("4×").getAttribute("aria-pressed"), "true", "and the buttons show it");
+
+  // The one or the other, by the bar's width: the list only below 360 px.
+  const css = stylesheet("sim.css");
+  const narrow = blockRules(css, "@container sim (max-width: 360px) {") || [];
+  const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
+  assert.match(rule(narrow, ".sim-speed"), /display:\s*none/, "narrow: no buttons");
+  assert.match(rule(narrow, ".sim-speed-pick"), /display:\s*block/, "narrow: the list");
+  assert.match(rule(narrow, ".sim-bar"), /flex-wrap:\s*nowrap/, "narrow: one row");
+  // The list's own rule, ahead of the container query that overrides it.
+  assert.match(rule(cssRules(css), ".sim-speed-pick"), /display:\s*none/, "otherwise the buttons alone");
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: its settings open from their button, and Escape or a press outside folds them away", () => {
+  const { page, byClass } = pageWithView();
+  const more = byClass("sim-tool").find((b) => b.getAttribute("aria-controls") === "simMore");
+  const panel = page.$("simMore");
+  assert.ok(more, "the settings button names its panel");
+  assert.ok(panel.hidden && more.getAttribute("aria-expanded") === "false", "folded at first");
+  assert.equal(more.getAttribute("aria-haspopup"), null, "settings, not a menu");
+  page.fire(more, "click");
+  assert.ok(!panel.hidden && more.getAttribute("aria-expanded") === "true", "open");
+  assert.notEqual(page.doc.activeElement, panel.querySelectorAll("button")[0], "not a menu: the focus stays put");
+  page.fire(panel.querySelectorAll("button")[0], "pointerdown");
+  assert.ok(!panel.hidden, "a press inside: still open");
+  page.fire(panel, "keydown", { key: "Escape" });
+  assert.ok(panel.hidden && page.doc.activeElement === more, "Escape folds them, back on the button");
+  page.fire(more, "click");
+  page.fire(more, "keydown", { key: "Escape" });
+  assert.ok(panel.hidden, "Escape on the button too");
+  page.fire(more, "click");
+  page.fire(page.$("programRun"), "pointerdown");
+  assert.ok(panel.hidden && more.getAttribute("aria-expanded") === "false", "a press outside folds them");
   assert.deepEqual(page.errors, []);
 });
 

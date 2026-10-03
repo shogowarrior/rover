@@ -141,9 +141,7 @@
   --scan-strip: 132px;
   /* The rail beside each tab on a wide screen: wide beside the Drive tab,
      for a large fan; narrow beside the Program tab, whose editor and
-     simulator want the room. Its floor keeps the fan's labels legible,
-     and its 24vw keeps the Program tab the 900 px its toolbar needs for
-     one row at 1280 px. */
+     simulator want the room. Its floor keeps the fan's labels legible. */
   --rail-drive: clamp(340px, 52vw - 160px, 620px);
   --rail-program: clamp(300px, 24vw, 380px);
   --shell-max: 720px;
@@ -178,8 +176,7 @@ body {
   color: var(--dim);
 }
 
-/* Read aloud, not shown: the scheme's name and the mode pill's. (The
-   Program tab's toolbar names its icon-only buttons with aria-label.) */
+/* Read aloud, not shown: the scheme's name and the mode pill's. */
 .srOnly,
 .scheme > .label {
   position: absolute;
@@ -291,6 +288,128 @@ input[type="range"]::-moz-range-thumb {
 /* A panel's own display (grid, flex) would otherwise override the hidden
    attribute. */
 [role="tabpanel"][hidden] { display: none; }
+
+/* --- menus (popover.js) ------------------------------------------------------ */
+
+/* A menu hangs under its button, right edges together, over whatever is
+   below: the holder is positioned for it, and is never an ancestor of a
+   stick. Over the block editor and the simulator, which keep their own
+   layers inside them, and under the Stop bar (z-index 2), which nothing
+   may cover. */
+.menuHolder {
+  position: relative;
+  flex: none;
+}
+
+.menuButton .caret {
+  width: var(--glyph);
+  height: var(--glyph);
+  margin-right: calc(-1 * var(--s-1));
+  color: var(--dim);
+}
+
+.menuButton[aria-expanded="true"] { background: var(--raised-hi); }
+
+.menu {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + var(--s-1));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: var(--s-1);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-pop);
+}
+
+.menu[hidden] { display: none; }
+
+.menu [role="group"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.menuLabel {
+  padding: var(--s-2) var(--s-3) var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--track-label);
+  color: var(--dim);
+}
+
+.menu [role="menuitem"] {
+  justify-content: flex-start;
+  padding: 0 var(--s-3);
+  font-weight: var(--fw-medium);
+  text-align: left;
+  background: none;
+  border-radius: var(--r-sm);
+}
+
+.menu [role="menuitem"]:focus-visible {
+  outline-offset: -2px;
+  background: var(--raised);
+}
+
+@media (hover: hover) {
+  .menu [role="menuitem"]:hover { background: var(--raised); }
+}
+
+.menu [role="menuitem"]:disabled {
+  color: var(--dim);
+  opacity: 0.5;
+  background: none;
+}
+
+.menu .icon {
+  width: var(--glyph);
+  height: var(--glyph);
+}
+
+.menuRule {
+  height: 1px;
+  margin: var(--s-1) var(--s-2);
+  background: var(--rule);
+}
+
+/* --- the question (ask.js) --------------------------------------------------- */
+
+.ask {
+  max-width: min(32rem, calc(100vw - 2 * var(--gutter)));
+  padding: var(--s-5) var(--s-6);
+  color: var(--readout);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-pop);
+}
+
+.ask::backdrop { background: var(--shade); }
+
+.ask p {
+  margin: 0 0 var(--s-5);
+  font-size: var(--t-md);
+  line-height: var(--lh-loose);
+}
+
+.askButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-3);
+}
+
+/* The agreeing button, in the accent: the action the question names. */
+.ask .yes {
+  color: var(--on-live);
+  background: var(--live);
+}
+
+@media (hover: hover) {
+  .ask .yes:hover { background: var(--live); filter: brightness(1.1); }
+}
 
 /* --- the shell: a phone first ---------------------------------------------- */
 
@@ -1045,6 +1164,10 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 /* Every layout but the side-by-side one (the media query below, negated). */
 @media (max-width: 959.98px), (max-height: 520.98px) {
+  /* Opened near the foot of the screen, a menu scrolls into view clear of
+     the Stop bar over it (popover.js), rather than hide under it. */
+  .menu { scroll-margin-bottom: calc(var(--tap-lg) + 2 * var(--s-3) + env(safe-area-inset-bottom, 0px)); }
+
   .shell > [role="tabpanel"] { margin-top: var(--s-3); }
 
   /* While the rover is driven the phase is hidden but keeps its line, so a
