@@ -600,6 +600,9 @@ test("sleep rejects when its signal aborts, and a sleep resolves where it was du
   controller.abort();
   await assert.rejects(slept, (err) => err.name === "AbortError");
   await assert.rejects(target.sleep(10, controller.signal), (err) => err.name === "AbortError", "already aborted");
+  // Its timer went with it: one left pending would keep the view from ever
+  // resting.
+  assert.equal(target.idle, true, "nothing left waiting");
 
   // A program that drives for 1 s stops at 1 s of simulated time, not a
   // frame later.
@@ -980,6 +983,16 @@ test("the view: a tap on the rover leaves a preview running; a drag places it", 
   page.fire(rover, "pointerup", { ...press, ...at(2, 1) });
   assert.deepEqual(lost, [], "a tap is not a placement");
   assert.equal(sim.state.trail.length, trail, "the trail is kept");
+  assert.equal(sim.state.moving, true, "the preview runs on");
+
+  // Only a primary press drags, as on the drive controls: a right or a
+  // ctrl drag well past the slop places nothing.
+  for (const other of [{ button: 2 }, { ctrlKey: true }]) {
+    page.fire(rover, "pointerdown", { ...press, ...other, ...at(0, 0) });
+    page.fire(rover, "pointermove", { ...press, ...other, ...at(30, 0) });
+    page.fire(rover, "pointerup", { ...press, ...other, ...at(30, 0) });
+  }
+  assert.deepEqual(lost, [], "a right or ctrl drag is not a placement");
   assert.equal(sim.state.moving, true, "the preview runs on");
 
   // A drag past the slop places the rover where it is dropped: a reset.

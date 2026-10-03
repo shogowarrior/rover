@@ -2179,6 +2179,17 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
   check(names(ws).slice(-1).join() === "STOP", `stale: ${names(ws)}`);
 });
 
+test("program: a run stopped mid-wait leaves no timer behind", async () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  startProgram(page, "await api.wait(60);");
+  await liveForAsync(page, ws, 300);
+  page.fire(page.$("connect"), "click"); // Disconnect: the run stops, and the link's own timers go
+  await flush();
+  page.clock.advance(100); // the socket's close
+  check(ended(page) && ended(page).outcome === "stopped", `ended ${JSON.stringify(ended(page))}`);
+  check(page.clock.pending() === 0, `timers pending ${page.clock.pending()}`);
+});
+
 test("program: start exploring hands over, its own stop is obeyed, and neither stops the program", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   startProgram(page, "await api.explore(); await api.wait(1); await api.stop(); await api.wait(1); await api.log('after');");
