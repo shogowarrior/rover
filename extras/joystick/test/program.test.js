@@ -893,6 +893,11 @@ test("sanitize: refuses what is not a rover program, and says why", () => {
     [program({ type: "rover_drive_until", fields: { MOVE: "STOP" } }), /drives "STOP"/],
     [program({ type: "rover_drive_for", fields: { MOVE: "RESUME_AUTONOMOUS" } }), /drives "RESUME_AUTONOMOUS"/],
     [program({ type: "rover_distance", fields: { BEARING: "distanceUp" } }), /reads "distanceUp", which is not a bearing/],
+    // Blockly would load these with their menu's first choice: drive forward.
+    [program({ type: "rover_drive_for", inputs: { SPEED: { block: { type: "math_number", fields: { NUM: 50 } } } } }), /"rover_drive_for" block that names no motion/],
+    [program({ type: "rover_drive_until", fields: {} }), /"rover_drive_until" block that names no motion/],
+    [program({ type: "rover_distance" }), /"rover_distance" block that names no bearing/],
+    [program({ type: "rover_clear", fields: { BEARING_X: "distanceFront" } }), /"rover_clear" block that names no bearing/],
     [program({ type: "rover_stop", next: "rover_stop" }), /joined to something that is not a block/],
     [program({ type: "rover_say", inputs: { TEXT: [] } }), /joined to something that is not a block/],
     [program(...many), new RegExp(`more than ${RoverBlocks.MAX_BLOCKS} blocks`)],

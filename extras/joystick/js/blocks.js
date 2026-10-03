@@ -46,6 +46,8 @@ class RoverBlocks {
 
   // The blocks that drive a motion, named by their MOVE field.
   static DRIVES = Object.freeze(["rover_drive_for", "rover_drive_until"]);
+  // The blocks with a BEARING menu: sanitize() needs each to name one.
+  static #READS_BEARING = Object.freeze(["rover_distance", "rover_clear"]);
 
   // The block colours, one per toolbox category. Mid-tones that hold the
   // blocks' white 12 px text at 4.5:1 or better and still read on the
@@ -537,10 +539,17 @@ class RoverBlocks {
       if (!RoverBlocks.TYPES.has(block.type)) throw notProgram(`it has a "${block.type}" block, which this editor does not have.`);
       if (++count > RoverBlocks.MAX_BLOCKS) throw notProgram(`it has more than ${RoverBlocks.MAX_BLOCKS} blocks.`);
       // Blockly would quietly put a menu's first choice in place of a value it
-      // does not offer: a drive it does not know would become a drive forward.
+      // does not offer, or of one missing: a drive it does not know, or a
+      // drive naming none, would become a drive forward.
       const fields = isObject(block.fields) ? block.fields : {};
+      if (RoverBlocks.DRIVES.includes(block.type) && !("MOVE" in fields)) {
+        throw notProgram(`it has a "${block.type}" block that names no motion.`);
+      }
       if ("MOVE" in fields && !motionNamed(fields.MOVE)) {
         throw notProgram(`it drives "${fields.MOVE}", which is not a motion the rover knows.`);
+      }
+      if (RoverBlocks.#READS_BEARING.includes(block.type) && !("BEARING" in fields)) {
+        throw notProgram(`it has a "${block.type}" block that names no bearing.`);
       }
       if ("BEARING" in fields && !BEARINGS.some((b) => b.key === fields.BEARING)) {
         throw notProgram(`it reads "${fields.BEARING}", which is not a bearing the rover measures.`);
