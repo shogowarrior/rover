@@ -11,8 +11,11 @@ live in three places that nothing keeps in sync:
 - `constexpr` constants in `namespace pins` in [src/Pins.h](../../../src/Pins.h)
   — the authority the firmware actually uses, and the only place in `src/` a
   pin number may appear
-- prose tables in [docs/pinouts.md](../../../docs/pinouts.md) and [docs/Readme.md](../../../docs/Readme.md)
-- photographs in [images/pinouts/](../../../images/pinouts/)
+- the motor-terminal table in [docs/Readme.md](../../../docs/Readme.md);
+  the TB6612 table in [docs/extra.md](../../../docs/extra.md) is the
+  superseded direct-wired design, not an assignment, so do not audit it
+- pinout images in [docs/pinouts.md](../../../docs/pinouts.md) and
+  [images/pinouts/](../../../images/pinouts/)
 
 A wrong pin here does not produce a compile error. It produces a robot that
 does not boot, or a sensor that silently reads garbage.
