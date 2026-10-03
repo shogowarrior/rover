@@ -91,6 +91,32 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
   check(page.sockets.length === 0, "no socket until asked");
 });
 
+// Classic scripts share one scope, and a second top-level declaration of a
+// name stops the later script from loading. So app.js's header names what
+// each script declares at top level for the others, and a class that one
+// script keeps for itself lives inside the class that uses it.
+test("app.js names every class a script declares at top level", () => {
+  const read = (file) => fs.readFileSync(path.join(PANEL_ROOT, file), "utf8");
+  const roster = {}; // script -> what app.js's header says it declares
+  let entry = null;
+  for (const line of read("js/app.js").split("*/")[0].split("\n")) {
+    const first = line.match(/^ \*   (\S+\.js)\s+(.*)$/);
+    const more = line.match(/^ \*\s{6,}(\S.*)$/);
+    if (first) roster[(entry = first[1])] = first[2];
+    else if (entry && more) roster[entry] += ` ${more[1]}`;
+    else entry = null;
+  }
+  const scripts = loadPage().scripts.filter((src) => src.startsWith("js/") && src !== "js/app.js");
+  check(scripts.length >= 10, `the page's scripts: ${scripts}`);
+  for (const src of scripts) {
+    const named = roster[src.slice("js/".length)];
+    check(named !== undefined, `app.js's header has a line for ${src}`);
+    for (const [, name] of read(src).matchAll(/^class\s+([A-Za-z_$][\w$]*)/gm)) {
+      check(new RegExp(`\\b${name}\\b`).test(named || ""), `app.js's header names ${name}, a class ${src} declares at top level`);
+    }
+  }
+});
+
 test("hover across a rotate button sends nothing (autonomous, idle)", () => {
   const { page, ws } = connected(telemetry(), { touch: false });
   for (const b of ["cw", "ccw"]) {

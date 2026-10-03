@@ -7,8 +7,8 @@
  *   Room        walls and boxes, and where a sonar ping meets them
  *   SimSonar    the servo sweep the firmware runs in manual mode, and what
  *               each bearing last read
- *   SimClock    simulated time, and timers on it
- *   SimTarget   the program runner's Target over all four (see below)
+ *   SimTarget   the program runner's Target over all three, on a simulated
+ *               clock of its own (see below)
  *
  * It is a preview, not a promise. The wheels follow ideal mecanum kinematics
  * with no slip, inertia or motor lag; the sonar is one ray per ping; contact
@@ -803,47 +803,6 @@ class SimSonar {
   }
 }
 
-/* --- simulated time ------------------------------------------------------- */
-
-class SimClock {
-  #now = 0;
-  #timers = new Map(); // id -> {at, fn}
-  #nextId = 1;
-
-  get now() {
-    return this.#now;
-  }
-
-  set(ms, fn) {
-    const id = this.#nextId++;
-    this.#timers.set(id, { at: this.#now + Math.max(0, ms), fn });
-    return id;
-  }
-
-  clear(id) {
-    this.#timers.delete(id);
-  }
-
-  advance(ms) {
-    this.#now += ms;
-  }
-
-  // How many timers are waiting.
-  get pending() {
-    return this.#timers.size;
-  }
-
-  // Run every timer due by now, earliest first. Returns how many ran.
-  fireDue() {
-    const due = [...this.#timers].filter(([, t]) => t.at <= this.#now).sort((a, b) => a[1].at - b[1].at || a[0] - b[0]);
-    for (const [id, timer] of due) {
-      this.#timers.delete(id);
-      timer.fn();
-    }
-    return due.length;
-  }
-}
-
 /* --- the Target ----------------------------------------------------------- */
 
 /**
@@ -906,9 +865,49 @@ class SimTarget {
   static BUMP_SAME_M = 0.03;
   static BUMP_MARKS = 100;
 
+  // Simulated time, and timers on it. Only #step() moves it on.
+  static #Clock = class {
+    #now = 0;
+    #timers = new Map(); // id -> {at, fn}
+    #nextId = 1;
+
+    get now() {
+      return this.#now;
+    }
+
+    set(ms, fn) {
+      const id = this.#nextId++;
+      this.#timers.set(id, { at: this.#now + Math.max(0, ms), fn });
+      return id;
+    }
+
+    clear(id) {
+      this.#timers.delete(id);
+    }
+
+    advance(ms) {
+      this.#now += ms;
+    }
+
+    // How many timers are waiting.
+    get pending() {
+      return this.#timers.size;
+    }
+
+    // Run every timer due by now, earliest first. Returns how many ran.
+    fireDue() {
+      const due = [...this.#timers].filter(([, t]) => t.at <= this.#now).sort((a, b) => a[1].at - b[1].at || a[0] - b[0]);
+      for (const [id, timer] of due) {
+        this.#timers.delete(id);
+        timer.fn();
+      }
+      return due.length;
+    }
+  };
+
   kind = "simulator";
 
-  #clock = new SimClock();
+  #clock = new SimTarget.#Clock();
   #sim;
   // What the sonar pings with: a reading at a bearing from where the rover
   // stands now, and that pose.
