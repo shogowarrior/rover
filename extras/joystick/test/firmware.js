@@ -1,7 +1,7 @@
 // What the firmware says, for the panel's tests: files in src/, the move codes
 // in src/MoveCodes.h, and the shared cases in test/vectors/, which the
-// firmware's own tests check too. Not a test itself: index.js runs only
-// *.test.js.
+// firmware's own tests check too, telemetry frames among them. Not a test
+// itself: index.js runs only *.test.js.
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
@@ -24,4 +24,20 @@ for (const [, name, value] of src("MoveCodes.h").matchAll(/^\s*([A-Z][A-Z0-9_]*)
 // Move names by code.
 const NAMES = Object.fromEntries(Object.entries(CODES).map(([name, code]) => [code, name]));
 
-module.exports = { src, vectors, CODES, NAMES };
+// Telemetry frames by name, each one key for key what src/Protocol.cpp
+// writes for its state: test/test_protocol checks writeTelemetry() against
+// every one.
+const FRAMES = Object.freeze(Object.fromEntries(
+  Object.entries(vectors("telemetry.json").frames).map(([name, frame]) => [name, Object.freeze(frame)])));
+
+// A telemetry frame as the firmware writes it: FRAMES.sweeping with extra
+// over it. A MANUAL frame carries no phase or halt unless extra gives one, as
+// the firmware's never does. A key set to undefined is left out of what the
+// fake socket sends (JSON.stringify drops it): firmware from before that key.
+function telemetry(extra = {}) {
+  const frame = { ...FRAMES.sweeping, ...extra };
+  if (frame.mode === "MANUAL") for (const key of ["phase", "halt"]) if (!(key in extra)) delete frame[key];
+  return frame;
+}
+
+module.exports = { src, vectors, CODES, NAMES, FRAMES, telemetry };

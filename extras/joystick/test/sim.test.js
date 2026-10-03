@@ -20,7 +20,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 // keeps a copy.
 const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
-const { src, CODES } = require("./firmware.js");
+const { src, CODES, telemetry } = require("./firmware.js");
 
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -896,7 +896,8 @@ test("a preview never sends: a spy link, socket and driver see nothing", async (
 test("in the page, a preview sends nothing over the real, open Link", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
-  ws.serverMsg({ mode: "AUTONOMOUS", move: "STOP", moving: false, scheme: "NORMAL", distanceFront: 80 });
+  const rover = telemetry();
+  ws.serverMsg(rover);
   assert.equal(page.evalIn("link.state"), "up");
   assert.equal(page.evalIn("typeof targets === 'object' && targets.simulator.kind"), "simulator");
   page.evalIn(`
@@ -919,10 +920,10 @@ test("in the page, a preview sends nothing over the real, open Link", async () =
   assert.deepEqual(ws.sent, [], "not one frame");
   assert.deepEqual(page.errors, []);
   // Its telemetry never reaches the readouts or the scan fan, which show the
-  // rover: here, a frame with only a front distance.
-  assert.equal(page.$("mode").textContent, "AUTONOMOUS", "the rover's mode, not the preview's MANUAL");
+  // rover's frame.
+  assert.equal(page.$("mode").textContent, rover.mode, "the rover's mode, not the preview's MANUAL");
   const readings = all(page.$("scan")).filter((n) => n.getAttribute("class") === "reading").map((n) => n.textContent);
-  assert.deepEqual(readings, ["—", "—", "80cm", "—", "—"], "only the rover's one distance on the fan");
+  assert.deepEqual(readings, BEARINGS.map((b) => `${rover[b.key]}cm`), "the rover's distances on the fan");
 });
 
 // The view's own loop, in a page whose display is throttled to two frames a
@@ -1090,7 +1091,7 @@ test("the preview reports the rover's scheme; nothing of its own reaches the pag
   const { page, sim } = pageWithView();
   const ws = connectOpen(page);
   assert.equal(sim.scheme, protocol.SCHEME_NORMAL, "NORMAL until the rover says");
-  ws.serverMsg({ mode: "MANUAL", move: "STOP", moving: false, scheme: protocol.SCHEME_ADVANCED });
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: protocol.SCHEME_ADVANCED }));
   assert.equal(sim.scheme, protocol.SCHEME_ADVANCED);
   await pageFrames(page, 600, sim);
   assert.equal(sim.telemetry().data.scheme, protocol.SCHEME_ADVANCED);

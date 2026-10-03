@@ -11,7 +11,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
-const { vectors, CODES, NAMES } = require("./firmware.js");
+const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
 
 let failed = null; // the running test's failed checks
 let passes = 0;
@@ -64,10 +64,6 @@ function scanBearings(page) {
   const readings = nodes.filter((n) => n.getAttribute("class") === "reading");
   return page.evalIn("BEARINGS").map((b, i) => ({ ...b, wedge: wedges[i], reading: readings[i] }));
 }
-const telemetry = (extra = {}) => ({
-  mode: "AUTONOMOUS", move: "STOP", moving: false, temperature: 41.5, phase: "SWEEP",
-  distanceLeft: 120, distanceFrontLeft: 80, distanceFront: 200, distanceFrontRight: 60, distanceRight: 150, ...extra,
-});
 
 /* --- tests --------------------------------------------------------------- */
 
@@ -575,16 +571,13 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(firstX(by.distanceLeft) < 210 && firstX(by.distanceRight) > 210, "left drawn on the left");
 
   // Distances missing (fresh boot): every wedge cleared, not left standing.
-  const bare = { mode: "MANUAL", move: "STOP", moving: false, temperature: 40 };
-  ws.serverMsg(bare);
+  ws.serverMsg(FRAMES.manualBeforeScan);
   for (const b of B) {
     check(b.wedge.getAttribute("d") === "", `${b.key} cleared`);
     check(b.reading.textContent === "—", `${b.key} reading cleared`);
   }
   // One key missing only clears that one.
-  const partial = telemetry();
-  delete partial.distanceFront;
-  ws.serverMsg(partial);
+  ws.serverMsg(telemetry({ distanceFront: undefined }));
   check(by.distanceFront.wedge.getAttribute("d") === "" && by.distanceLeft.wedge.getAttribute("d") !== "", "partial");
   for (const junk of ["not json", "null", "42", "[]", '"x"', '{"distanceFront":"12"}', '{"distanceFront":-1}']) ws.serverMsg(junk);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -599,15 +592,51 @@ test("phase readout: autonomous only, halt reason shown", () => {
   check(page.$("phase").dataset.tone === "warn", "halt tone");
   ws.serverMsg(telemetry({ phase: "HALTED", halt: "sensor silent" }));
   check(page.$("phase").textContent === "HALTED: sensor silent", page.$("phase").textContent);
-  const manual = telemetry({ mode: "MANUAL", move: "MOVE_FORWARD" });
-  delete manual.phase;
-  ws.serverMsg(manual);
+  ws.serverMsg(telemetry({ mode: "MANUAL", move: "MOVE_FORWARD" }));
   check(page.$("phaseCell").hidden === true, "hidden in manual");
   check(page.$("auto").getAttribute("aria-pressed") === "false", "auto not pressed");
   check(page.$("move").textContent === "MOVE_FORWARD", "move shown");
   check(page.$("temp").textContent === "41.5°C", page.$("temp").textContent);
   ws.serverMsg(telemetry({ phase: "SWEEP" }));
   check(!page.$("phaseCell").hidden && page.$("phase").textContent === "SWEEP" && page.$("phase").dataset.tone === "", "back");
+});
+
+// The frames test/test_protocol checks writeTelemetry() against, each read as
+// the operator reads it: sweeping, cruising, halted, manual before a scan,
+// and a dead shield with readings of 0 and no echo.
+test("telemetry: the page shows every frame in test/vectors/telemetry.json", () => {
+  const { FAR_CM } = require("../js/protocol.js");
+  for (const [what, is] of [
+    ["a halt", (f) => "halt" in f],
+    ["no scan yet", (f) => !("distanceFront" in f)],
+    ["a dead shield", (f) => f.motorsReady === false],
+    ["no echo", (f) => Object.values(f).includes(FAR_CM)],
+    ["a reading of 0", (f) => Object.values(f).includes(0)],
+  ]) check(Object.values(FRAMES).some(is), `no frame has ${what} any more`);
+  for (const [name, frame] of Object.entries(FRAMES)) {
+    const { page } = connected(frame);
+    const exploring = frame.mode === "AUTONOMOUS";
+    check(page.$("mode").textContent === frame.mode && page.$("auto").getAttribute("aria-pressed") === String(exploring),
+      `${name}: mode ${page.$("mode").textContent}, Autonomous pressed ${page.$("auto").getAttribute("aria-pressed")}`);
+    check(page.$("phaseCell").hidden === !exploring, `${name}: the phase shown only while exploring`);
+    if ("phase" in frame) {
+      const phase = page.$("phase");
+      check(phase.textContent === (frame.halt ? `${frame.phase}: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
+      check(phase.dataset.tone === (frame.halt ? "warn" : ""), `${name}: phase tone '${phase.dataset.tone}'`);
+    }
+    check(page.$("move").textContent === frame.move, `${name}: move ${page.$("move").textContent}`);
+    check(page.$("temp").textContent === `${frame.temperature.toFixed(1)}°C`, `${name}: temperature ${page.$("temp").textContent}`);
+    const fault = page.$("motorsFault");
+    check(fault.hidden === (frame.motorsReady !== false) && fault.dataset.ready === (frame.motorsReady ? "yes" : "no"),
+      `${name}: shield warning hidden ${fault.hidden}, ready ${fault.dataset.ready}`);
+    for (const { key, wedge, reading } of scanBearings(page)) {
+      const cm = frame[key];
+      const want = cm === undefined ? "—" : cm >= FAR_CM ? "no echo" : `${Math.round(cm)}cm`;
+      check(reading.textContent === want && (wedge.getAttribute("d") === "") === (cm === undefined), `${name}: ${key} reads '${reading.textContent}'`);
+    }
+    check(shownScheme(page) === frame.scheme, `${name}: scheme ${shownScheme(page)}`);
+    check(page.errors.length === 0, `${name}: errors ${page.errors}`);
+  }
 });
 
 test("Stop always sends STOP; Autonomous sends only RESUME and ends the repeat", () => {
@@ -671,7 +700,7 @@ test("motorsReady: false shows the shield warning; missing or true does not", ()
   check(/Motor shield not found/.test(fault.children.map((c) => c.textContent).join(" ")), "says what is wrong");
 
   const ws = connectOpen(page);
-  ws.serverMsg(telemetry()); // no motorsReady key at all: older firmware
+  ws.serverMsg(telemetry({ motorsReady: undefined })); // no motorsReady key at all: older firmware
   check(fault.hidden === true, "missing key is unknown, not false");
   ws.serverMsg(telemetry({ motorsReady: true }));
   check(fault.hidden === true, "true: hidden");
@@ -685,7 +714,7 @@ test("motorsReady: false shows the shield warning; missing or true does not", ()
     check(fault.hidden === true, `motorsReady ${JSON.stringify(odd)} is not an explicit false`);
   }
   ws.serverMsg(telemetry({ motorsReady: false }));
-  ws.serverMsg(telemetry());
+  ws.serverMsg(telemetry({ motorsReady: undefined }));
   check(fault.hidden === true, "a frame without the key hides it again");
   ws.serverMsg(telemetry({ motorsReady: true, mode: "MANUAL" }));
   check(fault.hidden === true, "rebooted with the shield: hidden");
@@ -1396,7 +1425,7 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
   check(page.evalIn("schemeToggle.scheme") === "NORMAL", "scheme getter");
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
   check(shownScheme(page) === "ADVANCED", `follows telemetry, as after the pad's SELECT: ${shownScheme(page)}`);
-  ws.serverMsg(telemetry()); // a frame that names none says nothing is known
+  ws.serverMsg(telemetry({ scheme: undefined })); // a frame that names none says nothing is known
   unknown("a frame without scheme");
   check(count(ws) === 0, `sent ${ws.sent}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -2316,7 +2345,7 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   check(asked() === 2 && names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
 
   // A scheme the rover has not reported: asked too, and it says so.
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: undefined }));
   page.evalIn("__answer = false;");
   await run();
   check(asked() === 3 && /has not said which control scheme/.test(question()), `unknown: ${question()}`);

@@ -1,5 +1,5 @@
 {
-  "about": "Telemetry frames exactly as src/Protocol.cpp writes them, every key and no other: test/test_protocol builds the status each frame describes and checks that writeTelemetry() writes this frame back. 999 is a bearing with no echo (DISTANCE_FAR_CM).",
+  "about": "Telemetry frames exactly as src/Protocol.cpp writes them, every key and no other: test/test_protocol builds the status each frame describes and checks that writeTelemetry() writes this frame back. The panel's tests read them through extras/joystick/test/firmware.js: panel.test.js checks what the page shows for each, and it and sim.test.js build their other frames from \"sweeping\". 999 is a bearing with no echo (DISTANCE_FAR_CM).",
   "frames": {
     "sweeping": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 41.5, "motorsReady": true, "scheme": "NORMAL", "phase": "SWEEP",
                  "distanceLeft": 120, "distanceFrontLeft": 80, "distanceFront": 200, "distanceFrontRight": 60, "distanceRight": 150},
