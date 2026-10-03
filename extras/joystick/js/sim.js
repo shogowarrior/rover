@@ -206,6 +206,16 @@ class RoverSim {
     return { x: pose.x + c * x - s * y, y: pose.y + s * x + c * y };
   }
 
+  // An angle in radians, wrapped into -pi..pi.
+  static wrap(angle) {
+    return Math.atan2(Math.sin(angle), Math.cos(angle));
+  }
+
+  // Whether two poses are the same within eps (metres, and radians of heading).
+  static samePose(a, b, eps) {
+    return Math.hypot(a.x - b.x, a.y - b.y) < eps && Math.abs(RoverSim.wrap(a.heading - b.heading)) < eps;
+  }
+
   // The pose after holding a twist for `seconds`, integrated exactly (the
   // twist is constant over a step, so the path is an arc or a line).
   static advance(pose, { vx, vy, w }, seconds) {
@@ -222,7 +232,7 @@ class RoverSim {
       dy = (vx * (1 - cos) + vy * sin) / w;
     }
     const moved = RoverSim.toWorld(pose, { x: dx, y: dy });
-    return { x: moved.x, y: moved.y, heading: RoverSim.#wrap(pose.heading + turn) };
+    return { x: moved.x, y: moved.y, heading: RoverSim.wrap(pose.heading + turn) };
   }
 
   #pose;
@@ -243,7 +253,7 @@ class RoverSim {
   }
 
   set pose(pose) {
-    this.#pose = { x: pose.x, y: pose.y, heading: RoverSim.#wrap(pose.heading) };
+    this.#pose = { x: pose.x, y: pose.y, heading: RoverSim.wrap(pose.heading) };
   }
 
   get releasedDrag() {
@@ -381,10 +391,6 @@ class RoverSim {
   static #clean(value) {
     const rounded = Math.round(value * 1e6) / 1e6;
     return rounded === 0 ? 0 : rounded;
-  }
-
-  static #wrap(angle) {
-    return Math.atan2(Math.sin(angle), Math.cos(angle));
   }
 }
 
@@ -675,12 +681,19 @@ class SimSonar {
   // FAR_CM when no echo would come back. One ray stands for the sensor's
   // cone, so a thin leg the cone would catch at an angle can slip past it.
   static measure(room, pose, bearingDeg) {
-    const origin = RoverSim.toWorld(pose, RoverSim.SENSOR_AT);
-    const hit = room.rayCast(origin, pose.heading + (bearingDeg * Math.PI) / 180);
+    const { origin, angle } = SimSonar.ray(pose, bearingDeg);
+    const hit = room.rayCast(origin, angle);
     if (!hit) return FAR_CM;
     const cm = hit.distance * 100;
     if (cm > SIM_SONAR.rangeCm || hit.incidence > (SIM_SONAR.maxIncidenceDeg * Math.PI) / 180) return FAR_CM;
     return Math.round(cm * 10) / 10;
+  }
+
+  // The ray a ping at bearingDeg follows from a chassis at pose: from the
+  // sensor, along the bearing. SimView draws this same ray, so what it draws
+  // is what was measured.
+  static ray(pose, bearingDeg) {
+    return { origin: RoverSim.toWorld(pose, RoverSim.SENSOR_AT), angle: pose.heading + (bearingDeg * Math.PI) / 180 };
   }
 
   #bearings; // the panel's BEARINGS, left to right
@@ -897,6 +910,10 @@ class SimTarget {
 
   #clock = new SimClock();
   #sim;
+  // What the sonar pings with: a reading at a bearing from where the rover
+  // stands now, and that pose.
+  #ping = (bearing) => SimSonar.measure(this.#room, this.#sim.pose, bearing);
+  #poseNow = () => this.#sim.pose;
   #sonar;
   #room;
   #roomKey;
@@ -1145,8 +1162,7 @@ class SimTarget {
     return {
       now: this.#clock.now,
       pose,
-      atStart: Math.hypot(pose.x - start.x, pose.y - start.y) < 0.002 &&
-        Math.abs(Math.atan2(Math.sin(pose.heading - start.heading), Math.cos(pose.heading - start.heading))) < 0.002,
+      atStart: RoverSim.samePose(pose, start, 0.002),
       move: sim.move,
       speed: sim.speed,
       moving: sim.moving,
@@ -1212,25 +1228,25 @@ class SimTarget {
   }
 
   // The firmware's Rover::command(), as far as a preview needs it. Every
-  // command but RESUME_AUTONOMOUS takes the rover out of autonomous mode, and
-  // any change of mode starts a fresh sweep.
+  // command but RESUME_AUTONOMOUS takes the rover out of autonomous mode.
   #commandRover(move, speed) {
     const now = this.#clock.now;
     this.#lastCommandAt = now;
     if (move === RESUME_AUTONOMOUS) {
-      if (this.#mode !== "AUTONOMOUS") {
-        this.#mode = "AUTONOMOUS";
-        this.#sim.release();
-        this.#sonar.restart(now);
-      }
+      this.#enterMode("AUTONOMOUS", now);
       return;
     }
-    if (this.#mode !== "MANUAL") {
-      this.#mode = "MANUAL";
-      this.#sim.release();
-      this.#sonar.restart(now);
-    }
+    this.#enterMode("MANUAL", now);
     this.#sim.command(move, speed, MOVE_DURATION_MS);
+  }
+
+  // Rover::setMode(): a change of mode releases the wheels and starts a
+  // fresh sweep.
+  #enterMode(mode, now) {
+    if (this.#mode === mode) return;
+    this.#mode = mode;
+    this.#sim.release();
+    this.#sonar.restart(now);
   }
 
   // One fixed step of the world.
@@ -1239,7 +1255,7 @@ class SimTarget {
     this.#clock.advance(SimTarget.STEP_MS);
     const now = this.#clock.now;
     if (bump) this.#bumped(bump, now);
-    this.#sonar.update(now, (bearing) => SimSonar.measure(this.#room, this.#sim.pose, bearing), () => this.#sim.pose);
+    this.#sonar.update(now, this.#ping, this.#poseNow);
     this.#extendTrail();
     if (now < this.#nextTelemetryAt) return;
     this.#nextTelemetryAt += SimTarget.TELEMETRY_MS;
@@ -1313,7 +1329,7 @@ class SimTarget {
     this.#mode = "MANUAL";
     this.#sim.release();
     this.#sim.pose = this.#start;
-    this.#sonar.settle(now, (bearing) => SimSonar.measure(this.#room, this.#sim.pose, bearing), () => this.#sim.pose);
+    this.#sonar.settle(now, this.#ping, this.#poseNow);
     this.#latest = null;
     this.#nextTelemetryAt = now;
     this.#trail = [this.#trailPoint()];

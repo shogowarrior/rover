@@ -546,8 +546,7 @@ class SimView {
         dot.setAttribute("visibility", "hidden");
         return;
       }
-      const from = RoverSim.toWorld(reading.from, RoverSim.SENSOR_AT);
-      const angle = reading.from.heading + (bearing * Math.PI) / 180;
+      const { origin: from, angle } = SimSonar.ray(reading.from, bearing);
       const noEcho = reading.cm >= FAR_CM;
       let lengthM = reading.cm / 100;
       if (noEcho) {
@@ -655,8 +654,7 @@ class SimView {
     const next = drag.mode === "move"
       ? { x: at.x + drag.offset.x, y: at.y + drag.offset.y, heading: pose.heading }
       : { x: pose.x, y: pose.y, heading: Math.atan2(at.y - pose.y, at.x - pose.x) };
-    const turn = Math.atan2(Math.sin(next.heading - pose.heading), Math.cos(next.heading - pose.heading));
-    if (Math.hypot(next.x - pose.x, next.y - pose.y) < 1e-6 && Math.abs(turn) < 1e-6) return;
+    if (RoverSim.samePose(next, pose, 1e-6)) return;
     // Where the chassis would not fit, it stays where it last did.
     if (this.#target.place(next)) this.#render();
   }
