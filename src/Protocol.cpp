@@ -45,6 +45,8 @@ Message readMessage(JsonVariantConst json) {
   return message;
 }
 
+// SCHEME_NORMAL and SCHEME_ADVANCED in extras/joystick/js/protocol.js copy
+// these names, and tools/check_protocol.py checks them.
 const char* schemeName(kinematics::ControlScheme scheme) {
   return scheme == kinematics::SCHEME_ADVANCED ? "ADVANCED" : "NORMAL";
 }
@@ -55,6 +57,9 @@ size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme sch
   // a state store is what let stale distances and move names leak into
   // telemetry before.
   JsonDocument doc;
+  // MODE_AUTONOMOUS and MODE_MANUAL in extras/joystick/js/protocol.js, and
+  // MODE_AUTONOMOUS in client/drive.py, copy these names, and
+  // tools/check_protocol.py checks them.
   doc["mode"] = status.mode == Rover::MODE_AUTONOMOUS ? "AUTONOMOUS" : "MANUAL";
   doc["move"] = moveName(status.move);
   doc["moving"] = status.moving;

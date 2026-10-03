@@ -18,7 +18,9 @@ namespace tuning {
 // 0..255). Duty is a fraction of the pack voltage: the TT motors on this rover
 // are rated 3-6 V and the 3S pack gives up to 12.6 V, so 255 drives them at
 // about twice their rating. About 120 keeps them in spec. It stays at 255
-// until the operator decides; see docs/ROADMAP.md.
+// until the operator decides; see docs/ROADMAP.md. MOTOR_SPEED_LIMIT in
+// extras/joystick/js/protocol.js is the panel's copy, which its simulator
+// clamps a preview to: change both, or tools/check_protocol.py fails.
 constexpr int MOTOR_SPEED_LIMIT = 255;
 
 // Longest one external command may drive before the motors are released.

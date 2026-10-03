@@ -18,6 +18,8 @@ constexpr int STICK_AXIS_MAX = 127;
 
 // Adafruit_DCMotor::setSpeed takes a uint8_t. Anything above 255 wraps around
 // to a small number, so a client asking for 300 would quietly get 44.
+// SPEED_MAX in extras/joystick/js/protocol.js is the panel's copy, and
+// tools/check_protocol.py checks it.
 constexpr int MOTOR_SPEED_MAX = 255;
 
 // HCSR04 2.0.0's measureDistanceCm() returns -1 for every failed measurement:
