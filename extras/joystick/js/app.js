@@ -13,7 +13,8 @@
  *   support.js     what the parts share: Listeners, memory, dom, segment,
  *                  pressSegment, clamp, radians, degrees, abortableWait,
  *                  isPrimaryPress, reportFault
- *   protocol.js    every value mirrored from the firmware
+ *   protocol.js    the firmware's constants: move codes, scheme and mode names,
+ *                  speed limits, the port, distances and timing
  *   mecanum.js     the motions, moveForStick() for the stick families, and
  *                  heldMotion() for a program's
  *   link.js        Link: the WebSocket, the link state, telemetry

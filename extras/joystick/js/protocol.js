@@ -1,8 +1,11 @@
 /**
- * Every value the panel shares with the firmware: the wire protocol's move
- * codes, scheme names and mode names, the port, the telemetry interval, the
- * distances the scan fan is drawn at, and the command timing the firmware's
- * deadman depends on.
+ * Most values the panel shares with the firmware: the wire protocol's move
+ * codes, scheme names and mode names, the speed limits, the port, the
+ * telemetry interval, the distances the scan fan is drawn at, and the command
+ * timing the firmware's deadman depends on. The rest are elsewhere: the
+ * sweep's bearings and their telemetry keys (BEARINGS in scan.js), the stick
+ * mapping and the move names telemetry reports (mecanum.js), and the
+ * simulator's own copies (sim.js).
  *
  * The wire format itself is in src/Protocol.h. The panel is a set of classic
  * scripts that share one global scope (see app.js), so the constants below

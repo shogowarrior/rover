@@ -7,9 +7,10 @@ thresholds, sentinels and command timing (MIRRORS below), scan angles,
 telemetry keys and command fields, the control-scheme names and message,
 and the mode names telemetry reports.
 Each Checker method says what it compares and why; main() runs them all.
-The panel keeps every number and name it mirrors in
-extras/joystick/js/protocol.js; its reads, commands and bearings are looked
-for in every extras/joystick/js/*.js.
+The panel's copies this script compares are in
+extras/joystick/js/protocol.js, except the bearings (BEARINGS, in
+extras/joystick/js/scan.js); its telemetry reads, commands and bearings are
+looked for in every extras/joystick/js/*.js.
 
 Nothing at build time notices when a copy drifts, and a drifted copy fails
 quietly -- a key that sends the wrong motion, a panel that shows a clear path
@@ -26,11 +27,13 @@ tables below to match.
 
 Not covered: client/ws.py and client/rover.ipynb, which import their numbers
 from drive.py; the default host address, which is per-network
-configuration every client lets the operator override; and the panel's
-simulator's copies in extras/joystick/js/sim.js (the wheel table from
-src/MovePatterns.cpp, the sweep timing from ExploreParams and the
-telemetry keys it writes), which extras/joystick/test/sim.test.js checks
-instead, in CI too.
+configuration every client lets the operator override; the panel's stick
+mapping and the move names telemetry reports, in
+extras/joystick/js/mecanum.js, which extras/joystick/test/mecanum.test.js
+checks instead; and the panel's simulator's copies in
+extras/joystick/js/sim.js (the wheel table from src/MovePatterns.cpp, the
+sweep timing from ExploreParams and the telemetry keys it writes), which
+extras/joystick/test/sim.test.js checks instead. CI runs both.
 
 Standard library only; the files are parsed with regular expressions.
 """
