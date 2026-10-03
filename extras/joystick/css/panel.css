@@ -1471,22 +1471,28 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   }
 
   /* The motor fault takes the scan's place (the rule for every phone,
-     above), and here that place is only what the head and the readouts
-     leave: 88 px at 568 x 320. At the card's own height the page grew by
-     120 px, and the stick, centred in the dock that spans every row, slid
-     half below the screen. So the card asks for no height of its own (size
-     containment): it fills what the dock leaves, at least two lines, and
-     scrolls the rest. All of it shows at 667 x 375 and up, and the stick
-     does not move. A two-line clamp, before, cut the text mid-sentence
-     wherever the row held more, with the lines after its ellipsis still
-     showing. A halt reason wrapping in the readouts as well still moves the
-     stick (up to 19 px at 568 x 320), and the Driver lets go of a stick
-     held through that (js/drive.js). */
-  .shell:has(#motorsFault:not([hidden])) .fault {
+     above), and beside the stick that place is only what the head and the
+     readouts leave: 88 px at 568 x 320. At the card's own height the page
+     grew by 120 px, and the stick, centred in the dock that spans every
+     row, slid half below the screen. So on the Drive tab the card asks for
+     no height of its own (size containment): it fills what the dock leaves
+     and scrolls the rest, and keeps at least its headline's line and one
+     more (its padding and borders are inside the height). All of it shows
+     at 667 x 375 and up, and while the dock leaves that much the stick does
+     not move. A two-line clamp, before, cut the text mid-sentence wherever
+     the row held more, with the lines after its ellipsis still showing. The
+     Program tab has no stick and scrolls as a page, so there the card keeps
+     its own height. A halt reason wrapping in the readouts as well still
+     moves the stick (up to 19 px at 568 x 320), and the Driver lets go of a
+     stick held through that (js/drive.js). */
+  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
     contain: size;
-    min-height: calc(2lh + 2 * var(--s-2));
+    min-height: calc(var(--t-sm) * var(--lh-tight) + var(--s-0) + var(--lh-body) * 1em + 2 * var(--s-2) + 2px);
     overflow-y: auto;
+    /* Centred when it fits, from the top when it scrolls, where centring
+       would put its first lines out of reach; start where safe is unknown. */
     align-content: start;
+    align-content: safe center;
     padding: var(--s-2) var(--s-3);
   }
 

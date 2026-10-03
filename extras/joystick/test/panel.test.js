@@ -2035,6 +2035,22 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   ]) check(!caught(css), `flagged harmless: ${css}`);
 });
 
+// Layout the fake DOM cannot lay out, held by the stylesheet's words. Beside
+// a landscape stick the motor-fault card takes the scan's place; at its own
+// height the page grew and the stick slid half off a 568 x 320 screen. And a
+// line clamp in a card the grid stretches cut the text mid-sentence and still
+// showed the lines after its ellipsis. Measured in a browser at 480 x 320 to
+// 812 x 375 (css/panel.css says what it found).
+test("motorsReady: the fault beside a landscape stick takes no height of its own, and no fault card clamps its lines", () => {
+  const rules = cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"));
+  const beside = rules.filter((r) => r.selector.includes("#driveTab") && /#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
+  check(beside.length === 1, `the Drive tab's fault card: ${beside.map((r) => r.selector)}`);
+  const body = beside.length === 1 ? beside[0].body : "";
+  check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
+  const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
+  check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
+});
+
 // The scripts read the stylesheet's tokens by name: blocks.js's Blockly
 // theme through token(), which reads nothing at all for a name that is gone,
 // and the scan's and the simulator's SVG fills through var(), which leave a
