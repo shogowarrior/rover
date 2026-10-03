@@ -672,6 +672,8 @@ class Room {
 // sweep left it, and the servo is at the end of that sweep. (A rover just
 // powered on has none for 1.1 s, and telemetry carries no distances until it
 // has all five; a program on the rover meets that only right after a boot.)
+// So settle() comes before anything else: SimTarget settles its sonar as it
+// builds it (#resetWorld), and there is no first aim from nowhere to time.
 class SimSonar {
   // ExploreParams in src/Explorer.h. test/sim.test.js checks them.
   static TIMING = Object.freeze({ servoBaseMs: 60, servoMsPerDeg: 2.5, pingIntervalMs: 70 });
@@ -700,9 +702,9 @@ class SimSonar {
   #readings; // per bearing: {cm, at, from: {x, y, heading}} or null
   #leftToRight = false;
   #step = 0;
-  #servoDeg = null; // where the servo points, null until it is first aimed
+  #servoDeg; // where the servo points
   #readyAt = 0;
-  #lastPingAt = null;
+  #lastPingAt; // when the last ping was
 
   constructor(bearings) {
     if (!Array.isArray(bearings) || bearings.length < 2) {
@@ -742,8 +744,7 @@ class SimSonar {
   // cm at that bearing from where the rover is now, and pose() the pose
   // it is taken from (kept for drawing). Returns the bearing pinged, or null.
   update(now, measure, pose) {
-    const ready = now >= this.#readyAt &&
-      (this.#lastPingAt === null || now - this.#lastPingAt >= SimSonar.TIMING.pingIntervalMs);
+    const ready = now >= this.#readyAt && now - this.#lastPingAt >= SimSonar.TIMING.pingIntervalMs;
     if (!ready) return null;
     const index = this.#bearingAt(this.#step);
     const bearing = this.#bearings[index].bearing;
@@ -779,20 +780,18 @@ class SimSonar {
     return this.#leftToRight ? step : this.#bearings.length - 1 - step;
   }
 
-  // Explorer::aim(): the servo settles for longer the further it swings; an
-  // aim from nowhere known assumes a full swing.
+  // Explorer::aim(): the servo settles for longer the further it swings.
   #aim(now) {
     const target = SimSonar.#servo(this.#bearings[this.#bearingAt(this.#step)].bearing);
     this.#readyAt = now + SimSonar.#settleMs(this.#servoDeg, target);
     this.#servoDeg = target;
   }
 
-  // How long the servo takes to settle at `to` from `from` (servo degrees;
-  // from null, a full swing), cut to whole milliseconds as the firmware does.
+  // How long the servo takes to settle at `to` from `from` (servo degrees),
+  // cut to whole milliseconds as the firmware does.
   static #settleMs(from, to) {
     const { servoBaseMs, servoMsPerDeg } = SimSonar.TIMING;
-    const travel = from === null ? 180 : Math.abs(to - from);
-    return servoBaseMs + Math.trunc(servoMsPerDeg * travel);
+    return servoBaseMs + Math.trunc(servoMsPerDeg * Math.abs(to - from));
   }
 
   // The servo's angle for a bearing: 90 minus it, within the servo's travel.
