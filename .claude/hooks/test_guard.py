@@ -184,6 +184,11 @@ CASES = [
     ("git grep --no-ind", "B", bash("git grep --no-ind WIFI src")),
     ("git grep --no-exclude-standard", "B", bash("git grep --untracked --no-exclude-standard WIFI")),
     ("git grep --no-exc", "B", bash("git grep --untracked --no-exc WIFI")),
+    # The shell joins the lines at an escaped newline, and so must the check,
+    # but not at an escaped backslash before a plain one.
+    ("git grep, escaped newline, --no-index", "B", bash("git grep \\\n --no-index WIFI src")),
+    ("git, escaped newline, grep --no-exc", "B", bash("git \\\n grep --untracked --no-exc WIFI")),
+    ("git grep, escaped backslash, newline", "A", bash("git grep -n x -- docs \\\\\necho --no-index")),
     ("git -C --no-pager grep --no-index", "B", bash("git -C " + P + " --no-pager grep --no-index WIFI")),
     ("git diff --no-index", "A", bash("git diff --no-index docs/a.md docs/b.md")),
     ("heredoc body", "A", bash("cat > f <<EOF\ngrep -r x src\nEOF\necho done")),

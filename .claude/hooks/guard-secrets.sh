@@ -445,8 +445,14 @@ a file instead (git commit -F <file>)."
   # directory as plain files, and --no-exclude-standard makes --untracked
   # take ignored files too. Either reads src/config.h. git accepts any
   # unambiguous prefix of a long option, so match the shortest it takes,
-  # --no-ind and --no-exc (--no-in and --no-ex are ambiguous).
-  if matches "$lower" '(^|[^[:alnum:]_.-])git[[:space:]]([^|;&]*[[:space:]])?grep[[:space:]][^|;&]*--no-(ind|exc)'; then
+  # --no-ind and --no-exc (--no-in and --no-ex are ambiguous). grep reads a
+  # line at a time, so first join the lines at each escaped newline, as the
+  # shell does: one that ends in an odd run of backslashes.
+  joined=$(printf '%s\n' "$lower" | awk '{
+    n = match($0, /\\+$/) ? RLENGTH : 0
+    if (n % 2) printf "%s", substr($0, 1, length($0) - 1); else print
+  }') || block "awk failed, so the command could not be checked."
+  if matches "$joined" '(^|[^[:alnum:]_.-])git[[:space:]]([^|;&]*[[:space:]])?grep[[:space:]][^|;&]*--no-(ind|exc)'; then
     block "git grep --no-index and --no-exclude-standard search gitignored files,
 src/config.h among them. Search with git grep --untracked, which skips them."
   fi
