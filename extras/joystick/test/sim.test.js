@@ -19,7 +19,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 // The panel's own BEARINGS: the simulator takes them as they are, and never
 // keeps a copy.
 const { BEARINGS } = require("../js/scan.js");
-const { loadPage, all } = require("./fake-dom.js");
+const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { src, CODES } = require("./firmware.js");
 
 const near = (actual, expected, tolerance, what) =>
@@ -32,7 +32,7 @@ const deg = (rad) => (rad * 180) / Math.PI;
 async function run(target, realMs, frameMs = 16) {
   for (let t = 0; t < realMs; t += frameMs) {
     await target.pump(Math.min(frameMs, realMs - t));
-    await new Promise((resolve) => setImmediate(resolve));
+    await flush();
   }
 }
 
@@ -390,7 +390,7 @@ test("a rover wedged in a corner marks each place once, however long it pushes",
   }, target);
   while (target.state.now < 60000) {
     await target.pump(16);
-    await new Promise((resolve) => setImmediate(resolve));
+    await flush();
   }
   runner.abort("done");
   const { bumps } = target.state;
@@ -538,7 +538,7 @@ test("a hitch at 4x stalls the page for its real length, not four times it", asy
     })();
     for (const ms of frames) {
       await target.pump(ms);
-      await new Promise((resolve) => setImmediate(resolve));
+      await flush();
     }
     await program;
     return target.state.pose.x - target.room.start.x;
@@ -809,7 +809,7 @@ async function previewFor(program, room, ms, { playback = 4, frameMs = 16 } = {}
   const ended = runner.run(program, target);
   while (target.state.now < ms) {
     await target.pump(frameMs);
-    await new Promise((resolve) => setImmediate(resolve));
+    await flush();
   }
   runner.abort("the preview is over");
   return { target, end: await ended };
@@ -841,7 +841,7 @@ test("a program previews the same at any frame rate and any playback", async () 
     runner.run(patrol, target);
     while (target.state.now < 20000) {
       await target.pump(frameMs);
-      await new Promise((resolve) => setImmediate(resolve));
+      await flush();
     }
     runner.abort("done");
     // Each stops at the first frame past 20 s; compare the first 20 s.
@@ -895,10 +895,7 @@ test("a preview never sends: a spy link, socket and driver see nothing", async (
 
 test("in the page, a preview sends nothing over the real, open Link", async () => {
   const page = loadPage();
-  page.$("host").value = "10.0.0.7";
-  page.fire(page.$("connect"), "click");
-  const ws = page.sockets[page.sockets.length - 1];
-  ws.serverOpen();
+  const ws = connectOpen(page);
   ws.serverMsg({ mode: "AUTONOMOUS", move: "STOP", moving: false, scheme: "NORMAL", distanceFront: 80 });
   assert.equal(page.evalIn("link.state"), "up");
   assert.equal(page.evalIn("typeof targets === 'object' && targets.simulator.kind"), "simulator");
@@ -917,11 +914,7 @@ test("in the page, a preview sends nothing over the real, open Link", async () =
   page.evalIn("__simulator").onTelemetry(() => frames++);
   // The page's own clock is the harness's, so the preview's turns of the
   // event loop come as it advances.
-  for (let i = 0; i < 100; i++) {
-    page.evalIn("__simulator.pump(16)");
-    page.clock.advance(16);
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await pageFrames(page, 1600, page.evalIn("__simulator"));
   assert.ok(frames > 0, "the preview published telemetry of its own");
   assert.deepEqual(ws.sent, [], "not one frame");
   assert.deepEqual(page.errors, []);
@@ -944,10 +937,7 @@ test("in the page, a throttled display does not stall the preview", async () => 
   page.evalIn("targets.simulator.setRoom('corridor')");
   const from = { ...sim.state.pose };
   sim.hold(protocol.MOVE_FORWARD, 128);
-  for (let t = 0; t < 3000; t += 16) {
-    page.clock.advance(16);
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await pageFrames(page, 3000);
   const moved = Math.hypot(sim.state.pose.x - from.x, sim.state.pose.y - from.y);
   // One command lasts MOVE_DURATION_MS: a preview that let it run out
   // covers about that much ground, not three seconds' worth.
@@ -973,16 +963,6 @@ function pageWithView(options) {
   byClass("sim-map")[0].getScreenCTM = () => ({ inverse: () => ({}) });
   const button = (text) => nodes().find((n) => n.tagName === "BUTTON" && n.textContent === text);
   return { page, sim: page.evalIn("targets.simulator"), byClass, button };
-}
-
-// Frames of the page's own clock, with the event loop's turns between them,
-// pumping the preview by hand where the page has no requestAnimationFrame.
-async function pageFrames(page, ms, sim = null) {
-  for (let t = 0; t < ms; t += 16) {
-    if (sim) sim.pump(16);
-    page.clock.advance(16);
-    await new Promise((resolve) => setImmediate(resolve));
-  }
 }
 
 test("the view: a tap on the rover leaves a preview running; a drag places it", async () => {
@@ -1108,10 +1088,7 @@ test("the view's frames: none while hidden or idle out of sight, and no jump aft
 
 test("the preview reports the rover's scheme; nothing of its own reaches the page", async () => {
   const { page, sim } = pageWithView();
-  page.$("host").value = "10.0.0.7";
-  page.fire(page.$("connect"), "click");
-  const ws = page.sockets[page.sockets.length - 1];
-  ws.serverOpen();
+  const ws = connectOpen(page);
   assert.equal(sim.scheme, protocol.SCHEME_NORMAL, "NORMAL until the rover says");
   ws.serverMsg({ mode: "MANUAL", move: "STOP", moving: false, scheme: protocol.SCHEME_ADVANCED });
   assert.equal(sim.scheme, protocol.SCHEME_ADVANCED);

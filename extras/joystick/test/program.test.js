@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const { ProgramRunner, RoverTarget } = require("../js/program.js");
 const P = require("../js/protocol.js");
+const { flush } = require("./fake-dom.js");
 
 // Every test has a time limit. A regression that leaves a program waiting
 // for good -- an abort that never lands, a cap that never comes -- then fails
@@ -15,9 +16,6 @@ const P = require("../js/protocol.js");
 // The tests also check that a run has ended before awaiting how it ended, so
 // most such regressions fail at once.
 const test = (name, fn) => nodeTest.test(name, { timeout: 10000 }, fn);
-
-// Let every promise that can settle, settle.
-const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 /* --- a target with its own clock ------------------------------------------ */
 

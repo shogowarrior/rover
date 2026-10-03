@@ -1,6 +1,7 @@
 // A minimal fake DOM, WebSocket and virtual clock: just enough to run the
 // panel's real scripts (joy.js included, unmodified) in a Node vm context, as
-// the page loads them. Nothing here is a test; panel.test.js drives it.
+// the page loads them, and the steps every test takes with such a page.
+// Nothing here is a test; the tests drive it.
 //
 // The page is read from joystick.html, and every <script src> in it is run
 // in page order in one shared context, as a browser runs classic scripts. A
@@ -277,4 +278,30 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   return page;
 }
 
-module.exports = { loadPage, all, PANEL_ROOT };
+/* --- driving a page --------------------------------------------------------- */
+
+// One turn of Node's event loop: every promise that can settle, settles.
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+// Type a host, press Connect and open the socket from the server's side;
+// returns the fake socket.
+function connectOpen(page, host = "10.0.0.7") {
+  page.$("host").value = host;
+  page.fire(page.$("connect"), "click");
+  const ws = page.sockets[page.sockets.length - 1];
+  ws.serverOpen();
+  return ws;
+}
+
+// ms of the page's clock in 16 ms frames, with the event loop's turns between
+// them. sim, if given, is pumped a frame first, where the page has no
+// requestAnimationFrame to do it.
+async function pageFrames(page, ms, sim = null) {
+  for (let t = 0; t < ms; t += 16) {
+    if (sim) sim.pump(16);
+    page.clock.advance(16);
+    await flush();
+  }
+}
+
+module.exports = { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames };

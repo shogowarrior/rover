@@ -10,7 +10,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
-const { loadPage, all, PANEL_ROOT } = require("./fake-dom.js");
+const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES } = require("./firmware.js");
 
 let failed = null; // the running test's failed checks
@@ -33,12 +33,12 @@ nodeTest.after(() => console.log(`panel.test.js: ${passes} checks passed`));
 
 /* --- helpers ------------------------------------------------------------- */
 
-function connectOpen(page, host = "10.0.0.7") {
-  page.$("host").value = host;
-  page.fire(page.$("connect"), "click");
-  const ws = page.sockets[page.sockets.length - 1];
-  ws.serverOpen();
-  return ws;
+// A page whose link is up and has had its first telemetry frame.
+function connected(frame, options) {
+  const page = loadPage(options);
+  const ws = connectOpen(page);
+  ws.serverMsg(frame);
+  return { page, ws };
 }
 const names = (ws, from = 0) => ws.moves().slice(from).map((m) => NAMES[m.move]);
 const count = (ws) => ws.sent.length;
@@ -95,9 +95,7 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
 });
 
 test("hover across a rotate button sends nothing (autonomous, idle)", () => {
-  const page = loadPage({ touch: false });
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry(), { touch: false });
   for (const b of ["cw", "ccw"]) {
     page.fire(page.$(b), "pointerover", { pointerId: 1, button: -1 });
     page.fire(page.$(b), "pointerleave", { pointerId: 1, button: -1 });
@@ -136,9 +134,7 @@ test("right-click on a rotate button sends nothing", () => {
 });
 
 test("blur / hidden / pagehide while autonomous and idle send nothing", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry());
   page.fire(page.win, "blur", { bubbles: false });
   page.doc.hidden = true;
   page.fire(page.doc, "visibilitychange", { bubbles: false });
@@ -228,9 +224,7 @@ test("Connect is Cancel while connecting, and cancel is a neutral disconnect", (
 });
 
 test("deliberate disconnect: neutral note, no stale relabel, no timers left", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry());
   page.fire(page.$("connect"), "click");
   check(count(ws) === 0, `autonomous idle rover not stopped: ${names(ws)}`);
   page.clock.advance(3000);
@@ -241,9 +235,7 @@ test("deliberate disconnect: neutral note, no stale relabel, no timers left", ()
 });
 
 test("stale telemetry, then a dropped link, stays down", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry());
   page.clock.advance(1900);
   check(page.doc.body.dataset.link === "stale", "stale after 1.8 s of silence");
   check(page.$("connect").textContent === "Disconnect", "Disconnect while stale");
@@ -463,9 +455,7 @@ test("link lost with the mouse holding the stick: the new link is not driven by 
 
 test("right-click and ctrl-click on the stick never drive, menu suppressed", () => {
   for (const press of [{ button: 2 }, { button: 0, ctrlKey: true }, { button: 1 }]) {
-    const page = loadPage({ touch: false });
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry());
+    const { page, ws } = connected(telemetry(), { touch: false });
     const m = mouseStick(page);
     m.down(press);
     const menu = page.fire(page.canvas, "contextmenu", { button: 2 });
@@ -479,9 +469,7 @@ test("right-click and ctrl-click on the stick never drive, menu suppressed", () 
 });
 
 test("a right-drag after a normal left press-and-release does not drive", () => {
-  const page = loadPage({ touch: false });
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry(), { touch: false });
   const m = mouseStick(page);
   m.down(); m.up(); // a plain click on the stick: joy.js reports centre, nothing driven
   m.down({ button: 2 }); m.move(0, -95);
@@ -490,9 +478,7 @@ test("a right-drag after a normal left press-and-release does not drive", () => 
 });
 
 test("ctrl-click on a rotate button sends nothing; its menu is suppressed", () => {
-  const page = loadPage({ touch: false });
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry(), { touch: false });
   for (const b of ["cw", "ccw"]) {
     press(page, page.$(b), 1, { ctrlKey: true });
     const menu = page.fire(page.$(b), "contextmenu", { button: 0, ctrlKey: true });
@@ -566,9 +552,7 @@ test("stick throttle: same move at most every 100 ms, direction change at once",
 });
 
 test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ distanceLeft: 20, distanceFrontLeft: 30, distanceFront: 150, distanceFrontRight: 999, distanceRight: 25 }));
+  const { page, ws } = connected(telemetry({ distanceLeft: 20, distanceFrontLeft: 30, distanceFront: 150, distanceFrontRight: 999, distanceRight: 25 }));
   const B = scanBearings(page);
   const by = Object.fromEntries(B.map((b) => [b.key, b]));
   for (const b of B) check(b.wedge.getAttribute("d") !== "", `${b.key} drawn`);
@@ -607,9 +591,7 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
 });
 
 test("phase readout: autonomous only, halt reason shown", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ phase: "CRUISE" }));
+  const { page, ws } = connected(telemetry({ phase: "CRUISE" }));
   check(!page.$("phaseCell").hidden && page.$("phase").textContent === "CRUISE", page.$("phase").textContent);
   check(page.$("auto").getAttribute("aria-pressed") === "true", "auto pressed");
   ws.serverMsg(telemetry({ phase: "HALTED", halt: "boxed in" }));
@@ -629,9 +611,7 @@ test("phase readout: autonomous only, halt reason shown", () => {
 });
 
 test("Stop always sends STOP; Autonomous sends only RESUME and ends the repeat", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry());
   page.fire(page.$("stop"), "click");
   check(names(ws).join() === "STOP", `idle stop ${names(ws)}`);
   press(page, page.$("cw"), 4);
@@ -753,9 +733,7 @@ test("motorsReady: the warning goes with its link, and controls still send", () 
 });
 
 test("a JSON array is not telemetry: wedges and warning untouched", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ motorsReady: false }));
+  const { page, ws } = connected(telemetry({ motorsReady: false }));
   const B = scanBearings(page);
   ws.serverMsg("[]");
   ws.serverMsg("[1,2,3]");
@@ -869,12 +847,12 @@ function listen(page) {
   };
 }
 
-// Advance the clock as a live rover would, with telemetry every 500 ms, so
-// the link never goes stale (a stale link ends a program).
-function liveFor(page, ws, ms) {
+// Advance the clock as a live rover would, with telemetry carrying `fields`
+// every 500 ms, so the link never goes stale (a stale link ends a program).
+function liveFor(page, ws, ms, fields = { mode: "MANUAL" }) {
   for (let left = ms; left > 0; left -= 500) {
     page.clock.advance(Math.min(500, left));
-    ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    ws.serverMsg(telemetry(fields));
   }
 }
 
@@ -1057,9 +1035,7 @@ test("onStandDown: blur, hidden, pagehide, link loss, stale, disconnect, Stop an
 });
 
 test("a stale link ends a program, but a held stick drives on as before", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   page.evalIn("driver.program(MOVE_FORWARD, 100)");
   page.clock.advance(1900);
   check(page.doc.body.dataset.link === "stale", "stale");
@@ -1081,9 +1057,7 @@ test("a stale link ends a program, but a held stick drives on as before", () => 
 });
 
 test("onManualInput: an armed stick press and a rotate press, never a hover or a right-click", () => {
-  const page = loadPage({ touch: false });
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry());
+  const { page, ws } = connected(telemetry(), { touch: false });
   const heard = listen(page);
 
   for (const b of ["cw", "ccw"]) {
@@ -1145,9 +1119,7 @@ const tabIds = ["tabDrive", "tabProgram"];
 const shown = (page) => tabIds.filter((id) => page.$(id).getAttribute("aria-selected") === "true").join();
 
 test("tabs: click and arrow keys switch, and switching sends nothing", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry()); // exploring: any frame would take control
+  const { page, ws } = connected(telemetry()); // exploring: any frame would take control
   const [drive, program] = tabIds.map((id) => page.$(id));
   const [drivePanel, programPanel] = ["driveTab", "programTab"].map((id) => page.$(id));
 
@@ -1242,9 +1214,7 @@ function resizeStick(page, size, settle = true) {
 const stickCanvases = (page) => page.$("stick").children.filter((n) => n.tagName === "CANVAS");
 
 test("stick: a resize rebuilds the canvas at the new size once it settles, and sends nothing", () => {
-  const page = loadPage({ frames: true, stickSize: 352 });
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry()); // exploring: any frame would take control
+  const { page, ws } = connected(telemetry(), { frames: true, stickSize: 352 }); // exploring: any frame would take control
   const first = page.canvas;
   check(first.width === 352 && first.height === 352, `built at ${first.width}x${first.height}`);
 
@@ -1319,9 +1289,7 @@ test("stick: a rebuild under a held stick sends one STOP, then nothing until a f
 
   // By mouse, held through the rebuild and let go of after it.
   {
-    const page = loadPage({ frames: true, touch: false });
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { frames: true, touch: false });
     const m = mouseStick(page);
     m.down(); m.move(95, 0);
     check(names(ws).join() === "MOVE_RIGHT", `mouse ${names(ws)}`);
@@ -1380,14 +1348,6 @@ const shownScheme = (page) => SCHEMES.filter((s) => isPressed(schemeButton(page,
 const pendingScheme = (page) => SCHEMES.filter((s) => schemeButton(page, s).dataset.pending === "yes").join() || null;
 const hintMoves = (page) => all(page.$("stickHints")).filter((n) => n.dataset.corner).map((n) => `${n.dataset.corner}:${n.dataset.move}`).join();
 
-// Telemetry every 500 ms, as a live rover sends it, carrying `fields`.
-function liveWith(page, ws, ms, fields) {
-  for (let left = ms; left > 0; left -= 500) {
-    page.clock.advance(Math.min(500, left));
-    ws.serverMsg(telemetry(fields));
-  }
-}
-
 // Push the stick so that joy.js reports (x, yUp): it reads a deflection of
 // maxMoveStick pixels as 100, and that is (w - (w/2 + 10))/2 + 5 for a
 // canvas w wide.
@@ -1443,9 +1403,7 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
 });
 
 test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, and the rover explores on", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ scheme: "NORMAL" })); // exploring
+  const { page, ws } = connected(telemetry({ scheme: "NORMAL" })); // exploring
   const heard = listen(page);
 
   page.fire(schemeButton(page, "ADVANCED"), "click");
@@ -1457,18 +1415,18 @@ test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, an
   page.fire(schemeButton(page, "ADVANCED"), "click"); // again, impatiently
   check(count(ws) === 1, `a second click on the pending scheme sent ${ws.sent}`);
 
-  liveWith(page, ws, 500, { scheme: "ADVANCED" });
+  liveFor(page, ws, 500, { scheme: "ADVANCED" });
   check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `confirmed: ${shownScheme(page)}, pending ${pendingScheme(page)}`);
   check(page.$("scheme").getAttribute("aria-busy") === "false", "not busy");
   check(page.$("mode").textContent === "AUTONOMOUS" && page.$("auto").getAttribute("aria-pressed") === "true", `mode ${page.$("mode").textContent}`);
   check(page.$("family").hidden === false, "selector offered");
   page.fire(schemeButton(page, "ADVANCED"), "click"); // the scheme already in force
-  liveWith(page, ws, 2000, { scheme: "ADVANCED" });
+  liveFor(page, ws, 2000, { scheme: "ADVANCED" });
   check(count(ws) === 1, `sent ${ws.sent}`);
   check(heard.presses() === 0 && heard.downs() === "", `manual input ${heard.presses()}, stand-downs '${heard.downs()}'`);
 
   page.fire(schemeButton(page, "NORMAL"), "click");
-  liveWith(page, ws, 500, { scheme: "NORMAL" });
+  liveFor(page, ws, 500, { scheme: "NORMAL" });
   check(ws.sent.join(" ") === '{"scheme":"ADVANCED"} {"scheme":"NORMAL"}', `sent ${ws.sent.join(" ")}`);
   check(shownScheme(page) === "NORMAL" && page.$("family").hidden === true, "back to NORMAL");
   check(page.$("mode").textContent === "AUTONOMOUS", "still exploring");
@@ -1476,9 +1434,7 @@ test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, an
 });
 
 test("schemes: the toggle bypasses the Driver: a held stick drives on until the rover reports the change", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   const s = stickTouch(page, 0);
   s.start(); pushTo(page, s, 0, 80);
   page.clock.advance(50);
@@ -1495,12 +1451,10 @@ test("schemes: the toggle bypasses the Driver: a held stick drives on until the 
 });
 
 test("schemes: an unconfirmed request stops showing as pending after CONFIRM_MS", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  const { page, ws } = connected(telemetry({ scheme: "NORMAL" }));
   check(page.evalIn("SchemeToggle.CONFIRM_MS") === 1500, "CONFIRM_MS");
   page.fire(schemeButton(page, "ADVANCED"), "click");
-  liveWith(page, ws, 1000, { scheme: "NORMAL" }); // the rover never takes it
+  liveFor(page, ws, 1000, { scheme: "NORMAL" }); // the rover never takes it
   page.clock.advance(499);
   check(pendingScheme(page) === "ADVANCED", `still pending at 1499 ms: ${pendingScheme(page)}`);
   page.clock.advance(1);
@@ -1700,9 +1654,7 @@ test("schemes: each quadrant of each family sends the move test/vectors/stick_mo
   const { cases: stickCases } = vectors("stick_moves.json");
   const runs = [["NORMAL", "TRANSLATE"], ["ADVANCED", "TRANSLATE"], ["ADVANCED", "PIVOT"], ["ADVANCED", "PIVOT_SIDEWAYS"]];
   for (const [scheme, family] of runs) {
-    const page = loadPage();
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL", scheme }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme }));
     if (scheme === "ADVANCED") page.fire(familyButton(page, family), "click");
     check(page.evalIn("driver.family") === family, `${scheme}/${family}: driver ${page.evalIn("driver.family")}`);
     const cases = stickCases.filter((c) => c.family === family);
@@ -1719,9 +1671,7 @@ test("schemes: each quadrant of each family sends the move test/vectors/stick_mo
   }
 
   // The headline case: ADVANCED, Pivot, the stick up and to the right.
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   page.fire(familyButton(page, "PIVOT"), "click");
   const s = stickTouch(page, 0);
   s.start(); pushTo(page, s, 60, 60);
@@ -1729,9 +1679,7 @@ test("schemes: each quadrant of each family sends the move test/vectors/stick_mo
 });
 
 test("schemes: the operator's family change re-steers a held stick at once", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   const s = stickTouch(page, 0);
   s.start(); pushTo(page, s, 60, 60);
   check(names(ws).join() === "MOVE_DIAGONAL45", `translate ${names(ws)}`);
@@ -1754,23 +1702,21 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
   // NORMAL to ADVANCED, by touch: the family stays Translate, and the stick
   // still lets go -- whoever flipped it, the change is not this thumb's.
   {
-    const page = loadPage();
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
     const s = stickTouch(page, 0);
     s.start(); pushTo(page, s, 0, 70);
-    liveWith(page, ws, 500, { mode: "MANUAL", scheme: "NORMAL" });
+    liveFor(page, ws, 500, { mode: "MANUAL", scheme: "NORMAL" });
     check(count(ws) >= 3 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
     let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" })); // the pad's SELECT, say
     check(names(ws, mark).join() === "STOP", `flip ${names(ws, mark)}`);
     mark = count(ws);
-    for (let i = 0; i < 10; i++) { pushTo(page, s, 10 * i, 70); liveWith(page, ws, 150, { mode: "MANUAL", scheme: "ADVANCED" }); }
+    for (let i = 0; i < 10; i++) { pushTo(page, s, 10 * i, 70); liveFor(page, ws, 150, { mode: "MANUAL", scheme: "ADVANCED" }); }
     check(count(ws) === mark, `the thumb still down sent ${names(ws, mark)}`);
     s.end();
     check(count(ws) === mark, `lifting sent ${names(ws, mark)}`);
     s.start(); pushTo(page, s, 0, 70);
-    liveWith(page, ws, 400, { mode: "MANUAL", scheme: "ADVANCED" });
+    liveFor(page, ws, 400, { mode: "MANUAL", scheme: "ADVANCED" });
     check(names(ws, mark).length >= 3 && names(ws, mark).every((n) => n === "MOVE_FORWARD"), `a fresh press drives: ${names(ws, mark)}`);
     check(page.errors.length === 0, `errors ${page.errors}`);
   }
@@ -1778,13 +1724,11 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
   // ADVANCED (Pivot) to NORMAL, by touch: the pivot under the thumb must not
   // become a diagonal.
   {
-    const page = loadPage();
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
     page.fire(familyButton(page, "PIVOT"), "click");
     const s = stickTouch(page, 0);
     s.start(); pushTo(page, s, 60, 60);
-    liveWith(page, ws, 500, { mode: "MANUAL", scheme: "ADVANCED" });
+    liveFor(page, ws, 500, { mode: "MANUAL", scheme: "ADVANCED" });
     check(names(ws).every((n) => n === "PIVOT_RIGHT_FORWARD"), `pivoted ${names(ws)}`);
     let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
@@ -1792,7 +1736,7 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
     check(page.evalIn("driver.family") === "TRANSLATE" && page.$("family").hidden === true, "translating, selector withdrawn");
     mark = count(ws);
     pushTo(page, s, 61, 60);
-    liveWith(page, ws, 1500, { mode: "MANUAL", scheme: "NORMAL" });
+    liveFor(page, ws, 1500, { mode: "MANUAL", scheme: "NORMAL" });
     check(count(ws) === mark, `the thumb still down sent ${names(ws, mark)}`);
     s.end(); s.start(); pushTo(page, s, 60, 60);
     check(names(ws, mark).join() === "MOVE_DIAGONAL45", `a fresh press drives in the new scheme: ${names(ws, mark)}`);
@@ -1800,16 +1744,14 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
 
   // By mouse, held through the change and released afterwards.
   {
-    const page = loadPage({ touch: false });
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }), { touch: false });
     const m = mouseStick(page);
     m.down(); m.move(95, 0);
     check(names(ws).join() === "MOVE_RIGHT", `mouse ${names(ws)}`);
     let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
     m.move(90, -20);
-    liveWith(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
+    liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
     check(names(ws, mark).join() === "STOP", `mouse flip ${names(ws, mark)}`);
     mark = count(ws);
     m.up();
@@ -1819,12 +1761,10 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
 });
 
 test("schemes: a scheme flip leaves a held rotate button driving", () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   press(page, page.$("cw"), 2);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  liveWith(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
   check(count(ws) >= 6 && names(ws).every((n) => n === "ROTATE_CLOCKWISE"), `rotate alone ${names(ws)}`);
 
   // The stick under the rotate button lets go; the rotation does not.
@@ -1832,11 +1772,11 @@ test("schemes: a scheme flip leaves a held rotate button driving", () => {
   s.start(); pushTo(page, s, 0, 80);
   let mark = count(ws);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-  liveWith(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
   check(!names(ws, mark).includes("STOP") && names(ws, mark).every((n) => n === "ROTATE_CLOCKWISE"), `rotate and stick ${names(ws, mark)}`);
   mark = count(ws);
   lift(page, page.$("cw"), 2);
-  liveWith(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
   check(names(ws, mark).join() === "STOP", `the stick does not take over from a released rotate: ${names(ws, mark)}`);
 });
 
@@ -1861,7 +1801,7 @@ test("schemes: the scheme first reported does not stop a stick held since the li
     const s = stickTouch(page, 0);
     s.start(); pushTo(page, s, 0, 70); // before any telemetry: the scheme is unknown
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme }));
-    liveWith(page, ws, 1000, { mode: "MANUAL", scheme });
+    liveFor(page, ws, 1000, { mode: "MANUAL", scheme });
     check(!names(ws).includes("STOP") && names(ws).every((n) => n === "MOVE_FORWARD"), `${scheme}: ${names(ws)}`);
   }
 });
@@ -1907,7 +1847,7 @@ test("schemes: a stick a scheme change let go of asks for a fresh press, until o
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   check(asking(), `held through the change: '${caption.textContent}' ${caption.dataset.tone}`);
   pushTo(page, s, 30, 70);
-  liveWith(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
   s.end();
   check(asking(), `still asking after the thumb lifts: '${caption.textContent}'`);
   const mark = count(ws);
@@ -1986,15 +1926,15 @@ test("schemes: the pivots' corner labels are short and tell each family's four m
 // with no internet would -- so these check the tab's offline path too, and
 // stand a hand-written program, or a stand-in editor, where blocks would be.
 
-const flush = () => new Promise((resolve) => setImmediate(resolve));
 const BLOCKLY = "https://cdn.jsdelivr.net/npm/blockly@13.3.0/blockly.min.js";
 
-// Time passes in small steps, with telemetry every 500 ms, and the program's
-// promises settle between the steps, as they would in a browser.
-async function liveForAsync(page, ws, ms, { step = 50, frames = true } = {}) {
+// Time passes in small steps, with telemetry carrying `fields` every 500 ms,
+// and the program's promises settle between the steps, as they would in a
+// browser.
+async function liveForAsync(page, ws, ms, { step = 50, frames = true, fields = { mode: "MANUAL" } } = {}) {
   for (let t = step; t <= ms; t += step) {
     page.clock.advance(step);
-    if (frames && t % 500 === 0) ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    if (frames && t % 500 === 0) ws.serverMsg(telemetry(fields));
     await flush();
   }
 }
@@ -2154,9 +2094,7 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
     ["Disconnect", (page) => page.fire(page.$("connect"), "click"), /disconnected/, "STOP"],
   ];
   for (const [what, act, reason, after] of cases) {
-    const page = loadPage();
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
     startProgram(page);
     await liveForAsync(page, ws, 300);
     check(names(ws).join() === "MOVE_FORWARD,MOVE_FORWARD", `${what}: driving ${names(ws)}`);
@@ -2179,9 +2117,7 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
   }
 
   // Telemetry that stops while the socket stays open: the link goes stale.
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   startProgram(page);
   await liveForAsync(page, ws, 1900, { frames: false });
   check(page.doc.body.dataset.link === "stale", "stale");
@@ -2191,9 +2127,7 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
 });
 
 test("program: start exploring hands over, its own stop is obeyed, and neither stops the program", async () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   startProgram(page, "await api.explore(); await api.wait(1); await api.stop(); await api.wait(1); await api.log('after');");
   await liveForAsync(page, ws, 500);
   check(names(ws).join() === "RESUME_AUTONOMOUS", `explore ${names(ws)}`);
@@ -2215,9 +2149,7 @@ test("program: start exploring hands over, its own stop is obeyed, and neither s
 });
 
 test("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   // The simulator, if its scripts registered one; otherwise a stand-in,
   // registered as the simulator's block in app.js would.
   page.evalIn(`
@@ -2292,9 +2224,7 @@ test("program: a loop of stops, of stops and explores, or of very short drives c
     ["stops and explores", "await api.stop(); await api.explore();", 11], // one each STICK_SEND_MS
     ["0.01 s drives", "await api.drive(MOVE_FORWARD, 50, 0.01);", 22], // a move each STICK_SEND_MS, and its STOP
   ]) {
-    const page = loadPage();
-    const ws = connectOpen(page);
-    ws.serverMsg(telemetry({ mode: "MANUAL" }));
+    const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
     startProgram(page, `for (let i = 0; i < 100000; i++) { await api.tick(); ${body} }`);
     await liveForAsync(page, ws, 1000, { step: 5 });
     check(page.evalIn("runner.state") === "running", `${what}: still running`);
@@ -2309,9 +2239,7 @@ test("program: a loop of stops, of stops and explores, or of very short drives c
 });
 
 test("program: Run is off with nothing to run, and asks before running several stacks on the rover", async () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   standInEditor(page);
   page.evalIn("__editor.empty = true; __editor.stacks = 0; programTab.refresh();");
   check(page.$("programRun").disabled === true, "Run off on an empty editor");
@@ -2360,15 +2288,6 @@ test("program: Run is off with nothing to run, and asks before running several s
 test("program: Run on the rover asks before it drives a pivot unless the rover reports ADVANCED; a preview never asks", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
-  // Telemetry that keeps the scheme as given: a frame without one makes the
-  // scheme unknown again.
-  const live = async (ms, scheme) => {
-    for (let t = 50; t <= ms; t += 50) {
-      page.clock.advance(50);
-      if (t % 500 === 0) ws.serverMsg(telemetry({ mode: "MANUAL", scheme }));
-      await flush();
-    }
-  };
   standInEditor(page, "await api.drive(PIVOT_RIGHT_FORWARD, 50, 0.5);");
   page.evalIn(`
     __editor.pivots = ["Pivot right, forward"];
@@ -2393,7 +2312,7 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   // Accepted: it drives the pivot, re-sent like any held move.
   page.evalIn("__answer = true;");
   await run();
-  await live(700, "NORMAL");
+  await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
   check(asked() === 2 && names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
 
   // A scheme the rover has not reported: asked too, and it says so.
@@ -2408,7 +2327,7 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   let mark = count(ws);
   await run();
   check(asked() === 3 && page.evalIn("runner.state") === "running", "ADVANCED: not asked, and it runs");
-  await live(700, "ADVANCED");
+  await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "ADVANCED" } });
   check(names(ws, mark).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws, mark)}`);
 
   // NORMAL, but no pivot in the program: nothing to ask.
@@ -2416,7 +2335,7 @@ test("program: Run on the rover asks before it drives a pivot unless the rover r
   page.evalIn("__editor.pivots = []; __editor.compile = () => async (api) => { await api.drive(MOVE_FORWARD, 50, 0.5); };");
   await run();
   check(asked() === 3 && page.evalIn("runner.state") === "running", "no pivot: not asked");
-  await live(700, "NORMAL");
+  await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
 
   // A preview sends nothing, so it never asks.
   if (page.evalIn("'simulator' in targets")) {
@@ -2448,11 +2367,7 @@ test("program: its own stop and start exploring are no press: a stick let go of 
   const heard = listen(page);
   const mark = count(ws);
   startProgram(page, "await api.stop(); await api.explore(); await api.log('after');");
-  for (let t = 50; t <= 1000; t += 50) {
-    page.clock.advance(50);
-    if (t % 500 === 0) ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-    await flush();
-  }
+  await liveForAsync(page, ws, 1000, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
   check(ended(page) && ended(page).outcome === "done", `ended ${JSON.stringify(ended(page))}`);
   check(names(ws, mark).join() === "STOP,RESUME_AUTONOMOUS", `sent ${names(ws, mark)}`);
   check(heard.presses() === 0 && heard.downs() === "", `the Driver raised ${heard.presses()} presses, stand-downs '${heard.downs()}'`);
@@ -2461,9 +2376,7 @@ test("program: its own stop and start exploring are no press: a stick let go of 
 });
 
 test("program: the Program tab is marked while a program drives the rover, not while it previews", async () => {
-  const page = loadPage();
-  const ws = connectOpen(page);
-  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const tab = page.$("tabProgram");
   const marked = () => tab.dataset.running === "yes" && /driving the rover/.test(tab.getAttribute("title") || "");
   check(!marked(), "not marked at first");
@@ -2490,16 +2403,9 @@ test("program: the simulator's word reaches the console while a preview runs, an
   const page = loadPage();
   if (!page.evalIn("'simulator' in targets")) return;
   const sim = page.evalIn("targets.simulator");
-  const frames = async (ms) => {
-    for (let t = 0; t < ms; t += 16) {
-      sim.pump(16);
-      page.clock.advance(16);
-      await flush();
-    }
-  };
   // Straight back into the wall behind the start.
   page.evalIn("globalThis.__end = null; runner.run(async (api) => { await api.drive(MOVE_BACKWARD, 100, 2); await api.explore(); }, targets.simulator).then((end) => { __end = end; });");
-  await frames(3000);
+  await pageFrames(page, 3000, sim);
   check(ended(page) && ended(page).outcome === "done", `ended ${JSON.stringify(ended(page))}`);
   const lines = () => page.$("programLog").children.map((li) => `${li.dataset.tone}: ${li.textContent}`);
   check(lines().includes("bump: Simulator: bumped into the wall"), `the bump: ${lines()}`);
@@ -2509,13 +2415,13 @@ test("program: the simulator's word reaches the console while a preview runs, an
   // The next preview starts where this one left the rover, and says so; the
   // simulator's word stops reaching the console once it has ended.
   page.evalIn("runner.run(async (api) => { await api.wait(0.1); }, targets.simulator);");
-  await frames(300);
+  await pageFrames(page, 300, sim);
   const said = lines();
   check(said.filter((l) => /^info: The preview goes on from where the last one left the simulated rover/.test(l)).length === 1, `said where: ${said}`);
   check(said.indexOf(said.find((l) => /goes on from where/.test(l))) < said.lastIndexOf("info: Started on the simulator."), "before it starts");
   sim.hold(CODES.MOVE_FORWARD, 255);
   sim.explore();
-  await frames(100);
+  await pageFrames(page, 100, sim);
   check(lines().length === said.length, `nothing after the preview ended: ${lines().slice(said.length)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
