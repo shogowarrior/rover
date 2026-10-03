@@ -2063,7 +2063,8 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   // Only in the landscape block: anywhere else, the upright phone's card too
   // would shrink to two lines.
   const beside = (mediaRules(LANDSCAPE_PHONE) || [])
-    .filter((r) => /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
+    .filter((r) => r.selector.split(",").some((s) =>
+      /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(s.trim())));
   check(beside.length === 1, `the Drive tab's fault card, in the landscape block: ${beside.map((r) => r.selector)}`);
   const body = beside.length === 1 ? beside[0].body : "";
   check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
