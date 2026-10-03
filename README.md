@@ -98,10 +98,12 @@ Changing the scheme stops a held stick, which then needs a fresh push.
 ## Programs and the simulator
 
 The panel's Program tab builds programs from blocks: drive a move for a time
-or until a condition, read the sonar, wait, loop, branch. Load an example
-(Square, Strafe box, Patrol, Mecanum tour), or export a program to a file and
-import it again. **Preview** runs it on a simulated rover in a simulated room
-and sends nothing to the real one; **Run on rover** drives the rover with it,
+or until a condition, read the sonar, wait, loop, branch. Its File menu loads
+an example (Square, Strafe box, Patrol, Mecanum tour), exports a program to a
+file and imports it again, and clears the editor. Loading over a program or
+clearing one asks first, and Ctrl+Z brings a cleared one back. **Preview**
+runs it on a simulated rover in a simulated room and sends nothing to the
+real one; **Run on rover** drives the rover with it,
 re-sending each move as a held control does. A press of any drive control,
 Stop, Autonomous, Stop program, losing the link or the page losing focus
 stops a program on the rover, and it never takes the rover back. Before

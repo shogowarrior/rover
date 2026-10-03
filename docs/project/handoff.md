@@ -33,21 +33,43 @@ motor-fault card cut mid-sentence on a phone on its side, fixed in
 back clean. Nothing has run on the robot yet:
 [bench-checklist.md](../bench-checklist.md) is how.
 
+The first thread on the owner's requests (branch
+`claude/project-thread-y2bq7r`) did steps 1 to 3 below, panel only:
+
+- the layout and interaction spec (features.md, F3f), and the owner's 20
+  questions, sent in one message with the defaults it carries on with;
+- `AskDialog` (`js/ask.js`): every question the panel asks, in the page's one
+  `<dialog>`; no `window.confirm()` is left;
+- `Popover` (`js/popover.js`): the Program tab's File menu and the
+  simulator's settings share it;
+- `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, still
+  on the Program toolbar until F1 moves it;
+- F2: the examples, Import, Export and Clear in the File menu, and a
+  playback list in place of the 1x / 2x / 4x buttons in a narrow simulator
+  view.
+
+Panel tests 195/195 and the protocol check pass. That thread's container
+could not build the firmware or run the host tests: its network policy
+blocked the PlatformIO registry. It changed nothing they cover; CI builds
+and tests them on the PR.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F4) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order:
+when it is done. Do them in this order; 1 to 3 are done, so the next thread
+starts at 4:
 
-1. Write the layout and interaction spec (F3f) into features.md, and send it
+1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
    message. Carry on with the marked defaults without waiting, and record the
    answers in features.md as they come.
-2. Shared parts, each tested: the in-page ask dialog in place of every
-   `window.confirm()`, one menu helper (shared with the simulator's settings
-   popover), one Rover | Simulator target switch.
-3. F2: Export, Import, Clear and the examples in one menu.
+2. **Done.** Shared parts, each tested: the in-page ask dialog in place of
+   every `window.confirm()`, one menu helper (shared with the simulator's
+   settings popover), one Rover | Simulator target switch.
+3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
+   simulator's 1x / 2x / 4x as a list only in a narrow view.
 4. F3 with F3a to F3e: one layout for both tabs.
 5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
    both tabs, with or without a rover.
@@ -76,9 +98,10 @@ and the next thread's task names that branch.
 ## Open, not started
 
 - Small panel and client items listed under "Open from earlier work" in
-  [features.md](../features.md): the three remaining `confirm()` calls, label
-  overflow at 480 x 320, `client/ws.py`'s traceback, and no committed
-  stand-in rover.
+  [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
+  traceback, and no committed stand-in rover.
+- No owner answers yet to the 20 questions (features.md, "The owner's
+  answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud
   review, has never run on this code. Only the owner can start it, as with
   `/verify`.
@@ -118,8 +141,13 @@ There:
 - `node --test extras/joystick/test/` runs the real page against a fake DOM,
   WebSocket and clock, and covers behaviour.
 - For layout, use Playwright's chromium headless shell only, as
-  [claude-project.md](setup.md) says, measuring at 375, 1280 and
-  about 1600 px (the owner's screen).
+  [instructions.md](instructions.md) says, measuring at 375, 1280 and
+  about 1600 px (the owner's screen). Where the container already has one
+  under `/opt/pw-browsers` (its `chromium_headless_shell-<revision>`), skip
+  `playwright install` and pin the `playwright` package whose browser
+  revision matches it (1.56.1 for revision 1194). Where `cdn.jsdelivr.net` is
+  blocked, install `blockly@13.3.0` from npm beside it and serve that file in
+  the CDN URL's place with `page.route`; it matches the page's pinned hash.
 - To exercise the panel end to end, run a stand-in rover: a WebSocket server
   on `127.0.0.1:8181` that logs every frame, answers `{"scheme": ...}`,
   sends telemetry every 500 ms in the shape of `test/vectors/telemetry.json`,
