@@ -14,8 +14,10 @@ what threads still need from those, and nothing the repo already says.
 The Project has two text fields, filled in by hand. They reach different
 readers, and are kept apart on purpose:
 
-- **Goal**: what the project conversation works toward. It plans the threads
-  from it and starts each with a task. It changes with each round of work.
+- **Goal**: what the project conversation works toward: the owner's standing
+  goals for the code, then the current work. It plans the threads from it and
+  starts each with a task. The standing goals stay; the current work changes
+  with each round.
 - **Project instructions**: sent to the conversation and to every thread.
   How to work in this repo from a cloud thread. They change rarely.
 
@@ -71,20 +73,29 @@ Project, update its copy here in the same change.
 
 ## Goal
 
-Paste everything inside the fence.
+Paste everything inside the fence. It leads with the owner's standing goals,
+in their words (typos fixed) where they gave them, then the current work.
 
 ```text
-Improve the rover's browser control panel (extras/joystick/), and for F4 the PS3 pad's buttons, as the owner asked on 2026-10-03. docs/features.md quotes every request and maps each to an item (F1-F4) with a proposal, the owner's questions and when it is done; docs/handoff.md says where things stand.
+Keep the rover's code (firmware in src/, the browser panel in extras/joystick/, the Python clients in client/) clean, modular and easy to read, and keep improving it without breaking a feature or regressing behaviour. Read docs/handoff.md first: where things stand.
 
-Run one thread at a time, each on one item (or a few related ones), because each builds on the one before and all of them edit the same docs. Start the next thread only after the previous thread's PR is merged; if it could not be merged, name its branch in the next thread's task so it starts from there. In order:
+Standing goals, for every change:
+- "Most important is code hygiene, modularity and easy to read. Review to improve, not break features and regressions, and make it better."
+- Neat, clean object-oriented design. Highly modular, with reuse: modular functions and good templates shared by production and tests, everywhere they apply.
+- Clean and efficient code: nothing redundant, no dead code, no unnecessary bloat, no AI slop.
+- Never delete a feature. Work on a branch.
+- When a piece of work is done: review it thoroughly and judge it against the design, code quality, modularity and reuse. Run adversarial reviews for defects, bugs, redundant and dead code, bloat and AI slop, and /code-review in rounds, fixing everything a round finds before the next, until a round raises no flags. Ask the owner to run /verify (only they can start it). Then commit, merge and push.
 
-1. Write the layout and interaction spec (F3f) into features.md. Send it to the owner together with every "Ask the owner" question in features.md, in one message, then carry on with the marked defaults without waiting; record answers in features.md as they come.
-2. Shared parts, each tested: the in-page ask dialog in place of every window.confirm(), one menu helper (shared with the simulator's settings popover), one Rover | Simulator target switch.
+Current work: the owner's panel and controls requests of 2026-10-03. docs/features.md quotes them verbatim and maps each to an item (F1-F4) with a proposal, the owner's questions and when it is done. Run one thread at a time, each on one item or a few related ones; start the next only after the previous thread's PR is merged, or name its branch in the next thread's task. In order:
+1. Write the layout and interaction spec (F3f) into features.md and send it to the owner with every "Ask the owner" question in one message; carry on with the marked defaults without waiting.
+2. Shared parts, each tested: the in-page ask dialog in place of every window.confirm(), one menu helper, one Rover | Simulator target switch.
 3. F2: Export, Import, Clear and the examples in one menu.
 4. F3 with F3a-F3e: one layout for both tabs.
-5. F1: a simulator for the Drive tab. Then F3g: Normal | Advanced usable on both tabs, with or without a rover.
+5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on both tabs.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly disabled.
 7. F4: other buttons (PS3 Cross as STOP, keyboard keys).
+
+Keep: every safety rule in AGENTS.md, and Stop one press, always visible, in the same place on both tabs.
 ```
 
 ## Project instructions
@@ -141,5 +152,6 @@ Paste everything inside the fence.
   threads and local sessions both read it. The Project instructions carry
   only what a cloud thread cannot get from the repo: the owner's standing
   preferences, the cloud's limits, and the setup.
-- When the goal is done, write the next one here and paste it in; move the
-  finished one's summary into [handoff.md](handoff.md).
+- When the current work is done, replace that part of the goal here and paste
+  it in, keeping the standing goals; move the finished work's summary into
+  [handoff.md](handoff.md).
