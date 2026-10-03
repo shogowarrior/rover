@@ -23,8 +23,10 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 - There is no runtime feedback loop: a mistake is invisible until the board
   is flashed. Build after every firmware change, run the host tests after
   every change to the pure modules, run `tools/check_protocol.py` after
-  changing a client or a value a client mirrors, and run the panel's tests
-  after changing the browser panel or anything in `src/`.
+  changing a client or a value a client mirrors, run the panel's tests after
+  changing the browser panel or anything in `src/`, and run both the host
+  tests and the panel's tests after changing `test/vectors/`, whose cases
+  both read.
 
 ## Commands
 
