@@ -91,6 +91,36 @@ After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1280 and about 1600 px (see the handoff for how, without the desktop
 pane), and `/code-review` rounds until one comes back clean.
 
+## The owner's answers
+
+Every "Ask the owner" question below, numbered as they went to the owner in
+one message on 2026-10-03, with the spec. Work goes on with the default
+until an answer comes; record each answer here, and amend the item and the
+spec it changes.
+
+| # | Item | Question | Default | Answer |
+|---|---|---|---|---|
+| 1 | F1 | In Simulator mode, does Stop still send STOP to a connected rover? | yes | none yet |
+| 2 | F1 | In Simulator mode, does Autonomous act on the simulator only, or is it disabled? | the simulator only, saying exploring is not simulated | none yet |
+| 3 | F1 | Do Drive and Program share one simulated world (room, trail, pose)? | yes | none yet |
+| 4 | F1 | On a phone's Drive tab in Simulator mode, does the view replace the scan fan, or fold away? | replace the fan; the readouts stay | none yet |
+| 5 | F2 | One menu with the examples in it, or Examples kept as its own dropdown? | one menu | none yet |
+| 6 | F2 | Clear inside the menu, last, behind an in-page question? | yes | none yet |
+| 7 | F2 | Should the simulator's 1x / 2x / 4x become a dropdown? | only in a narrow view | none yet |
+| 8 | F3 | A slightly narrower Program editor at 1280 px, for one column width on both tabs? | yes | none yet |
+| 9 | F3a | Does "biggest buttons" mean too big? | shrink them modestly; Stop stays the most prominent | none yet |
+| 10 | F3b | "drive/program at the top": keep them there, or a complaint? | keep them at the top, as the switch row | none yet |
+| 11 | F3c | The rover's data on the right at all times, or not shown without a rover? | at all times, with an empty state | none yet |
+| 12 | F3d | A wider right column for the fan, or a narrower one for the editor? | the middle: `clamp(320px, 30vw, 460px)` | none yet |
+| 13 | F3e | May the simulated room be drawn turned 90 degrees? | no: north stays up | none yet |
+| 14 | F3e | Does the Program console move under the simulator, or stay under the editor? | under the simulator on wide screens | none yet |
+| 15 | F3g | With a rover connected and the target on Simulator, does the simulator's scheme follow the rover's? | its own, starting from the rover's | none yet |
+| 16 | F3g | Should NORMAL refuse pivots in programs outright (a firmware change), or keep asking? | keep asking | none yet |
+| 17 | F3h | What does the second stick drive? | the pivots | none yet |
+| 18 | F3h | Should the PS3 pad's right stick get the same mapping (a firmware change)? | no, not in this round | none yet |
+| 19 | F3h | On an upright phone: two smaller sticks, or one stick with the pivots shown disabled? | two smaller sticks | none yet |
+| 20 | F4 | Which reading of "other buttons" was meant, and is the split right? | all three; PS3 Cross = STOP and keyboard keys now, the rest later | none yet |
+
 ## Rules every item keeps
 
 These come from AGENTS.md and the panel's tests, except the last bullet (the
@@ -466,17 +496,104 @@ Program tab only; three questions use `window.confirm()` and one a
 `<dialog>`; the simulator's buttons are 32 px tall on wide screens and the
 Program toolbar's 44 px.
 
-**Proposal.** Write this spec here first, then apply it:
-- Header rows hold the page-wide switches; each tab holds only its own
-  actions; the foot bar holds the safety buttons.
-- One left pane and one right column, the same widths on both tabs, and the
-  foot bar's cells aligned to them.
-- One control height per layout for ordinary controls; the foot bar's Stop
-  and Autonomous are the one exception, taller.
-- Controls that depend on the scheme are shown disabled, never hidden.
-- One way to ask: the in-page `<dialog>`.
-- Shared helpers for the target switch, the menu and the ask dialog, used
-  everywhere they apply.
+**The spec.** Every item from here on follows it, and an answer from the
+owner amends it here. The items name the parts they apply; a part no item
+has applied yet describes the target, not today's page.
+
+*Layouts.* Three, chosen by the viewport as today: **wide** (960 px wide and
+521 px tall and up), **a phone on its side** (landscape, 520 px tall or
+less), and **a phone upright** (the rest). Every check is made at 375 x 812,
+480 x 320 and 812 x 375 for the phones, and 1280 x 800 and about 1600 x 900
+(the owner's screen) for wide, on both tabs.
+
+*Regions.* Four, in this order on screen and in the focus order, on every
+layout and both tabs:
+1. The header: the wordmark and the status pills; the address, Connect and
+   the note; and the switch row.
+2. The open tab: its own action row first (the Program toolbar), then its
+   content.
+3. The right column: the rover's data, at all times (F3c): the motor fault,
+   the scan and the readouts.
+4. The foot bar: Autonomous, then Stop, the last control in the focus order.
+
+*The switch row.* One header row holds every page-wide switch and nothing
+else: Drive | Program, Normal | Advanced, and Rover | Simulator once F1 moves
+it there, in that order, each a segmented control of the one control height.
+A tab's own actions never go in it, and a page-wide switch never goes in a
+tab.
+
+*Columns, wide.* The left pane (the open tab) and the right column, the
+same two widths on both tabs. The right column is one `--rail`,
+`clamp(320px, 30vw, 460px)` (384 px at 1280, 460 px at 1600), used by every
+part of it: the address and Connect, the note, the fault, the scan and the
+readouts, and the foot bar's Autonomous, all starting at one left edge. One
+gap between the columns, one gutter at the page's edges. Both columns start
+on one line under the header: the left pane's top is the Program toolbar's
+on the Program tab and the dock's on the Drive tab.
+
+*The foot bar.* Its two cells sit under the two columns. On wide, Stop
+starts at the left pane's left edge and is as wide as that pane up to
+480 px, and Autonomous fills the cell under the right column, so a hand
+reaching for Stop never lands on Autonomous. Both are 56 px tall, the two
+largest controls on the page, Stop the most prominent (its red fill), and
+Autonomous a raised secondary button, lit while the rover explores. On a
+phone the bar stays as today: Autonomous | Stop, Stop under the right thumb.
+
+*Control heights.* One height for every ordinary control on every layout:
+`--tap`, 44 px, the touch floor. That covers buttons, segmented controls,
+selects, the address field, menu buttons, the Program toolbar and the
+simulator's bar (32 px on wide today). The exceptions are larger, never
+smaller: the foot bar's Stop and Autonomous, the Drive tab's rotate buttons
+(held controls, as today) and Blockly's own controls.
+
+*Disabled, never hidden.* A control that belongs to a layout is always shown
+there. When it cannot act now (the scheme, the link or a running program
+forbids it) it is disabled, with a title that says why ("Advanced only",
+"Connect to the rover first"). Messages are not controls: the motor fault
+and the halt reason come and go, as today, and keep their line where a held
+stick would move.
+
+*Nothing moves under a held stick.* No change of the scheme, the link, the
+target or a running program changes the size or place of anything above or
+beside a held stick, on any layout. Disabled-not-hidden is what makes that
+hold; the rules in [Rules every item keeps](#rules-every-item-keeps) still
+apply.
+
+*One way to ask.* Every question is asked in the page's one `<dialog>`
+through one shared helper: the question as its text, a confirm button that
+names the action ("Run on rover", "Replace", "Clear"), Cancel focused so a
+reflexive Enter does nothing, and Escape or Cancel answering no. No
+`window.confirm()`, `alert()` or `prompt()`. A question is asked only before
+something costly to undo: driving the rover in a way the operator may not
+expect, or replacing or removing the program in the editor. Never before
+Stop.
+
+*Menus.* One shared helper for every popup: the Program menu and the
+simulator's settings. A menu holds only infrequent actions that move
+nothing; every safety control, page-wide switch, primary action and held
+control stays a visible, one-press control
+([Menu or explicit](#menu-or-explicit-every-control)). A menu button says it
+opens a menu (a chevron, `aria-haspopup="menu"`, `aria-expanded`). A click,
+Enter, Space or Down opens it on its first item, Up on its last; Up and Down
+move through its items and wrap, Home and End go to the ends; an item does
+its action and closes the menu with the focus back on its button; Escape
+closes it the same way, Tab closes it and moves on, and a press outside
+closes it. An item that cannot act now stays in the menu, disabled. A
+popover that is not a menu, the simulator's settings, shares the opening,
+Escape and press-outside behaviour.
+
+*Labels.* No label overflows its control (`scrollWidth <= clientWidth`) at
+any of the sizes above. An icon-only button (the simulator's pause, reset
+and settings) carries its word as its accessible name and its title.
+
+*Empty states.* A region with nothing to show yet says why in its own place,
+at its full size: the right column before a rover's first frame (F3c), the
+editor while Blockly loads or after it failed, the console before a run.
+
+*Measured, not eyeballed.* Each layout change is measured in a headless
+browser at the sizes above, on both tabs (the handoff says how): the column
+edges, the foot bar's cells, control heights, label overflow, and that no
+stick's box moved.
 
 **Done when** the spec is in this file, has gone to the owner with the
 questions, and every item follows it (amended by any answer that comes
