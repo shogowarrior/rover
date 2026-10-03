@@ -29,8 +29,6 @@ constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
 
-constexpr int NO_CLIENT = -1;
-
 }  // namespace
 
 RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme)

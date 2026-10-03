@@ -54,9 +54,11 @@ class RemoteControl {
   bool started = false;
   uint32_t lastBroadcastMs = 0;
 
+  static constexpr int NO_CLIENT = -1;
+
   // The client whose commands are driving. Losing it is losing control, so
   // it stops the rover; a telemetry-only listener coming and going does not.
-  int driver = -1;
+  int driver = NO_CLIENT;
 };
 
 #endif
