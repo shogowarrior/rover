@@ -64,19 +64,19 @@ test("the wheel table is src/MovePatterns.cpp's, row for row", () => {
   assert.equal(Object.keys(RoverSim.WHEELS).length, 19, "no row the firmware does not have");
 });
 
+// The bearings the sweep visits are the panel's, which check_protocol.py
+// checks against Explorer's sweep angles.
 test("the sweep timing is ExploreParams' in src/Explorer.h", () => {
   const params = src("Explorer.h");
   const read = (name) => Number(params.match(new RegExp(`\\b${name}\\s*=\\s*([\\d.]+)f?\\s*;`))[1]);
   assert.equal(SimSonar.TIMING.servoBaseMs, read("servoBaseMs"));
   assert.equal(SimSonar.TIMING.servoMsPerDeg, read("servoMsPerDeg"));
   assert.equal(SimSonar.TIMING.pingIntervalMs, read("pingIntervalMs"));
-  // The bearings the sweep visits are the panel's, which check_protocol.py
-  // checks against Explorer's sweep angles.
-  assert.deepEqual(BEARINGS.map((b) => b.bearing), [read("sweepOuterDeg"), read("sweepInnerDeg"), 0, -read("sweepInnerDeg"), -read("sweepOuterDeg")]);
 });
 
 test("speed is clamped to tuning::MOTOR_SPEED_LIMIT, as Rover::drive() clamps it", () => {
-  assert.equal(RoverSim.SPEED_LIMIT, Number(src("Tuning.h").match(/MOTOR_SPEED_LIMIT\s*=\s*(\d+)/)[1]));
+  // protocol.js's copy, which check_protocol.py checks against Tuning.h.
+  assert.equal(RoverSim.SPEED_LIMIT, protocol.MOTOR_SPEED_LIMIT);
   const full = drive(protocol.MOVE_FORWARD, { speed: 255 });
   const saved = RoverSim.SPEED_LIMIT;
   RoverSim.SPEED_LIMIT = 120; // as the README advises for a full 3S pack

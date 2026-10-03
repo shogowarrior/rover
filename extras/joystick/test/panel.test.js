@@ -11,7 +11,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const { loadPage, all, PANEL_ROOT } = require("./fake-dom.js");
-const { src, vectors, CODES, NAMES } = require("./firmware.js");
+const { vectors, CODES, NAMES } = require("./firmware.js");
 
 let failed = null; // the running test's failed checks
 let passes = 0;
@@ -1354,40 +1354,13 @@ test("stick: a rebuild under a held stick sends one STOP, then nothing until a f
 
 /* --- mirrored constants -------------------------------------------------- */
 
-test("mirrored constants match the firmware (check_protocol.py's regex)", () => {
-  const js = fs.readFileSync(path.join(PANEL_ROOT, "js", "protocol.js"), "utf8");
-  const consts = {};
-  for (const [, n, v] of js.matchAll(/^\s*const\s+([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*;/gm)) consts[n] = Number(v);
-  const strings = {};
-  for (const [, n, v] of js.matchAll(/^\s*const\s+([A-Z][A-Z0-9_]*)\s*=\s*"([^"]*)"\s*;/gm)) strings[n] = v;
-
-  // Every move code, 0 to 19, the pivots included.
-  check(Object.keys(CODES).length === 20, `src/MoveCodes.h has 20 codes, read ${Object.keys(CODES).length}`);
-  for (const [n, code] of Object.entries(CODES)) check(consts[n] === code, `${n}: panel ${consts[n]} firmware ${code}`);
-  // What the page runs is what the file says: no later script redefines one.
+// tools/check_protocol.py compares protocol.js with src/ (CI and the build
+// hook run it); this checks only the page: no later script redefines one.
+test("the page runs protocol.js's values as the file writes them", () => {
+  const written = Object.entries(require("../js/protocol.js"));
+  check(written.length > 0, "protocol.js exports its values");
   const page = loadPage();
-  for (const [n, value] of Object.entries(consts)) check(page.evalIn(n) === value, `the page's ${n} is ${value}`);
-
-  const num = (text, re) => Number(text.match(re)[1]);
-  check(consts.STOP_CM === num(src("Tuning.h"), /EXPLORE_STOP_CM\s*=\s*([\d.]+)/), "STOP_CM");
-  check(consts.GO_CM === num(src("Tuning.h"), /EXPLORE_GO_CM\s*=\s*([\d.]+)/), "GO_CM");
-  check(consts.PORT === num(src("Tuning.h"), /WEBSOCKET_PORT\s*=\s*(\d+)/), "PORT");
-  check(consts.FAR_CM === num(src("Kinematics.h"), /DISTANCE_FAR_CM\s*=\s*([\d.]+)/), "FAR_CM");
-  check(consts.SPEED_MAX === num(src("Kinematics.h"), /MOTOR_SPEED_MAX\s*=\s*(\d+)/), "SPEED_MAX");
-  check(consts.MOTOR_SPEED_LIMIT === num(src("Tuning.h"), /MOTOR_SPEED_LIMIT\s*=\s*(\d+)/), "MOTOR_SPEED_LIMIT");
-  const cap = num(src("Tuning.h"), /COMMAND_DURATION_MAX_MS\s*=\s*(\d+)/);
-  check(consts.MOVE_DURATION_MS < cap && consts.REPEAT_MS * 2 <= consts.MOVE_DURATION_MS, "repeat refreshes each move before it expires");
-  check(consts.STICK_SEND_MS === num(src("Tuning.h"), /GAMEPAD_SPEED_CHANGE_MS\s*=\s*(\d+)/), "STICK_SEND_MS is the gamepad's speed-change rule");
-  check(consts.REPEAT_MS === num(src("Tuning.h"), /GAMEPAD_REFRESH_MS\s*=\s*(\d+)/), "the panel and the gamepad re-send a held move equally often");
-
-  // The scheme names, as protocol::schemeName() spells them.
-  const schemeName = src("Protocol.cpp").match(/schemeName\([^)]*\)\s*\{\s*return\s+scheme\s*==\s*kinematics::(\w+)\s*\?\s*"(\w+)"\s*:\s*"(\w+)"/);
-  check(schemeName !== null, "src/Protocol.cpp's schemeName() is readable");
-  if (schemeName) {
-    const [, which, yes, no] = schemeName;
-    const other = which === "SCHEME_ADVANCED" ? "SCHEME_NORMAL" : "SCHEME_ADVANCED";
-    check(strings[which] === yes && strings[other] === no, `schemes: panel ${JSON.stringify(strings)}, firmware ${which} = "${yes}", else "${no}"`);
-  }
+  for (const [name, value] of written) check(page.evalIn(name) === value, `the page's ${name} is ${JSON.stringify(value)}`);
 });
 
 /* --- schemes -------------------------------------------------------------- */
