@@ -36,9 +36,7 @@ int stickSpeed(int x, int y, int maxSpeed) {
 
   float magnitude = sqrtf(static_cast<float>(x) * x + static_cast<float>(y) * y);
   if (magnitude > STICK_AXIS_MAX) magnitude = STICK_AXIS_MAX;
-
-  const int speed = static_cast<int>((magnitude * maxSpeed) / STICK_AXIS_MAX);
-  return clampInt(speed, 0, maxSpeed);
+  return static_cast<int>((magnitude * maxSpeed) / STICK_AXIS_MAX);
 }
 
 int triggerSpeed(int pressure, int maxSpeed) {
