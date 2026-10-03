@@ -195,3 +195,6 @@ which way the servo turns) is covered by
 - [docs/Readme.md](docs/Readme.md): motor shield terminals, board pinout, chassis
 - [docs/pinouts.md](docs/pinouts.md) and [docs/extra.md](docs/extra.md): reference pinouts and an older wiring
 - [AGENTS.md](AGENTS.md): architecture, invariants and conventions, for contributors and coding agents
+- [docs/handoff.md](docs/handoff.md): where the work stands and what is next
+- [docs/features.md](docs/features.md): the owner's requested panel features, itemised
+- [docs/claude-project.md](docs/claude-project.md): running the repo as a Claude Project (setup, goal, instructions)
