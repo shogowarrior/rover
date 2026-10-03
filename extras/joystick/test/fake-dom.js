@@ -160,7 +160,7 @@ function makeWebSocketClass(clock, sockets) {
   return class WebSocket {
     static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3;
     constructor(url) {
-      this.url = url; this.readyState = 0; this.sent = []; this.listeners = {}; this.n = sockets.length + 1;
+      this.url = url; this.readyState = 0; this.sent = []; this.listeners = {};
       this.closeCalls = 0;
       this.sentAt = [];
       sockets.push(this);

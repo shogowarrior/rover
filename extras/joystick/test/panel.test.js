@@ -174,7 +174,7 @@ test("Enter while connected: one socket, no stale handler effects", () => {
   // driving on ws1 when Enter is pressed: STOP goes out on ws1 before it closes
   const s = stickTouch(page);
   s.start(); s.move(0, -50);
-  const k = page.fire(page.$("host"), "keydown", { key: "Enter" });
+  page.fire(page.$("host"), "keydown", { key: "Enter" });
   check(page.sockets.length === 2, `sockets ${page.sockets.length}`);
   check(ws1.closeCalls === 1, "old socket closed");
   check(names(ws1).slice(-1)[0] === "STOP", `ws1 ended with ${names(ws1).slice(-1)}`);
@@ -538,7 +538,6 @@ test("stick throttle: same move at most every 100 ms, direction change at once",
   const ws = connectOpen(page);
   const s = stickTouch(page, 0);
   s.start();
-  const t0 = page.clock.now();
   // 1 s of a wobbling forward push: an event every 10 ms, the speed changing each time
   for (let i = 0; i < 100; i++) {
     s.move(i % 2 ? 3 : -3, -20 - (i % 30));
@@ -567,7 +566,6 @@ test("stick throttle: same move at most every 100 ms, direction change at once",
   const mark2 = count(ws);
   for (let i = 0; i < 50; i++) { s.move(40, 0); page.clock.advance(10); }
   check(count(ws) - mark2 === 2 || count(ws) - mark2 === 3, `unchanged stick for 500 ms sent ${count(ws) - mark2}`);
-  void t0;
 });
 
 test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", () => {
