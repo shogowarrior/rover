@@ -54,6 +54,8 @@ guard blocks every call, and the build check says what it skipped.
     recursive grep, or an `rg` that ignores `.gitignore` or picks files with
     `--glob`, over `src/` or a directory above it, or feeds a listing of
     `src/` or a directory above it to a reader (`find src | xargs grep`);
+  - a `git grep` with `--no-index` or `--no-exclude-standard`, wherever it
+    searches: both read gitignored files;
   - a command that dumps a firmware build product (`strings`, `xxd`,
     `objdump -s`...) or reads one whole (`cat`, `head`, `base64`...): the
     firmware embeds the same strings.

@@ -440,6 +440,17 @@ If it only mentions the file -- a commit message, say -- pass the text through
 a file instead (git commit -F <file>)."
   fi
 
+  # git grep skips gitignored files, which is why AGENTS.md sends a search of
+  # src/ to it, but two of its options undo that: --no-index searches the
+  # directory as plain files, and --no-exclude-standard makes --untracked
+  # take ignored files too. Either reads src/config.h. git accepts any
+  # unambiguous prefix of a long option, so match the shortest it takes,
+  # --no-ind and --no-exc (--no-in and --no-ex are ambiguous).
+  if matches "$lower" '(^|[^[:alnum:]_.-])git[[:space:]]([^|;&]*[[:space:]])?grep[[:space:]][^|;&]*--no-(ind|exc)'; then
+    block "git grep --no-index and --no-exclude-standard search gitignored files,
+src/config.h among them. Search with git grep --untracked, which skips them."
+  fi
+
   hazard=$(printf '%s\n' "$cmd" | awk -v home="$HOME" -v cwd="$cwd" -v secret="$secret" \
     "$PATHS_AWK$COMMAND_AWK") || block "awk failed, so the command could not be checked."
   kind=$(printf '%s\n' "$hazard" | sed -n 1p)

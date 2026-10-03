@@ -452,14 +452,16 @@ password. It is gitignored. Never read it by any means (an editor, `cat`,
 `grep`, a glob that matches it, printing its macros), never commit it, and
 never paste from it. To search `src/`, use `git grep --untracked`, which
 searches new files too but skips gitignored ones; a plain recursive `grep`
-reads it. The build products under `.pio/build/` (`firmware.elf`,
-`firmware.bin`, `Network.cpp.o`) contain the same strings, so never dump them
-with `strings`, `xxd` or similar either. `src/config.example.h` has the same
-shape with placeholder values, and that is everything you need. Only
-`src/Network.cpp` includes it. A new setting that belongs there must be added
-to `config.example.h` too, because CI builds against the template. Never write
-an OTA password into `platformio.ini`, which git tracks: `config.example.h`
-shows how the operator passes one to an upload instead.
+reads it, and so does `git grep` with `--no-index` or
+`--no-exclude-standard`. The build products under `.pio/build/`
+(`firmware.elf`, `firmware.bin`, `Network.cpp.o`) contain the same strings,
+so never dump them with `strings`, `xxd` or similar either.
+`src/config.example.h` has the same shape with placeholder values, and that
+is everything you need. Only `src/Network.cpp` includes it. A new setting
+that belongs there must be added to `config.example.h` too, because CI
+builds against the template. Never write an OTA password into
+`platformio.ini`, which git tracks: `config.example.h` shows how the
+operator passes one to an upload instead.
 
 ## Conventions
 

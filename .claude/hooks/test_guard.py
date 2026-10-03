@@ -176,6 +176,16 @@ CASES = [
     ("backtick grep", "B", bash("echo `grep -r x src`")),
     ("path grep", "B", bash("/usr/bin/grep -r x src")),
     ("git grep", "A", bash("git grep -n WIFI -- src")),
+    ("git grep --untracked", "A", bash("git grep --untracked -n WIFI -- src")),
+    # --no-index and --no-exclude-standard read gitignored files, and git
+    # takes any unambiguous prefix of a long option: --no-ind and --no-exc
+    # are the shortest.
+    ("git grep --no-index", "B", bash("git grep --no-index -n WIFI src")),
+    ("git grep --no-ind", "B", bash("git grep --no-ind WIFI src")),
+    ("git grep --no-exclude-standard", "B", bash("git grep --untracked --no-exclude-standard WIFI")),
+    ("git grep --no-exc", "B", bash("git grep --untracked --no-exc WIFI")),
+    ("git -C --no-pager grep --no-index", "B", bash("git -C " + P + " --no-pager grep --no-index WIFI")),
+    ("git diff --no-index", "A", bash("git diff --no-index docs/a.md docs/b.md")),
     ("heredoc body", "A", bash("cat > f <<EOF\ngrep -r x src\nEOF\necho done")),
     ("heredoc quoted dash", "A", bash("cat > f <<-'EOF'\n\tgrep -r x src\n\tEOF\necho done")),
     ("after heredoc", "B", bash("cat > f <<EOF\nhi\nEOF\ngrep -r x src")),
