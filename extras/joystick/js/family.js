@@ -88,18 +88,16 @@ class FamilySelector {
       const button = segment(choice, () => this.#choose(family));
       button.dataset.family = family;
       button.appendChild(FamilySelector.#icon(family, 1, 1).svg);
-      button.appendChild(FamilySelector.#span("name", name));
+      dom.html("span", { class: "name" }, button, name);
       this.#buttons.set(family, button);
     }
 
     for (const { corner, x, yUp } of FamilySelector.CORNERS) {
-      const hint = document.createElement("span");
-      hint.className = "hint";
+      const hint = dom.html("span", { class: "hint" }, hints);
       hint.dataset.corner = corner;
       const { svg, path } = FamilySelector.#icon(null, x, yUp);
       hint.appendChild(svg);
-      const text = hint.appendChild(FamilySelector.#span("name", ""));
-      hints.appendChild(hint);
+      const text = dom.html("span", { class: "name" }, hint, "");
       this.#corners.push({ x, yUp, hint, path, text });
     }
 
@@ -176,12 +174,5 @@ class FamilySelector {
       d: family ? FamilySelector.ICONS[family] : "",
     }, svg);
     return { svg, path };
-  }
-
-  static #span(className, text) {
-    const span = document.createElement("span");
-    span.className = className;
-    span.textContent = text;
-    return span;
   }
 }

@@ -117,10 +117,8 @@ const dom = (() => {
 // A segment of a segmented control (the page's .segmented): a button in
 // group that calls onPick when clicked. The caller gives it its content.
 function segment(group, onPick) {
-  const button = document.createElement("button");
-  button.type = "button";
+  const button = dom.html("button", { type: "button" }, group);
   button.addEventListener("click", onPick);
-  group.appendChild(button);
   return button;
 }
 

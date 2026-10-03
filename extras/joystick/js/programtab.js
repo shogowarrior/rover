@@ -85,12 +85,7 @@ class ProgramTab {
     ui.clear.addEventListener("click", () => this.#clear());
     ui.simToggle.addEventListener("click", () => this.#expandSim(ui.simToggle.getAttribute("aria-expanded") !== "true"));
 
-    for (const example of examples) {
-      const option = document.createElement("option");
-      option.value = example.id;
-      option.textContent = example.name;
-      ui.examples.appendChild(option);
-    }
+    for (const example of examples) dom.html("option", { value: example.id }, ui.examples, example.name);
 
     runner.onState((state, detail) => this.#onRunnerState(state, detail));
     runner.onLog((entry) => this.#appendLog(entry));
