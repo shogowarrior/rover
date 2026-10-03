@@ -313,8 +313,10 @@ the firmware: small classes in `js/`, each documenting its contract in its
 header, wired by `js/app.js`, the composition root, whose header lists them in
 load order.
 
-Every value mirrored from `src/` is in `js/protocol.js`, except the
-simulator's own copies, in `js/sim.js`. `joy.js` is a vendored third-party
+Every constant mirrored from `src/` is in `js/protocol.js`, except the scan's
+bearings and telemetry keys (`BEARINGS` in `js/scan.js`), the stick mapping,
+its family names and the move names telemetry reports (`js/mecanum.js`), and
+the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
