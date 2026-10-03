@@ -38,19 +38,21 @@
   flex-wrap: wrap;
 }
 
-.programBar .grow { flex: 1; }
+/* The File menu at the end of whatever row it lands on, so its list,
+   which hangs from the button's right edge, always opens over the page. */
+.programBar .menuHolder { margin-left: auto; }
 
-.programBar button { flex: none; }
+.programBar > button { flex: none; }
 
-.programBar button:disabled,
-#programExamples:disabled {
+.programBar > button:disabled,
+.programBar .menuButton:disabled {
   color: var(--dim);
   opacity: 0.5;
-  cursor: default;
 }
 
 @media (hover: hover) {
-  .programBar button:disabled:hover { background: var(--raised); }
+  .programBar > button:disabled:hover,
+  .programBar .menuButton:disabled:hover { background: var(--raised); }
 }
 
 .programBar .icon { width: var(--glyph); height: var(--glyph); }
@@ -90,45 +92,12 @@
 
 .programBar .segmented button { flex: none; padding-inline: var(--s-4); }
 
-#programExamples {
-  appearance: none;
-  -webkit-appearance: none;
-  min-height: var(--tap);
-  padding: 0 var(--s-7) 0 var(--s-4);
-  font: inherit;
-  font-size: var(--t-md);
-  font-weight: var(--fw-semi);
-  color: var(--readout);
-  /* The caret: two half-squares meeting in a V, in the panel's colours. */
-  background:
-    linear-gradient(45deg, transparent 50%, var(--dim) 50%) right calc(var(--s-3) + 5px) center / 5px 5px no-repeat,
-    linear-gradient(135deg, var(--dim) 50%, transparent 50%) right var(--s-3) center / 5px 5px no-repeat,
-    var(--raised);
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  #programExamples:hover { background-color: var(--raised-hi); }
-}
-
-#programExamples option { background: var(--panel); color: var(--readout); }
-
-/* Too narrow for one row: the examples and the file tools take a second. */
-@container program (max-width: 899.98px) {
-  .programBar .grow { flex-basis: 100%; height: 0; }
-}
-
-/* A phone: the switch across the top, then Run and Stop, then the file
-   tools, as icons; each keeps its name in its aria-label. */
+/* A phone: the switch across the top, then Run and Stop program, then the
+   File menu. */
 @container program (max-width: 560px) {
   .programBar .segmented { flex: 1 1 100%; }
   .programBar .segmented button { flex: 1 1 0; }
   .programBar .run { flex: 1; }
-  #programExamples { flex: 1; min-width: 0; }
-  .programBar .tool { width: var(--tap); padding: 0; }
-  .programBar .tool span { display: none; }
 }
 
 /* --- the stage: the editor, and the simulator's view ---------------------- */
@@ -139,8 +108,7 @@
    100%.
 
    Stacked, the editor is most of a phone's height and the view 360 px under
-   it: below about 300 px the view no longer fits its own controls, which
-   take two rows on a phone. */
+   it: below about 300 px the view no longer fits its own controls. */
 .programStage {
   --stage-h: clamp(360px, 62 * var(--svh), 560px);
   display: grid;
@@ -164,10 +132,14 @@
 
 .programSim[hidden] { display: none; }
 
+/* clip, not hidden: a scroll container would swallow the settings' scroll
+   margin, and they would open under the Stop bar (panel.css). hidden stays
+   for a browser without clip. */
 #simSlot {
   position: relative;
   height: 360px;
   overflow: hidden;
+  overflow: clip;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
@@ -225,10 +197,9 @@
 
   .programConsole { flex: none; }
 
-  .programBar button,
+  .programBar > button,
+  .programBar .menuButton,
   .programBar .segmented button { padding-inline: var(--s-3); }
-
-  #programExamples { padding-inline: var(--s-3) var(--s-6); }
 }
 
 /* Over the workspace while it is empty. */
@@ -349,44 +320,6 @@
 /* The simulator's own word (app.js): a bump is worth seeing among the rest. */
 .programLog li[data-tone="bump"] { color: var(--warn); }
 .programLog li[data-tone="bump"]::before { content: "×"; color: var(--warn); }
-
-/* --- the question Run asks ------------------------------------------------- */
-
-/* A modal <dialog> (joystick.html says why not window.confirm()). Run on
-   rover is filled like the toolbar's Run; Cancel, which has the focus, is
-   the plain one. */
-.programAsk {
-  max-width: min(32rem, calc(100vw - 2 * var(--gutter)));
-  padding: var(--s-5) var(--s-6);
-  color: var(--readout);
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  box-shadow: var(--lift-pop);
-}
-
-.programAsk::backdrop { background: var(--shade); }
-
-.programAsk p {
-  margin: 0 0 var(--s-5);
-  font-size: var(--t-md);
-  line-height: var(--lh-loose);
-}
-
-.programAskButtons {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--s-3);
-}
-
-.programAsk .run {
-  color: var(--on-live);
-  background: var(--live);
-}
-
-@media (hover: hover) {
-  .programAsk .run:hover { background: var(--live); filter: brightness(1.1); }
-}
 
 /* --- Blockly, dressed for the panel ---------------------------------------- */
 

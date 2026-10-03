@@ -10,27 +10,32 @@
  * file from loading. So each file declares at top level only what it offers
  * the others, and keeps the rest inside its class:
  *
- *   support.js     what the parts share: Listeners, memory, dom, segment,
- *                  pressSegment, clamp, radians, degrees, abortableWait,
- *                  isPrimaryPress, reportFault
- *   protocol.js    the firmware's constants: move codes, scheme and mode names,
- *                  speed limits, the port, distances and timing
- *   mecanum.js     the motions, moveForStick() for the stick families, and
- *                  heldMotion() for a program's
- *   link.js        Link: the WebSocket, the link state, telemetry
- *   scan.js        BEARINGS, ScanView: the scan fan
- *   readouts.js    Readouts: mode, move, phase, chip temperature, motor warning
- *   drive.js       Driver: the stick, rotate buttons and speed, and what to send
- *   scheme.js      SchemeToggle: the rover's control scheme, NORMAL or ADVANCED
- *   family.js      FamilySelector: the stick family, and the stick's labels
- *   tabs.js        Tabs: the Drive and Program tabs
- *   program.js     ProgramRunner, RoverTarget: running a block program on a target
- *   blocks.js      RoverBlocks, BlockEditor: the rover's blocks, on Blockly
- *   programtab.js  ProgramTab: the Program tab's toolbar, editor and console
- *   sim.js         RoverSim, Room, SimSonar, SimTarget: the simulator a program
- *                  previews on
- *   simview.js     SimView: the simulator on screen, and its own controls
- *   app.js         this file, last
+ *   support.js       what the parts share: Listeners, memory, dom, segment,
+ *                    pressSegment, clamp, radians, degrees, abortableWait,
+ *                    isPrimaryPress, reportFault
+ *   protocol.js      the firmware's constants: move codes, scheme and mode names,
+ *                    speed limits, the port, distances and timing
+ *   mecanum.js       the motions, moveForStick() for the stick families, and
+ *                    heldMotion() for a program's
+ *   link.js          Link: the WebSocket, the link state, telemetry
+ *   scan.js          BEARINGS, ScanView: the scan fan
+ *   readouts.js      Readouts: mode, move, phase, chip temperature, motor warning
+ *   drive.js         Driver: the stick, rotate buttons and speed, and what to send
+ *   scheme.js        SchemeToggle: the rover's control scheme, NORMAL or ADVANCED
+ *   family.js        FamilySelector: the stick family, and the stick's labels
+ *   tabs.js          Tabs: the Drive and Program tabs
+ *   ask.js           AskDialog: the page's one way to ask the operator something
+ *   popover.js       Popover: a button and the menu or panel it opens
+ *   program.js       ProgramRunner, RoverTarget: running a block program on a
+ *                    target
+ *   blocks.js        RoverBlocks, BlockEditor: the rover's blocks, on Blockly
+ *   targetswitch.js  TargetSwitch: the Rover | Simulator switch
+ *   programtab.js    ProgramTab: the Program tab's toolbar, File menu, editor and
+ *                    console
+ *   sim.js           RoverSim, Room, SimSonar, SimTarget: the simulator a program
+ *                    previews on
+ *   simview.js       SimView: the simulator on screen, and its own controls
+ *   app.js           this file, last
  *
  * Every part's on...(fn) returns a function that unsubscribes fn
  * (Listeners.add, support.js).
@@ -193,8 +198,8 @@ const tabs = new Tabs([byId("tabDrive"), byId("tabProgram")], { storageKey: "rov
 
 // What a program can run on, by kind; the Target interface is described in
 // js/program.js. The rover is always here. The simulator's block, next, adds
-// it when its scripts loaded; the Program tab, after that, offers whatever is
-// here.
+// it when its scripts loaded; the target switch, after that, offers whatever
+// is here.
 const targets = { rover: new RoverTarget(driver, link) };
 
 /* --- the simulator ------------------------------------------------------- */
@@ -216,20 +221,33 @@ if (typeof SimTarget === "function" && typeof SimView === "function") {
 
 /* --- the Program tab ----------------------------------------------------- */
 
-// Programs run one at a time, through the runner, on the target the tab's
-// switch picks. A program reaches the rover only through its Target, which
-// drives it through the Driver like any held control.
+// Programs run one at a time, through the runner, on the target the switch
+// picks from the registry, which is complete by now. A program reaches the
+// rover only through its Target, which drives it through the Driver like any
+// held control. Every question the tab asks is the page's one AskDialog.
 const runner = new ProgramRunner();
+const targetSwitch = new TargetSwitch({
+  group: byId("programTarget"),
+  targets,
+  storageKey: "rover.programTarget",
+});
+const ask = new AskDialog({
+  dialog: byId("ask"),
+  text: byId("askText"),
+  yes: byId("askYes"),
+  no: byId("askNo"),
+});
 const programTab = new ProgramTab({
   runner,
-  targets,
+  targetSwitch,
   examples: RoverBlocks.EXAMPLES,
-  storageKey: "rover.programTarget",
+  ask,
   ui: {
-    targetChoice: byId("programTarget"),
     run: byId("programRun"),
     runLabel: byId("programRunLabel"),
     stop: byId("programStop"),
+    menu: byId("programMenu"),
+    menuList: byId("programMenuList"),
     examples: byId("programExamples"),
     exportButton: byId("programExport"),
     importButton: byId("programImport"),
@@ -242,10 +260,6 @@ const programTab = new ProgramTab({
     simToggle: byId("simToggle"),
     state: byId("programState"),
     log: byId("programLog"),
-    ask: byId("programAsk"),
-    askText: byId("programAskText"),
-    askRun: byId("programAskRun"),
-    askCancel: byId("programAskCancel"),
   },
 });
 
@@ -255,7 +269,7 @@ const programTab = new ProgramTab({
 byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab."));
 byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));
-programTab.onTargetChange((kind) => runner.abort(`the target was switched to the ${kind}.`));
+targetSwitch.onChange((kind) => runner.abort(`the target was switched to the ${kind}.`));
 
 // Run on the rover needs a live link, and asks before it drives a pivot
 // unless the rover reports ADVANCED.
@@ -298,6 +312,13 @@ function startBlockEditor() {
     programTab.editorUnavailable("The block editor could not load: it needs Blockly from cdn.jsdelivr.net.");
     return;
   }
+  // Blockly's own questions (deleting every block, or a variable still in
+  // use) are asked as the panel's are: in the page's one dialog, Cancel
+  // focused, rather than in Blockly's, where OK has the focus and a
+  // reflexive Enter deletes.
+  Blockly.dialog.setConfirm((message, callback) => {
+    ask.ask({ title: "Delete blocks?", text: message, yes: "Delete" }).then(callback);
+  });
   try {
     programTab.attachEditor(new BlockEditor(byId("programWorkspace"), {
       Blockly,

@@ -132,8 +132,8 @@ panel instead. `.claude/launch.json` defines the `panel` preview: it runs
   Testing.app" in Playwright's cache. macOS registers each app bundle that
   launches in the operator's Notifications settings. Two round-4 agents
   probing focus with a headless Chrome for Testing left two entries there.
-  If a check needs a real, focused browser window (blur around `confirm()`,
-  say), report it as a manual check for the operator instead.
+  If a check needs a real, focused browser window (blur around the
+  file picker, say), report it as a manual check for the operator instead.
 
 ## Permissions
 

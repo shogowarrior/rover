@@ -324,8 +324,9 @@ joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
 (`mecanum.test.js`) on their own. `test/firmware.js` reads what they check
-against in `src/` and `test/vectors/`, and `test/harness.js` sets the time
-limit an asynchronous test runs under, so one that never ends fails by name.
+against in `src/` and `test/vectors/`, `test/css.js` reads the stylesheets
+as they check them, and `test/harness.js` sets the time limit an
+asynchronous test runs under, so one that never ends fails by name.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms (`MOVE_DURATION_MS`). `REPEAT_MS`
@@ -386,11 +387,21 @@ page's globals in reach, so a program loaded from anywhere goes through
 `RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
 keeps comments out of the code. On the rover, Run asks first when the editor
 holds several stacks, and when the program drives a pivot while the rover is
-not on ADVANCED. It asks in the page, in a `<dialog>`, never with
-`window.confirm()`: desktop Chrome blurs the window as its own dialog
-closes, and the blur stopped the run just confirmed. A program's own stop
-and start exploring are not presses:
-the Driver raises no event for them.
+not on ADVANCED. A program's own stop and start exploring are not presses:
+the Driver raises no event for them. The tab's File menu holds the
+examples, Import, Export and Clear; loading an example or importing over a
+program, and Clear, ask first too. Every question the panel asks goes
+through `AskDialog` (`js/ask.js`), in the page's one `<dialog>`, never
+`window.confirm()`, `alert()` or `prompt()`: desktop Chrome blurs the window
+as its own dialog closes, and the blur stopped the run just confirmed; the
+desktop app's browser pane dismisses native dialogs unseen. Blockly's own
+questions (deleting every block, or a variable in use) go through it too
+(`app.js`), with Cancel focused; only its prompts for a variable's name (new
+or renamed), which need a text field, and its note that a name is taken stay
+Blockly's own in-page dialogs. The File menu
+and the simulator's settings share `Popover` (`js/popover.js`), and the
+Rover | Simulator switch is a `TargetSwitch` (`js/targetswitch.js`), whose
+change stops a run.
 
 **The simulator** holds no Link and no Driver: a preview sends nothing, and
 its telemetry never reaches the scan fan or the readouts. It follows the

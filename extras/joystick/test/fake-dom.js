@@ -55,6 +55,7 @@ class Node_ {
     this.children = [];
     this.parentNode = null;
     this.listeners = {};
+    this.captureListeners = {};
     this.dataset = {};
     this.style = {};
     this._text = "";
@@ -84,21 +85,67 @@ class Node_ {
   removeAttribute(n) { delete this.attributes[n]; }
   appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
   remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter((c) => c !== this); this.parentNode = null; } }
-  addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); }
-  removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((g) => g !== f); }
+  // A listener for the capture phase (a third argument of true, or
+  // {capture: true}) runs on the way down to the target, before any on the
+  // way back up.
+  addEventListener(t, f, options) {
+    const list = options === true || (options && options.capture) ? this.captureListeners : this.listeners;
+    (list[t] = list[t] || []).push(f);
+  }
+  removeEventListener(t, f, options) {
+    const list = options === true || (options && options.capture) ? this.captureListeners : this.listeners;
+    list[t] = (list[t] || []).filter((g) => g !== f);
+  }
   dispatchEvent(e) { return dispatch(this, e); }
-  focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
-  // A <dialog>, as a browser's: showModal() opens it; close(value) shuts an
-  // open one, setting returnValue when given one, and "close" follows as a
-  // task of its own. Escape is a close() with no value, which leaves
+  // As in a browser, focus() does nothing on an element with no layout box
+  // or a disabled one, and, while a modal <dialog> is open, on anything
+  // outside it: the rest of the page is inert.
+  focus() {
+    const doc = this.ownerDocument;
+    if (!doc || !this.rendered || this.disabled || (doc.__modal && !doc.__modal.contains(this))) return;
+    doc.activeElement = this;
+  }
+  // A <dialog>, as a browser's: showModal() opens it, makes the rest of the
+  // page inert, and focuses its autofocus control, remembering what had the
+  // focus; close(value) shuts an open one, setting returnValue when given
+  // one, and gives the focus back to what had it, or to the body if that
+  // has no layout box now (a menu item hidden meanwhile). "close" follows as
+  // a task of its own. Escape is a close() with no value, which leaves
   // returnValue as it was.
-  showModal() { if (this.tagName !== "DIALOG" || this.open) throw new Error("showModal() on a closed <dialog> only"); this.open = true; }
+  showModal() {
+    if (this.tagName !== "DIALOG" || this.open) throw new Error("showModal() on a closed <dialog> only");
+    const doc = this.ownerDocument;
+    this.open = true;
+    this.previouslyFocused = doc.activeElement;
+    doc.__modal = this;
+    (all(this).find((n) => n.hasAttribute("autofocus")) || this).focus();
+  }
   close(value) {
     if (!this.open) return;
+    const doc = this.ownerDocument;
     this.open = false;
     if (value !== undefined) this.returnValue = String(value);
+    doc.__modal = null;
+    const back = this.previouslyFocused;
+    doc.activeElement = back && back.rendered && doc.contains(back) ? back : doc.body;
     setImmediate(() => dispatch(this, { type: "close", bubbles: false }));
   }
+  // As in a browser, click() fires a click that bubbles. A file <input>'s
+  // picker is the browser's: here a test counts the clicks (pickerOpened)
+  // and fires "change" itself.
+  click() {
+    if (this.tagName === "INPUT" && this.getAttribute("type") === "file") this.pickerOpened = (this.pickerOpened || 0) + 1;
+    dispatch(this, { type: "click", bubbles: true, preventDefault() {} });
+  }
+  // As in a browser, an element with no layout box scrolls nowhere.
+  scrollIntoView(options) {
+    if (!this.rendered) return;
+    this.scrolledIntoView = (this.scrolledIntoView || 0) + 1;
+    this.scrollOptions = options;
+  }
+  contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
+  closest(selector) { const test = parseSelector(selector); for (let n = this; n && n.tagName !== "#DOCUMENT"; n = n.parentNode) if (test(n)) return n; return null; }
+  querySelectorAll(selector) { const test = parseSelector(selector); return all(this).slice(1).filter(test); }
   getContext() { return fakeContext(); }
   // As in a browser, an element with no layout box has no rects, and an
   // empty bounding rect. Laid out, it sits at the sum of its own and its
@@ -112,6 +159,27 @@ class Node_ {
   }
 }
 
+// A test for one compound selector -- a tag, #id, .class, [attr] or
+// [attr="value"], in any combination -- which is all the panel asks of
+// closest() and querySelectorAll(). Anything more (a combinator,
+// a list, a pseudo-class) throws, rather than match the wrong elements.
+function parseSelector(selector) {
+  const parts = [];
+  const re = /^(?:([a-zA-Z][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\])/;
+  let rest = selector.trim();
+  while (rest) {
+    const m = rest.match(re);
+    if (!m) throw new Error(`fake-dom: unsupported selector "${selector}"`);
+    const [, tag, id, cls, attr, value] = m;
+    if (tag) parts.push((n) => n.tagName === tag.toUpperCase());
+    else if (id) parts.push((n) => n.id === id);
+    else if (cls) parts.push((n) => (n.getAttribute("class") || "").split(/\s+/).includes(cls));
+    else parts.push((n) => (value === undefined ? n.hasAttribute(attr) : n.getAttribute(attr) === value));
+    rest = rest.slice(m[0].length);
+  }
+  return (n) => typeof n.getAttribute === "function" && parts.every((test) => test(n));
+}
+
 function fakeContext() {
   const noop = () => {};
   return {
@@ -121,19 +189,31 @@ function fakeContext() {
 }
 
 // Listener exceptions are reported, not propagated, as in a browser. An event
-// bubbles through the target's ancestors as they are when it fires, so one
-// on a node taken out of the page (a stick canvas rebuilt under a thumb)
-// never reaches the document, as in a browser.
+// travels the target's ancestors as they are when it fires, so one on a node
+// taken out of the page (a stick canvas rebuilt under a thumb) never reaches
+// the document, as in a browser: down from the top through the capture
+// listeners, then at the target, then back up through the others if it
+// bubbles. stopPropagation() ends the trip after the node it was called on,
+// as Blockly's workspace does to every press. Its target is the node it was
+// fired at, unless the test gave it another.
 function dispatch(target, e) {
+  if (e.target === undefined) e.target = target;
+  let stopped = false;
+  e.stopPropagation = () => { stopped = true; };
   const path = [];
   for (let n = target; n; n = n.parentNode) path.push(n);
-  const bubbles = e.bubbles !== false;
-  for (let i = 0; i < path.length; i++) {
-    if (i > 0 && !bubbles) break;
-    for (const f of (path[i].listeners[e.type] || []).slice()) {
-      try { f.call(path[i], e); } catch (err) { (target.ownerDocument || target).__errors.push(err); }
+  const run = (node, listeners) => {
+    for (const f of (listeners[e.type] || []).slice()) {
+      try { f.call(node, e); } catch (err) { (target.ownerDocument || target).__errors.push(err); }
     }
+  };
+  for (let i = path.length - 1; i > 0 && !stopped; i--) run(path[i], path[i].captureListeners);
+  if (!stopped) {
+    run(target, target.captureListeners);
+    run(target, target.listeners);
   }
+  const bubbles = e.bubbles !== false;
+  for (let i = 1; i < path.length && bubbles && !stopped; i++) run(path[i], path[i].listeners);
   return true;
 }
 

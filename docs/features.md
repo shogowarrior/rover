@@ -1,7 +1,8 @@
 # Requested features: the next work
 
 The owner's requests for the browser panel and the controls, from
-2026-10-03. Nothing here is started. [project/handoff.md](project/handoff.md) says where the
+2026-10-03. Steps 1 to 3 of the [order of work](#order-of-work) are done; the
+rest is not started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
 Every bullet and clause the owner wrote is quoted below and mapped to an
@@ -65,19 +66,22 @@ The screenshot that came with it shows the Program tab on a wide screen
 | please make it consistent (the joysticks bullet) | [F3h](#f3h-both-sticks-shown-disabled-by-scheme), "Consistent means" |
 | check if other buttons can be used too | [F4](#f4-other-buttons) |
 | All this requests can go to your handoff and make sure nothing is dropepd. from my requests. i dont want to waste time on figureing out what got missed. | This table; [project/handoff.md](project/handoff.md) points here |
-| please work on the stuff needed for project 1st and then we can do the features requested/ | Done in that order: these docs are the first change, and nothing below is started |
+| please work on the stuff needed for project 1st and then we can do the features requested/ | Done in that order: these docs came first, then the work below in its [order](#order-of-work) |
 | you can creat a separate doc for it which handoff cna refer to. | This file |
 | goal and project instructions are different | Two files: [project/goal.md](project/goal.md) and [project/instructions.md](project/instructions.md) |
 
 ## Order of work
 
-1. Write the layout and interaction spec ([F3f](#f3f-consistency-rules)) into
-   this file, and send it to the owner with the questions (see above).
-2. Shared parts first, each with its tests: the in-page ask dialog in place of
-   every `window.confirm()`, one menu/popover helper (shared with the
-   simulator's settings popover), and a target switch class.
-3. [F2](#f2-file-actions-in-one-menu): it shortens the Program toolbar, which is
-   what holds the right column narrow today.
+1. **Done.** Write the layout and interaction spec
+   ([F3f](#f3f-consistency-rules)) into this file, and send it to the owner
+   with the questions (see above).
+2. **Done.** Shared parts first, each with its tests: the in-page ask dialog
+   in place of every `window.confirm()` (`AskDialog`, `js/ask.js`), one
+   menu/popover helper shared with the simulator's settings popover
+   (`Popover`, `js/popover.js`), and a target switch class (`TargetSwitch`,
+   `js/targetswitch.js`).
+3. **Done.** [F2](#f2-file-actions-in-one-menu): it shortens the Program
+   toolbar, which was what held the right column narrow.
 4. [F3](#f3-one-layout-for-both-tabs) and F3a to F3e: one right-column width,
    the foot bar aligned to the columns, the simulator view fixed.
 5. [F1](#f1-a-simulator-for-the-drive-tab), then
@@ -90,6 +94,36 @@ The screenshot that came with it shows the Program tab on a wide screen
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1280 and about 1600 px (see the handoff for how, without the desktop
 pane), and `/code-review` rounds until one comes back clean.
+
+## The owner's answers
+
+Every "Ask the owner" question below, numbered as they went to the owner in
+one message on 2026-10-03, with the spec. Work goes on with the default
+until an answer comes; record each answer here, and amend the item and the
+spec it changes.
+
+| # | Item | Question | Default | Answer |
+|---|---|---|---|---|
+| 1 | F1 | In Simulator mode, does Stop still send STOP to a connected rover? | yes | none yet |
+| 2 | F1 | In Simulator mode, does Autonomous act on the simulator only, or is it disabled? | the simulator only, saying exploring is not simulated | none yet |
+| 3 | F1 | Do Drive and Program share one simulated world (room, trail, pose)? | yes | none yet |
+| 4 | F1 | On a phone's Drive tab in Simulator mode, does the view replace the scan fan, or fold away? | replace the fan; the readouts stay | none yet |
+| 5 | F2 | One menu with the examples in it, or Examples kept as its own dropdown? | one menu | none yet |
+| 6 | F2 | Clear inside the menu, last, behind an in-page question? | yes | none yet |
+| 7 | F2 | Should the simulator's 1x / 2x / 4x become a dropdown? | only in a narrow view | none yet |
+| 8 | F3 | A slightly narrower Program editor at 1280 px, for one column width on both tabs? | yes | none yet |
+| 9 | F3a | Does "biggest buttons" mean too big? | shrink them modestly; Stop stays the most prominent | none yet |
+| 10 | F3b | "drive/program at the top": keep them there, or a complaint? | keep them at the top, as the switch row | none yet |
+| 11 | F3c | The rover's data on the right at all times, or not shown without a rover? | at all times, with an empty state | none yet |
+| 12 | F3d | A wider right column for the fan, or a narrower one for the editor? | the middle: `clamp(320px, 30vw, 460px)` | none yet |
+| 13 | F3e | May the simulated room be drawn turned 90 degrees? | no: north stays up | none yet |
+| 14 | F3e | Does the Program console move under the simulator, or stay under the editor? | under the simulator on wide screens | none yet |
+| 15 | F3g | With a rover connected and the target on Simulator, does the simulator's scheme follow the rover's? | its own, starting from the rover's | none yet |
+| 16 | F3g | Should NORMAL refuse pivots in programs outright (a firmware change), or keep asking? | keep asking | none yet |
+| 17 | F3h | What does the second stick drive? | the pivots | none yet |
+| 18 | F3h | Should the PS3 pad's right stick get the same mapping (a firmware change)? | no, not in this round | none yet |
+| 19 | F3h | On an upright phone: two smaller sticks, or one stick with the pivots shown disabled? | two smaller sticks | none yet |
+| 20 | F4 | Which reading of "other buttons" was meant, and is the split right? | all three; PS3 Cross = STOP and keyboard keys now, the rest later | none yet |
 
 ## Rules every item keeps
 
@@ -121,8 +155,9 @@ on.
 controls work. just like the simulator for program (in blockly)."
 
 **Today.** Only the Program tab has one. `js/app.js` builds one `SimTarget`
-drawn by one `SimView` in `#simSlot`, and the Program toolbar's Rover |
-Simulator switch (`#programTarget`, `js/programtab.js`) picks where Run goes.
+drawn by one `SimView` in `#simSlot`, and one `TargetSwitch`
+(`js/targetswitch.js`), drawn as the Program toolbar's Rover | Simulator
+switch (`#programTarget`), picks where Run goes.
 The Drive tab's controls feed only the `Driver` (`js/drive.js`), which sends
 through the Link; `SimTarget` offers only the program target API (hold,
 release, stop, explore) and has no public raw command. The Drive tab has no
@@ -138,15 +173,16 @@ Switching targets is a new way to lose control: it must let go of every held
 input.
 
 **Proposal.** One Rover | Simulator switch for the whole page, in the header
-row beside Normal | Advanced, as a small reusable class (one storage key,
-read once from the old `rover.programTarget`). In Simulator mode `app.js`
+row beside Normal | Advanced: the `TargetSwitch` moved there, under one
+storage key read once from the old `rover.programTarget`. In Simulator mode `app.js`
 gives the Driver a sink in place of the Link: an adapter whose
 `send({move, speed, duration})` calls a new public `SimTarget.command()` that
 mirrors `Rover::command` (STOP stops, RESUME_AUTONOMOUS explores, an unknown
 code stops, speed 0 releases). One SimTarget and one SimView serve both tabs.
 On a switch: one STOP to the old target only if it was driving, abort a
 running program. Playback held at 1x while the Drive tab drives the
-simulator, the faster speeds disabled with a title saying why. Stop also
+simulator, the faster speeds disabled with a title saying why, both as
+buttons and in the narrow view's playback list. Stop also
 sends STOP to a connected rover. In Simulator mode a Drive press
 aborts a running preview, as a press aborts a run on the rover ("the
 operator's hands win"), and playback drops to 1x.
@@ -190,7 +226,8 @@ real, open Link" to driving; update the Program-tab target tests in
 mode the stick and rotate buttons send nothing over an open Link while Stop
 still does; a switch under a held stick or rotate button sends one STOP to
 the old target; playback is held at 1x; with a preview running, a stick press
-ends it and only the Driver's moves reach the simulator.
+ends it and only the Driver's moves reach the simulator; the narrow view's
+playback list holds 1x too.
 
 **Done when** the Drive tab's stick, rotate buttons, speed and family drive
 the simulated rover in the room with no rover connected, nothing reaches the
@@ -205,15 +242,38 @@ can be put in dropdown too. there can be multiple based on what is needed.
 but htink before you do as some things might be better without dropdown to
 make it explicit/"
 
-**Today.** The Program toolbar (`joystick.html`, `css/program.css`) holds the
-Rover | Simulator switch, Run, Stop program, a spacer, Examples (a `<select>`
-already used as an action menu), then Export, Import and Clear as buttons
-with the hidden `#programFile` input. Export works mid-run; Examples, Import
-and Clear only while idle. Examples, Import and Clear ask with
-`window.confirm()`, while Run asks in the page's `<dialog>`. The toolbar's
-900 px is what holds the Program tab's right column narrow (F3d). The
-simulator's settings popover already behaves like a menu (`aria-expanded`;
-Escape and a press outside close it).
+**Done** (step 3). The Program toolbar holds the Rover | Simulator switch,
+Run, Stop program and one File menu button (`#programMenu`). Its menu
+(`#programMenuList`) holds the four examples under an Examples heading
+(the group `#programExamples`), a separator, Import…, Export, a separator
+and Clear, built on `Popover` and following the spec's *Menus*. The menu is
+named File, not Program as proposed below, because the tab is already called
+Program. Export works mid-run; the examples, Import and Clear only while
+idle, and stay in the menu otherwise, disabled, with a title that says why
+("Stop the program first", or "Nothing to clear"). Loading an example or
+importing over a program, and Clear, ask first in the page's one `<dialog>`
+(`AskDialog`), and so do Blockly's own questions (deleting every block, or a
+variable still in use).
+
+Where the 1x / 2x / 4x buttons would leave the room's name too little of
+the simulator's bar, a playback list (`.sim-speed-pick`) takes their place,
+setting the same speed; while paused it shows none, as no button is pressed
+then. Narrower still, the room's name takes a row of its own. The widths
+(`css/sim.css`) are measured, and follow the tools' size: the list below
+421 px of the bar in the one-column layout and 349 px in the wide one, the
+room's own row below 340 and 304. So the bar is one row from 340 px (390 px
+phones and up) and at 1280 to 1600 px, and two rows on a 375 px phone, at
+480 x 320 and at 960 x 540, with every room's name in full.
+
+At 1280 and 1600 px the toolbar is one row at today's right-column width (it
+took two at 1280); F3 re-checks it at the new one. On an upright phone it
+still takes three rows (the switch, Run and Stop program, the menu), until
+F1 moves the switch to the header.
+
+**Before**, for the record: the toolbar held Examples (a `<select>` used as
+an action menu), then Export, Import and Clear as buttons, needing 900 px
+for one row, which is what held the Program tab's right column narrow
+(F3d); Examples, Import and Clear asked with `window.confirm()`.
 
 **Binding rules.** No packages, so the menu is hand-written. Run's question
 lives in a `<dialog>`, never `window.confirm()`: desktop Chrome blurs the
@@ -221,14 +281,15 @@ window after its own dialog, and blur stands the Driver down. Import's file
 picker needs user activation, so the menu item's click handler calls
 `#programFile.click()` directly. All four actions stay.
 
-**Proposal.** One menu button ("Program", `aria-haspopup="menu"`) holding the
-four examples, Import..., Export, a separator, and Clear last, the items
-keeping their ids. Built as one small class shared with the simulator's
-settings popover (open and close, Escape, a press outside, focus back to the
-button). Replace the three `window.confirm()` calls with the page's
-`<dialog>` by generalising `ProgramTab.#ask`. Keep the enable rules.
+**Proposal** (as written; built, with the menu named File). One menu button
+("Program", `aria-haspopup="menu"`) holding the four examples, Import...,
+Export, a separator, and Clear last, the items keeping their ids. Built as
+one small class shared with the simulator's settings popover (open and
+close, Escape, a press outside, focus back to the button). Replace the three
+`window.confirm()` calls with the page's `<dialog>` by generalising
+`ProgramTab.#ask`. Keep the enable rules.
 
-Which menus, and how many: the new Program menu; the simulator's room
+Which menus, and how many: the new File menu; the simulator's room
 `<select>` and settings popover, which are menus already; and the
 simulator's 1x / 2x / 4x as a `<select>` only where the simulator's bar is
 narrower than its buttons need (below about 360 px). Everything else stays a
@@ -239,7 +300,8 @@ visible control, for the reasons in
 - One menu with the examples in it, or Examples kept as its own dropdown?
   *(default: one menu)*
 - Clear inside the menu, last, behind an in-page question? *(default: yes; it
-  is undoable with Ctrl+Z and moves nothing)*
+  is undoable with Ctrl+Z, Cmd+Z on a Mac, in the editor, and moves
+  nothing)*
 - Should the simulator's 1x/2x/4x become a dropdown? *(default: only in a
   narrow view)*
 
@@ -252,9 +314,10 @@ Clear asks in the page; the playback `<select>` appears only in a narrow
 simulator bar and sets the same speed as the buttons.
 
 **Done when** Export, Import and Clear (and the examples, unless the owner
-asks to keep them apart) are in one menu, no `window.confirm()` is left in the panel, the toolbar fits one
-row at the new right-column width, and every control sits where
-[Menu or explicit](#menu-or-explicit-every-control) puts it.
+asks to keep them apart) are in one menu, no `window.confirm()` is left in
+the panel, the toolbar fits one row at the new right-column width, and every
+control sits where [Menu or explicit](#menu-or-explicit-every-control) puts
+it. All but the right-column width hold now; F3 checks that.
 
 ## F3. One layout for both tabs
 
@@ -462,21 +525,109 @@ without moving it.
 **Today**, besides F3 to F3e: the family selector is hidden under NORMAL
 rather than shown disabled, and on a phone it comes and goes above the stick;
 the scheme toggle is greyed with no link; the target switch exists on the
-Program tab only; three questions use `window.confirm()` and one a
-`<dialog>`; the simulator's buttons are 32 px tall on wide screens and the
+Program tab only; the simulator's buttons are 32 px tall on wide screens and the
 Program toolbar's 44 px.
 
-**Proposal.** Write this spec here first, then apply it:
-- Header rows hold the page-wide switches; each tab holds only its own
-  actions; the foot bar holds the safety buttons.
-- One left pane and one right column, the same widths on both tabs, and the
-  foot bar's cells aligned to them.
-- One control height per layout for ordinary controls; the foot bar's Stop
-  and Autonomous are the one exception, taller.
-- Controls that depend on the scheme are shown disabled, never hidden.
-- One way to ask: the in-page `<dialog>`.
-- Shared helpers for the target switch, the menu and the ask dialog, used
-  everywhere they apply.
+**The spec.** Every item from here on follows it, and an answer from the
+owner amends it here. The items name the parts they apply; a part no item
+has applied yet describes the target, not today's page.
+
+*Layouts.* Three, chosen by the viewport as today: **wide** (960 px wide and
+521 px tall and up), **a phone on its side** (landscape, 520 px tall or
+less), and **a phone upright** (the rest). Every check is made at 375 x 812,
+480 x 320 and 812 x 375 for the phones, and 1280 x 800 and about 1600 x 900
+(the owner's screen) for wide, on both tabs.
+
+*Regions.* Four, in this order on screen and in the focus order, on every
+layout and both tabs:
+1. The header: the wordmark and the status pills; the address, Connect and
+   the note; and the switch row.
+2. The open tab: its own action row first (the Program toolbar), then its
+   content.
+3. The right column: the rover's data, at all times (F3c): the motor fault,
+   the scan and the readouts.
+4. The foot bar: Autonomous, then Stop, the last control in the focus order.
+
+*The switch row.* One header row holds every page-wide switch and nothing
+else: Drive | Program, Normal | Advanced, and Rover | Simulator once F1 moves
+it there, in that order, each a segmented control of the one control height.
+A tab's own actions never go in it, and a page-wide switch never goes in a
+tab.
+
+*Columns, wide.* The left pane (the open tab) and the right column, the
+same two widths on both tabs. The right column is one `--rail`,
+`clamp(320px, 30vw, 460px)` (384 px at 1280, 460 px at 1600), used by every
+part of it: the address and Connect, the note, the fault, the scan and the
+readouts, and the foot bar's Autonomous, all starting at one left edge. One
+gap between the columns, one gutter at the page's edges. Both columns start
+on one line under the header: the left pane's top is the Program toolbar's
+on the Program tab and the dock's on the Drive tab.
+
+*The foot bar.* Its two cells sit under the two columns. On wide, Stop
+starts at the left pane's left edge and is as wide as that pane up to
+480 px, and Autonomous fills the cell under the right column, so a hand
+reaching for Stop never lands on Autonomous. Both are 56 px tall, the two
+largest controls on the page, Stop the most prominent (its red fill), and
+Autonomous a raised secondary button, lit while the rover explores. On a
+phone the bar stays as today: Autonomous | Stop, Stop under the right thumb.
+
+*Control heights.* One height for every ordinary control on every layout:
+`--tap`, 44 px, the touch floor. That covers buttons, segmented controls,
+selects, the address field, menu buttons, the Program toolbar and the
+simulator's bar (32 px on wide today). The exceptions are larger, never
+smaller: the foot bar's Stop and Autonomous, the Drive tab's rotate buttons
+(held controls, as today) and Blockly's own controls.
+
+*Disabled, never hidden.* A control that belongs to a layout is always shown
+there. When it cannot act now (the scheme, the link or a running program
+forbids it) it is disabled, with a title that says why ("Advanced only",
+"Connect to the rover first"). Messages are not controls: the motor fault
+and the halt reason come and go, as today, and keep their line where a held
+stick would move.
+
+*Nothing moves under a held stick.* No change of the scheme, the link, the
+target or a running program changes the size or place of anything above or
+beside a held stick, on any layout. Disabled-not-hidden is what makes that
+hold; the rules in [Rules every item keeps](#rules-every-item-keeps) still
+apply.
+
+*One way to ask.* Every question is asked in the page's one `<dialog>`
+through one shared helper (`AskDialog`): the question as its text, a
+confirm button that names the action ("Run on rover", "Replace", "Clear",
+"Delete"), Cancel focused so a reflexive Enter does nothing, and Escape or
+Cancel answering no. Blockly's own questions go through it too; only its
+prompts for a variable's name (new or renamed), which need a text field, and
+its note that a name is taken stay Blockly's own in-page dialogs. No `window.confirm()`, `alert()` or `prompt()`. A question is asked only before
+something costly to undo: driving the rover in a way the operator may not
+expect, or replacing or removing the program in the editor. Never before
+Stop.
+
+*Menus.* One shared helper for every popup (`Popover`): the Program tab's
+File menu and the simulator's settings. A menu holds only infrequent actions that move
+nothing; every safety control, page-wide switch, primary action and held
+control stays a visible, one-press control
+([Menu or explicit](#menu-or-explicit-every-control)). A menu button says it
+opens a menu (a chevron, `aria-haspopup="menu"`, `aria-expanded`). A click,
+Enter, Space or Down opens it on its first item, Up on its last; Up and Down
+move through its items and wrap, Home and End go to the ends; an item does
+its action and closes the menu with the focus back on its button; Escape
+closes it the same way, Tab closes it and moves on, and a press outside
+closes it. An item that cannot act now stays in the menu, disabled. A
+popover that is not a menu, the simulator's settings, shares the opening,
+Escape and press-outside behaviour.
+
+*Labels.* No label overflows its control (`scrollWidth <= clientWidth`) at
+any of the sizes above. An icon-only button (the simulator's pause, reset
+and settings) carries its word as its accessible name and its title.
+
+*Empty states.* A region with nothing to show yet says why in its own place,
+at its full size: the right column before a rover's first frame (F3c), the
+editor while Blockly loads or after it failed, the console before a run.
+
+*Measured, not eyeballed.* Each layout change is measured in a headless
+browser at the sizes above, on both tabs (the handoff says how): the column
+edges, the foot bar's cells, control heights, label overflow, and that no
+stick's box moved.
 
 **Done when** the spec is in this file, has gone to the owner with the
 questions, and every item follows it (amended by any answer that comes
@@ -646,8 +797,8 @@ button (keydown arms it, ignoring auto-repeat; keyup releases it), the blur
 and hidden stand-downs cover focus loss, space's keydown and keyup call
 `preventDefault()` so it never also clicks a focused button (Autonomous,
 Run or Connect would otherwise fire on keyup), and keys are ignored while focus is in
-the address, a select, the speed slider, the tab list, the dialog, Blockly,
-or the simulator's rover (which already takes q/e and the arrow keys to turn
+the address, a select, the speed slider, the tab list, the dialog, an open
+menu or the simulator's settings, Blockly, or the simulator's rover (which already takes q/e and the arrow keys to turn
 and nudge the preview rover).
 
 **The browser Gamepad API.** A pad plugged into the laptop could drive
@@ -689,27 +840,25 @@ control table lists them.
 | Rover \| Simulator | Program toolbar (header under F1) | no | decides whether Run moves the real rover |
 | Run / Preview | Program toolbar | no | the primary action |
 | Stop program | Program toolbar | no | safety: ends a run at once |
-| Examples | Program toolbar | yes | already a dropdown; replaces the program like Import |
-| Export | Program toolbar | yes | infrequent, moves nothing |
-| Import | Program toolbar | yes | infrequent; the item calls the file picker directly |
-| Clear | Program toolbar | yes | last, behind an in-page question |
+| Examples | File menu | yes | was a dropdown already; replaces the program like Import |
+| Export | File menu | yes | infrequent, moves nothing |
+| Import | File menu | yes | infrequent; the item calls the file picker directly |
+| Clear | File menu | yes | last, behind an in-page question |
 | Simulator room | simulator bar | yes | already a dropdown |
 | Simulator 1x / 2x / 4x | simulator bar | narrow view only | its state should show |
 | Simulator Pause, Reset | simulator bar | no | quick, stateful toggles |
-| Simulator settings | simulator bar | already one | the popover whose logic the new menu shares |
+| Simulator settings | simulator bar | already one | a `Popover`, like the File menu |
 | Simulator fold | Program tab, phone | no | a disclosure |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
 
 ## Open from earlier work
 
-Not started. In scope only where an item or step below says what takes it
-up; the rest waits for the owner.
+In scope only where an item or step below says what takes it up; the rest
+waits for the owner.
 
-- `js/programtab.js` asks with native `confirm()` to load an example, import
-  over a program, and Clear, while Run uses the in-page `<dialog>`; the
-  desktop app's browser pane dismisses native dialogs, so those three do
-  nothing there. Taken up by the shared ask dialog (Order of work, step 2),
-  which F2 then uses.
+- **Done** (step 2): `js/programtab.js` asked with native `confirm()` to
+  load an example, import over a program, and Clear, which the desktop
+  app's browser pane dismisses unseen. They ask in the page now.
 - At 480 x 320 on its side, the middle column is 101 px wide and the tab and
   scheme labels overflow their buttons. Found while verifying the last
   branch's landscape layout. Taken up by F3b's done-when.

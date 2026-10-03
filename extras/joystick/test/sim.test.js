@@ -23,6 +23,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { src, CODES, telemetry } = require("./firmware.js");
+const { stylesheet, cssRules, blockRules } = require("./css.js");
 
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -1133,6 +1134,108 @@ test("the view: paused, Pause is pressed and no playback speed is", () => {
   assert.equal(sim.paused, false, "a speed plays");
   assert.deepEqual(pressed(), [4]);
   assert.equal(pause.getAttribute("aria-pressed"), "false");
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: a narrow bar offers the playback speed as a list, the same choice as the buttons", () => {
+  const { page, sim, byClass, button } = pageWithView();
+  const list = byClass("sim-speed-pick")[0];
+  assert.equal(list.tagName, "SELECT");
+  assert.deepEqual(list.children.map((o) => o.getAttribute("value")), SimTarget.PLAYBACKS.map(String));
+  page.fire(button("2×"), "click");
+  assert.equal(list.value, "2", "a button's choice shows in the list");
+  // Paused, it shows no speed, as no button is pressed: any choice is a
+  // change, and plays, the speed it was at included.
+  page.fire(byClass("sim-pause")[0], "click");
+  assert.equal(list.value, "", "paused: no speed shown");
+  list.value = "2";
+  page.fire(list, "change");
+  assert.equal(sim.paused, false, "the speed it was at plays again, as its button would");
+  page.fire(byClass("sim-pause")[0], "click");
+  list.value = "4";
+  page.fire(list, "change");
+  assert.equal(sim.playback, 4);
+  assert.equal(sim.paused, false, "a choice from the list plays, as a button's does");
+  assert.equal(button("4×").getAttribute("aria-pressed"), "true", "and the buttons show it");
+
+  // The one or the other, by the bar's width; narrower still, the room's
+  // name takes a row of its own, and the settings open below both rows.
+  // The widths follow the tools' size, which follows the layout: the list
+  // where the buttons no longer fit beside the room's longest name, the
+  // row where the list no longer does.
+  const css = stylesheet("sim.css");
+  const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
+  const layouts = {
+    "one column": "@media (max-width: 959.98px), (max-height: 520.98px) {",
+    wide: "@media (min-width: 960px) and (min-height: 521px) {",
+  };
+  const widths = {};
+  for (const [name, opening] of Object.entries(layouts)) {
+    // The layout's block that holds the container queries (the wide one
+    // has another, for the tools' size).
+    let start = -1;
+    do start = css.indexOf(opening, start + 1);
+    while (start >= 0 && !(blockRules(css.slice(start), opening) || []).some((r) => r.selector === ".sim-speed-pick"));
+    assert.ok(start >= 0, `${name}: its block`);
+    const queries = [...css.slice(start).matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)].slice(0, 2);
+    assert.equal(queries.length, 2, `${name}: two widths`);
+    const [list_, row] = queries.map((m) => ({ px: Number(m[1]), rules: blockRules(css.slice(start), m[0]) || [] }));
+    assert.match(rule(list_.rules, ".sim-speed"), /display:\s*none/, `${name}: no buttons`);
+    assert.match(rule(list_.rules, ".sim-speed-pick"), /display:\s*block/, `${name}: the list`);
+    assert.match(rule(row.rules, ".sim-room"), /flex-basis:\s*100%/, `${name}: the room's own row`);
+    assert.match(rule(row.rules, ".sim-more"), /--sim-bar-h:\s*calc\(2 \* var\(--sim-tool\)/, `${name}: the settings below both rows`);
+    assert.ok(row.px < list_.px, `${name}: the row only narrower than the list`);
+    widths[name] = list_.px;
+  }
+  assert.ok(widths.wide < widths["one column"], "the wide layout's smaller tools fit a narrower bar");
+  // The list's own rule, ahead of the container queries that override it.
+  assert.match(rule(cssRules(css), ".sim-speed-pick"), /display:\s*none/, "otherwise the buttons alone");
+  const settings = cssRules(css).find((r) => r.selector === ".sim-more" && /position:\s*absolute/.test(r.body));
+  assert.match(settings.body, /top:\s*calc\([^;]*var\(--sim-bar-h\)/, "the settings open below the bar's rows");
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: its settings open from their button, and Escape or a press outside folds them away", () => {
+  // On its tab: hidden, nothing can take the focus.
+  const { page, byClass } = pageWithView({ stored: { "rover.tab": "tabProgram" } });
+  const more = byClass("sim-tool").find((b) => b.getAttribute("aria-controls") === "simMore");
+  const panel = page.$("simMore");
+  const press = (target) => {
+    page.fire(target, "pointerdown");
+    page.fire(target, "click");
+  };
+  assert.ok(more, "the settings button names its panel");
+  assert.ok(panel.hidden && more.getAttribute("aria-expanded") === "false", "folded at first");
+  assert.equal(more.getAttribute("aria-haspopup"), null, "settings, not a menu");
+  press(more);
+  assert.ok(!panel.hidden && more.getAttribute("aria-expanded") === "true", "open");
+  assert.notEqual(page.doc.activeElement, panel.querySelectorAll("button")[0], "not a menu: the focus stays put");
+  page.fire(panel.querySelectorAll("button")[0], "pointerdown");
+  assert.ok(!panel.hidden, "a press inside: still open");
+  // Not a menu: its keys are its controls' own. The drag slider moves
+  // with the arrows, Home and End, and Tab moves on inside it.
+  const [slider] = panel.querySelectorAll("input");
+  for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Tab"]) {
+    assert.equal(page.fire(slider, "keydown", { key }).defaultPrevented, false, `${key} is the slider's`);
+  }
+  assert.ok(!panel.hidden, "and none of them folds it");
+  page.fire(panel, "keydown", { key: "Escape" });
+  assert.ok(panel.hidden && page.doc.activeElement === more, "Escape folds them, back on the button");
+  press(more);
+  page.fire(more, "keydown", { key: "Escape" });
+  assert.ok(panel.hidden, "Escape on the button too");
+  press(more);
+  press(more);
+  assert.ok(panel.hidden, "its button folds them again");
+  press(more);
+  page.fire(page.$("programRun"), "pointerdown");
+  assert.ok(panel.hidden && more.getAttribute("aria-expanded") === "false", "a press outside folds them");
+  // A press on the block editor too, which Blockly keeps from going any
+  // further.
+  press(more);
+  page.$("programWorkspace").addEventListener("pointerdown", (event) => event.stopPropagation());
+  page.fire(page.$("programWorkspace"), "pointerdown");
+  assert.ok(panel.hidden, "a press Blockly stops still folds them");
   assert.deepEqual(page.errors, []);
 });
 
