@@ -87,12 +87,18 @@ class RoverBlocks {
 
   static #installed = null; // the theme, once the blocks are defined
 
+  // A number input holding n, as a shadow block: for the examples and the
+  // toolbox.
+  static #number(n) {
+    return { shadow: { type: "math_number", fields: { NUM: n } } };
+  }
+
   /* --- the examples ------------------------------------------------------ */
 
   // Serialised workspaces, as Blockly.serialization.workspaces.save() writes
   // them, built by a few helpers so each reads like the program it is.
   static EXAMPLES = (() => {
-    const number = (n) => ({ shadow: { type: "math_number", fields: { NUM: n } } });
+    const number = RoverBlocks.#number;
     const drive = (move, speed, seconds) => ({
       type: "rover_drive_for", fields: { MOVE: move }, inputs: { SPEED: number(speed), SECONDS: number(seconds) },
     });
@@ -158,7 +164,7 @@ class RoverBlocks {
   /* --- the toolbox ------------------------------------------------------- */
 
   static toolbox() {
-    const number = (n) => ({ shadow: { type: "math_number", fields: { NUM: n } } });
+    const number = RoverBlocks.#number;
     const block = (type, extra = {}) => ({ kind: "block", type, ...extra });
     const category = (name, key, contents) => ({
       kind: "category",
@@ -717,11 +723,7 @@ class BlockEditor {
   }
 
   compile() {
-    return new BlockEditor.#AsyncFunction("api", this.code());
-  }
-
-  code() {
-    return `"use strict";\n${this.#generator.workspaceToCode(this.#workspace)}`;
+    return new BlockEditor.#AsyncFunction("api", `"use strict";\n${this.#generator.workspaceToCode(this.#workspace)}`);
   }
 
   save() {
