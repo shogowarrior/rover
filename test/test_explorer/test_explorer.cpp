@@ -471,6 +471,33 @@ void test_wall_ahead_turns_until_clear_then_drives_on(void) {
   assertMovesRunTheirCourse(h);
 }
 
+// "Clear" ends a turn only twice in a row, and only beyond goCm: one stray long
+// reading (a beam slipping past an edge) or a wall still between stopCm and
+// goCm is no way out, and the sweep it started would only find the wall again.
+void test_turn_needs_the_front_clear_beyond_go_twice_in_a_row(void) {
+  Harness h;
+  h.scanner.setArc(60, 120, 30.0f);  // ahead, between stopCm and goCm
+  bool turning = false;
+  h.onMotion = [&](const Explorer::Motion& m) {
+    if (isRotation(m.move)) turning = true;
+  };
+  TEST_ASSERT_TRUE(advanceUntil(h.now, 3000, 5, [&h](uint32_t) { h.step(); }, [&] { return turning; }));
+
+  // The first look after the step reads clear, and every look after it the wall.
+  h.scanner.setArc(60, 120, 200.0f);
+  const int pings = h.scanner.pings;
+  TEST_ASSERT_TRUE(advanceUntil(h.now, 1000, 5, [&h](uint32_t) { h.step(); }, [&] { return h.scanner.pings > pings; }));
+  h.scanner.setArc(60, 120, 30.0f);
+
+  // No sweep starts: it would aim at the outer bearings first.
+  const size_t aims = h.scanner.aims.size();
+  h.run(1500);
+  for (size_t i = aims; i < h.scanner.aims.size(); i++) {
+    const int aim = h.scanner.aims[i];
+    TEST_ASSERT_TRUE_MESSAGE(aim != LEFT_DEG && aim != RIGHT_DEG, "the turn ended: a sweep started");
+  }
+}
+
 void test_turns_toward_the_more_open_side(void) {
   Harness left;
   left.scanner.setArc(60, 120, 30.0f);
@@ -483,6 +510,20 @@ void test_turns_toward_the_more_open_side(void) {
   right.scanner.setArc(0, 59, 25.0f);  // left side close
   right.run(3000);
   TEST_ASSERT_EQUAL_INT(ROTATE_CLOCKWISE, right.firstMotion());
+}
+
+// Choosing a side, each reading counts for at most turnCompareCapCm. Summed
+// uncapped, one far echo on the left (400 cm) would outweigh a wall 20 cm
+// away at front-left, and turn the rover toward that wall, away from a right
+// side open for a metre.
+void test_one_far_reading_cannot_outvote_a_nearer_wall(void) {
+  Harness h;
+  h.scanner.setArc(60, 120, 30.0f);    // blocked ahead
+  h.scanner.setArc(0, 40, 400.0f);     // left: far
+  h.scanner.setArc(41, 59, 20.0f);     // front-left: a wall
+  h.scanner.setArc(121, 180, 100.0f);  // the right: open
+  h.run(3000);
+  TEST_ASSERT_EQUAL_INT(ROTATE_CLOCKWISE, h.firstMotion());
 }
 
 // Re-choosing the direction on every look makes a rover dither in a corner:
@@ -1142,7 +1183,9 @@ int main(int, char**) {
   RUN_TEST(test_sensor_dying_mid_cruise_stops_within_a_weave);
   // turning
   RUN_TEST(test_wall_ahead_turns_until_clear_then_drives_on);
+  RUN_TEST(test_turn_needs_the_front_clear_beyond_go_twice_in_a_row);
   RUN_TEST(test_turns_toward_the_more_open_side);
+  RUN_TEST(test_one_far_reading_cannot_outvote_a_nearer_wall);
   RUN_TEST(test_turn_direction_is_kept_until_the_way_is_clear);
   RUN_TEST(test_long_cruise_forgets_the_turn_direction);
   RUN_TEST(test_repeated_stucks_turn_further_the_same_way);
