@@ -8,6 +8,13 @@
 #include "Tuning.h"
 #include "config.h"  // WiFi credentials: gitignored, template in config.example.h
 
+// Without src/config.h (a fresh clone, a git worktree) the include above
+// quietly finds the toolchain's own config.h instead, and the build fails on
+// every WIFI_ macro below as if this file were broken. Say what is missing.
+#ifndef WIFI_SSID
+#error "src/config.h is missing: the operator creates it from src/config.example.h (AGENTS.md)"
+#endif
+
 namespace {
 
 // Static IP configuration, used when config.h sets WIFI_IS_STATIC_IP. This
