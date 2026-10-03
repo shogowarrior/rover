@@ -835,15 +835,7 @@ test("a program previews the same at any frame rate and any playback", async () 
   // The Patrol example: forward while the way is clear, else turn.
   const patrol = exampleProgram(RoverBlocks.EXAMPLES.find((e) => e.id === "patrol").state);
   const preview = async (playback, frameMs) => {
-    const target = new SimTarget({ bearings: BEARINGS, room: "course" });
-    target.playback = playback;
-    const runner = new ProgramRunner();
-    runner.run(patrol, target);
-    while (target.state.now < 20000) {
-      await target.pump(frameMs);
-      await flush();
-    }
-    runner.abort("done");
+    const { target } = await previewFor(patrol, "course", 20000, { playback, frameMs });
     // Each stops at the first frame past 20 s; compare the first 20 s.
     const { trail, log } = target.state;
     return {
