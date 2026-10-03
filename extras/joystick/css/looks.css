@@ -47,4 +47,13 @@
   --stop-ink: #ff7a6e; /* red text on a dark surface */
   --stop-soft: rgb(210 60 55 / 0.16);
   --stop-glow: rgb(210 60 55 / 0.32);
+
+  /* the simulator's room (css/sim.css): its grid and the rover's halo and
+     deck in the ink, faint; the rover's plate; a backward wheel */
+  --sim-grid: rgb(241 243 246 / 0.045);
+  --sim-grid-major: rgb(241 243 246 / 0.09);
+  --sim-halo: rgb(241 243 246 / 0.05);
+  --sim-deck: rgb(241 243 246 / 0.2);
+  --sim-plate: #3a424e;
+  --sim-back: #a594f9;
 }
