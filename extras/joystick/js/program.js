@@ -451,12 +451,12 @@ class ProgramRunner {
 
   // 0..100 % of SPEED_MAX. The firmware clamps further, to its own limit.
   static #speed(percent) {
-    const n = Math.min(100, Math.max(0, ProgramRunner.#number(percent, "speed")));
+    const n = clamp(ProgramRunner.#number(percent, "speed"), 0, 100);
     return Math.round((n * SPEED_MAX) / 100);
   }
 
   static #seconds(seconds, max, what) {
-    return Math.min(max, Math.max(0, ProgramRunner.#number(seconds, what)));
+    return clamp(ProgramRunner.#number(seconds, what), 0, max);
   }
 
   static #checkMotion(move) {

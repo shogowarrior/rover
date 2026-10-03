@@ -168,7 +168,7 @@ class RoverSim {
   // driving a diagonal pair against itself, as code 15 once did, only spins
   // the rover, and drag slows that spin.
   static twistForWheels(wheels, releasedDrag = SIM_RELEASED_DRAG) {
-    const drag = Math.min(1, Math.max(0, releasedDrag));
+    const drag = clamp(releasedDrag, 0, 1);
     // Normal equations: (sum weight * r r^T + tiny I) u = sum weight * s * r.
     const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
     const b = [0, 0, 0];
@@ -251,7 +251,7 @@ class RoverSim {
   }
 
   set releasedDrag(drag) {
-    this.#releasedDrag = Math.min(1, Math.max(0, Number(drag) || 0));
+    this.#releasedDrag = clamp(Number(drag) || 0, 0, 1);
     this.#twist = this.#twistOf(this.#move, this.#speed);
   }
 
@@ -292,7 +292,7 @@ class RoverSim {
   // extends it; anything else starts afresh, away from whatever it was
   // stalled against.
   command(move, speed, durationMs) {
-    const clamped = Math.min(RoverSim.SPEED_LIMIT, SPEED_MAX, Math.max(0, Math.round(Number(speed) || 0)));
+    const clamped = clamp(Math.round(Number(speed) || 0), 0, Math.min(RoverSim.SPEED_LIMIT, SPEED_MAX));
     if (!motionFor(move) || clamped === 0 || !(durationMs > 0)) {
       this.release();
       return;
@@ -786,7 +786,7 @@ class SimSonar {
   // (The firmware's sign depends on how the servo is mounted; the time a swing
   // takes does not.)
   static #servo(bearing) {
-    return Math.min(180, Math.max(0, 90 - bearing));
+    return clamp(90 - bearing, 0, 180);
   }
 }
 

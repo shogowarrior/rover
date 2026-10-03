@@ -41,7 +41,7 @@ class ScanView {
   // 12-unit stub, and the STOP and GO rings sit well clear of the rover.
   static radiusFor(cm) {
     const { R_MIN, R_MAX, RANGE_CM } = ScanView;
-    return R_MIN + (R_MAX - R_MIN) * Math.sqrt(Math.min(1, Math.max(0, cm) / RANGE_CM));
+    return R_MIN + (R_MAX - R_MIN) * Math.sqrt(clamp(cm / RANGE_CM, 0, 1));
   }
 
   static colorFor(cm) {

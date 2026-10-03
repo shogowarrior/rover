@@ -4,6 +4,7 @@
  *   Listeners       the listeners for one event
  *   reportFault     report an error without throwing it
  *   memory          best-effort storage for what the panel remembers
+ *   clamp           a value kept within bounds
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -67,6 +68,11 @@ const memory = Object.freeze({
   },
 });
 
+// value kept within lo..hi: the panel's kinematics::clampInt. NaN stays NaN.
+function clamp(value, lo, hi) {
+  return Math.min(hi, Math.max(lo, value));
+}
+
 // A press is the primary button alone. Right-click, middle-click and a Mac's
 // ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can
 // open a context menu, which takes the release with it and leaves the input
@@ -75,4 +81,4 @@ function isPrimaryPress(event) {
   return event.button === 0 && !event.ctrlKey;
 }
 
-if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory };
+if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp };
