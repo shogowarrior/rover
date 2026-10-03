@@ -10,13 +10,9 @@
 /* --- the Program tab's name, while a program drives the rover -------------- */
 
 /* app.js marks the tab while a program runs on the rover, so that the Drive
-   tab, where nothing else says so, shows it too. */
+   tab, where nothing else says so, shows it too. A status dot (panel.css
+   draws them all). */
 .tabs [role="tab"][data-running="yes"]::after {
-  content: "";
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
   background: var(--live);
   box-shadow: 0 0 0 3px var(--live-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
@@ -53,7 +49,9 @@
   cursor: default;
 }
 
-.programBar button:disabled:hover { background: var(--raised); }
+@media (hover: hover) {
+  .programBar button:disabled:hover { background: var(--raised); }
+}
 
 .programBar .icon { width: var(--glyph); height: var(--glyph); }
 
@@ -70,7 +68,9 @@
   background: var(--live);
 }
 
-.programBar .run:hover { background: var(--live); filter: brightness(1.1); }
+@media (hover: hover) {
+  .programBar .run:hover { background: var(--live); filter: brightness(1.1); }
+}
 
 .programBar .run:disabled {
   color: var(--dim);
@@ -109,7 +109,10 @@
   cursor: pointer;
 }
 
-#programExamples:hover { background-color: var(--raised-hi); }
+@media (hover: hover) {
+  #programExamples:hover { background-color: var(--raised-hi); }
+}
+
 #programExamples option { background: var(--panel); color: var(--readout); }
 
 /* Too narrow for one row: the examples and the file tools take a second. */
@@ -118,21 +121,14 @@
 }
 
 /* A phone: the switch across the top, then Run and Stop, then the file
-   tools, as icons. */
+   tools, as icons; each keeps its name in its aria-label. */
 @container program (max-width: 560px) {
   .programBar .segmented { flex: 1 1 100%; }
   .programBar .segmented button { flex: 1 1 0; }
   .programBar .run { flex: 1; }
   #programExamples { flex: 1; min-width: 0; }
   .programBar .tool { width: var(--tap); padding: 0; }
-  .programBar .tool span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  .programBar .tool span { display: none; }
 }
 
 /* --- the stage: the editor, and the simulator's view ---------------------- */
@@ -198,7 +194,12 @@
 }
 
 .simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
-.programSim[data-collapsed="yes"] #simSlot { display: none; }
+
+/* Folded, in the layouts that stack it; beside the editor the view always
+   shows, and there is no heading to unfold it with. */
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  .programSim[data-collapsed="yes"] #simSlot { display: none; }
+}
 
 /* The wide layout's left pane: the page no longer scrolls, the pane does.
    The stage takes what the toolbar and the console leave of it, down to a
@@ -271,7 +272,7 @@
   font-size: var(--t-md);
   line-height: var(--lh-loose);
   color: var(--dim);
-  background: radial-gradient(circle, var(--rule) 1px, transparent 1.5px) 0 0 / 24px 24px, var(--case);
+  background: radial-gradient(circle, var(--rule) 1px, transparent 1.5px) 0 0 / var(--s-6) var(--s-6), var(--case);
 }
 
 .programOffline strong { color: var(--readout); font-size: var(--t-lg); }
@@ -299,14 +300,8 @@
   border-bottom: 1px solid var(--rule);
 }
 
-.programState::before {
-  content: "";
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dim);
-}
+/* A status dot (panel.css draws them all), in the state's colour. */
+.programState::before { background: var(--dim); }
 
 .programState[data-tone="ready"]::before,
 .programState[data-tone="done"]::before { background: var(--live); }
@@ -399,16 +394,10 @@
 
 .roverCategory .blocklyTreeRowContentContainer { display: flex; align-items: center; gap: var(--s-2); }
 
-/* The dot. Blockly's own icon (a sprite, and unclassed in a horizontal
+/* The dot, a status dot (panel.css draws them all) in the category's
+   colour. Blockly's own icon (a sprite, and unclassed in a horizontal
    toolbox) gives way to it. */
-.roverCategory .blocklyTreeRowContentContainer::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--dot);
-}
+.roverCategory .blocklyTreeRowContentContainer::before { background: var(--dot); }
 
 .roverCategory .blocklyTreeRowContentContainer > span:not(.blocklyToolboxCategoryLabel) { display: none !important; }
 
@@ -419,7 +408,9 @@
   color: var(--readout);
 }
 
-.blocklyToolboxCategory.roverCategory:hover { background: var(--raised) !important; }
+@media (hover: hover) {
+  .blocklyToolboxCategory.roverCategory:hover { background: var(--raised) !important; }
+}
 
 .blocklyToolboxCategory.roverCategory.blocklyToolboxSelected {
   background: color-mix(in srgb, var(--dot) 26%, transparent) !important;
@@ -444,7 +435,11 @@
 }
 
 .blocklyFlyoutButton { fill: var(--raised-hi); }
-.blocklyFlyoutButton:hover { fill: var(--faint); }
+
+@media (hover: hover) {
+  .blocklyFlyoutButton:hover { fill: var(--faint); }
+}
+
 .blocklyFlyoutButton .blocklyText { fill: var(--readout); }
 .blocklyFlyoutLabelText { fill: var(--dim); }
 
@@ -503,8 +498,11 @@
 /* Blockly's zoom and trashcan icons are drawn for a light workspace. */
 .blocklyZoom > image,
 .blocklyTrash > image { filter: invert(1) brightness(0.85); opacity: 0.4; }
-.blocklyZoom > image:hover,
-.blocklyTrash > image:hover { opacity: 0.9; }
+
+@media (hover: hover) {
+  .blocklyZoom > image:hover,
+  .blocklyTrash > image:hover { opacity: 0.9; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .programState[data-tone="running"]::before,

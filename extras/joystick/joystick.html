@@ -91,7 +91,7 @@
         <div id="familySlot">
           <div class="family" id="family" role="group" aria-label="Stick family" hidden>
             <div class="segmented" id="familyChoice"></div>
-            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: try each one slowly first.</p>
+            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: go slowly.</p>
           </div>
         </div>
 
@@ -153,16 +153,16 @@
         <select id="programExamples" aria-label="Load an example program" disabled>
           <option value="">Examples</option>
         </select>
-        <button type="button" class="tool" id="programExport" title="Save the program as rover-program.json" disabled>
+        <button type="button" class="tool" id="programExport" aria-label="Export" title="Save the program as rover-program.json" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13.5h10"/></svg>
           <span>Export</span>
         </button>
-        <button type="button" class="tool" id="programImport" title="Open a program saved with Export" disabled>
+        <button type="button" class="tool" id="programImport" aria-label="Import" title="Open a program saved with Export" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2M3 13.5h10"/></svg>
           <span>Import</span>
         </button>
         <input type="file" id="programFile" accept=".json,application/json" hidden>
-        <button type="button" class="tool" id="programClear" title="Remove every block" disabled>
+        <button type="button" class="tool" id="programClear" aria-label="Clear" title="Remove every block" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>
           <span>Clear</span>
         </button>

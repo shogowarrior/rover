@@ -101,7 +101,9 @@
   border-radius: var(--r-sm);
 }
 
-.sim-tool:hover { color: var(--readout); }
+@media (hover: hover) {
+  .sim-tool:hover { color: var(--readout); }
+}
 
 .sim-tool[aria-pressed="true"],
 .sim-tool[aria-expanded="true"] {

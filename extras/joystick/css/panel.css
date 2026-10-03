@@ -120,7 +120,7 @@
   --icon-lg: 26px;
   --icon-xl: 34px;
   --glyph: 16px;
-  --lamp: 8px;
+  --lamp: 8px; /* every status dot on the page, the Program tab's too */
   --mark: 22px;
   --notch: 10px;
 
@@ -136,16 +136,15 @@
      scrollbar); the viewport is enough. */
   --stick: clamp(148px, min(54vw, 25 * var(--svh)), 236px);
   --gutter: var(--s-4);
-  /* The scan yields first when a phone is short of height (the fault, the
-     stick family, the note): a small scan beats a stick under the Stop
-     bar. */
-  --scan-min: 72px;
+  --cell-y: var(--s-2); /* a readout line's padding above and below */
   --scan-strip: 132px;
   /* The rail beside each tab on a wide screen: wide beside the Drive tab,
      for a large fan; narrow beside the Program tab, whose editor and
-     simulator want the room. */
+     simulator want the room. Its floor keeps the fan's labels legible,
+     and its 24vw keeps the Program tab the 900 px its toolbar needs for
+     one row at 1280 px. */
   --rail-drive: clamp(340px, 52vw - 160px, 620px);
-  --rail-program: clamp(280px, 24vw, 380px);
+  --rail-program: clamp(300px, 24vw, 380px);
   --shell-max: 720px;
 }
 
@@ -178,7 +177,8 @@ body {
   color: var(--dim);
 }
 
-/* Read aloud, not shown: the scheme's name and the mode pill's. */
+/* Read aloud, not shown: the scheme's name and the mode pill's. (The
+   Program tab's toolbar names its icon-only buttons with aria-label.) */
 .srOnly,
 .scheme > .label {
   position: absolute;
@@ -227,9 +227,11 @@ button {
 
 button:disabled { cursor: default; }
 
+/* The simulator's rover is a button drawn in SVG (js/simview.js). */
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+.sim-rover:focus-visible {
   outline: 2px solid var(--live);
   outline-offset: 2px;
 }
@@ -292,15 +294,23 @@ input[type="range"]::-moz-range-thumb {
 /* --- the shell: a phone first ---------------------------------------------- */
 
 /* One column, as tall as the screen at least. The scan's row takes what the
-   others leave, so on the Drive tab the dock lands at the foot of the
-   screen and nothing needs scrolling. Rows are spaced by margins, not gap:
-   an empty row (the fault, most of the time) would still take a gap. */
+   others leave, down to nothing, so on the Drive tab the dock lands at the
+   foot of the screen and nothing needs scrolling. And because the scan is
+   the one row that gives way, a row above the dock that grows or shrinks
+   (the note, a fault) shrinks or grows the scan instead of moving the stick
+   under a thumb that has not moved: joy.js reads the canvas's place afresh
+   on every move, so a stick that moved 13 px sent another move. Rows are
+   spaced by margins, not gap: an empty row (the fault, most of the time)
+   would still take a gap. The height is a minimum rather than exact, so
+   that a fault too long for the room lengthens the page instead of
+   spilling over the dock; the scan's own content counts for nothing
+   (.scan's size containment), so until then it gives way as if exact. */
 .shell {
   --edge-l: calc(var(--gutter) + env(safe-area-inset-left, 0px));
   --edge-r: calc(var(--gutter) + env(safe-area-inset-right, 0px));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(var(--scan-min), 1fr) auto auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
   grid-template-areas: "head" "fault" "scan" "read" "main" "act";
   min-height: 100vh;
   min-height: 100dvh;
@@ -455,12 +465,18 @@ input[type="range"]::-moz-range-thumb {
   min-width: 0;
 }
 
+/* A pill gives way before it overflows: what it says is cut short, never
+   drawn over its neighbour (the layouts size them so it is not: the three
+   longest, "Link", "Autonomous" and "No motor shield", fit beside the mark
+   at 360 px). */
 .pill {
+  --pill-x: calc(var(--s-1) + var(--s-0));
   display: inline-flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--pill-x);
+  min-width: 0;
   min-height: var(--pill-h);
-  padding: 0 var(--s-2);
+  padding: 0 var(--pill-x);
   font-size: var(--t-sm);
   font-weight: var(--fw-bold);
   white-space: nowrap;
@@ -469,8 +485,22 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-full);
 }
 
+.pill > :not(.lamp) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Every status dot: the pills' lamps, the note's, the pivot caveat's and
+   the Program tab's (its running tab, its state line, its block
+   categories), which program.css colours. */
 .lamp,
-.modePill::before {
+.modePill::before,
+#note::before,
+.caveat::before,
+.tabs [role="tab"][data-running="yes"]::after,
+.programState::before,
+.roverCategory .blocklyTreeRowContentContainer::before {
   content: "";
   flex: none;
   width: var(--lamp);
@@ -557,11 +587,11 @@ body[data-link="down"] #connect {
 
 /* What the link has to say, under the address it is about: a line in the
    page, never over the scan, whose near field is where the closest
-   obstacles are drawn. */
+   obstacles are drawn. The line is kept while empty, and while a link is
+   up its note keeps to it: the one note that can come while the rover is
+   driven, "Telemetry stopped", then moves nothing under the stick. */
 #note {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
+  min-height: calc(var(--lh-body) * var(--t-sm));
   margin: 0;
   padding-inline: var(--s-1);
   font-size: var(--t-sm);
@@ -570,15 +600,18 @@ body[data-link="down"] #connect {
 }
 
 #note::before {
-  content: "";
-  flex: none;
-  width: var(--lamp);
-  height: var(--lamp);
-  border-radius: 50%;
-  background: currentColor;
+  display: inline-block;
+  margin-right: var(--s-2);
+  vertical-align: 0.05em;
 }
 
-#note:empty { display: none; }
+#note:empty::before { content: none; }
+
+body:is([data-link="up"], [data-link="stale"]) #note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 
 #note[data-tone="bad"] { color: var(--warn); }
 
@@ -608,13 +641,14 @@ body[data-link="down"] #connect {
 
 .fault[hidden] { display: none; }
 
-/* The scan and the readouts under it read as one card. contain: size lets
-   the scan's row shrink below the drawing's own height when the screen is
-   short; the drawing then fits the card rather than the card the drawing. */
+/* The scan and the readouts under it read as one card. Its size
+   containment lets the scan's row shrink below the drawing's own height
+   when the screen is short, to nothing if need be; the drawing then fits
+   the card rather than the card the drawing, and the queries below thin it
+   out as it shrinks. */
 .scan {
   grid-area: scan;
-  contain: size;
-  min-height: var(--scan-min);
+  container: scan / size;
   display: grid;
   padding: var(--s-3) var(--s-1) var(--s-1);
   background:
@@ -629,6 +663,23 @@ body[data-link="down"] #connect {
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+/* The fan draws at min(width / 420, height / 200) of its own size in the
+   card's room. Below about 7 px a label is a smudge, so the ring and
+   bearing names go first (under 0.68 of full size), then the readings
+   (under 0.45): the wedges alone still show, by colour and length, what
+   is close and on which side. Under 32 px they are a smudge too. */
+@container scan (max-width: 285.98px) or (max-height: 135.98px) {
+  .tick { display: none; }
+}
+
+@container scan (max-width: 188.98px) or (max-height: 89.98px) {
+  .reading { display: none; }
+}
+
+@container scan (max-height: 31.98px) {
+  #scan { display: none; }
 }
 
 /* Readings glide over the telemetry interval rather than snapping, so the
@@ -684,53 +735,48 @@ body[data-link="down"] #connect {
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
 
+/* Two lines: the move, with the whole width for its longest name (29
+   characters, which then fits at 320 px), and under it the phase and the
+   chip. Squeezed beside the chip, the move broke mid-word. */
 .readouts {
   grid-area: read;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "move move" "phase chip";
   background: var(--panel);
   border-top: 1px solid var(--rule);
   border-radius: 0 0 var(--r-xl) var(--r-xl);
 }
 
+/* A label and its value on a line. A value too long to sit beside its label
+   takes the next line whole rather than breaking mid-word, and breaks only
+   if it is wider than the line itself (the longest pivot's name, on a
+   phone on its side). */
 .cell {
-  flex: 1 1 0;
-  min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--s-0);
-  padding: var(--s-2) var(--s-3) var(--s-3);
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--s-2);
+  min-width: 0;
+  padding: var(--cell-y) var(--s-3);
 }
 
-/* The move's names run to 23 characters; the chip's to six. */
-.cell:first-child { flex-grow: 3; }
-
-.cell + .cell { border-left: 1px solid var(--rule); }
+.cell:first-child { grid-area: move; border-bottom: 1px solid var(--rule); }
+#phaseCell { grid-area: phase; }
+.cell:last-child { grid-area: chip; border-left: 1px solid var(--rule); }
 
 /* Narrower than 360 px, a step smaller, so the longest move still fits. */
 .cell output {
+  min-width: 0;
   font-family: var(--gauge);
   font-size: clamp(var(--t-sm), 3.8vw, var(--t-md));
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* .cell's display: flex would otherwise override the hidden attribute. */
 .cell[hidden] { display: none; }
-
-/* While exploring, the phase takes a line of its own under the move and the
-   chip: squeezed in beside them, a halt's reason and the longest move names
-   broke mid-word. */
-#phaseCell {
-  order: 1;
-  flex-basis: 100%;
-  flex-direction: row;
-  align-items: baseline;
-  gap: var(--s-2);
-  border-left: none;
-  border-top: 1px solid var(--rule);
-}
 
 #phase[data-tone="warn"] { color: var(--warn); }
 
@@ -814,13 +860,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 .hints[hidden] { display: none; }
 
+/* A label wraps within its corner ("Right" over "back") rather than run
+   into its neighbour, on a short phone's smaller stick. */
 .hint {
   display: flex;
   align-items: center;
   gap: var(--s-1);
   font-size: var(--t-xs);
   font-weight: var(--fw-bold);
-  white-space: nowrap;
+  line-height: var(--lh-tight);
   color: var(--readout);
 }
 
@@ -842,9 +890,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .family button[aria-pressed="true"] .glyph { color: var(--live); }
 
 .hint[data-corner="upLeft"] { align-self: start; justify-self: start; }
-.hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; }
+.hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; text-align: right; }
 .hint[data-corner="downLeft"] { align-self: end; justify-self: start; }
-.hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; }
+.hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; text-align: right; }
 
 .family {
   display: grid;
@@ -874,11 +922,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 .caveat::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
   background: var(--warn);
   transform: translateY(-1px);
 }
@@ -1004,6 +1047,13 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 @media (max-width: 959.98px), (max-height: 520.98px) {
   .shell > [role="tabpanel"] { margin-top: var(--s-3); }
 
+  /* While the rover is driven the phase is hidden but keeps its line, so a
+     takeover (exploring, then manual) moves nothing above the stick. */
+  #phaseCell[hidden] {
+    display: flex;
+    visibility: hidden;
+  }
+
   /* The Program tab scrolls as a page does; the scan becomes a strip above
      it. */
   .shell:has(> #programTab:not([hidden])) {
@@ -1037,26 +1087,21 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   }
 }
 
-/* A short phone screen (its browser's bars showing): the readouts on a line
-   each, the bar's buttons and the stick a step smaller, so the stick family
-   still fits above the Stop bar. */
-@media (max-width: 959.98px) and (max-height: 720px) {
+/* A short phone screen (its browser's bars showing), 760 px or less: most
+   phones in a browser. The readouts' lines, the bar and the stick a step
+   smaller, and the address put away while a link is up, so the stick
+   family fits above the Stop bar with the scan still showing. The Program
+   tab shows the address, Disconnect with it; a link going down brings it
+   back here too, when nothing can be driving. */
+@media (max-width: 959.98px) and (max-height: 760px) {
   :root {
     --stick: clamp(140px, min(54vw, 23 * var(--svh)), 236px);
-    --scan-min: 64px;
+    --cell-y: calc(var(--s-1) + var(--s-0));
   }
 
   .bar { margin-bottom: var(--s-2); }
 
-  .cell {
-    flex-direction: row;
-    align-items: baseline;
-    gap: var(--s-2);
-    padding-block: var(--s-2);
-  }
-
-  /* The chip's reading never wraps; the move's longest names may. */
-  .cell:last-child { flex: none; }
+  body:is([data-link="up"], [data-link="stale"]) .shell:has(> #driveTab:not([hidden])) .link { display: none; }
 
   .shell:has(#motorsFault:not([hidden])) .fault {
     padding: var(--s-3);
@@ -1067,7 +1112,40 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   .family { margin-bottom: var(--s-2); }
 
+  .actions { padding-block: var(--s-2) calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
+
   .actions button { min-height: calc(var(--tap) + var(--s-3)); }
+}
+
+/* Shorter still, 600 px or less: a 16:9 phone under its browser's bars
+   (375 x 548, 360 x 560), and every phone on its side. Here the stick ran
+   under the Stop bar: everything around it a step smaller again. */
+@media (max-width: 959.98px) and (max-height: 600px) {
+  :root {
+    --stick: clamp(112px, min(54vw, 21 * var(--svh)), 236px);
+    --cell-y: var(--s-1);
+  }
+
+  .shell { padding-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
+
+  .shell > [role="tabpanel"] { margin-top: var(--s-2); }
+
+  .dock { padding-bottom: var(--s-3); }
+
+  .spin button { min-height: calc(var(--tap) + var(--s-2)); }
+
+  .actions button { min-height: calc(var(--tap) + var(--s-2)); }
+}
+
+/* Under 360 px the status needs the row the mark shares with it: with the
+   longest words up ("Autonomous", "No motor shield") the pills ran over the
+   mark. Autonomous drops its icon, for the same reason. */
+@media (max-width: 359.98px) {
+  .wordmark { display: none; }
+
+  .actions button { padding-inline: var(--s-2); }
+
+  #auto .icon { display: none; }
 }
 
 @media (min-width: 600px) {
@@ -1106,7 +1184,26 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     padding-top: var(--s-5);
   }
 
-  .shell:has(> #programTab:not([hidden])) { --rail: var(--rail-program); }
+  /* Beside the Program tab the rail is narrower, and the scan's card only
+     as tall as its drawing, with the readouts right under it: the room
+     left over goes below them rather than into a card mostly empty. */
+  .shell:has(> #programTab:not([hidden])) {
+    --rail: var(--rail-program);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head head"
+      "main fault"
+      "main scan"
+      "main read"
+      "main ."
+      "act  act";
+  }
+
+  .shell:has(> #programTab:not([hidden])) .scan {
+    box-sizing: content-box;
+    aspect-ratio: 420 / 200;
+    padding-inline: var(--s-1);
+  }
 
   /* Two rows on the shell's two columns: the mark and the status, then the
      tabs and the scheme, on the left; the address, then the note under it,
@@ -1131,7 +1228,8 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .status { gap: var(--s-2); }
 
   .pill {
-    padding-inline: var(--s-3);
+    --pill-x: var(--s-3);
+    gap: var(--s-2);
     font-size: var(--t-md);
   }
 
@@ -1169,28 +1267,24 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   .scan { padding: var(--s-4) var(--s-3); }
 
-  /* A column of readouts, label and value on a line, as an instrument's. */
+  /* A column of readouts, label and value on a line, as an instrument's;
+     a value too long for the line goes under its label, at the right. */
   .readouts {
-    flex-direction: column;
-    flex-wrap: nowrap;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "move" "phase" "chip";
   }
 
   .cell {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: var(--s-4);
+    column-gap: var(--s-4);
     padding: var(--s-3) var(--s-5);
   }
 
-  .cell + .cell {
-    border-left: none;
-    border-top: 1px solid var(--rule);
-  }
+  #phaseCell { border-bottom: 1px solid var(--rule); }
 
-  #phaseCell { order: 0; flex-basis: auto; }
+  .cell:last-child { border-left: none; }
 
   .cell output {
+    margin-left: auto;
     font-size: var(--t-lg);
     text-align: right;
   }
@@ -1267,6 +1361,40 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   }
 }
 
+/* Side by side on a short screen, 640 px or less (a laptop's browser):
+   the dock's right column -- the rotate buttons, the speed, the stick
+   family's held-open slot -- was taller than the dock and spilled over the
+   tabs, the scheme and the bar, where a click on Advanced rotated the
+   rover. Everything around the stick a step smaller, the caveat to one
+   line, so the column fits whatever the height. --stick's 264 px and 344 px
+   are the side-by-side layout's 324 px and 368 px, for these sizes. */
+@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
+  :root {
+    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 264px, 100vw - var(--rail-drive) - 344px), 400px);
+  }
+
+  .shell { padding-top: var(--s-4); }
+
+  .bar { margin-bottom: var(--s-3); }
+
+  .dock { padding: var(--s-4); }
+
+  .controls { gap: var(--s-3) var(--s-6); }
+
+  .spin button { min-height: var(--tap-lg); }
+
+  #familySlot { min-height: calc(var(--tap) + 2 * var(--s-2) + var(--lh-body) * var(--t-sm)); }
+
+  .caveat { font-size: var(--t-xs); }
+
+  .actions {
+    margin-top: var(--s-3);
+    padding-block: var(--s-2) var(--s-3);
+  }
+
+  .actions button { min-height: calc(var(--tap) + var(--s-3)); }
+}
+
 /* A phone on its side, held like a gamepad: the stick down the left edge,
    the rotate buttons and Stop down the right, the header and the scan
    between them. The dock spans the screen behind them, on the same three
@@ -1275,7 +1403,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 @media (orientation: landscape) and (max-height: 520px) {
   :root {
     --stick: clamp(140px, 54vmin, 240px);
-    --side: clamp(176px, 26vw, 260px);
+    --side: clamp(150px, 22vw, 260px);
     --shell-max: none;
   }
 
@@ -1283,7 +1411,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     grid-template-columns: var(--stick) minmax(0, 1fr) var(--side);
     column-gap: var(--s-5);
     padding-bottom: var(--s-3);
-    grid-template-rows: auto auto minmax(var(--scan-min), 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
       ". head  ."
       ". fault ."
@@ -1301,7 +1429,9 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
       "main  main  act";
   }
 
-  .shell > .dock {
+  /* Not while hidden: this display would outrank the hidden attribute's,
+     and the rotate buttons stayed live beside the Program tab. */
+  .shell > .dock:not([hidden]) {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
     display: grid;
@@ -1324,6 +1454,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   /* Over the dock, which comes later in the page and would paint over it. */
   .bar { z-index: 1; }
+
+  /* Beside the stick rather than above it, the middle column cannot move
+     it: the note and the phase need not hold their lines here. */
+  #note:empty,
+  #phaseCell[hidden] { display: none; }
 
   .status { flex-wrap: wrap; }
 
@@ -1351,6 +1486,26 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   }
 
   #auto { min-height: var(--tap); }
+}
+
+/* On its side and narrower than about 780 px (640 x 360, 732 x 412), the
+   middle column is too narrow for the tabs and the scheme side by side:
+   their labels ran into each other's segments, and a tap on "Normal" could
+   land on Advanced. They take a row each, and the columns close up (the
+   shell's and the dock's together, as they must). The status keeps to one
+   row: it takes the mark's place, and the mode pill gives way to the
+   Autonomous button beside it, lit while the rover explores. The readouts
+   take the type size a portrait phone of this width would. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
+  .shell,
+  .controls { column-gap: var(--s-3); }
+
+  .switches { grid-template-columns: minmax(0, 1fr); }
+
+  .wordmark,
+  .modePill { display: none; }
+
+  .cell output { font-size: var(--t-sm); }
 }
 
 @media (prefers-reduced-motion: reduce) {
