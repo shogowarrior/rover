@@ -26,6 +26,8 @@
 class SimView {
   // The room is drawn in centimetres, with y up as in the world.
   static CM = 100;
+  // A stroke as wide on screen at any scale.
+  static #THIN = Object.freeze({ "vector-effect": "non-scaling-stroke" });
   // Room kept clear around the floor, in screen pixels: the badge sits above
   // it and the scale bar below, never over the room.
   static PAD = Object.freeze({ top: 22, right: 8, bottom: 18, left: 8 });
@@ -198,11 +200,11 @@ class SimView {
     ui.trail = dom.svg("g", { class: "sim-trail" }, ui.world);
     for (let band = 0; band < SimView.TRAIL_BANDS; band++) {
       const opacity = 0.08 + (0.72 * (SimView.TRAIL_BANDS - band)) / SimView.TRAIL_BANDS;
-      this.#trail.push(dom.svg("polyline", { opacity: opacity.toFixed(2), "vector-effect": "non-scaling-stroke" }, ui.trail));
+      this.#trail.push(dom.svg("polyline", { opacity: opacity.toFixed(2), ...SimView.#THIN }, ui.trail));
     }
     ui.rayGroup = dom.svg("g", { class: "sim-rays" }, ui.world);
     this.#rays = BEARINGS.map(() => ({
-      line: dom.svg("line", { "vector-effect": "non-scaling-stroke" }, ui.rayGroup),
+      line: dom.svg("line", { ...SimView.#THIN }, ui.rayGroup),
       dot: dom.svg("circle", { r: 0 }, ui.rayGroup),
     }));
     ui.bumps = dom.svg("g", { class: "sim-bumps" }, ui.world);
@@ -308,7 +310,6 @@ class SimView {
     const r = this.#rover;
     const hl = (SIM_CHASSIS.lengthM * SimView.CM) / 2;
     const hw = (SIM_CHASSIS.widthM * SimView.CM) / 2;
-    const thin = { "vector-effect": "non-scaling-stroke" };
     r.group = dom.svg("g", {
       class: "sim-rover", tabindex: "0", role: "button",
       "aria-label": "The rover. Drag it, or use the arrow keys, to set where it starts; Q and E turn it.",
@@ -317,20 +318,20 @@ class SimView {
     // chassis is a dozen pixels long; and a larger, invisible grip.
     r.halo = dom.svg("circle", { class: "sim-halo", r: 20 }, r.group);
     r.grip = dom.svg("circle", { class: "sim-grip", r: 30 }, r.group);
-    r.handleLine = dom.svg("line", { class: "sim-handle-line", x1: hl, y1: 0, x2: hl + 14, y2: 0, ...thin }, r.group);
-    dom.svg("rect", { class: "sim-plate", x: -hl, y: -hw, width: 2 * hl, height: 2 * hw, rx: 1.6, ...thin }, r.group);
-    dom.svg("rect", { class: "sim-deck", x: -hl + 3.2, y: -hw + 3.4, width: 2 * hl - 9, height: 2 * hw - 6.8, rx: 1, ...thin }, r.group);
+    r.handleLine = dom.svg("line", { class: "sim-handle-line", x1: hl, y1: 0, x2: hl + 14, y2: 0, ...SimView.#THIN }, r.group);
+    dom.svg("rect", { class: "sim-plate", x: -hl, y: -hw, width: 2 * hl, height: 2 * hw, rx: 1.6, ...SimView.#THIN }, r.group);
+    dom.svg("rect", { class: "sim-deck", x: -hl + 3.2, y: -hw + 3.4, width: 2 * hl - 9, height: 2 * hw - 6.8, rx: 1, ...SimView.#THIN }, r.group);
     const d = SIM_WHEEL.diameterM * SimView.CM;
     const w = SIM_WHEEL.widthM * SimView.CM;
     r.wheels = RoverSim.WHEEL_AT.map(({ x, y }) => dom.svg("rect", {
-      class: "sim-wheel", x: x * SimView.CM - d / 2, y: y * SimView.CM - w / 2, width: d, height: w, rx: 0.9, ...thin,
+      class: "sim-wheel", x: x * SimView.CM - d / 2, y: y * SimView.CM - w / 2, width: d, height: w, rx: 0.9, ...SimView.#THIN,
     }, r.group));
     // The heading: an arrow on the deck, and the sonar on the nose with the
     // way its servo points now.
     dom.svg("path", { class: "sim-nose", d: `M${hl - 4.2} 0 L${hl - 9.5} 3.6 L${hl - 8.2} 0 L${hl - 9.5} -3.6 Z` }, r.group);
-    dom.svg("rect", { class: "sim-sensor", x: hl - 1.6, y: -2.3, width: 2.6, height: 4.6, rx: 0.6, ...thin }, r.group);
-    r.aim = dom.svg("line", { class: "sim-aim", x1: hl, y1: 0, x2: hl + 10, y2: 0, ...thin }, r.group);
-    r.handle = dom.svg("circle", { class: "sim-handle", cx: hl + 14, cy: 0, r: 2, ...thin }, r.group);
+    dom.svg("rect", { class: "sim-sensor", x: hl - 1.6, y: -2.3, width: 2.6, height: 4.6, rx: 0.6, ...SimView.#THIN }, r.group);
+    r.aim = dom.svg("line", { class: "sim-aim", x1: hl, y1: 0, x2: hl + 10, y2: 0, ...SimView.#THIN }, r.group);
+    r.handle = dom.svg("circle", { class: "sim-handle", cx: hl + 14, cy: 0, r: 2, ...SimView.#THIN }, r.group);
     r.handleGrip = dom.svg("circle", { class: "sim-grip", cx: hl + 14, cy: 0, r: 8 }, r.group);
 
     // A touch that starts on the rover moves the rover, not the page; a swipe
@@ -379,24 +380,23 @@ class SimView {
     const ui = this.#ui;
     ui.floor.textContent = "";
     ui.labels.textContent = "";
-    const thin = { "vector-effect": "non-scaling-stroke" };
 
     dom.svg("rect", { class: "sim-floor", x: 0, y: 0, width: w, height: h }, ui.floor);
     // A soft grid: every 50 cm, stronger every metre.
-    for (let x = 50; x < w; x += 50) dom.svg("line", { class: x % 100 ? "sim-grid" : "sim-grid major", x1: x, y1: 0, x2: x, y2: h, ...thin }, ui.floor);
-    for (let y = 50; y < h; y += 50) dom.svg("line", { class: y % 100 ? "sim-grid" : "sim-grid major", x1: 0, y1: y, x2: w, y2: y, ...thin }, ui.floor);
+    for (let x = 50; x < w; x += 50) dom.svg("line", { class: x % 100 ? "sim-grid" : "sim-grid major", x1: x, y1: 0, x2: x, y2: h, ...SimView.#THIN }, ui.floor);
+    for (let y = 50; y < h; y += 50) dom.svg("line", { class: y % 100 ? "sim-grid" : "sim-grid major", x1: 0, y1: y, x2: w, y2: y, ...SimView.#THIN }, ui.floor);
     for (const outline of room.outlines) {
       const { x, y, w: ow, h: oh } = outline;
-      dom.svg("rect", { class: "sim-outline", x: (x - ow / 2) * CM, y: (y - oh / 2) * CM, width: ow * CM, height: oh * CM, rx: 2, ...thin }, ui.floor);
+      dom.svg("rect", { class: "sim-outline", x: (x - ow / 2) * CM, y: (y - oh / 2) * CM, width: ow * CM, height: oh * CM, rx: 2, ...SimView.#THIN }, ui.floor);
       this.#label(outline.name, x, y, ow);
     }
     for (const obstacle of room.obstacles) {
-      const points = obstacle.points.map((p) => `${(p.x * CM).toFixed(1)},${(p.y * CM).toFixed(1)}`).join(" ");
+      const points = SimView.#points(obstacle.points);
       if (!obstacle.closed) {
-        dom.svg("polyline", { class: "sim-wall", points, ...thin }, ui.floor);
+        dom.svg("polyline", { class: "sim-wall", points, ...SimView.#THIN }, ui.floor);
         continue;
       }
-      dom.svg("polygon", { class: "sim-box", points, ...thin }, ui.floor);
+      dom.svg("polygon", { class: "sim-box", points, ...SimView.#THIN }, ui.floor);
       if (!obstacle.label) continue;
       const xs = obstacle.points.map((p) => p.x);
       const ys = obstacle.points.map((p) => p.y);
@@ -415,6 +415,11 @@ class SimView {
       class: "sim-label", x: (x * SimView.CM).toFixed(1), y: (-y * SimView.CM).toFixed(1),
       "text-anchor": "middle", "dominant-baseline": "central", "data-width": widthM * SimView.CM,
     }, this.#ui.labels, text);
+  }
+
+  // Points in the world (m) as a polyline's or polygon's points, drawn in cm.
+  static #points(list) {
+    return list.map((p) => `${(p.x * SimView.CM).toFixed(1)},${(p.y * SimView.CM).toFixed(1)}`).join(" ");
   }
 
   // Fit the room to the stage, keeping SimView.PAD (pixels) clear around it,
@@ -585,7 +590,7 @@ class SimView {
       bands[b].push(p);
     }
     bands.forEach((points, b) => {
-      this.#trail[b].setAttribute("points", points.map((p) => `${(p.x * 100).toFixed(1)},${(p.y * 100).toFixed(1)}`).join(" "));
+      this.#trail[b].setAttribute("points", SimView.#points(points));
     });
   }
 
@@ -604,11 +609,11 @@ class SimView {
       let mark = this.#bumpMarks[i];
       if (!mark) {
         mark = dom.svg("g", { class: "sim-bump" }, this.#ui.bumps);
-        dom.svg("circle", { r: 1, "vector-effect": "non-scaling-stroke" }, mark);
-        dom.svg("path", { d: "M-0.55 -0.55 L0.55 0.55 M-0.55 0.55 L0.55 -0.55", "vector-effect": "non-scaling-stroke" }, mark);
+        dom.svg("circle", { r: 1, ...SimView.#THIN }, mark);
+        dom.svg("path", { d: "M-0.55 -0.55 L0.55 0.55 M-0.55 0.55 L0.55 -0.55", ...SimView.#THIN }, mark);
         this.#bumpMarks.push(mark);
       }
-      mark.setAttribute("transform", `translate(${(bump.x * 100).toFixed(1)} ${(bump.y * 100).toFixed(1)}) scale(${size.toFixed(2)})`);
+      mark.setAttribute("transform", `translate(${(bump.x * SimView.CM).toFixed(1)} ${(bump.y * SimView.CM).toFixed(1)}) scale(${size.toFixed(2)})`);
     });
     while (this.#bumpMarks.length > bumps.length) this.#bumpMarks.pop().remove();
   }
