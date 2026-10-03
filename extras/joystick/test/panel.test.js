@@ -261,8 +261,15 @@ test("deliberate disconnect: neutral note, no stale relabel, no timers left", ()
 
 test("stale telemetry, then a dropped link, stays down", () => {
   const { page, ws } = connected(telemetry());
-  page.clock.advance(1900);
-  check(page.doc.body.dataset.link === "stale", "stale after 1.8 s of silence");
+  const staleMs = page.evalIn("Link.STALE_MS");
+  // Two frames missed, and the next one late, is a slow link, not a dead one.
+  const late = 2 * page.evalIn("TELEMETRY_MS") + 100;
+  page.clock.advance(late);
+  check(page.doc.body.dataset.link === "up", `up after ${late} ms of silence, with STALE_MS ${staleMs}`);
+  page.clock.advance(staleMs - late - 1);
+  check(page.doc.body.dataset.link === "up", "up until STALE_MS");
+  page.clock.advance(1);
+  check(page.doc.body.dataset.link === "stale", `stale after STALE_MS (${staleMs} ms) of silence`);
   check(page.$("connect").textContent === "Disconnect", "Disconnect while stale");
   ws.serverMsg(telemetry());
   check(page.doc.body.dataset.link === "up" && page.$("note").textContent === "", "fresh again");

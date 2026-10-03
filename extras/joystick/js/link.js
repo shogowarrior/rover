@@ -29,10 +29,11 @@
  *   note(text, tone)   show text in the status line; tone "bad" marks trouble.
  */
 class Link {
-  // Telemetry arrives every 500 ms (tuning::TELEMETRY_INTERVAL_MS). Miss
-  // several and the link is not trustworthy even though the socket still
-  // claims to be open.
-  static STALE_MS = 1800;
+  // Telemetry arrives every TELEMETRY_MS (protocol.js). Three intervals with
+  // no frame, plus slack for one arriving late, and the link is not
+  // trustworthy even though the socket still claims to be open. Derived, so
+  // a change to the firmware's interval cannot leave it under two frames.
+  static STALE_MS = 3 * TELEMETRY_MS + 300;
 
   static LABEL = Object.freeze({ down: "No link", connecting: "Connecting", up: "Link", stale: "No data" });
 
