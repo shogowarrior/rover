@@ -38,10 +38,10 @@
  *                 to or from null included -- whoever changed it.
  */
 class SchemeToggle {
-  // Telemetry arrives every 500 ms (tuning::TELEMETRY_INTERVAL_MS). Three
-  // frames without the scheme asked for, and the request was lost or someone
-  // has already changed it back: show the rover's scheme again.
-  static CONFIRM_MS = 1500;
+  // Telemetry arrives every TELEMETRY_MS (protocol.js). Three frames without
+  // the scheme asked for, and the request was lost or someone has already
+  // changed it back: show the rover's scheme again.
+  static CONFIRM_MS = 3 * TELEMETRY_MS;
 
   static OPTIONS = Object.freeze([
     Object.freeze({ scheme: SCHEME_NORMAL, label: "Normal" }),

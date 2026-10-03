@@ -28,9 +28,9 @@ Not covered: client/ws.py and client/rover.ipynb, which import their numbers
 from drive.py; the default host address, which is per-network
 configuration every client lets the operator override; and the panel's
 simulator's copies in extras/joystick/js/sim.js (the wheel table from
-src/MovePatterns.cpp, the sweep timing from ExploreParams, the telemetry
-interval and the telemetry keys it writes), which
-extras/joystick/test/sim.test.js checks instead, in CI too.
+src/MovePatterns.cpp, the sweep timing from ExploreParams and the
+telemetry keys it writes), which extras/joystick/test/sim.test.js checks
+instead, in CI too.
 
 Standard library only; the files are parsed with regular expressions.
 """
@@ -105,6 +105,9 @@ MIRRORS = [
      "the client would connect to a port nothing listens on"),
     (DRIVE_PY, "DEFAULT_PORT", "==", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
+    (PANEL_PROTOCOL_JS, "TELEMETRY_MS", "==", TUNING_H, "TELEMETRY_INTERVAL_MS",
+     "the simulator publishes telemetry at the rover's pace, so a program sees readings as old as the "
+     "rover's; and the scheme toggle waits three frames of it for a change it asked for"),
     (PANEL_PROTOCOL_JS, "STICK_SEND_MS", "==", TUNING_H, "GAMEPAD_SPEED_CHANGE_MS",
      "a dragged stick changes speed at most this often from the panel as from the gamepad; "
      "each change costs the rover a four-motor rewrite"),

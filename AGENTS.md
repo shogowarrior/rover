@@ -474,9 +474,8 @@ shows how the operator passes one to an upload instead.
   them), autonomy thresholds in `ExploreParams`, pins in `Pins.h`. A value a
   client mirrors names its copy in a comment, and `tools/check_protocol.py`
   checks the copy. The panel simulator's copies in
-  `extras/joystick/js/sim.js` (the wheel table, the sweep timing, the
-  telemetry interval) are checked by `extras/joystick/test/sim.test.js`
-  instead.
+  `extras/joystick/js/sim.js` (the wheel table, the sweep timing) are
+  checked by `extras/joystick/test/sim.test.js` instead.
 - Optional features are switches in `Features.h`, not commented-out code, and
   every setting keeps compiling (CI builds `car_wire_gamepad` for the gamepad
   path).

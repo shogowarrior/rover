@@ -854,8 +854,6 @@ class SimTarget {
   // How long one frame may spend letting a program react, in real time,
   // before it leaves the rest of its simulated time to the next frame.
   static FRAME_WORK_MS = 8;
-  // tuning::TELEMETRY_INTERVAL_MS in src/Tuning.h. test/sim.test.js checks it.
-  static TELEMETRY_MS = 500;
   static PLAYBACKS = Object.freeze([1, 2, 4]);
   static TRAIL_POINTS = 3000;
   static TRAIL_SPACING_M = 0.01;
@@ -1258,7 +1256,7 @@ class SimTarget {
     this.#sonar.update(now, this.#ping, this.#poseNow);
     this.#extendTrail();
     if (now < this.#nextTelemetryAt) return;
-    this.#nextTelemetryAt += SimTarget.TELEMETRY_MS;
+    this.#nextTelemetryAt += TELEMETRY_MS;
     this.#publish();
     this.#published = true;
   }

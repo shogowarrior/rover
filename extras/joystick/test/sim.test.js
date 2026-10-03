@@ -95,10 +95,6 @@ test("speed is clamped to tuning::MOTOR_SPEED_LIMIT, as Rover::drive() clamps it
   }
 });
 
-test("telemetry comes as often as the rover's: tuning::TELEMETRY_INTERVAL_MS", () => {
-  assert.equal(SimTarget.TELEMETRY_MS, Number(src("Tuning.h").match(/TELEMETRY_INTERVAL_MS\s*=\s*(\d+)/)[1]));
-});
-
 /* --- kinematics ----------------------------------------------------------- */
 
 test("forward drives along the rover's +x, with no turn", () => {
