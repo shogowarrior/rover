@@ -74,25 +74,21 @@ const FAR_CM = 999;
 
 /* --- command timing ------------------------------------------------------ */
 
-// Every command asks for MOVE_DURATION_MS of motion and a held input is re-sent
-// REPEAT_MS after the last send, so each move is refreshed well before it
-// expires, and letting go coasts to a stop within 400 ms instead of running
-// on. There is no separate deadman timer: the firmware caps any one command at
-// 1.5 s (tuning::COMMAND_DURATION_MAX_MS), and that cap is the deadman for
-// every client. If this page dies mid-drive, its last 400 ms move simply runs
-// out. The gamepad re-sends as often (tuning::GAMEPAD_REFRESH_MS).
+// Every command asks for MOVE_DURATION_MS of motion, well inside the 1.5 s
+// the firmware allows one (tuning::COMMAND_DURATION_MAX_MS), the deadman for
+// every client: if this page dies mid-drive, its last 400 ms move runs out.
 const MOVE_DURATION_MS = 400;
+// A held input is re-sent REPEAT_MS after the last send, so each move is
+// refreshed well before it expires. The gamepad re-sends as often
+// (tuning::GAMEPAD_REFRESH_MS).
 const REPEAT_MS = 200;
 
 // A dragged stick reports every animation frame. A new direction goes out at
 // once; the same direction at a new speed no sooner than this after the last
-// send, with the repeat carrying the latest speed otherwise. Each speed change
-// costs the rover a rewrite of all four motors over I2C (~7 ms of the loop
-// that also runs the sonar and this WebSocket), so one per frame would be
-// felt. An unchanged repeat usually only moves the deadline: the firmware
-// rewrites a held move just once per tuning::MOTOR_REFRESH_MS (500 ms), to
-// repair a write the bus lost. The gamepad follows the same rule with
-// tuning::GAMEPAD_SPEED_CHANGE_MS in src/Tuning.h; keep the two equal.
+// send, the repeat carrying the latest speed otherwise. Each speed change
+// costs the rover a rewrite of all four motors over I2C (~7 ms of its loop),
+// so one per frame would be felt. The gamepad's rule is the same
+// (tuning::GAMEPAD_SPEED_CHANGE_MS in src/Tuning.h); keep the two equal.
 const STICK_SEND_MS = 100;
 
 if (typeof module !== "undefined") {

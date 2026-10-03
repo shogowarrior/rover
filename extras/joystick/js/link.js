@@ -27,8 +27,6 @@
  *                      so a STOP sent from one still goes out on it.
  *   state              the current state, as above.
  *   note(text, tone)   show text in the status line; tone "bad" marks trouble.
- *
- * Each on...(fn) returns a function that unsubscribes fn.
  */
 class Link {
   // Telemetry arrives every 500 ms (tuning::TELEMETRY_INTERVAL_MS). Miss

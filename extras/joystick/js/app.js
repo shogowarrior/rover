@@ -2,21 +2,19 @@
  * The control panel's composition root, like src/main.cpp: it builds every
  * part of the panel, wires them together by reference, and does nothing else.
  *
- * Open joystick.html directly in a browser -- the rover cannot serve it.
- * partition.csv allocates the whole flash to nvs, otadata and two OTA app
- * slots, leaving no SPIFFS/LittleFS partition to hold web assets.
+ * Open joystick.html from disk (AGENTS.md says why). The page loads its
+ * scripts as classic <script src> files, in order, because Chrome refuses
+ * module scripts from file://. Classic scripts share one global scope: what
+ * one file declares at top level is visible to every file after it, and a
+ * second top-level declaration of the same name stops that whole second
+ * file from loading. So each file declares at top level only what it offers
+ * the others, and keeps the rest inside its class:
  *
- * The page loads its scripts as classic <script src> files, in order, because
- * Chrome refuses module scripts from file://. Classic scripts share one global
- * scope: what one file declares at top level is visible to every file after
- * it, and a second top-level declaration of the same name stops that whole
- * second file from loading. So each file declares at top level only what it
- * offers the others, and keeps the rest inside its class:
- *
- *   support.js     Listeners, reportFault, memory, isPrimaryPress: what the
- *                  parts share
+ *   support.js     what the parts share: Listeners, memory, dom, segment,
+ *                  pressSegment, clamp, abortableWait, isPrimaryPress, reportFault
  *   protocol.js    every value mirrored from the firmware
- *   mecanum.js     the motions, and moveForStick() for the stick families
+ *   mecanum.js     the motions, moveForStick() for the stick families, and
+ *                  heldMotion() for a program's
  *   link.js        Link: the WebSocket, the link state, telemetry
  *   scan.js        BEARINGS, ScanView: the scan fan
  *   readouts.js    Readouts: mode, move, phase, chip temperature, motor warning
@@ -27,10 +25,13 @@
  *   program.js     ProgramRunner, RoverTarget: running a block program on a target
  *   blocks.js      RoverBlocks, BlockEditor: the rover's blocks, on Blockly
  *   programtab.js  ProgramTab: the Program tab's toolbar, editor and console
- *   sim.js         RoverSim, Room, SimSonar, SimClock, SimTarget: the simulator
- *                  a program previews on
+ *   sim.js         RoverSim, Room, SimSonar, SimTarget: the simulator a program
+ *                  previews on
  *   simview.js     SimView: the simulator on screen, and its own controls
  *   app.js         this file, last
+ *
+ * Every part's on...(fn) returns a function that unsubscribes fn
+ * (Listeners.add, support.js).
  *
  * Below, each wiring concern is a block of its own. A new part is built and
  * wired in a new block, rather than by growing another.
@@ -152,21 +153,13 @@ link.onState((state) => {
 // R1 does on the gamepad: the thumb is theirs, and so is the change.
 familySelector.onChange((family) => driver.setFamily(family));
 
-// A change of scheme never redirects a held stick. It can come from anyone,
-// and would otherwise turn the move under this operator's thumb into another
-// -- a diagonal into a pivot, or a pivot into a diagonal. So, as the gamepad
-// does (src/GamepadSession.cpp), the stick lets go of what it was driving (one
-// STOP, and only if it was driving) and drives again only from a fresh press;
-// only then does the family follow the scheme. A held rotate button carries
-// on: it sends the same move under either scheme. Learning the scheme for the
-// first time redirects nothing -- the family was TRANSLATE while it was
-// unknown, and stays so -- so a stick held as telemetry first arrives drives
-// on.
-//
-// joy.js goes on drawing the knob under a thumb the stick has let go of, over
-// a rover that has stopped, so the stick's caption asks for a fresh press
-// until the next press of any drive control; otherwise the operator takes it
-// for a dead link. A link that goes takes the request with it.
+// A change of scheme, from anyone, never redirects a held stick: the stick
+// lets go (Driver.releaseStick: one STOP, only if it was driving) and drives
+// again only from a fresh press, which its caption asks for
+// (FamilySelector.awaitPress); a link that goes takes the request with it.
+// Learning the scheme for the first time redirects nothing -- the family was
+// TRANSLATE while it was unknown, and stays so -- so a stick held as
+// telemetry first arrives drives on.
 schemeToggle.onChange((scheme, previous) => {
   const letGo = previous !== null && driver.releaseStick();
   familySelector.offer(scheme === SCHEME_ADVANCED);
@@ -190,19 +183,12 @@ const targets = { rover: new RoverTarget(driver, link) };
 
 /* --- the simulator ------------------------------------------------------- */
 
-// A preview: the same program, run on a simulated rover in a simulated room
-// and drawn in #simSlot, so the operator can see where it would go before
-// (or instead of) running it for real. The simulator holds no Link and no
-// Driver, so in a preview nothing is ever sent, whatever the link is doing;
-// and its telemetry goes only to the program and its own view, never to the
-// scan fan or the readouts, which show the rover. It measures at the scan
-// fan's own BEARINGS. If its scripts did not load, the tab offers the rover
+// A preview: the same program on a simulated rover, drawn in #simSlot. The
+// simulator holds no Link and no Driver, so a preview sends nothing whatever
+// the link is doing, and its telemetry reaches only the program and its
+// view, never the scan fan or the readouts. Only the rover's scheme crosses
+// over, the other way. If its scripts did not load, the tab offers the rover
 // alone.
-//
-// Only the rover's scheme crosses over, the other way: the preview's
-// telemetry reports the scheme the rover last reported (NORMAL until one is
-// known), as the rover's own would. Nothing of the preview's reaches the
-// toggle.
 if (typeof SimTarget === "function" && typeof SimView === "function") {
   const simulator = new SimTarget({ bearings: BEARINGS });
   targets.simulator = simulator;
@@ -243,12 +229,9 @@ const programTab = new ProgramTab({
   },
 });
 
-// Every way a program is stopped before it ends. The target it runs on
-// reports its own losses, and the runner listens for them itself: for the
-// rover, any stand-down (blur, a hidden or closed page, the link lost, stale
-// or disconnected) and any manual drive press. The panel's Stop and
-// Autonomous stop a program on any target, a preview included: an operator
-// reaching for Stop means everything.
+// Every other way a program stops: the Target reports its own losses
+// (program.js). Stop and Autonomous stop a program on any target, a preview
+// included: an operator reaching for Stop means everything.
 byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab."));
 byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));

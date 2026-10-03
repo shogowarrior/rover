@@ -28,7 +28,6 @@
  *   family            the family chosen.
  *   onChange(fn)      fn(family) when the family changes: the operator's
  *                     choice, or the return to FAMILY_TRANSLATE on withdrawal.
- *                     Returns a function that unsubscribes fn.
  *
  * Choosing a family is not a drive press, and nothing here sends: the
  * listener hands the family to the Driver, which re-steers a held stick and

@@ -35,8 +35,7 @@
  *   scheme        SCHEME_NORMAL or SCHEME_ADVANCED as telemetry last reported
  *                 it, or null while unknown.
  *   onChange(fn)  fn(scheme, previous) whenever the reported scheme changes,
- *                 to or from null included -- whoever changed it. Returns a
- *                 function that unsubscribes fn.
+ *                 to or from null included -- whoever changed it.
  */
 class SchemeToggle {
   // Telemetry arrives every 500 ms (tuning::TELEMETRY_INTERVAL_MS). Three

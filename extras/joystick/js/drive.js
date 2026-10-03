@@ -107,8 +107,6 @@
  *       (resumeAutonomous). Not on an ordinary release of a control, nor on
  *       a program's own stop or start exploring.
  *
- *   Each on...(fn) returns a function that unsubscribes fn.
- *
  *   driving
  *       A copy of the {move, speed} this panel is sending, or null.
  */
@@ -180,10 +178,7 @@ class Driver {
     this.#steer();
   }
 
-  // Disarming is what makes the release last: joy.js goes on reporting the
-  // thumb that is still down, and an armed stick would rebuild held.stick from
-  // the next report and drive again -- the very redirection this exists to
-  // stop.
+  // Disarming is what makes the release last (see #wireStick).
   releaseStick() {
     const deflected = this.#held.stick !== null;
     this.#held.stick = null;
@@ -214,8 +209,6 @@ class Driver {
     this.#standDownListeners.emit("autonomous");
   }
 
-  // Always sends STOP, driving or not: this is also how to stop an exploring
-  // rover.
   stopRover({ byProgram = false } = {}) {
     this.#releaseInputs();
     this.#halt();
@@ -224,9 +217,6 @@ class Driver {
     this.#standDownListeners.emit("stop");
   }
 
-  // Forget every held input, so nothing drives again without a fresh press,
-  // and stop what this panel is driving. An exploring rover is left alone: it
-  // is not ours to stop.
   standDown(reason) {
     this.#releaseInputs();
     if (this.#driving) this.#halt();
@@ -240,9 +230,8 @@ class Driver {
 
   /* --- arbitration ------------------------------------------------------- */
 
-  // The command the held inputs call for, or null. A held rotate button wins
-  // over the stick, and the latest one pressed wins over an earlier one; the
-  // operator's hands win over a program.
+  // The command the held inputs call for, or null: see "Which input wins"
+  // above.
   #wanted() {
     const held = this.#held;
     const limit = Number(this.#speed.value);
@@ -254,7 +243,6 @@ class Driver {
   }
 
   // The one place that decides what to send, called whenever an input changes.
-  // With nothing held the rover stops -- but only if this panel was driving it.
   #steer() {
     const next = this.#wanted();
     const driving = this.#driving;
@@ -291,18 +279,15 @@ class Driver {
     this.#repeatTimer = null;
   }
 
-  // Stop the rover. This always sends STOP, which also ends autonomous mode, so
-  // only the Stop button and the end of a motion this panel drove call it.
+  // Always sends STOP, which ends autonomous mode too: only Stop and the end of
+  // a motion this panel drove may call it.
   #halt() {
     this.#stopRepeating();
     this.#send(STOP, 0);
   }
 
-  // Forget every held input. Clearing held.stick is not enough on its own:
-  // joy.js still believes it is pressed until its own mouseup or touchend, and
-  // its next move report would rebuild held.stick. Disarming makes it wait for
-  // a new press. A program's input goes too, or the next #steer() would hand
-  // the rover to it.
+  // Forget every held input. The stick is disarmed too (see #wireStick), and
+  // a program's input goes, or the next #steer() would hand the rover to it.
   #releaseInputs() {
     const held = this.#held;
     held.stick = null;
