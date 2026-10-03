@@ -1682,6 +1682,26 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   ]) check(!caught(css), `flagged harmless: ${css}`);
 });
 
+// The scripts read the stylesheet's tokens by name: blocks.js's Blockly
+// theme through token(), which falls back silently on a name that is gone,
+// and the scan's and the simulator's SVG fills through var(), which leave a
+// wedge or a ray unfilled. joy.js, outside js/, draws in its own colours.
+test("every CSS token a script reads is declared on :root in css/panel.css", () => {
+  const declared = new Set(cssRules(fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8"))
+    .filter((rule) => rule.selector === ":root")
+    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:/g)].map(([, name]) => name)));
+  const readers = new Map(); // token -> the scripts that read it
+  const js = path.join(PANEL_ROOT, "js");
+  for (const file of fs.readdirSync(js).filter((name) => name.endsWith(".js"))) {
+    const text = fs.readFileSync(path.join(js, file), "utf8");
+    for (const [, token] of [...text.matchAll(/token\("(--[\w-]+)"/g), ...text.matchAll(/var\((--[\w-]+)\)/g)]) {
+      readers.set(token, new Set(readers.get(token)).add(file));
+    }
+  }
+  check(readers.size > 0, "found the tokens the scripts read");
+  for (const [token, files] of readers) check(declared.has(token), `${token}, read by ${[...files]}, is not declared on :root`);
+});
+
 test("schemes: each quadrant of each family sends the move test/vectors/stick_moves.json gives it", () => {
   const { cases: stickCases } = vectors("stick_moves.json");
   const runs = [["NORMAL", "TRANSLATE"], ["ADVANCED", "TRANSLATE"], ["ADVANCED", "PIVOT"], ["ADVANCED", "PIVOT_SIDEWAYS"]];
