@@ -64,6 +64,8 @@ function scanBearings(page) {
   const readings = nodes.filter((n) => n.getAttribute("class") === "reading");
   return page.evalIn("BEARINGS").map((b, i) => ({ ...b, wedge: wedges[i], reading: readings[i] }));
 }
+// Whether script a is in the page's order before script b.
+const loadsBefore = (order, a, b) => order.includes(a) && order.includes(b) && order.indexOf(a) < order.indexOf(b);
 
 /* --- tests --------------------------------------------------------------- */
 
@@ -72,12 +74,11 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
   const order = page.scripts;
   check(order[0] === "joy.js" && order[order.length - 1] === "js/app.js", `joy.js first, app.js last: ${order}`);
   check(new Set(order).size === order.length, `each script once: ${order}`);
-  const before = (a, b) => order.includes(a) && order.includes(b) && order.indexOf(a) < order.indexOf(b);
   for (const [a, b] of [
     ["js/support.js", "js/link.js"], ["js/support.js", "js/drive.js"], ["js/support.js", "js/tabs.js"],
     ["js/protocol.js", "js/mecanum.js"], ["js/protocol.js", "js/link.js"], ["js/protocol.js", "js/scan.js"],
     ["js/mecanum.js", "js/drive.js"],
-  ]) check(before(a, b), `${a} loads before ${b}: ${order}`);
+  ]) check(loadsBefore(order, a, b), `${a} loads before ${b}: ${order}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.doc.body.dataset.link === "down", "link down");
   check(page.$("connect").textContent === "Connect", "button Connect");
@@ -1392,11 +1393,10 @@ function pushTo(page, s, x, yUp) {
 test("schemes: scheme.js and family.js load after what they use, before app.js", () => {
   const page = loadPage();
   const order = page.scripts;
-  const before = (a, b) => order.includes(a) && order.includes(b) && order.indexOf(a) < order.indexOf(b);
   for (const [a, b] of [
     ["js/support.js", "js/scheme.js"], ["js/protocol.js", "js/scheme.js"], ["js/scheme.js", "js/app.js"],
     ["js/support.js", "js/family.js"], ["js/mecanum.js", "js/family.js"], ["js/family.js", "js/app.js"],
-  ]) check(before(a, b), `${a} loads before ${b}: ${order}`);
+  ]) check(loadsBefore(order, a, b), `${a} loads before ${b}: ${order}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2022,12 +2022,11 @@ function standInEditor(page, program = "await api.step('b1'); await api.drive(MO
 test("program: the scripts load in order, and Blockly is the one remote script, pinned and deferred", () => {
   const page = loadPage();
   const order = page.allScripts;
-  const before = (a, b) => order.includes(a) && order.includes(b) && order.indexOf(a) < order.indexOf(b);
   for (const [a, b] of [
     ["js/support.js", "js/program.js"], ["js/protocol.js", "js/program.js"], ["js/mecanum.js", "js/program.js"],
     ["js/scan.js", "js/blocks.js"], ["js/mecanum.js", "js/blocks.js"], ["js/program.js", "js/blocks.js"], ["js/support.js", "js/programtab.js"],
     ["js/programtab.js", "js/app.js"], ["js/blocks.js", "js/app.js"], [BLOCKLY, "js/app.js"],
-  ]) check(before(a, b), `${a} before ${b}: ${order}`);
+  ]) check(loadsBefore(order, a, b), `${a} before ${b}: ${order}`);
   const remote = order.filter((src) => /^(?:[a-z]+:)?\/\//i.test(src));
   check(remote.join() === BLOCKLY, `remote scripts: ${remote}`);
   check(!page.scripts.includes(BLOCKLY), "the harness, like a browser offline, never ran it");
