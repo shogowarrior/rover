@@ -290,7 +290,7 @@ class ProgramRunner {
         live();
         const mode = await this.#reading(run, "its mode", (data) =>
           typeof data.mode === "string" ? data.mode : undefined, run.modeFrom);
-        return mode === "AUTONOMOUS";
+        return mode === MODE_AUTONOMOUS;
       },
 
       log: async (text) => {

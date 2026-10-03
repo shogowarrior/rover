@@ -1,7 +1,7 @@
 /**
  * Every value the panel shares with the firmware: the wire protocol's move
- * codes and scheme names, the port, the distances the scan fan is drawn at,
- * and the command timing the firmware's deadman depends on.
+ * codes, scheme names and mode names, the port, the distances the scan fan
+ * is drawn at, and the command timing the firmware's deadman depends on.
  *
  * The wire format itself is in src/Protocol.h. The panel is a set of classic
  * scripts that share one global scope (see app.js), so the constants below
@@ -44,6 +44,14 @@ const RESUME_AUTONOMOUS = 19;
 // schemeName().
 const SCHEME_NORMAL = "NORMAL";
 const SCHEME_ADVANCED = "ADVANCED";
+
+// The modes, as writeTelemetry() in src/Protocol.cpp spells Rover::Mode under
+// "mode", named as its enumerators are. The readouts, a program's "rover is
+// exploring" and the simulator's own telemetry all go by them, and a
+// misspelt copy would leave each one quietly wrong; check_protocol.py
+// compares these with writeTelemetry().
+const MODE_AUTONOMOUS = "AUTONOMOUS";
+const MODE_MANUAL = "MANUAL";
 
 // kinematics::MOTOR_SPEED_MAX in src/Kinematics.h: the motor driver takes a
 // byte, so no command asks for more.
@@ -99,7 +107,7 @@ if (typeof module !== "undefined") {
     PIVOT_SIDEWAYS_FORWARD_RIGHT, PIVOT_SIDEWAYS_FORWARD_LEFT,
     PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT,
     ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS,
-    SCHEME_NORMAL, SCHEME_ADVANCED,
+    SCHEME_NORMAL, SCHEME_ADVANCED, MODE_AUTONOMOUS, MODE_MANUAL,
     SPEED_MAX, MOTOR_SPEED_LIMIT, PORT, STOP_CM, GO_CM, FAR_CM,
     MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,
   };

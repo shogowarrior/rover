@@ -918,7 +918,7 @@ class SimTarget {
   #room;
   #roomKey;
   #start; // where reset() puts the rover; the room's own start until placed
-  #mode = "MANUAL";
+  #mode = MODE_MANUAL;
   #scheme;
   #held = null; // {move, speed} the program holds
   #lastCommandAt = 0;
@@ -1233,10 +1233,10 @@ class SimTarget {
     const now = this.#clock.now;
     this.#lastCommandAt = now;
     if (move === RESUME_AUTONOMOUS) {
-      this.#enterMode("AUTONOMOUS", now);
+      this.#enterMode(MODE_AUTONOMOUS, now);
       return;
     }
-    this.#enterMode("MANUAL", now);
+    this.#enterMode(MODE_MANUAL, now);
     this.#sim.command(move, speed, MOVE_DURATION_MS);
   }
 
@@ -1326,7 +1326,7 @@ class SimTarget {
   #resetWorld() {
     const now = this.#clock.now;
     this.#held = null;
-    this.#mode = "MANUAL";
+    this.#mode = MODE_MANUAL;
     this.#sim.release();
     this.#sim.pose = this.#start;
     this.#sonar.settle(now, this.#ping, this.#poseNow);

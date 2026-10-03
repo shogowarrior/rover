@@ -19,7 +19,7 @@ class Readouts {
   show(data) {
     const ui = this.#ui;
     if (typeof data.mode === "string") {
-      const exploring = data.mode === "AUTONOMOUS";
+      const exploring = data.mode === MODE_AUTONOMOUS;
       ui.mode.textContent = data.mode;
       ui.auto.setAttribute("aria-pressed", String(exploring));
 

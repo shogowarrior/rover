@@ -507,7 +507,7 @@ class SimView {
   #describe(state) {
     const ui = this.#ui;
     const motion = state.moving ? motionFor(state.move) : null;
-    ui.move.textContent = motion ? motion.name : state.mode === "AUTONOMOUS" ? "AUTONOMOUS" : "STOP";
+    ui.move.textContent = motion ? motion.name : state.mode === MODE_AUTONOMOUS ? MODE_AUTONOMOUS : "STOP";
     const percent = `${Math.round((state.speed * 100) / SPEED_MAX)}%`;
     const { vx, vy, w } = state.twist;
     // Stopped away from its start with nothing running, the rover is where
@@ -515,7 +515,7 @@ class SimView {
     // over the first. (Mid-run, a wait between moves is only standing still.)
     const resting = state.atStart || !this.#target.idle ? "standing still" : "standing still · a preview goes on from here";
     ui.twist.textContent = !motion
-      ? state.mode === "AUTONOMOUS" ? "exploring is not simulated" : resting
+      ? state.mode === MODE_AUTONOMOUS ? "exploring is not simulated" : resting
       : state.stalled ? `${percent}, pushing against ${state.contact || "something"}`
       : `${percent} · ${Math.hypot(vx, vy).toFixed(2)} m/s · ${Math.round((w * 180) / Math.PI)}°/s`;
     ui.move.dataset.stalled = state.stalled ? "yes" : "no";

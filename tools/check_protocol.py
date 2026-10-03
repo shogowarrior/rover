@@ -4,7 +4,8 @@
 The firmware defines the protocol once, in src/, but the Python clients and
 the browser panel each carry copies of parts of it: move codes, the port,
 thresholds, sentinels and command timing (MIRRORS below), scan angles,
-telemetry keys and command fields, and the control-scheme names and message.
+telemetry keys and command fields, the control-scheme names and message,
+and the mode names telemetry reports.
 Each Checker method says what it compares and why; main() runs them all.
 The panel keeps every number and name it mirrors in
 extras/joystick/js/protocol.js; its reads, commands and bearings are looked
@@ -47,6 +48,7 @@ MOVE_CODES_H = "src/MoveCodes.h"
 TUNING_H = "src/Tuning.h"
 KINEMATICS_H = "src/Kinematics.h"
 PROTOCOL_CPP = "src/Protocol.cpp"
+ROVER_H = "src/Rover.h"
 EXPLORER_H = "src/Explorer.h"
 EXPLORER_CPP = "src/Explorer.cpp"
 DRIVE_PY = "client/drive.py"
@@ -120,12 +122,22 @@ MIRRORS = [
      "the panel and the gamepad re-send a held move equally often"),
 ]
 
-# The panel's name for each control scheme (kinematics::ControlScheme) must be
-# the one protocol::schemeName() gives it. The firmware compares the name a
-# client sends exactly and ignores one it does not know, so a misspelt copy
-# is a scheme toggle that silently does nothing. The constants are named as
-# the enumerators are.
-SCHEME_CLIENT = PANEL_PROTOCOL_JS
+# Two-valued enums src/Protocol.cpp names on the wire with a ternary,
+# `X == Enum::A ? "NAME" : "OTHER"`. The panel's copy of each name must be the
+# one the ternary gives it; the copies are string constants in protocol.js,
+# named as the enumerators are (SCHEME_NORMAL, MODE_AUTONOMOUS):
+#   (what they are, the enum's header, the enum, the function the ternary is
+#    in, the ternary, why a misspelt copy matters)
+WIRE_NAMES = [
+    ("scheme names", KINEMATICS_H, "ControlScheme", "schemeName",
+     r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
+     "the rover ignores a scheme name it does not know, so the toggle would silently do nothing"),
+    ("mode names", ROVER_H, "Mode", "writeTelemetry",
+     r'\bdoc\[\s*"mode"\s*\]\s*=\s*[\w.]+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
+     "the panel would never see the rover in that mode: its readouts, a program's "
+     "\"rover is exploring\" and the simulator's telemetry all go by it"),
+]
+WIRE_NAME_CLIENT = PANEL_PROTOCOL_JS
 STRING_CONSTANT = r'^\s*const\s+NAME\s*=\s*"([^"\n]*)"\s*;'
 
 # Where each client reads telemetry keys and writes command fields, once its
@@ -473,41 +485,41 @@ class Checker:
                     f"{angles[bearing]} ({bearing} in Explorer::angleOf, ExploreParams in {EXPLORER_H})"
                 )
 
-    def schemes(self) -> int:
-        """The panel names each control scheme as protocol::schemeName() does.
+    def wire_names(self, header: str, enum: str, function: str, ternary: str, why: str) -> int:
+        """The panel names each value of a two-valued enum as src/Protocol.cpp
+        puts it on the wire (a row of WIRE_NAMES).
 
-        Reads the two enumerators of kinematics::ControlScheme, then the name
-        schemeName() returns for each: `return scheme == X ? "NAME" : "OTHER";`.
+        Reads the enum's two enumerators, then the name the ternary in
+        `function` gives each: `X == Enum::A ? "NAME" : "OTHER"`. A third
+        enumerator, or a ternary that names neither, cannot be read, and
+        fails.
         """
-        kinematics = self.text(KINEMATICS_H)
+        enums = self.text(header)
         protocol = self.text(PROTOCOL_CPP)
-        panel = self.text(SCHEME_CLIENT)
-        if kinematics is None or protocol is None or panel is None:
+        panel = self.text(WIRE_NAME_CLIENT)
+        if enums is None or protocol is None or panel is None:
             return 0
 
-        enum = enum_body(kinematics, "ControlScheme")
-        schemes = [item.strip() for item in enum.split(",") if item.strip()] if enum is not None else []
-        if not schemes or not all(re.fullmatch(r"[A-Za-z_]\w*", item) for item in schemes):
-            self.unreadable(KINEMATICS_H, "`enum ControlScheme { A, B }`")
+        body = enum_body(enums, enum)
+        values = [item.strip() for item in body.split(",") if item.strip()] if body is not None else []
+        if len(values) != 2 or not all(re.fullmatch(r"[A-Za-z_]\w*", item) for item in values):
+            self.unreadable(header, f"`enum {enum} {{ A, B }}`")
             return 0
 
-        ternary = re.search(r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
-                            function_body(protocol, "schemeName") or "")
-        names: dict[str, str] = {}
-        if ternary and len(schemes) == 2:
-            which, yes, no = ternary.groups()
-            names = {scheme: yes if scheme == which else no for scheme in schemes}
-        if set(names) != set(schemes):
-            self.unreadable(PROTOCOL_CPP, f"the name schemeName() gives each of {', '.join(schemes)}")
+        found = re.search(ternary, function_body(protocol, function) or "")
+        if not found or found.group(1) not in values:
+            self.unreadable(PROTOCOL_CPP, f"the name {function}() gives each of {', '.join(values)}")
             return 0
+        which, yes, no = found.groups()
+        names = {value: yes if value == which else no for value in values}
 
-        for scheme, name in names.items():
-            match = re.search(STRING_CONSTANT.replace("NAME", re.escape(scheme)), panel, re.M)
+        for value, name in names.items():
+            match = re.search(STRING_CONSTANT.replace("NAME", re.escape(value)), panel, re.M)
             if not match:
-                self.unreadable(SCHEME_CLIENT, f'{scheme} (const {scheme} = "{name}";)')
+                self.unreadable(WIRE_NAME_CLIENT, f'{value} (const {value} = "{name}";)')
             elif match.group(1) != name:
-                self.problem(f'{SCHEME_CLIENT}: {scheme} = "{match.group(1)}", but schemeName() in {PROTOCOL_CPP} '
-                             f'names it "{name}" -- the rover ignores a scheme name it does not know')
+                self.problem(f'{WIRE_NAME_CLIENT}: {value} = "{match.group(1)}", but {function}() in {PROTOCOL_CPP} '
+                             f'names it "{name}" -- {why}')
         return len(names)
 
     def scheme_wire(self) -> None:
@@ -582,7 +594,7 @@ def main() -> int:
     checker.mirrors()
     key_count = checker.keys()
     checker.bearings()
-    scheme_count = checker.schemes()
+    name_counts = [f"{checker.wire_names(*row)} {what}" for what, *row in WIRE_NAMES]
     checker.scheme_wire()
 
     for problem in checker.problems:
@@ -593,7 +605,7 @@ def main() -> int:
 
     print(
         f"check_protocol: OK -- {code_count} move codes, {len(MIRRORS)} mirrored constants, the scan angles, "
-        f"{scheme_count} scheme names and the scheme message, and the names of {key_count} telemetry keys and the "
+        f"{', '.join(name_counts)}, the scheme message, and the names of {key_count} telemetry keys and the "
         f"command fields agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
     )
     return 0
