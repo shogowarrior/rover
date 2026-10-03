@@ -39,8 +39,10 @@ guard blocks every call, and the build check says what it skipped.
   does. A failure is handed back so the break is fixed at once; this project
   has no other feedback loop. It fires only for the Edit and Write tools:
   change firmware, test and client files with those, or run the build, the
-  host tests, the protocol check and the panel tests yourself after any
-  change made through Bash (sed, a heredoc, a script).
+  host tests, the protocol check and the panel tests, and after a change
+  under `.claude/hooks/` `python3 .claude/hooks/test_guard.py`, yourself
+  after any change made through Bash (sed, a heredoc, a script, the `mv`
+  that puts a proven guard in place).
 - **PreToolUse, `.claude/hooks/guard-secrets.sh`.** Runs before every tool
   call, built in or MCP (Serena, the browser panes, the terminal panel), and
   blocks one that would touch `src/config.h`:
