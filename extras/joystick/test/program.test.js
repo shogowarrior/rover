@@ -240,6 +240,7 @@ test("speed and seconds are clamped; a non-number fails cleanly", async () => {
     await api.drive(P.MOVE_LEFT, -20, 0.01);
     await api.drive(P.MOVE_LEFT, "60", 0.01);
     await api.drive(P.MOVE_RIGHT, 40, 0); // no time: no motion at all
+    await api.drive(P.MOVE_RIGHT, 40, -1); // nor a negative one
     await api.drive(P.MOVE_RIGHT, 12.5, 1e9);
   }, target);
   // Each drive starts its turn after the last (COMMAND_GAP_MS).

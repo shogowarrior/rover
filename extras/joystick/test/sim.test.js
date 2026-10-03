@@ -201,6 +201,28 @@ test("each pivot moves and turns as its wheels imply, with released wheels free 
   }
 });
 
+// The arc in advance() for a twist that strafes and turns at once, as only
+// the four sideways pivots do: every other row has vy = 0 or w = 0, and a
+// sign flipped in either vy term of the arc carried the driven axle the
+// wrong way in every preview of codes 13 to 16 without a test failing. A
+// constant twist turns the rover about one point that stays where it is, so
+// after any time that point must be where it began.
+test("advance() leaves the point a strafing turn turns about where it was", () => {
+  const start = { x: 1, y: 2, heading: 0.3 };
+  for (const name of ["PIVOT_SIDEWAYS_FORWARD_RIGHT", "PIVOT_SIDEWAYS_FORWARD_LEFT",
+    "PIVOT_SIDEWAYS_BACKWARD_RIGHT", "PIVOT_SIDEWAYS_BACKWARD_LEFT"]) {
+    const unit = RoverSim.unitTwist(protocol[name]);
+    const twist = { vx: unit.vx * SIM_WHEEL_MAX_MPS, vy: unit.vy * SIM_WHEEL_MAX_MPS, w: unit.w * SIM_WHEEL_MAX_MPS };
+    assert.ok(twist.vy !== 0 && twist.w !== 0, `${name} strafes and turns: ${JSON.stringify(twist)}`);
+    // Where the body's velocity, (vx - w y, vy + w x), is zero: in the
+    // rover's frame, and so carried along with it.
+    const still = { x: -twist.vy / twist.w, y: twist.vx / twist.w };
+    const before = RoverSim.toWorld(start, still);
+    const after = RoverSim.toWorld(RoverSim.advance(start, twist, 0.7), still);
+    near(Math.hypot(after.x - before.x, after.y - before.y), 0, 1e-9, `${name}: how far its still point moved`);
+  }
+});
+
 test("no row of the table needs a released wheel to turn, so releasedDrag leaves it as it is", () => {
   for (const { move, name } of MOTIONS) {
     const free = RoverSim.unitTwist(move, 0);
