@@ -41,7 +41,13 @@ each file whole.
      works.
 6. **Point the Project at it:** in the Project, open **Project settings >
    Environment** and pick `rover`.
-7. **Start it.** A new Project waits for your first message (only an
+7. **Models and effort:** gear icon in the Project's header > **Project
+   settings** > **General**: **Thread model** and **Thread effort** for the
+   threads, **Coordinator model** and **Coordinator effort** for the project
+   conversation. The defaults are Opus everywhere, high effort for threads
+   and low for the conversation. A running thread's own model picker, in its
+   header, overrides them for that thread.
+8. **Start it.** A new Project waits for your first message (only an
    account's very first Project starts by itself). Send:
 
    > Read docs/project/handoff.md and start the current work at step 1.
