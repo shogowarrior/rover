@@ -618,10 +618,9 @@ class SimView {
 
   /* --- placing the rover by hand ----------------------------------------- */
 
-  // A primary press only: right-, middle- and ctrl-clicks open menus, as on
-  // the drive controls.
+  // A primary press only (isPrimaryPress), as on the drive controls.
   #startDrag(event, mode) {
-    if (event.button !== 0 || event.ctrlKey) return;
+    if (!isPrimaryPress(event)) return;
     const at = this.#worldAt(event);
     if (!at) return;
     event.preventDefault();

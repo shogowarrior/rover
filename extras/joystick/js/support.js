@@ -1,7 +1,18 @@
 /**
- * Two small helpers the panel's parts share: a list of event listeners, and
- * best-effort storage for what the panel remembers between visits.
+ * What the panel's parts share:
+ *
+ *   Listeners       the listeners for one event
+ *   reportFault     report an error without throwing it
+ *   memory          best-effort storage for what the panel remembers
+ *   isPrimaryPress  whether a press is the primary button alone
  */
+
+// Reported as an uncaught error would be, where the page has reportError,
+// and on the console otherwise (Node).
+function reportFault(err) {
+  if (typeof reportError === "function") reportError(err);
+  else console.error(err);
+}
 
 // The listeners for one event. Each runs in turn, and one that throws is
 // reported without stopping the rest, or the part that raised the event: a
@@ -27,9 +38,8 @@ class Listeners {
       try {
         listener(...args);
       } catch (err) {
-        // Shown in the console as an uncaught error would be, and carried on.
-        if (typeof reportError === "function") reportError(err);
-        else console.error(err);
+        // Reported, and the rest still run.
+        reportFault(err);
       }
     }
   }
@@ -57,4 +67,12 @@ const memory = Object.freeze({
   },
 });
 
-if (typeof module !== "undefined") module.exports = { Listeners, memory };
+// A press is the primary button alone. Right-click, middle-click and a Mac's
+// ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can
+// open a context menu, which takes the release with it and leaves the input
+// held with nobody holding it.
+function isPrimaryPress(event) {
+  return event.button === 0 && !event.ctrlKey;
+}
+
+if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory };

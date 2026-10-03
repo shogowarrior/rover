@@ -311,14 +311,6 @@ class Driver {
 
   /* --- the controls ------------------------------------------------------ */
 
-  // A press is the primary button alone. Right-click, middle-click and a Mac's
-  // ctrl-click (which arrives as button 0 with ctrlKey set) are not: each can
-  // open a context menu, which takes the release with it and leaves the input
-  // held with nobody holding it.
-  static #isPrimaryPress(event) {
-    return event.button === 0 && !event.ctrlKey;
-  }
-
   // Holding a control is not asking for its menu, and a menu that did open
   // would swallow the release. On touch screens a long press, which is how
   // these controls are held, raises contextmenu too.
@@ -348,7 +340,7 @@ class Driver {
     // again, knocking it out of autonomous mode if it was exploring. Capture
     // phase, so this decides before joy.js sees the press.
     stick.addEventListener("mousedown", (event) => {
-      this.#held.stickArmed = Driver.#isPrimaryPress(event);
+      this.#held.stickArmed = isPrimaryPress(event);
       if (this.#held.stickArmed) this.#manualInputListeners.emit();
     }, true);
     stick.addEventListener("touchstart", () => {
@@ -397,7 +389,7 @@ class Driver {
 
     button.addEventListener("pointerdown", (event) => {
       // Touch and pen presses arrive as button 0 too.
-      if (!Driver.#isPrimaryPress(event)) return;
+      if (!isPrimaryPress(event)) return;
       event.preventDefault();
       const held = this.#held;
       if (held.rotate.some((h) => h.button === button)) return;

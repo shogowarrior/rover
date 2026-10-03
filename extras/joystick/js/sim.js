@@ -1095,7 +1095,7 @@ class SimTarget {
     if (!this.#draining) {
       // A fault here is the simulator's own: report it once, and let the next
       // frame carry on.
-      this.#draining = this.#drain().catch(SimTarget.#report).finally(() => { this.#draining = null; });
+      this.#draining = this.#drain().catch(reportFault).finally(() => { this.#draining = null; });
     }
     return this.#draining;
   }
@@ -1209,11 +1209,6 @@ class SimTarget {
     const steps = Math.floor(ms / SimTarget.STEP_MS);
     for (let i = 0; i < steps; i++) this.#step();
     return steps * SimTarget.STEP_MS;
-  }
-
-  static #report(err) {
-    if (typeof reportError === "function") reportError(err);
-    else console.error(err);
   }
 
   // One turn of the page's event loop, so that every promise a program has

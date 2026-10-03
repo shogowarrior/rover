@@ -13,7 +13,8 @@
  * second file from loading. So each file declares at top level only what it
  * offers the others, and keeps the rest inside its class:
  *
- *   support.js     Listeners, memory: event listeners and best-effort storage
+ *   support.js     Listeners, reportFault, memory, isPrimaryPress: what the
+ *                  parts share
  *   protocol.js    every value mirrored from the firmware
  *   mecanum.js     the motions, and moveForStick() for the stick families
  *   link.js        Link: the WebSocket, the link state, telemetry
@@ -292,7 +293,7 @@ function startBlockEditor() {
       storageKey: "rover.program",
     }));
   } catch (err) {
-    reportError(err);
+    reportFault(err);
     programTab.editorUnavailable(`The block editor failed to start: ${err.message}`);
   }
 }
