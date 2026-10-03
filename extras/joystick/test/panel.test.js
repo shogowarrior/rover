@@ -2071,7 +2071,7 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   // And only beside the stick: the Program tab's card, contained, fell to its
   // floor and scrolled inside a page that scrolls.
   const rules = cssRules(panelCss());
-  const contained = rules.filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:/.test(r.body));
+  const contained = rules.filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:(?!\s*none\b)/.test(r.body));
   check(contained.every((r) => r.selector.split(",").every(besideStick)), `contained beyond the Drive tab: ${contained.map((r) => r.selector)}`);
   const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
