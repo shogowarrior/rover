@@ -87,7 +87,7 @@ class RoverBlocks {
 
   static PIVOT_NOTE = " Pivots are not bench-verified yet (docs/mecanum.md): watch the rover the first time.";
 
-  static #installed = null; // the theme, once the blocks are defined
+  static #installed = false; // the blocks and their code are defined
 
   // A number input holding n, as a shadow block: for the examples and the
   // toolbox.
@@ -235,9 +235,10 @@ class RoverBlocks {
 
   /* --- the blocks -------------------------------------------------------- */
 
-  // Define the blocks and their code, and the theme, once. Returns the theme.
+  // Define the blocks and their code, once.
   static install(Blockly, generator) {
-    if (RoverBlocks.#installed) return RoverBlocks.#installed;
+    if (RoverBlocks.#installed) return;
+    RoverBlocks.#installed = true;
 
     RoverBlocks.#defineBlocks(Blockly);
     RoverBlocks.#defineCode(generator);
@@ -252,9 +253,6 @@ class RoverBlocks {
     // natural way out of one: Blockly enables it only inside the loop types
     // it knows.
     Blockly.libraryBlocks.loops.loopTypes.add("rover_forever");
-
-    RoverBlocks.#installed = RoverBlocks.#defineTheme(Blockly);
-    return RoverBlocks.#installed;
   }
 
   // The compiled program runs with the page's globals in reach (`link`,
@@ -573,14 +571,16 @@ class RoverBlocks {
 
   /* --- the theme --------------------------------------------------------- */
 
-  // Dark, on the panel's own palette (css/panel.css), with the blocks in
-  // PALETTE. Blockly paints the workspace from these; program.css styles the
-  // rest (the toolbox pills, menus, tooltips, the running block's glow).
-  static #defineTheme(Blockly) {
+  // The theme in the page's look as it is now (css/looks.css), with the
+  // blocks in PALETTE. Blockly paints the workspace, the toolbox and the
+  // flyout from these plain values, so each look needs a theme of its own;
+  // program.css styles the rest with var() (the toolbox pills, menus,
+  // tooltips, the running block's glow, the grid). Every theme has the one
+  // name: Blockly lets a theme be defined again over an earlier one.
+  static theme(Blockly) {
     // Every name read here is declared on :root, which panel.test.js checks:
     // no fallback, and so no second copy of a colour to drift.
-    const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    const ink = token("--readout");
+    const ink = lookToken("--readout");
     const style = (colour) => ({
       colourPrimary: colour,
       colourSecondary: RoverBlocks.#mix(colour, "#ffffff", 0.25),
@@ -588,7 +588,7 @@ class RoverBlocks {
     });
     const P = RoverBlocks.PALETTE;
 
-    return Blockly.Theme.defineTheme("rover-dark", {
+    return Blockly.Theme.defineTheme("rover", {
       base: Blockly.Themes.Classic,
       blockStyles: {
         motion_blocks: style(P.motion),
@@ -603,20 +603,22 @@ class RoverBlocks {
       },
       categoryStyles: Object.fromEntries(Object.entries(P).map(([key, colour]) => [`${key}_category`, { colour }])),
       componentStyles: {
-        workspaceBackgroundColour: token("--case"),
-        toolboxBackgroundColour: token("--panel"),
+        workspaceBackgroundColour: lookToken("--case"),
+        toolboxBackgroundColour: lookToken("--panel"),
         toolboxForegroundColour: ink,
-        flyoutBackgroundColour: token("--raised"),
+        flyoutBackgroundColour: lookToken("--raised"),
         flyoutForegroundColour: ink,
         flyoutOpacity: 1,
-        scrollbarColour: token("--dim"),
+        scrollbarColour: lookToken("--dim"),
         scrollbarOpacity: 0.35,
-        insertionMarkerColour: "#ffffff",
+        // A shadow of the block where it would drop, in the look's ink:
+        // white would vanish on a light look's case.
+        insertionMarkerColour: ink,
         insertionMarkerOpacity: 0.25,
-        markerColour: token("--live"),
-        cursorColour: token("--live"),
+        markerColour: lookToken("--live"),
+        cursorColour: lookToken("--live"),
       },
-      fontStyle: { family: token("--sans"), weight: "600", size: 12 },
+      fontStyle: { family: lookToken("--sans"), weight: "600", size: 12 },
       startHats: false,
     });
   }
@@ -656,6 +658,8 @@ class RoverBlocks {
  *   select(id)         select a block and bring it into view.
  *   setReadOnly(on)    lock editing while a program runs.
  *   resize()           fit the container again, after it is shown.
+ *   restyle()          take the page's look, after it changes (look.js): the
+ *                      workspace, toolbox, flyout and blocks repaint in it.
  *   onChange(fn)       fn() after the program changes.
  *
  * Under 600 px of screen the toolbox runs across the top, as a row of pills,
@@ -669,7 +673,6 @@ class BlockEditor {
 
   #Blockly;
   #generator;
-  #theme;
   #container;
   #storageKey;
   #narrow;
@@ -682,7 +685,7 @@ class BlockEditor {
   constructor(container, { Blockly, generator, storageKey }) {
     this.#Blockly = Blockly;
     this.#generator = generator;
-    this.#theme = RoverBlocks.install(Blockly, generator);
+    RoverBlocks.install(Blockly, generator);
     this.#container = container;
     this.#storageKey = storageKey;
     this.#narrow = window.matchMedia(BlockEditor.NARROW);
@@ -785,19 +788,24 @@ class BlockEditor {
     if (!this.#placed) this.#showTopLeft();
   }
 
+  restyle() {
+    this.#workspace.setTheme(RoverBlocks.theme(this.#Blockly));
+  }
+
   #inject(state) {
     const narrow = this.#narrow.matches;
     const workspace = this.#Blockly.inject(this.#container, {
       toolbox: RoverBlocks.toolbox(),
-      theme: this.#theme,
+      theme: RoverBlocks.theme(this.#Blockly),
       renderer: "zelos",
       media: RoverBlocks.MEDIA,
       sounds: false,
       trashcan: true,
       horizontalLayout: narrow,
       toolboxPosition: "start",
-      // --raised-hi in css/panel.css, which panel.test.js checks.
-      grid: { spacing: 24, length: 2, colour: "#2b323c", snap: true },
+      // Its lines take their colour from program.css, which follows the look:
+      // Blockly draws them once, and has no way to recolour them.
+      grid: { spacing: 24, length: 2, snap: true },
       zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },
       maxTrashcanContents: 16,

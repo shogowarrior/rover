@@ -59,6 +59,16 @@
  *       thumb on it has just lost what it was asking for, though joy.js
  *       goes on drawing the knob under it.
  *
+ *   restyle()
+ *       The page's look has changed (look.js). joy.js paints the stick into
+ *       its canvas once, in the colours it was built with (the look's
+ *       --live, --case and --faint where the stick is), so the stick is
+ *       built again in the new look's, as for a new size: a stick held now
+ *       is let go of first -- one STOP, and only if the stick was what this
+ *       panel was sending -- and drives again only from a fresh press. A
+ *       stick in a hidden tab has no size to be built at: it is built again
+ *       once it is shown.
+ *
  *   program(move, speed)
  *   endProgram()
  *       A third input, for a program runner. move is a motion code (1 to 18;
@@ -128,6 +138,7 @@ class Driver {
   #speed;
   #stick;
   #joy = null; // the JoyStick drawn in the stick now
+  #restyled = false; // the look has changed since it was drawn
   #pressedOn = null; // the stick's box on screen at its last primary press (#stickBox)
   #family = FAMILY_TRANSLATE;
 
@@ -193,6 +204,11 @@ class Driver {
     this.#held.stickArmed = false;
     this.#steer();
     return deflected;
+  }
+
+  restyle() {
+    this.#restyled = true;
+    this.#refit();
   }
 
   program(move, speed) {
@@ -363,17 +379,18 @@ class Driver {
     });
   }
 
-  // joy.js draws its canvas at the box's size as it is built, and never
-  // looks again. Only the newest JoyStick drives: one a refit replaced still
-  // listens on the document, and would go on reporting the thumb or mouse
-  // that pressed it.
+  // joy.js draws its canvas at the box's size and in the look's colours as
+  // it is built, and never looks again. Only the newest JoyStick drives: one
+  // a refit replaced still listens on the document, and would go on
+  // reporting the thumb or mouse that pressed it.
   #buildJoy() {
+    const token = (name) => lookToken(name, this.#stick);
     const joy = new JoyStick(this.#stick.id, {
-      // The page's teal, --live in css/panel.css, which takes it from here;
-      // panel.test.js checks the two agree.
-      internalFillColor: "#4db8a8",
-      internalStrokeColor: "#1c1e21",
-      externalStrokeColor: "#383c42",
+      // The knob in the page's teal, rimmed in its case colour, inside a ring
+      // drawn as the well's notches are (css/panel.css).
+      internalFillColor: token("--live"),
+      internalStrokeColor: token("--case"),
+      externalStrokeColor: token("--faint"),
       internalLineWidth: 2,
       externalLineWidth: 2,
       autoReturnToCenter: true,
@@ -381,6 +398,7 @@ class Driver {
       if (joy === this.#joy) this.#onStick(status);
     });
     this.#joy = joy;
+    this.#restyled = false;
   }
 
   // A window resized or a phone turned can move the stick's box, resize it
@@ -418,13 +436,16 @@ class Driver {
     return `${left},${top},${width},${height}`;
   }
 
-  // A hidden tab's box has no size, and shown again it has the size it had:
-  // neither needs a new canvas. A new JoyStick starts unpressed, so a stick
-  // held now is let go first, as a scheme change lets go of it: one STOP if
-  // it was driving, and nothing more until a fresh press.
+  // A new canvas, for a new size or a new look. A hidden tab's box has no
+  // size, and joy.js cannot draw at none; shown again, it has the size it
+  // had, and needs a new canvas only if the look changed meanwhile. A new
+  // JoyStick starts unpressed, so a stick held now is let go first, as a
+  // scheme change lets go of it: one STOP if it was driving, and nothing
+  // more until a fresh press.
   #refit() {
     const { clientWidth: width, clientHeight: height } = this.#stick;
-    if (width === 0 || height === 0 || (width === this.#joy.GetWidth() && height === this.#joy.GetHeight())) return;
+    if (width === 0 || height === 0) return;
+    if (!this.#restyled && width === this.#joy.GetWidth() && height === this.#joy.GetHeight()) return;
     if (this.#held.stick || this.#held.stickArmed) this.releaseStick();
     // A mouse still pressing the old JoyStick would have it measure its
     // removed canvas, and throw, on every move: hand it the ending it listens

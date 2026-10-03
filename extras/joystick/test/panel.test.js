@@ -75,12 +75,15 @@ const loadsBefore = (order, a, b) => order.includes(a) && order.includes(b) && o
 test("loads clean from the HTML: scripts, ids, initial state", () => {
   const page = loadPage();
   const order = page.scripts;
-  check(order[0] === "joy.js" && order[order.length - 1] === "js/app.js", `joy.js first, app.js last: ${order}`);
+  // support.js and look.js in <head>, so the look is on before the first
+  // paint; the vendored joy.js first in <body>.
+  check(order.slice(0, 3).join() === "js/support.js,js/look.js,joy.js" && order[order.length - 1] === "js/app.js",
+    `support.js, look.js and joy.js first, app.js last: ${order}`);
   check(new Set(order).size === order.length, `each script once: ${order}`);
   for (const [a, b] of [
     ["js/support.js", "js/link.js"], ["js/support.js", "js/drive.js"], ["js/support.js", "js/tabs.js"],
     ["js/protocol.js", "js/mecanum.js"], ["js/protocol.js", "js/link.js"], ["js/protocol.js", "js/scan.js"],
-    ["js/mecanum.js", "js/drive.js"],
+    ["js/mecanum.js", "js/drive.js"], ["js/look.js", "js/drive.js"], ["js/look.js", "js/blocks.js"],
   ]) check(loadsBefore(order, a, b), `${a} loads before ${b}: ${order}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.doc.body.dataset.link === "down", "link down");
@@ -2058,34 +2061,38 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
-// The scripts read the stylesheet's tokens by name: blocks.js's Blockly
-// theme through token(), which reads nothing at all for a name that is gone,
-// and the scan's and the simulator's SVG fills through var(), which leave a
-// wedge or a ray unfilled. Three colours cannot be read so, and are copied:
-// joy.js paints the stick's knob from drive.js (and the page takes its teal
-// from there), and Blockly takes the stop block's red and the grid's colour
-// as plain values. Each copy must be its token's value.
-test("every CSS token a script reads is declared on :root, in css/looks.css or css/panel.css, and the copies agree", () => {
+// The scripts read the stylesheet's tokens by name: the stick's knob, the
+// browser's theme-color and blocks.js's Blockly theme through lookToken(),
+// which reads nothing at all for a name that is gone, and the scan's and the
+// simulator's SVG fills through var(), which leave a wedge or a ray
+// unfilled. One colour is copied: Blockly takes the stop block's red as a
+// plain value, and the copy must be its token's value. The grid's colour is
+// not given to Blockly at all, which would draw it once: program.css paints
+// it from the look.
+test("every CSS token a script reads is declared on :root, in css/looks.css or css/panel.css, and the copy agrees", () => {
   const root = new Map([stylesheet("looks.css"), panelCss()].flatMap((css) => cssRules(css))
     .filter((rule) => rule.selector.split(",").some((selector) => selector.trim() === ":root"))
     .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
   const declared = new Set(root.keys());
   const script = (file) => fs.readFileSync(path.join(PANEL_ROOT, "js", file), "utf8");
   const { RoverBlocks } = require("../js/blocks.js");
-  for (const [what, copy, token] of [
-    ["drive.js's stick knob", (script("drive.js").match(/\binternalFillColor:\s*"([^"]*)"/) || [])[1], "--live"],
-    ["blocks.js's stop block", RoverBlocks.PALETTE.stop, "--stop"],
-    ["blocks.js's workspace grid", (script("blocks.js").match(/\bgrid:\s*\{[^}]*\bcolour:\s*"([^"]*)"/) || [])[1], "--raised-hi"],
-  ]) check(copy !== undefined && copy.toLowerCase() === (root.get(token) || "").toLowerCase(), `${what} is ${copy}, but ${token} is ${root.get(token)}`);
+  check(RoverBlocks.PALETTE.stop.toLowerCase() === (root.get("--stop") || "").toLowerCase(),
+    `blocks.js's stop block is ${RoverBlocks.PALETTE.stop}, but --stop is ${root.get("--stop")}`);
+  const grid = script("blocks.js").match(/\bgrid:\s*\{[^}]*\}/);
+  check(grid && !/\bcolour\b/.test(grid[0]), `Blockly is given no grid colour to draw once: ${grid}`);
+  check(cssRules(stylesheet("program.css")).some((r) => /\bpattern\b.*\bline$/.test(r.selector) && /\bstroke:\s*var\(--raised-hi\)/.test(r.body)),
+    "program.css paints the grid's lines from the look");
   const readers = new Map(); // token -> the scripts that read it
   const js = path.join(PANEL_ROOT, "js");
   for (const file of fs.readdirSync(js).filter((name) => name.endsWith(".js"))) {
     const text = fs.readFileSync(path.join(js, file), "utf8");
-    for (const [, token] of [...text.matchAll(/token\("(--[\w-]+)"/g), ...text.matchAll(/var\((--[\w-]+)\)/g)]) {
+    for (const [, token] of [...text.matchAll(/\b(?:lookToken|token)\("(--[\w-]+)"/g), ...text.matchAll(/var\((--[\w-]+)\)/g)]) {
       readers.set(token, new Set(readers.get(token)).add(file));
     }
   }
-  check(readers.size > 0, "found the tokens the scripts read");
+  for (const [token, file] of [["--case", "app.js"], ["--panel", "blocks.js"], ["--faint", "drive.js"], ["--stop", "scan.js"]]) {
+    check(readers.has(token) && readers.get(token).has(file), `found ${file} reading ${token}`);
+  }
   for (const [token, files] of readers) check(declared.has(token), `${token}, read by ${[...files]}, is not declared on :root`);
 });
 
@@ -2411,12 +2418,13 @@ const segments = (page) => page.$("programTarget").children;
 function standInEditor(page, program = "await api.step('b1'); await api.drive(MOVE_FORWARD, 50, 0.5); await api.log('hi');") {
   page.evalIn(`
     globalThis.__editor = {
-      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, loaded: [], cleared: 0,
+      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, restyled: 0, loaded: [], cleared: 0,
       compile() { return async (api) => { ${program} }; },
       onChange() { return () => {}; },
       highlight(id) { this.highlighted.push(id); },
       setReadOnly(on) { this.readOnly.push(on); },
       resize() { this.resized++; },
+      restyle() { this.restyled++; },
       load(state) { this.loaded.push(state); },
       clear() { this.cleared++; },
       select() {}, save() { return {}; },
@@ -3184,6 +3192,245 @@ test("program: the two Stops are named apart", () => {
   check(/Stop program/.test(words), `the Program tab's: ${words}`);
   check(/End the program/.test(page.$("programStop").getAttribute("title") || ""), "its title says what it does");
   check(page.$("stop").textContent === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the bar's always stops the rover, and says so");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+/* --- the look ------------------------------------------------------------- */
+
+// The page's look (look.js), picked in the Options popover under the gear.
+// Looks of the tests' own, read after css/looks.css, give each a colour the
+// default does not have, whatever the file holds.
+const TEST_LOOKS = `
+[data-look="field-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; }
+[data-look="blueprint-dark"] { --case: #0b1a33; --live: #3fc9b8; --faint: #34507c; }`;
+const LOOK_IDS = ["console-dark", "console-light", "field-dark", "field-light", "blueprint-dark", "blueprint-light"];
+const lookRadios = (page) => page.$("lookChoice").querySelectorAll('input[name="look"]');
+// As the operator picks one: the radio checked, the others not, and its
+// change event.
+function pickLook(page, id) {
+  for (const radio of lookRadios(page)) radio.checked = radio.getAttribute("value") === id;
+  page.fire(lookRadios(page).find((radio) => radio.checked), "change");
+}
+const worn = (page) => page.doc.documentElement.getAttribute("data-look");
+const themeColor = (page) => page.doc.querySelector('meta[name="theme-color"]').getAttribute("content");
+
+test("look: six looks, the default first, each theme a Dark and a Light", () => {
+  const { LookPicker } = require("../js/look.js");
+  check(LookPicker.LOOKS.map((look) => look.id).join() === LOOK_IDS.join(), `ids ${LookPicker.LOOKS.map((look) => look.id)}`);
+  check(LookPicker.LOOKS.every((look) => look.id === `${look.theme}-${look.flavour}`.toLowerCase()), "each id is its theme and flavour");
+  check(LookPicker.STORAGE_KEY === "rover.look", `remembered under ${LookPicker.STORAGE_KEY}`);
+});
+
+test("look: one tile per look in the gear's popover, a row per theme, the look in force checked", () => {
+  const page = loadPage();
+  const group = page.$("lookChoice");
+  check(group.getAttribute("role") === "radiogroup" && page.$(group.getAttribute("aria-labelledby")).textContent === "Theme", "a radiogroup named Theme");
+  const rows = group.children;
+  check(rows.map((row) => row.children[0].textContent).join() === "Console,Field,Blueprint", `rows ${rows.map((row) => row.children[0].textContent)}`);
+  check(rows.every((row) => row.children[0].getAttribute("aria-hidden") === "true"), "a row's name is for the eye: each tile says its theme");
+  const tiles = rows.flatMap((row) => row.children.slice(1));
+  check(tiles.length === 6 && tiles.every((tile) => tile.tagName === "LABEL"), `six tiles, each a label: ${tiles.length}`);
+  const words = (n) => all(n).map((m) => m.textContent).join("");
+  check(tiles.map(words).join() === "Console Dark,Console Light,Field Dark,Field Light,Blueprint Dark,Blueprint Light", `names ${tiles.map(words)}`);
+  tiles.forEach((tile, i) => {
+    const [radio] = tile.querySelectorAll("input");
+    check(radio && radio.getAttribute("type") === "radio" && radio.getAttribute("name") === "look" && radio.getAttribute("value") === LOOK_IDS[i], `tile ${i}: a radio for ${LOOK_IDS[i]}`);
+    const swatches = tile.querySelectorAll(".lookSwatch");
+    check(swatches.length === 1 && swatches[0].getAttribute("data-look") === LOOK_IDS[i], `tile ${i}: previewed in ${LOOK_IDS[i]}'s own tokens`);
+    check(swatches[0] && swatches[0].parentNode.getAttribute("aria-hidden") === "true", `tile ${i}: the preview is for the eye`);
+  });
+  check(lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join() === "console-dark", "the default checked");
+  check(worn(page) === "console-dark", `html wears ${worn(page)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a tile's preview is painted only in the tokens every look declares for it", () => {
+  // css/looks.css gives each look these, and the preview shows the look by
+  // them alone; anything else would show the page's look, not the tile's.
+  const PREVIEW = ["--case", "--panel", "--raised", "--rule", "--readout", "--dim", "--live", "--on-live", "--warn", "--stop", "--on-stop"];
+  const rules = cssRules(panelCss()).filter((rule) => /\.look(Swatch|Card|Text|Lamps|Lamp|Foot|Go|Stop)\b/.test(rule.selector));
+  check(rules.length >= 8, `found the preview's rules: ${rules.length}`);
+  const tokens = rules.flatMap((rule) => [...rule.body.matchAll(/var\((--[\w-]+)\)/g)].map(([, token]) => token));
+  const stray = tokens.filter((token) => !PREVIEW.includes(token) && !/^--[sr]-/.test(token)); // spaces and radii are the page's
+  check(stray.length === 0, `painted in ${stray}`);
+  const literal = rules.filter((rule) => /#[0-9a-f]{3,8}\b|\b(rgb|hsl)a?\(|\b(white|black)\b/i.test(rule.body));
+  check(literal.length === 0, `a colour of its own: ${literal.map((rule) => rule.selector)}`);
+});
+
+test("look: a remembered look is on <html> from the start; an unknown one, or storage that fails, gives the default", () => {
+  // look.js runs in <head>, after support.js, so the look is on before the
+  // page is first drawn.
+  const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
+  const head = html.slice(0, html.indexOf("</head>"));
+  check(/<script src="js\/support\.js"><\/script>\s*<script src="js\/look\.js"><\/script>/.test(head), "support.js, then look.js, in <head>");
+
+  const page = loadPage({ stored: { "rover.look": "blueprint-dark" }, looks: TEST_LOOKS });
+  check(worn(page) === "blueprint-dark", `wears ${worn(page)}`);
+  check(lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join() === "blueprint-dark", "its tile checked");
+  check(themeColor(page) === "#0b1a33", `the browser's bar in its --case: ${themeColor(page)}`);
+  check(page.joyParameters.internalFillColor === "#3fc9b8", `the knob in its --live: ${page.joyParameters.internalFillColor}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  for (const options of [{ stored: { "rover.look": "neon" } }, { stored: { "rover.look": "" } }, { storage: "throws" }, { storage: "null" }]) {
+    const fallback = loadPage(options);
+    check(worn(fallback) === "console-dark", `${JSON.stringify(options)}: wears ${worn(fallback)}`);
+    check(lookRadios(fallback).filter((radio) => radio.checked).length === 1, `${JSON.stringify(options)}: one tile checked`);
+    check(themeColor(fallback) === "#0b0d11", `${JSON.stringify(options)}: the bar ${themeColor(fallback)}`);
+    check(fallback.errors.length === 0, `${JSON.stringify(options)}: errors ${fallback.errors}`);
+  }
+});
+
+test("look: picking one puts it on <html>, remembers it, repaints the browser's bar, and sends nothing", () => {
+  const { page, ws } = connected(telemetry(), { looks: TEST_LOOKS }); // exploring: any frame would take control
+  page.evalIn("globalThis.__picked = []; lookPicker.onChange((id) => __picked.push(id));");
+  pickLook(page, "field-light");
+  check(worn(page) === "field-light", `wears ${worn(page)}`);
+  check(page.store["rover.look"] === "field-light", `remembered ${page.store["rover.look"]}`);
+  check(themeColor(page) === "#f4f6f8", `the browser's bar in its --case: ${themeColor(page)}`);
+  check(page.evalIn("__picked.join()") === "field-light", `heard ${page.evalIn("__picked.join()")}`);
+  pickLook(page, "console-dark");
+  check(worn(page) === "console-dark" && themeColor(page) === "#0b0d11", `back: ${worn(page)}, ${themeColor(page)}`);
+  page.clock.advance(2000);
+  check(count(ws) === 0, `sent ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: the gear opens a popover that Escape and a press outside close, and that is not modal: Stop stays one press", () => {
+  const { page, ws } = connected(telemetry()); // exploring
+  const gear = page.$("options");
+  const panel = page.$("optionsPanel");
+  check(gear.getAttribute("aria-label") === "Options" && gear.getAttribute("title") === "Options", "the gear is named Options");
+  check(gear.getAttribute("aria-controls") === "optionsPanel" && gear.getAttribute("aria-expanded") === "false" && panel.hidden, "closed at first");
+  check(!gear.hasAttribute("aria-haspopup") && panel.getAttribute("role") === "group" && panel.tagName === "DIV" && !panel.hasAttribute("aria-modal"),
+    `a group, not a menu or a dialog: ${panel.tagName} role=${panel.getAttribute("role")}`);
+  check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, under the Stop bar");
+  check(gear.parentNode.parentNode.getAttribute("class") === "masthead" && gear.parentNode.parentNode.children.at(-1) === gear.parentNode,
+    "at the end of the masthead's row");
+  const key = (target, k) => page.fire(target, "keydown", { key: k });
+
+  page.fire(gear, "click");
+  check(!panel.hidden && gear.getAttribute("aria-expanded") === "true", "the gear opens it");
+  check(page.doc.activeElement !== panel && !panel.contains(page.doc.activeElement), "opening takes no focus into it");
+  const shut = all(page.doc.documentElement).filter((n) => n.hasAttribute("inert") || n.getAttribute("aria-hidden") === "true" && n.contains(page.$("stop")));
+  check(shut.length === 0, `nothing made inert: ${shut.map((n) => n.id || n.tagName)}`);
+  check(!key(panel, "Tab").defaultPrevented && !panel.hidden, "Tab moves on as ever: nothing holds the focus");
+  key(panel, "Escape");
+  check(panel.hidden && gear.getAttribute("aria-expanded") === "false" && page.doc.activeElement === gear, "Escape closes it, back on the gear");
+
+  page.fire(gear, "click");
+  page.fire(panel, "pointerdown");
+  check(!panel.hidden, "a press inside leaves it open");
+  page.fire(page.$("scan"), "pointerdown");
+  check(panel.hidden, "a press outside closes it");
+  page.fire(gear, "click");
+  page.fire(gear, "click");
+  check(panel.hidden, "the gear closes it again");
+
+  // Stop, with the popover open: one press stops the rover, and closes it.
+  page.fire(gear, "click");
+  page.fire(page.$("stop"), "pointerdown");
+  page.fire(page.$("stop"), "click");
+  check(names(ws).join() === "STOP", `Stop sent ${names(ws)}`);
+  check(panel.hidden, "and the popover closed");
+
+  // One popup at a time: the File menu, opening, closes it.
+  standInEditor(page);
+  page.fire(gear, "click");
+  key(page.$("programMenu"), "ArrowDown");
+  check(panel.hidden && !page.$("programMenuList").hidden, "the File menu, opening, closes it");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: the stick's knob is painted from the look's tokens", () => {
+  const page = loadPage();
+  const root = new Map(cssRules(stylesheet("looks.css")).filter((rule) => rule.selector.split(",").some((s) => s.trim() === ":root"))
+    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
+  const knob = page.joyParameters;
+  check(knob.internalFillColor === root.get("--live"), `fill ${knob.internalFillColor}, --live ${root.get("--live")}`);
+  check(knob.internalStrokeColor === root.get("--case"), `rim ${knob.internalStrokeColor}, --case ${root.get("--case")}`);
+  check(knob.externalStrokeColor === root.get("--faint"), `ring ${knob.externalStrokeColor}, --faint ${root.get("--faint")}`);
+
+  // In the look in force where the stick is, which is not always <html>'s.
+  const local = loadPage({ looks: TEST_LOOKS });
+  local.$("stick").parentNode.setAttribute("data-look", "field-light");
+  local.evalIn("driver.restyle()");
+  check(local.joyParameters.internalFillColor === "#0a6f63", `the knob in the look around it: ${local.joyParameters.internalFillColor}`);
+  check(local.errors.length === 0, `errors ${local.errors}`);
+});
+
+test("look: a change under a held stick lets go of it: one STOP, nothing until a fresh press, and the knob in the new look", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { looks: TEST_LOOKS });
+  const first = page.canvas;
+  const thumb = stickTouch(page, 0);
+  thumb.start(); thumb.move(0, -50);
+  page.clock.advance(250);
+  check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
+  let mark = count(ws);
+  pickLook(page, "field-light");
+  check(names(ws, mark).join() === "STOP" && ws.sentAt.at(-1) === page.clock.now(), `the change sent ${names(ws, mark)}`);
+  check(page.canvas !== first && first.parentNode === null && stickCanvases(page).length === 1, "one new canvas in place of the old");
+  const knob = page.joyParameters;
+  check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#f4f6f8" && knob.externalStrokeColor === "#a3adb8",
+    `the knob in field-light: ${JSON.stringify(knob)}`);
+  check(page.joy.GetWidth() === 230, `built at the box's size: ${page.joy.GetWidth()}`);
+  mark = count(ws);
+  thumb.move(30, -60); thumb.move(0, -80);
+  page.clock.advance(1000);
+  thumb.end();
+  check(count(ws) === mark, `the thumb on the old canvas sent ${names(ws, mark)}`);
+  const fresh = stickTouch(page, 1);
+  fresh.start(); fresh.move(0, -50);
+  fresh.end();
+  check(names(ws, mark).join() === "MOVE_FORWARD,STOP", `a fresh press drove ${names(ws, mark)}`);
+
+  // A held rotate button drives on: the change lets go of the stick alone.
+  press(page, page.$("cw"), 4);
+  mark = count(ws);
+  pickLook(page, "blueprint-dark");
+  page.clock.advance(1000);
+  const after = names(ws, mark);
+  check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a change ${after}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a change with nothing held sends nothing, and builds the knob in the new look", () => {
+  const { page, ws } = connected(telemetry(), { looks: TEST_LOOKS }); // exploring
+  const first = page.canvas;
+  pickLook(page, "blueprint-dark");
+  page.clock.advance(1000);
+  check(count(ws) === 0, `sent ${names(ws)}`);
+  check(page.canvas !== first && page.joyParameters.internalFillColor === "#3fc9b8", `the knob ${page.joyParameters.internalFillColor}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a change while the Drive tab is hidden builds the stick once it is shown, at its size, in the new look", () => {
+  // joy.js cannot draw a stick at no size: a hidden one waits.
+  const page = loadPage({ frames: true, looks: TEST_LOOKS });
+  const ws = connectOpen(page);
+  const first = page.canvas;
+  page.fire(page.$("tabProgram"), "click");
+  resizeStick(page, 230);
+  pickLook(page, "field-light");
+  check(page.canvas === first && page.joyParameters.internalFillColor !== "#0a6f63", "nothing built while hidden");
+  page.fire(page.$("tabDrive"), "click");
+  resizeStick(page, 230);
+  check(page.canvas !== first && page.canvas.width === 230, `built once shown, at ${page.canvas.width}`);
+  check(page.joyParameters.internalFillColor === "#0a6f63", `in the new look: ${page.joyParameters.internalFillColor}`);
+  // Built in it once: a settle at the same size, later, builds nothing.
+  const built = page.canvas;
+  resizeStick(page, 230);
+  check(page.canvas === built, "the same size and the same look: no rebuild");
+  check(count(ws) === 0, `sent ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a change repaints the block editor, and an editor not yet built is built in the look", () => {
+  const page = loadPage({ looks: TEST_LOOKS });
+  pickLook(page, "field-light");
+  check(page.errors.length === 0, `with no editor yet: errors ${page.errors}`);
+  standInEditor(page);
+  pickLook(page, "blueprint-dark");
+  check(page.evalIn("__editor.restyled") === 1, `the editor restyled ${page.evalIn("__editor.restyled")} times`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

@@ -343,7 +343,8 @@ Autonomous buttons stay on screen on both tabs. Stop and Autonomous stay in
 the same place; the scan gives the Program tab room, as a strip above it on
 a phone and a narrower column beside it on a wide screen.
 
-The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
+The layout is `css/panel.css`'s, on its tokens (type, space, radii) and the
+look's colours.
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
 the left thumb, rotate, speed and Stop under the right, and the scan takes
 what height is left; on a wide screen (960 px by 521 px and up) the open tab
@@ -361,8 +362,18 @@ nothing above the stick changes height while it is held: the pivot caveat
 keeps its line on a phone on its side, and the stick's caption stays on one
 line, which keeps a family chosen under a held stick a re-steer. joy.js
 sizes its canvas once, as it is built, so when the box settles at a new size
-the Driver builds the stick again. The stick's teal is joy.js's own
-(`js/drive.js`), and the theme's accent follows it.
+the Driver builds the stick again; it paints it once too, so it builds it
+again when the look changes, in the new look's `--live`, `--case` and
+`--faint` (`js/drive.js`).
+
+**The look.** The page's colours are `css/looks.css`'s: six looks, three
+themes in Dark and Light, worn as `<html data-look>`. The gear at the end of
+the header opens Options, where `js/look.js` offers them and remembers the
+choice; it loads in `<head>`, so the page is drawn in that look from the
+first paint. The popover is not modal: Stop stays one press while it is
+open. What takes a colour as a plain value (joy.js's canvas, Blockly's
+theme, the browser's `theme-color`) is given it again on a change, through
+`lookToken()`; everything else follows through `var()`.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
