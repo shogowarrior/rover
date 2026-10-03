@@ -336,10 +336,15 @@ fills the left, the scan and readouts a column on the right, and Stop and
 Autonomous a bar across the foot, Stop under the controls. No ancestor of the
 stick may be positioned, transformed, filtered or contained: joy.js places a
 touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
-for it. A window resize or a turned phone that moves or resizes the stick's box
-under a held stick lets go of it at once, as a scheme change does: a thumb
-resting where it was would otherwise steer the moved stick another way. (A
-375 px phone turned on its side moves the stick and keeps its size.) joy.js
+for it. Any move of the stick's box on the screen under a held stick lets go
+of it, as a scheme change does: a thumb resting where it was would otherwise
+steer the moved stick another way. A window resize or a turned phone lets go
+at once (a 375 px phone turned on its side moves the stick and keeps its
+size); a move nothing reports, a row above the stick coming or going or the
+page scrolling, lets go at joy.js's next report, before it can drive. So
+nothing above the stick changes height while it is held: the pivot caveat
+keeps its line on a phone on its side, and the stick's caption stays on one
+line, which keeps a family chosen under a held stick a re-steer. joy.js
 sizes its canvas once, as it is built, so when the box settles at a new size
 the Driver builds the stick again. The stick's teal is joy.js's own
 (`js/drive.js`), and the theme's accent follows it.

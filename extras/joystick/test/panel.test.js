@@ -1509,6 +1509,79 @@ test("stick: a resize that changes the stick's size lets go of a held stick at o
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A move of the stick that no resize reports: a row above it coming or going
+// (on a phone on its side, the address put away as the link comes up), or
+// the page scrolling. joy.js measures the resting thumb against the box where
+// it is now, so its next report would be another motion.
+test("stick: a move no resize reports lets go of a held stick at its next report, then nothing until a fresh press", () => {
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(40, -40);
+    page.clock.advance(250);
+    check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_DIAGONAL45"), `drove ${names(ws)}`);
+    let mark = count(ws);
+    // The stick moves 25 px up, and nothing tells the window: the thumb,
+    // resting where it was, is now nearly level with its centre. Before,
+    // that report drove the rover right, with no STOP between.
+    page.$("stick").offsetTop = -25;
+    thumb.move(40, -40);
+    check(names(ws, mark).join() === "STOP" && ws.sentAt[count(ws) - 1] === page.clock.now(), `the next report sent ${names(ws, mark)}`);
+    mark = count(ws);
+    thumb.move(40, -60); thumb.move(0, -80);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the thumb resting on the moved stick sent ${names(ws, mark)}`);
+    thumb.end();
+    check(count(ws) === mark, `lifting it sent ${names(ws, mark)}`);
+    // A fresh press is measured where the stick is now.
+    const fresh = stickTouch(page, 1);
+    fresh.start(); fresh.move(0, -50 - 25);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh press drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // A held rotate button drives on; an idle stick on a moved box sends
+  // nothing, so an exploring rover is left alone.
+  {
+    const page = loadPage();
+    const ws = connectOpen(page);
+    const thumb = stickTouch(page, 0);
+    thumb.start(); thumb.move(0, -50);
+    press(page, page.$("cw"), 4);
+    const mark = count(ws);
+    page.$("stick").offsetTop = 40;
+    thumb.move(0, -50);
+    page.clock.advance(1000);
+    const after = names(ws, mark);
+    check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a move ${after}`);
+  }
+  {
+    const { page, ws } = connected(telemetry());
+    const m = mouseStick(page);
+    m.move(0, -95);
+    page.$("stick").offsetTop = 40;
+    m.move(0, -95);
+    page.clock.advance(1000);
+    check(count(ws) === 0, `an idle stick on a moved box sent ${names(ws)}`);
+  }
+});
+
+// A press's own redraw can move the stick: the caption asking for a fresh
+// press goes back to the family's name as the press lands. The box the
+// thumb pressed into is the one after that redraw, so the press drives.
+test("stick: a press is measured against the box its own redraw leaves", () => {
+  const page = loadPage();
+  const ws = connectOpen(page);
+  page.evalIn(`driver.onManualInput(() => { document.getElementById("stick").offsetTop = 8; })`);
+  const thumb = stickTouch(page, 0);
+  thumb.start(0, 8); thumb.move(0, -50 + 8);
+  page.clock.advance(1000);
+  check(count(ws) >= 5 && names(ws).every((n) => n === "MOVE_FORWARD"), `the press drove ${names(ws)}`);
+  thumb.end();
+  check(names(ws).slice(-1).join() === "STOP", `let go ${names(ws).slice(-1)}`);
+});
+
 /* --- mirrored constants -------------------------------------------------- */
 
 // tools/check_protocol.py compares protocol.js with src/ (CI and the build
@@ -2037,7 +2110,7 @@ test("schemes: a stick a scheme change let go of asks for a fresh press, until o
   const page = loadPage();
   const ws = connectOpen(page);
   const caption = page.$("stickLabel");
-  const asking = () => caption.textContent === "Scheme changed: press again" && caption.dataset.tone === "warn";
+  const asking = () => caption.textContent === page.evalIn("FamilySelector.PRESS_AGAIN") && caption.dataset.tone === "warn";
   const naming = (family) => caption.textContent === family && caption.dataset.tone === undefined;
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   page.fire(familyButton(page, "PIVOT"), "click");
@@ -2078,6 +2151,28 @@ test("schemes: a stick a scheme change let go of asks for a fresh press, until o
   ws.serverDrop();
   check(naming("Translate"), `link lost: '${caption.textContent}' ${caption.dataset.tone}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// What is above the stick holds its height as the family and the caption
+// change, so the stick stays where a held thumb pressed it (js/drive.js). A
+// browser measured it; this keeps the two rules that made it so.
+test("schemes: the caption and the pivot caveat change nothing's height above the stick", () => {
+  const page = loadPage();
+  const request = page.evalIn("FamilySelector.PRESS_AGAIN");
+  const longest = Math.max(...page.evalIn("FamilySelector.OPTIONS").map((option) => option.label.length));
+  check(request.length <= longest, `the press-again request '${request}' is no longer than a family's name (${longest}): it wrapped`);
+
+  // The phone on its side has the family's row above the stick: there the
+  // caveat keeps its line while hidden, as long as the selector shows.
+  const css = fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const query = "@media (orientation: landscape) and (max-height: 520px) {";
+  const start = css.indexOf(query);
+  let end = start + query.length;
+  for (let depth = 1; depth > 0 && end < css.length; end++) depth += css[end] === "{" ? 1 : css[end] === "}" ? -1 : 0;
+  const kept = cssRules(css.slice(start + query.length, end - 1))
+    .find((rule) => rule.selector.split(",").some((s) => /\.caveat\[hidden\]$/.test(s.trim())));
+  check(start >= 0 && kept && /visibility:\s*hidden/.test(kept.body) && !/display:\s*none/.test(kept.body),
+    `the landscape layout keeps the hidden caveat's line: ${kept && kept.selector} { ${kept && kept.body.trim()} }`);
 });
 
 test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change until telemetry resumes", () => {
@@ -2570,7 +2665,7 @@ test("program: its own stop and start exploring are no press: a stick let go of 
   const page = loadPage();
   const ws = connectOpen(page);
   const caption = page.$("stickLabel");
-  const asking = () => caption.textContent === "Scheme changed: press again" && caption.dataset.tone === "warn";
+  const asking = () => caption.textContent === page.evalIn("FamilySelector.PRESS_AGAIN") && caption.dataset.tone === "warn";
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   const s = stickTouch(page, 0);
   s.start(); pushTo(page, s, 0, 70);

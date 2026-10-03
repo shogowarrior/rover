@@ -58,8 +58,11 @@ class FamilySelector {
     [FAMILY_PIVOT_SIDEWAYS]: "M1.5 10.5a5.5 5.5 0 0 1 11 0M10 8.5l2.5 2.5L15 8.5",
   });
 
-  // The caption's request, while a press is awaited.
-  static PRESS_AGAIN = "Scheme changed: press again";
+  // The caption's request, while a press is awaited. Short enough to keep to
+  // one line wherever a family's name does: a longer request wrapped on a
+  // narrow phone, and the stick below it moved under the thumb as it came
+  // and went (js/drive.js).
+  static PRESS_AGAIN = "Press again";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
   // is forward. Each is labelled with the move its quadrant sends.

@@ -14,10 +14,13 @@
  *               out: a Link;
  *     stick     the joystick's container. joy.js sizes its canvas from it
  *               as it is built, so it must be laid out (not in a hidden
- *               tab) when the Driver is built. A window resize or a phone
- *               turned that moves or resizes it under a held stick lets go
- *               of that stick at once (one STOP, only if it was driving);
- *               a new size also has the stick built again at that size;
+ *               tab) when the Driver is built. Any move of it on the screen
+ *               under a held stick lets go of that stick (one STOP, only if
+ *               it was driving): at once for a window resize or a phone
+ *               turned, and otherwise (the layout above it changing, the
+ *               page scrolling) at joy.js's next report, before it can
+ *               drive. A new size also has the stick built again at that
+ *               size;
  *     cw, ccw   the rotate buttons;
  *     speed     the speed slider (0..SPEED_MAX), and speedOut its readout.
  *
@@ -37,9 +40,12 @@
  *       FAMILY_PIVOT_SIDEWAYS, from mecanum.js; anything else throws a
  *       RangeError. The stick maps through moveForStick(x, yUp, family).
  *       Changing the family while the stick is held re-steers at once: the
- *       new direction goes out immediately, as on the gamepad. Nothing here
- *       checks the rover's scheme: offering the pivot families only under
- *       ADVANCED is the caller's job.
+ *       new direction goes out immediately, as on the gamepad. That needs the
+ *       page to keep the stick where it is as the family changes
+ *       (css/panel.css does): a stick moved under the thumb is let go of at
+ *       its next report instead (see stick, above). Nothing here checks the
+ *       rover's scheme: offering the pivot families only under ADVANCED is
+ *       the caller's job.
  *
  *   releaseStick()
  *       Let go of the stick behind the operator's back: it drives again only
@@ -326,10 +332,13 @@ class Driver {
     // mouseup a context menu took -- and its next move report drove the rover
     // again, knocking it out of autonomous mode if it was exploring. Capture
     // phase, so this decides before joy.js sees the press.
+    // The box is recorded after the listeners have run: what they redraw
+    // for the press (the caption's request for one going back to the
+    // family's name) is part of the layout the thumb pressed into.
     const arm = () => {
       this.#held.stickArmed = true;
-      this.#pressedOn = this.#stickBox();
       this.#manualInputListeners.emit();
+      this.#pressedOn = this.#stickBox();
     };
     stick.addEventListener("mousedown", (event) => {
       if (isPrimaryPress(event)) arm();
@@ -381,7 +390,8 @@ class Driver {
   // the box and keeps its size (54vw upright is 54vmin on its side), and a
   // thumb that held it forward drove the rover backward, with no STOP
   // between. So the stick is let go at once, as a scheme change lets go of
-  // it. A resize that leaves the box where it was lets go of nothing.
+  // it. A resize that leaves the box where it was lets go of nothing. A move
+  // that no resize reports is caught at the stick's next report (#onStick).
   //
   // Resized, the box also needs a new canvas: one left at the old size
   // spread over the rotate buttons and the speed slider. Once the size has
@@ -425,7 +435,17 @@ class Driver {
 
   // joy.js reports x and y as strings in -100..100, with y already inverted so
   // that pushing up is positive. No sign correction needed here.
+  //
+  // joy.js measures the thumb against where the canvas is now. A box that
+  // has moved on the screen since the press, by anything a window resize
+  // does not report (a row above it coming or going, the page scrolling),
+  // turns the resting thumb's next report into another motion: so that
+  // report lets go of the stick instead (one STOP, only if it was driving).
   #onStick(status) {
+    if (this.#held.stickArmed && this.#stickBox() !== this.#pressedOn) {
+      this.releaseStick();
+      return;
+    }
     const x = Number(status.x);
     const yUp = Number(status.y);
     const magnitude = Math.min(100, Math.hypot(x, yUp));

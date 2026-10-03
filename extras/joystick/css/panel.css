@@ -827,8 +827,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* The well joy.js draws its ring and knob in, with a notch on each axis.
    joy.js sizes its canvas from this box as it is built. The box is always
    --stick, never stretched by the canvas, so the Driver sees it take a new
-   size and builds the stick again at it. A resize or a turned phone that
-   moves or resizes the box under a held stick lets go of it (js/drive.js). */
+   size and builds the stick again at it. Anything that moves or resizes
+   the box under a held stick lets go of it (js/drive.js), so nothing above
+   it may change height while it is held. */
 #stick {
   display: grid;
   place-items: center;
@@ -1458,6 +1459,16 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
      it: the note and the phase need not hold their lines here. */
   #note:empty,
   #phaseCell[hidden] { display: none; }
+
+  /* The family's row is above the stick, though: while the selector is
+     offered, the caveat keeps its line under Translate too, as the phase
+     keeps its line in the portrait layouts. Without it, choosing a pivot
+     under a held stick moved the stick 12 px under the thumb, and the next
+     report turned a backward pivot into a forward one (js/drive.js). */
+  .family:not([hidden]) .caveat[hidden] {
+    display: flex;
+    visibility: hidden;
+  }
 
   .status { flex-wrap: wrap; }
 
