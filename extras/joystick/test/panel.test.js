@@ -1955,9 +1955,11 @@ function panelCss() {
   return fs.readFileSync(path.join(PANEL_ROOT, "css", "panel.css"), "utf8");
 }
 
+// The opening of the phone-on-its-side block, as css/panel.css writes it.
+const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
+
 // The rules inside one @media block of css/panel.css, found by its opening
 // as written, or null when there is no such block.
-const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
 function mediaRules(opening) {
   const css = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
   const start = css.indexOf(opening);
@@ -2061,7 +2063,7 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   // Only in the landscape block: anywhere else, the upright phone's card too
   // would shrink to two lines.
   const beside = (mediaRules(LANDSCAPE_PHONE) || [])
-    .filter((r) => r.selector.includes("#driveTab") && /#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
+    .filter((r) => /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(r.selector));
   check(beside.length === 1, `the Drive tab's fault card, in the landscape block: ${beside.map((r) => r.selector)}`);
   const body = beside.length === 1 ? beside[0].body : "";
   check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
