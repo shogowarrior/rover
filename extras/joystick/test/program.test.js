@@ -7,6 +7,7 @@
 const assert = require("node:assert/strict");
 const { ProgramRunner, RoverTarget } = require("../js/program.js");
 const P = require("../js/protocol.js");
+const { abortableWait } = require("../js/support.js");
 const { flush } = require("./fake-dom.js");
 // Every test has a time limit (harness.js says why). The tests also check
 // that a run has ended before awaiting how it ended, so most regressions
@@ -74,12 +75,9 @@ class FakeTarget {
   onLost(fn) { this.#lost.add(fn); return () => this.#lost.delete(fn); }
   listeners() { return this.#frames.size + this.#lost.size; }
 
+  // The rule both real Targets follow (program.js, sim.js).
   sleep(ms, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal.aborted) return reject(signal.reason);
-      const cancel = this.clock.at(ms, resolve);
-      signal.addEventListener("abort", () => { cancel(); reject(signal.reason); }, { once: true });
-    });
+    return abortableWait(signal, (done) => this.clock.at(ms, done), (cancel) => cancel());
   }
 
   frame(extra = {}) {

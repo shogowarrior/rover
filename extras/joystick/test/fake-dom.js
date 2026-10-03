@@ -22,11 +22,10 @@ const isRemote = (src) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(src);
 function makeClock() {
   let now = 1000;
   let nextId = 1;
-  const timers = new Map(); // id -> {at, fn, every}
+  const timers = new Map(); // id -> {at, fn}
   const clock = {
     now: () => now,
     setTimeout(fn, ms = 0) { const id = nextId++; timers.set(id, { at: now + Math.max(0, ms), fn }); return id; },
-    setInterval(fn, ms) { const id = nextId++; timers.set(id, { at: now + ms, fn, every: ms }); return id; },
     clear(id) { timers.delete(id); },
     pending() { return timers.size; },
     advance(ms) {
@@ -37,7 +36,7 @@ function makeClock() {
         if (!best) break;
         const [id, t] = best;
         now = t.at;
-        if (t.every) t.at += t.every; else timers.delete(id);
+        timers.delete(id);
         t.fn();
       }
       now = end;
@@ -252,7 +251,9 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
     document: doc, window: win, WebSocket, console, Event,
     // A program run's waits are aborted through one (js/program.js).
     AbortController,
-    setTimeout: clock.setTimeout, clearTimeout: clock.clear, setInterval: clock.setInterval, clearInterval: clock.clear,
+    // No setInterval: nothing in the panel repeats on one (the Driver sets a
+    // timeout per send), and a script that started to would fail here.
+    setTimeout: clock.setTimeout, clearTimeout: clock.clear,
     performance: { now: clock.now },
     // As in a browser: report an error without throwing it. Collected, so a
     // test that expects no errors sees one a listener raised.
@@ -283,7 +284,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
 
   const $ = (id) => doc.getElementById(id);
   const page = {
-    ctx, doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $,
+    doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $,
     get canvas() { return stick.children.find((c) => c.tagName === "CANVAS"); },
     get joy() { return ctx.__joy; },
     evalIn: (code) => vm.runInContext(code, ctx),
