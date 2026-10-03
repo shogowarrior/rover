@@ -154,10 +154,11 @@ python3 tools/check_protocol.py               # the clients agree with the firmw
 node --test extras/joystick/test/             # the browser panel and its simulator, in Node
 ```
 
-CI runs all three, parses every client (Python and JavaScript), and builds
-every board environment on each pull request and each push to `main`. What
-no test can know (which motor is on which terminal, which way the servo
-turns) is covered by [docs/bench-checklist.md](docs/bench-checklist.md).
+CI runs all three, parses the Python scripts in `client/` and every panel
+script, and builds every board environment on each pull request and each
+push to `main`. What no test can know (which motor is on which terminal,
+which way the servo turns) is covered by
+[docs/bench-checklist.md](docs/bench-checklist.md).
 
 ## Safety
 
