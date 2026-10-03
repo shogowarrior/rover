@@ -305,18 +305,9 @@ Chrome refuses module scripts from `file://`, so the panel is classic
 bundler, no packages. Its one remote script is Blockly 13.3.0 from
 cdn.jsdelivr.net, for the Program tab: pinned, checked against its hash and
 deferred, so driving never waits for it or depends on it. The panel reads like
-the firmware: small classes in `js/`, wired by `js/app.js`, the composition
-root:
-
-- `Link` the WebSocket, `Driver` the controls and what to send, `ScanView`,
-  `Readouts`, `Tabs`;
-- `SchemeToggle` the rover's control scheme, `FamilySelector` the stick
-  family;
-- `ProgramRunner` and `RoverTarget` run a block program on the rover,
-  `RoverBlocks` and `BlockEditor` are its blocks on Blockly, `ProgramTab` the
-  tab;
-- `RoverSim`, `Room`, `SimSonar`, `SimClock` and `SimTarget` the simulator,
-  and `SimView` draws it.
+the firmware: small classes in `js/`, each documenting its contract in its
+header, wired by `js/app.js`, the composition root, whose header lists them in
+load order.
 
 Every value mirrored from `src/` is in `js/protocol.js`, except the
 simulator's own copies, in `js/sim.js`. `joy.js` is a vendored third-party
@@ -344,8 +335,10 @@ fills the left, the scan and readouts a column on the right, and Stop and
 Autonomous a bar across the foot, Stop under the controls. No ancestor of the
 stick may be positioned, transformed, filtered or contained: joy.js places a
 touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
-for it. The stick's teal is joy.js's own (`js/drive.js`), and the theme's
-accent follows it.
+for it. joy.js sizes its canvas once, as it is built, so when the stick's box
+settles at a new size (a phone turned, a window resized) the Driver builds it
+again, letting go of a stick held then as a scheme change does. The stick's
+teal is joy.js's own (`js/drive.js`), and the theme's accent follows it.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
@@ -364,13 +357,14 @@ Autonomous, the tab's Stop program or a switch of target stops a run, and an
 abort sends STOP only if the program was driving. Its commands are paced
 (`COMMAND_GAP_MS` and `REPEAT_GAP_MS` in `js/program.js`), so no loop floods
 the rover; it acts only on fresh readings, and never takes no echo for a
-clear way; every loop yields. A drive lasts at most 60 s, a drive-until 30 s, a wait 600 s.
-The compiled code runs with the page's globals in reach, so a program loaded
-from anywhere goes through `RoverBlocks.sanitize()`, which drops block ids,
-and `RoverBlocks.harden()` keeps comments out of the code. On the rover, Run
-asks first when the editor holds several stacks, and when the program drives
-a pivot while the rover is not on ADVANCED. A program's own stop and start
-exploring are not presses: the Driver raises no event for them.
+clear way; every loop yields. Its limits on a drive, a drive-until and a wait
+are `ProgramRunner`'s (`js/program.js`). The compiled code runs with the
+page's globals in reach, so a program loaded from anywhere goes through
+`RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
+keeps comments out of the code. On the rover, Run asks first when the editor
+holds several stacks, and when the program drives a pivot while the rover is
+not on ADVANCED. A program's own stop and start exploring are not presses:
+the Driver raises no event for them.
 
 **The simulator** holds no Link and no Driver: a preview sends nothing, and
 its telemetry never reaches the scan fan or the readouts. It follows the

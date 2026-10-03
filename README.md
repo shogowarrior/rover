@@ -113,11 +113,11 @@ and no exploring. Its readings are as old as the rover's, so a program that
 works in the preview does not rely on fresher ones. The numbers that describe
 this rover are estimates, at the top of
 [`extras/joystick/js/sim.js`](extras/joystick/js/sim.js), each with how to
-measure it on the bench: full wheel speed (`SIM_WHEEL_MAX_MPS`, 0.6 m/s), the
-duty below which the wheels do not turn (`SIM_DEADBAND_PWM`, 0), how hard a
-released wheel drags (`SIM_RELEASED_DRAG`, 0.25), the chassis and where its
-wheels sit (`SIM_CHASSIS`, `SIM_WHEEL`), and the sonar's reach and the angle
-past which a surface sends no echo (`SIM_SONAR`, 400 cm and 60 degrees).
+measure it on the bench: full wheel speed (`SIM_WHEEL_MAX_MPS`), the duty
+below which the wheels do not turn (`SIM_DEADBAND_PWM`), how hard a released
+wheel drags (`SIM_RELEASED_DRAG`), the chassis and where its wheels sit
+(`SIM_CHASSIS`, `SIM_WHEEL`), and the sonar's reach and the angle past which a
+surface sends no echo (`SIM_SONAR`).
 
 ## How it works
 
