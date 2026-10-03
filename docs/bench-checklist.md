@@ -98,8 +98,8 @@ the same table.
 
 **Pivots, before anyone switches to ADVANCED.** Once the moves above are
 right, send each pivot (codes 9 to 16) with the script in section 0, step 4,
-and watch which pair drives and which way the rover goes. [mecanum.md](mecanum.md) has all
-eight; for example:
+and watch which pair drives and which way the rover goes.
+[mecanum.md](mecanum.md) has all eight; for example:
 
 - Code 9 (`PIVOT_RIGHT_FORWARD`): only the left-hand wheels turn, forward,
   and the rover moves **forward** with its nose turning right, about its

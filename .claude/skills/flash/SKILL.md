@@ -116,11 +116,11 @@ instead.
 
 A power-on starts the rover exploring, and to the ESP32 a reset through EN
 (the button, a USB upload, often the serial monitor opening) is a power-on:
-that is why steps 3 and 5 stop and ask. After an **OTA** flash, or any other reset that is
-not a power-on (a crash, the watchdog, a brownout), it comes up in **manual**
-mode, stopped, and waits to be told. Tell the operator so, or a rover sitting
-still reads as a failed flash. To start exploring, press **Autonomous** in the
-browser panel or `t` in `client/drive.py`.
+that is why steps 3 and 5 stop and ask. After an **OTA** flash, or any other
+reset that is not a power-on (a crash, the watchdog, a brownout), it comes up
+in **manual** mode, stopped, and waits to be told. Tell the operator so, or a
+rover sitting still reads as a failed flash. To start exploring, press
+**Autonomous** in the browser panel or `t` in `client/drive.py`.
 
 ## Reading a boot failure
 

@@ -424,10 +424,13 @@ choice as a selector. SELECT toggles the scheme, the panel's toggle sends the
 rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
 a Bluetooth send from the loop task, and any client can flip the scheme as
 fast as it sends.
+
 Any client may change the scheme, so a change never redirects a held stick:
 the pad stops what it was driving and waits for the stick to come back to
-centre, so a toggle elsewhere can only ever stop it. The panel's stick does
-the same, and waits for a fresh press.
+centre, so a toggle elsewhere can only ever stop it. The panel's stick lets
+go too: see the scheme toggle under
+[The browser control panel](#the-browser-control-panel).
+
 `kinematics::moveForStick` maps the stick for the pad; the panel carries a
 copy, and both are tested against `test/vectors/stick_moves.json`.
 [docs/mecanum.md](docs/mecanum.md) has the table and warns that none of it
