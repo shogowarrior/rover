@@ -4,7 +4,7 @@
  *   new Tabs(tabs, { storageKey })
  *     tabs        the role="tab" elements, in order. Each names its panel
  *                 with aria-controls.
- *     storageKey  where the last tab chosen is remembered, or omitted.
+ *     storageKey  where the last tab chosen is remembered.
  *
  *   select(tab, { focus })  show tab's panel and hide the others.
  *   selected                the selected tab element.
@@ -27,7 +27,7 @@ class Tabs {
   #selected = null;
   #listeners = new Listeners();
 
-  constructor(tabs, { storageKey } = {}) {
+  constructor(tabs, { storageKey }) {
     this.#tabs = tabs;
     this.#storageKey = storageKey;
 
@@ -47,7 +47,7 @@ class Tabs {
       });
     });
 
-    const remembered = storageKey && tabs.find((tab) => tab.id === memory.recall(storageKey));
+    const remembered = tabs.find((tab) => tab.id === memory.recall(storageKey));
     const marked = tabs.find((tab) => tab.getAttribute("aria-selected") === "true");
     this.#show(remembered || marked || tabs[0]);
   }
@@ -65,7 +65,7 @@ class Tabs {
     if (focus) tab.focus();
     if (tab === this.#selected) return;
     this.#show(tab);
-    if (this.#storageKey) memory.remember(this.#storageKey, tab.id);
+    memory.remember(this.#storageKey, tab.id);
     this.#listeners.emit(tab, Tabs.#panelOf(tab));
   }
 

@@ -52,6 +52,7 @@ const link = new Link({
   connect: byId("connect"),
   linkState: byId("linkState"),
   note: byId("note"),
+  storageKey: "rover.host",
 });
 
 const scanView = new ScanView(byId("scan"));

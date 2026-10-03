@@ -3,11 +3,12 @@
  * whether telemetry still arrives, remembering the address, showing the link
  * state, and turning frames into telemetry objects.
  *
- *   new Link({ body, host, connect, linkState, note })
- *     body       gets data-link = the state, which the page's CSS keys on;
- *     host       the address field (host or host:port); Enter connects;
- *     connect    the Connect / Cancel / Disconnect button;
- *     linkState  the state's label; note: the status line.
+ *   new Link({ body, host, connect, linkState, note, storageKey })
+ *     body        gets data-link = the state, which the page's CSS keys on;
+ *     host        the address field (host or host:port); Enter connects;
+ *     connect     the Connect / Cancel / Disconnect button;
+ *     linkState   the state's label; note: the status line;
+ *     storageKey  where the address is remembered.
  *
  *   send(obj)          serialise obj and send it as one frame. Returns false,
  *                      sending nothing, when no socket is open.
@@ -38,6 +39,7 @@ class Link {
   static LABEL = Object.freeze({ down: "No link", connecting: "Connecting", up: "Link", stale: "No data" });
 
   #ui;
+  #storageKey;
   #state = null;
   // The one current socket. Every listener checks it first: a socket that has
   // been replaced or closed on purpose must not touch the page, or its late
@@ -47,8 +49,9 @@ class Link {
   #stateListeners = new Listeners();
   #telemetryListeners = new Listeners();
 
-  constructor({ body, host, connect, linkState, note }) {
+  constructor({ body, host, connect, linkState, note, storageKey }) {
     this.#ui = { body, host, connect, linkState, note };
+    this.#storageKey = storageKey;
 
     connect.addEventListener("click", () => {
       if (this.#socket) this.disconnect();
@@ -58,7 +61,7 @@ class Link {
       if (event.key === "Enter") this.connect();
     });
 
-    host.value = memory.recall("rover.host") || host.value;
+    host.value = memory.recall(storageKey) || host.value;
     this.#setState("down");
     this.note("Enter the rover's address and connect.");
   }
@@ -93,7 +96,7 @@ class Link {
       this.note("Enter the rover's address first.", "bad");
       return;
     }
-    memory.remember("rover.host", host);
+    memory.remember(this.#storageKey, host);
 
     // One socket at a time. An old one left open would hold one of the rover's
     // five client slots, and pressing Enter or Connect again must replace the
