@@ -7,6 +7,7 @@
  *   show(data)   update from a telemetry object; a key it lacks leaves its
  *                readout as it was (motorsReady excepted, below).
  *   linkDown()   the link the readings came over has gone.
+ *   clear()      show nothing reported, as the page loads.
  */
 class Readouts {
   #ui;
@@ -41,6 +42,15 @@ class Readouts {
   // The warning belongs to the link it came over, so losing that link clears
   // it.
   linkDown() {
+    this.#showMotorsReady(undefined);
+  }
+
+  clear() {
+    const ui = this.#ui;
+    for (const output of [ui.mode, ui.move, ui.phase, ui.temp]) output.textContent = "—";
+    ui.auto.setAttribute("aria-pressed", "false");
+    ui.phaseCell.hidden = true;
+    ui.phase.dataset.tone = "";
     this.#showMotorsReady(undefined);
   }
 

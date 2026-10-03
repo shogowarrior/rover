@@ -87,6 +87,18 @@ link.onTelemetry((data) => {
   readouts.show(data);
 });
 
+// Readings belong to the link they came over. A link that went leaves the
+// last scan and mode on screen, dimmed (panel.css), as what the rover last
+// reported; a new link starts from nothing. It is up as its socket opens,
+// before the rover has sent a frame over it, and the last link's scan was
+// drawn as live again until one came: an all-clear that nothing vouched for.
+link.onState((state) => {
+  if (state === "connecting") {
+    scanView.show({});
+    readouts.clear();
+  }
+});
+
 /* --- loss of control stops the rover ------------------------------------- */
 
 // When the link goes down, nothing held may drive again without a fresh

@@ -827,6 +827,41 @@ test("motorsReady: the warning goes with its link, and controls still send", () 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+test("a new link starts the scan and readouts from nothing; a link that went keeps them, dimmed", () => {
+  const page = loadPage();
+  const B = scanBearings(page);
+  const shown = () => [
+    `${B.filter((b) => b.wedge.getAttribute("d") !== "").length} wedges`,
+    B.map((b) => b.reading.textContent).join(" "),
+    page.$("mode").textContent, page.$("move").textContent, page.$("temp").textContent,
+    page.$("phaseCell").hidden ? "no phase" : page.$("phase").textContent,
+    `auto ${page.$("auto").getAttribute("aria-pressed")}`,
+  ].join(" | ");
+  const clear = "0 wedges | — — — — — | — | — | — | no phase | auto false";
+  check(shown() === clear, `at load: ${shown()}`);
+  const all150 = Object.fromEntries(B.map((b) => [b.key, 150]));
+  let ws = connectOpen(page);
+  ws.serverMsg(telemetry({ ...all150, phase: "CRUISE", move: "MOVE_FORWARD", temperature: 41.5 }));
+  const live = "5 wedges | 150cm 150cm 150cm 150cm 150cm | AUTONOMOUS | MOVE_FORWARD | 41.5°C | CRUISE | auto true";
+  check(shown() === live, `live: ${shown()}`);
+
+  // The link goes: what it last reported stays, for panel.css to dim.
+  ws.serverDrop();
+  check(page.doc.body.dataset.link === "down" && shown() === live, `down: ${shown()}`);
+
+  // A new link is up as its socket opens, before the rover says anything
+  // over it: nothing from the last link may show as live meanwhile.
+  ws = connectOpen(page);
+  check(page.doc.body.dataset.link === "up" && shown() === clear, `a new link, no frame yet: ${shown()}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", distanceFront: 30 }));
+  check(/^5 wedges \| .* 30cm .* \| MANUAL \| STOP \|/.test(shown()), `its first frame: ${shown()}`);
+
+  // Replaced by Enter, the same.
+  page.fire(page.$("host"), "keydown", { key: "Enter" });
+  check(page.doc.body.dataset.link === "connecting" && shown() === clear, `replaced: ${shown()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("a JSON array is not telemetry: wedges and warning untouched", () => {
   const { page, ws } = connected(telemetry({ motorsReady: false }));
   const B = scanBearings(page);
