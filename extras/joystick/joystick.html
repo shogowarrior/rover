@@ -172,8 +172,8 @@
         </button>
         <!-- The File menu, at the end of its row: what is used now and then
              and moves nothing. popover.js opens and closes it, programtab.js
-             adds the examples and keeps each item's disabled. Run, Stop
-             program and the switch stay out of it, one press each. -->
+             adds the examples and keeps each item's disabled and title. Run,
+             Stop program and the switch stay out of it, one press each. -->
         <div class="menuHolder">
           <button type="button" class="menuButton" id="programMenu" disabled>
             <span>File</span>
@@ -184,7 +184,7 @@
               <span class="menuLabel" aria-hidden="true">Examples</span>
             </div>
             <div class="menuRule" role="separator"></div>
-            <button type="button" role="menuitem" id="programImport" title="Open a program saved with Export" disabled>
+            <button type="button" role="menuitem" id="programImport" disabled>
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2M3 13.5h10"/></svg>
               <span>Import…</span>
             </button>
@@ -193,7 +193,7 @@
               <span>Export</span>
             </button>
             <div class="menuRule" role="separator"></div>
-            <button type="button" role="menuitem" id="programClear" title="Remove every block" disabled>
+            <button type="button" role="menuitem" id="programClear" disabled>
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>
               <span>Clear</span>
             </button>
@@ -208,7 +208,7 @@
       <div class="programStage" id="programStage" data-sim="yes">
         <div class="programEditor">
           <div id="programWorkspace"></div>
-          <p class="programHint" id="programHint" hidden>Drag blocks in from the toolbox, or start from an example.</p>
+          <p class="programHint" id="programHint" hidden>Drag blocks in from the toolbox, or start from an example in the File menu.</p>
           <div class="programOffline" id="programOffline" hidden>
             <strong>The block editor could not load.</strong>
             <span>It loads Blockly from cdn.jsdelivr.net, so it needs the internet the first time.

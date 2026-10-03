@@ -132,10 +132,14 @@
 
 .programSim[hidden] { display: none; }
 
+/* clip, not hidden: a scroll container would swallow the settings' scroll
+   margin, and they would open under the Stop bar (panel.css). hidden stays
+   for a browser without clip. */
 #simSlot {
   position: relative;
   height: 360px;
   overflow: hidden;
+  overflow: clip;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);

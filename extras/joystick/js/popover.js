@@ -43,16 +43,21 @@ class Popover {
     button.addEventListener("keydown", (event) => this.#onButtonKey(event));
     panel.addEventListener("keydown", (event) => this.#onPanelKey(event));
     if (menu) {
-      // After the item's own click has done its action.
+      // Closed before the item's own click acts (the capture phase): an item
+      // that asks opens the page's modal <dialog>, which makes the button
+      // inert and later gives the focus back to whatever had it when it
+      // opened. That must be the button, not an item hidden meanwhile.
       panel.addEventListener("click", (event) => {
         const item = event.target.closest(Popover.ITEM);
         if (item && !item.disabled) this.#close();
-      });
+      }, true);
     }
+    // The capture phase, because Blockly stops every press on its workspace
+    // from going any further, and the editor is most of the Program tab.
     document.addEventListener("pointerdown", (event) => {
       if (panel.hidden || panel.contains(event.target) || button.contains(event.target)) return;
       this.#show(false);
-    });
+    }, true);
   }
 
   #show(open) {

@@ -38,17 +38,30 @@ The first thread on the owner's requests (branch
 
 - the layout and interaction spec (features.md, F3f), and the owner's 20
   questions, sent in one message with the defaults it carries on with;
-- `AskDialog` (`js/ask.js`): every question the panel asks, in the page's one
-  `<dialog>`; no `window.confirm()` is left;
+- `AskDialog` (`js/ask.js`): every question the panel asks, Blockly's
+  delete questions included, in the page's one `<dialog>`; no
+  `window.confirm()` is left;
 - `Popover` (`js/popover.js`): the Program tab's File menu and the
   simulator's settings share it;
 - `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, still
   on the Program toolbar until F1 moves it;
 - F2: the examples, Import, Export and Clear in the File menu, and a
   playback list in place of the 1x / 2x / 4x buttons in a narrow simulator
-  view.
+  bar, which also keeps every room's name in full.
 
-Panel tests 195/195 and the protocol check pass. That thread's container
+A review round (seven lenses, each finding checked by a skeptic) found and
+fixed: the focus lost to the page after a question an item asked, a press on
+the block editor not closing a menu (Blockly stops its presses), room names
+cut short in a narrow simulator bar, disabled items not saying why, Clear's
+undo key (Cmd+Z on a Mac), and Blockly's delete question with OK focused.
+A second round found: the simulator's settings still opening under the Stop
+bar on a phone (its box was a scroll container, which swallowed the scroll
+margin), the same margin pushing the File button off a phone on its side,
+the empty editor not saying the examples are in the File menu, and tests a
+browser would fail but the fake DOM passed (a click on an item's word, focus
+in a hidden tab).
+
+Panel tests 197/197 and the protocol check pass. That thread's container
 could not build the firmware or run the host tests: its network policy
 blocked the PlatformIO registry. It changed nothing they cover; CI builds
 and tests them on the PR.

@@ -177,7 +177,8 @@ class SimView {
     }));
     // The same choice as a list, for a bar too narrow to show the buttons
     // beside the room's name: sim.css shows one or the other. While paused
-    // it shows the speed a choice resumes at; Pause says it is paused.
+    // it shows none, as no button is pressed then, so any choice resumes,
+    // the speed it was at included.
     ui.speedPick = dom.html("select", { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" }, bar);
     for (const rate of SimTarget.PLAYBACKS) dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
     ui.speedPick.addEventListener("change", () => this.#play(Number(ui.speedPick.value)));
@@ -492,7 +493,7 @@ class SimView {
     // The playback.
     ui.pause.setAttribute("aria-pressed", String(target.paused));
     pressSegment(ui.speeds, target.paused ? null : target.playback);
-    ui.speedPick.value = String(target.playback);
+    ui.speedPick.value = target.paused ? "" : String(target.playback);
   }
 
   // The motion in words and numbers, the clock, and the latest thing the

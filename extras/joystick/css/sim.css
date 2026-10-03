@@ -22,6 +22,7 @@
   /* The bar's buttons: a full touch target in the one-column layout, where
      the view is on a phone; smaller beside the editor, under a mouse. */
   --sim-tool: var(--tap);
+  --sim-bar-h: var(--sim-tool);
 
   position: relative;
   container: sim / size;
@@ -68,19 +69,40 @@
 .sim-room option,
 .sim-speed-pick option { background: var(--panel); color: var(--readout); }
 
-/* The playback speed as a list, only where the bar is too narrow for its
-   buttons beside the room's name (a phone): the bar keeps to one row, and
-   the room keeps that row's height. */
+/* The playback speed as a list where its buttons would leave the room's
+   name too little of the bar, and the room on a row of its own where even
+   the list would. The widths are the bar's: the longest name ("Obstacle
+   course", 135 px) beside the buttons (134 px, or 98 beside the editor) or
+   the list (53 px), the three tools and the gaps, as measured in Chromium,
+   with 4 px to spare. They follow the tools' size, and so the layout. */
 .sim-speed-pick {
   display: none;
   flex: none;
   font-family: var(--mono);
 }
 
-@container sim (max-width: 360px) {
-  .sim-bar { flex-wrap: nowrap; }
-  .sim-speed { display: none; }
-  .sim-speed-pick { display: block; }
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  @container sim (max-width: 420.98px) {
+    .sim-speed { display: none; }
+    .sim-speed-pick { display: block; }
+  }
+
+  @container sim (max-width: 339.98px) {
+    .sim-room { flex-basis: 100%; }
+    .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
+  }
+}
+
+@media (min-width: 960px) and (min-height: 521px) {
+  @container sim (max-width: 348.98px) {
+    .sim-speed { display: none; }
+    .sim-speed-pick { display: block; }
+  }
+
+  @container sim (max-width: 303.98px) {
+    .sim-room { flex-basis: 100%; }
+    .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
+  }
 }
 
 .sim-speed { flex: none; border-radius: var(--r-sm); }
@@ -488,14 +510,15 @@
 .sim-swatch.ray.live { border-color: var(--live); }
 .sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
 
-/* Folded open over the room, under the controls that open it. */
+/* Folded open over the room, under the controls that open it, however many
+   rows they take (--sim-bar-h, set where the room takes a row of its own). */
 .sim-more {
   position: absolute;
   z-index: 2;
-  top: calc(var(--s-2) + var(--sim-tool) + var(--s-1));
+  top: calc(var(--s-2) + var(--sim-bar-h) + var(--s-1));
   right: var(--s-2);
   left: var(--s-2);
-  max-height: calc(100% - var(--sim-tool) - 2 * var(--s-3));
+  max-height: calc(100% - var(--sim-bar-h) - 2 * var(--s-3));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
