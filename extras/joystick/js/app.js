@@ -312,6 +312,13 @@ function startBlockEditor() {
     programTab.editorUnavailable("The block editor could not load: it needs Blockly from cdn.jsdelivr.net.");
     return;
   }
+  // Blockly's own questions (deleting every block, or a variable still in
+  // use) are asked as the panel's are: in the page's one dialog, Cancel
+  // focused, rather than in Blockly's, where OK has the focus and a
+  // reflexive Enter deletes.
+  Blockly.dialog.setConfirm((message, callback) => {
+    ask.ask({ title: "Delete blocks?", text: message, yes: "Delete" }).then(callback);
+  });
   try {
     programTab.attachEditor(new BlockEditor(byId("programWorkspace"), {
       Blockly,

@@ -101,7 +101,8 @@ The panel's Program tab builds programs from blocks: drive a move for a time
 or until a condition, read the sonar, wait, loop, branch. Its File menu loads
 an example (Square, Strafe box, Patrol, Mecanum tour), exports a program to a
 file and imports it again, and clears the editor. Loading over a program or
-clearing one asks first, and Ctrl+Z brings a cleared one back. **Preview**
+clearing one asks first, and Ctrl+Z (Cmd+Z on a Mac) in the editor brings a
+cleared one back. **Preview**
 runs it on a simulated rover in a simulated room and sends nothing to the
 real one; **Run on rover** drives the rover with it,
 re-sending each move as a held control does. A press of any drive control,

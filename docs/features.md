@@ -81,7 +81,7 @@ The screenshot that came with it shows the Program tab on a wide screen
    (`Popover`, `js/popover.js`), and a target switch class (`TargetSwitch`,
    `js/targetswitch.js`).
 3. **Done.** [F2](#f2-file-actions-in-one-menu): it shortens the Program
-   toolbar, which is what holds the right column narrow today.
+   toolbar, which was what held the right column narrow.
 4. [F3](#f3-one-layout-for-both-tabs) and F3a to F3e: one right-column width,
    the foot bar aligned to the columns, the simulator view fixed.
 5. [F1](#f1-a-simulator-for-the-drive-tab), then
@@ -245,19 +245,30 @@ make it explicit/"
 **Done** (step 3). The Program toolbar holds the Rover | Simulator switch,
 Run, Stop program and one File menu button (`#programMenu`). Its menu
 (`#programMenuList`) holds the four examples under an Examples heading
-(the group `#programExamples`), Import…, Export, a separator and Clear,
-built on `Popover` and following the spec's *Menus*. The menu is named File,
-not Program as proposed below, because the tab is already called Program.
-Export works mid-run; the examples, Import and Clear only while idle, and
-stay in the menu, disabled, otherwise. Loading an example or importing over
-a program, and Clear, ask first in the page's one `<dialog>` (`AskDialog`).
-Where the simulator's view is 360 px wide or less (a container query on the
-`sim` container), a playback list (`.sim-speed-pick`) takes the 1x / 2x / 4x
-buttons' place, and both set the same speed. At 1280 and 1600 px the toolbar
-is one row at today's right-column width (it took two at 1280); F3
-re-checks it at the new one. On
-an upright phone it still takes three rows (the switch, Run and Stop
-program, the menu), until F1 moves the switch to the header.
+(the group `#programExamples`), a separator, Import…, Export, a separator
+and Clear, built on `Popover` and following the spec's *Menus*. The menu is
+named File, not Program as proposed below, because the tab is already called
+Program. Export works mid-run; the examples, Import and Clear only while
+idle, and stay in the menu otherwise, disabled, with a title that says why
+("Stop the program first", or "Nothing to clear"). Loading an example or
+importing over a program, and Clear, ask first in the page's one `<dialog>`
+(`AskDialog`), and so do Blockly's own questions (deleting every block, or a
+variable still in use).
+
+Where the 1x / 2x / 4x buttons would leave the room's name too little of
+the simulator's bar, a playback list (`.sim-speed-pick`) takes their place,
+setting the same speed; while paused it shows none, as no button is pressed
+then. Narrower still, the room's name takes a row of its own. The widths
+(`css/sim.css`) are measured, and follow the tools' size: the list below
+421 px of the bar in the one-column layout and 349 px in the wide one, the
+room's own row below 340 and 304. So the bar is one row from 340 px (390 px
+phones and up) and at 1280 to 1600 px, and two rows on a 375 px phone, at
+480 x 320 and at 960 x 540, with every room's name in full.
+
+At 1280 and 1600 px the toolbar is one row at today's right-column width (it
+took two at 1280); F3 re-checks it at the new one. On an upright phone it
+still takes three rows (the switch, Run and Stop program, the menu), until
+F1 moves the switch to the header.
 
 **Before**, for the record: the toolbar held Examples (a `<select>` used as
 an action menu), then Export, Import and Clear as buttons, needing 900 px
@@ -289,7 +300,8 @@ visible control, for the reasons in
 - One menu with the examples in it, or Examples kept as its own dropdown?
   *(default: one menu)*
 - Clear inside the menu, last, behind an in-page question? *(default: yes; it
-  is undoable with Ctrl+Z and moves nothing)*
+  is undoable with Ctrl+Z, Cmd+Z on a Mac, in the editor, and moves
+  nothing)*
 - Should the simulator's 1x/2x/4x become a dropdown? *(default: only in a
   narrow view)*
 
@@ -580,10 +592,12 @@ hold; the rules in [Rules every item keeps](#rules-every-item-keeps) still
 apply.
 
 *One way to ask.* Every question is asked in the page's one `<dialog>`
-through one shared helper (`AskDialog`): the question as its text, a confirm button that
-names the action ("Run on rover", "Replace", "Clear"), Cancel focused so a
-reflexive Enter does nothing, and Escape or Cancel answering no. No
-`window.confirm()`, `alert()` or `prompt()`. A question is asked only before
+through one shared helper (`AskDialog`): the question as its text, a
+confirm button that names the action ("Run on rover", "Replace", "Clear",
+"Delete"), Cancel focused so a reflexive Enter does nothing, and Escape or
+Cancel answering no. Blockly's own questions go through it too; only its
+prompt for a new variable's name, which needs a text field, stays Blockly's
+own in-page dialog. No `window.confirm()`, `alert()` or `prompt()`. A question is asked only before
 something costly to undo: driving the rover in a way the operator may not
 expect, or replacing or removing the program in the editor. Never before
 Stop.
@@ -826,7 +840,7 @@ control table lists them.
 | Rover \| Simulator | Program toolbar (header under F1) | no | decides whether Run moves the real rover |
 | Run / Preview | Program toolbar | no | the primary action |
 | Stop program | Program toolbar | no | safety: ends a run at once |
-| Examples | File menu | yes | already a dropdown; replaces the program like Import |
+| Examples | File menu | yes | was a dropdown already; replaces the program like Import |
 | Export | File menu | yes | infrequent, moves nothing |
 | Import | File menu | yes | infrequent; the item calls the file picker directly |
 | Clear | File menu | yes | last, behind an in-page question |

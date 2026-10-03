@@ -45,6 +45,14 @@ class ProgramTab {
   static RUN_LABELS = Object.freeze({ rover: "Run on rover", simulator: "Preview" });
   static EMPTY = "Nothing to run yet: drag blocks in, or load an example.";
   static LOG_LINES = 200;
+  // What the File menu's items do, and why one cannot now (F3f: disabled,
+  // with a title that says why).
+  static TITLES = Object.freeze({
+    import: "Open a program saved with Export",
+    clear: "Remove every block",
+    busy: "Stop the program first",
+    nothingToClear: "Nothing to clear",
+  });
 
   #runner;
   #targetSwitch;
@@ -279,7 +287,11 @@ class ProgramTab {
 
   async #clear() {
     if (!this.#canEdit() || this.#editor.empty) return;
-    const yes = await this.#ask.ask({ title: "Clear the program?", text: "Remove every block? Undo (Ctrl+Z) brings them back.", yes: "Clear" });
+    const yes = await this.#ask.ask({
+      title: "Clear the program?",
+      text: "Remove every block? Ctrl+Z (Cmd+Z on a Mac) in the editor brings them back.",
+      yes: "Clear",
+    });
     if (yes && this.#canEdit()) this.#editor.clear();
   }
 
@@ -299,13 +311,21 @@ class ProgramTab {
     ui.run.title = !editor ? this.#editorWhy : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : "";
     ui.stop.disabled = state !== "running";
 
-    // Without an editor no item can act, so neither can the menu.
+    // Without an editor no item can act, so neither can the menu. With one,
+    // an item that cannot act now stays, disabled, saying why.
+    const titles = ProgramTab.TITLES;
     const canEdit = this.#canEdit();
+    const busy = canEdit ? "" : titles.busy;
     ui.menu.disabled = !editor;
     ui.menu.title = editor ? "" : this.#editorWhy;
-    for (const item of this.#exampleItems) item.disabled = !canEdit;
+    for (const item of this.#exampleItems) {
+      item.disabled = !canEdit;
+      item.title = busy;
+    }
     ui.importButton.disabled = !canEdit;
+    ui.importButton.title = busy || titles.import;
     ui.clear.disabled = !canEdit || empty;
+    ui.clear.title = busy || (empty ? titles.nothingToClear : titles.clear);
     ui.exportButton.disabled = !editor;
     ui.hint.hidden = !editor || !editor.empty;
 

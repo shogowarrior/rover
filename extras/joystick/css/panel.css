@@ -1164,9 +1164,10 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 /* Every layout but the side-by-side one (the media query below, negated). */
 @media (max-width: 959.98px), (max-height: 520.98px) {
-  /* Opened near the foot of the screen, a menu scrolls into view clear of
+  /* Opened near the foot of the screen, a popup scrolls into view clear of
      the Stop bar over it (popover.js), rather than hide under it. */
-  .menu { scroll-margin-bottom: calc(var(--tap-lg) + 2 * var(--s-3) + env(safe-area-inset-bottom, 0px)); }
+  .menu,
+  .sim-more { scroll-margin-bottom: calc(var(--tap-lg) + 2 * var(--s-3) + env(safe-area-inset-bottom, 0px)); }
 
   .shell > [role="tabpanel"] { margin-top: var(--s-3); }
 

@@ -394,7 +394,10 @@ program, and Clear, ask first too. Every question the panel asks goes
 through `AskDialog` (`js/ask.js`), in the page's one `<dialog>`, never
 `window.confirm()`, `alert()` or `prompt()`: desktop Chrome blurs the window
 as its own dialog closes, and the blur stopped the run just confirmed; the
-desktop app's browser pane dismisses native dialogs unseen. The File menu
+desktop app's browser pane dismisses native dialogs unseen. Blockly's own
+questions (deleting every block, or a variable in use) go through it too
+(`app.js`), with Cancel focused; only its prompt for a new variable's name
+stays Blockly's own in-page dialog. The File menu
 and the simulator's settings share `Popover` (`js/popover.js`), and the
 Rover | Simulator switch is a `TargetSwitch` (`js/targetswitch.js`), whose
 change stops a run.

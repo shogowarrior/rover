@@ -2859,11 +2859,18 @@ test("program: Run asks in the page, so a run the operator confirmed drives on",
     };
   `);
   const asked = questionsAsked(page);
+  // The dialog is shared, and the last question relabelled it: Run's must
+  // name its own action, the one that drives the real rover.
+  page.fire(exampleItems(page)[0], "click");
+  await flush();
+  await answer(page, "cancel");
   page.fire(page.$("programRun"), "click");
   await flush();
+  check(page.$("askYes").textContent === "Run on rover" && page.$("ask").getAttribute("aria-label") === "Run on the rover?",
+    `Run asks under ${page.$("ask").getAttribute("aria-label")}, with ${page.$("askYes").textContent}`);
   await answer(page, "yes"); // the stacks
   await answer(page, "yes"); // the pivot
-  check(asked.length === 2 && page.evalIn("__confirmed") === 0, `asked ${asked.length} in the page, ${page.evalIn("__confirmed")} with confirm()`);
+  check(asked.length === 3 && page.evalIn("__confirmed") === 0, `asked ${asked.length} in the page, ${page.evalIn("__confirmed")} with confirm()`);
   check(page.evalIn("runner.state") === "running", `running: ${page.$("programState").textContent}`);
   await liveForAsync(page, ws, 700, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
   check(names(ws).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD,STOP", `sent ${names(ws)}`);
@@ -2924,7 +2931,8 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   check(button.disabled === false, "on with an editor");
   page.fire(button, "click");
   check(!menu.hidden && button.getAttribute("aria-expanded") === "true" && focused() === "Square", `opened on the first item: ${focused()}`);
-  check(menu.scrolledIntoView === 1, "scrolled into view as it opened, clear of the Stop bar on a phone");
+  check(menu.scrolledIntoView === 1 && menu.scrollOptions && menu.scrollOptions.block === "nearest",
+    "scrolled into view as it opened, clear of the Stop bar on a phone, and no further: the button stays in sight");
   check(key(page.doc.activeElement, "ArrowDown").defaultPrevented, "Down moves in the menu, not the page");
   check(focused() === "Strafe box", `Down: ${focused()}`);
   key(page.doc.activeElement, "End");
@@ -2954,8 +2962,21 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   check(!menu.hidden, "a press inside: still open");
   page.fire(page.$("programRun"), "pointerdown");
   check(menu.hidden && page.doc.activeElement !== button, "a press outside closes it");
-  page.fire(button, "click");
-  page.fire(button, "click");
+  // So does a press on the editor, which Blockly keeps from going any
+  // further: the editor is most of the tab.
+  key(button, "ArrowDown");
+  page.$("programWorkspace").addEventListener("pointerdown", (event) => event.stopPropagation());
+  page.fire(page.$("programWorkspace"), "pointerdown");
+  check(menu.hidden, "a press Blockly stops still closes it");
+  // A press on its button sends pointerdown before click, as a browser
+  // does: the button, not the press, closes it.
+  const press = (target) => {
+    page.fire(target, "pointerdown");
+    page.fire(target, "click");
+  };
+  press(button);
+  check(!menu.hidden, "its button opens it");
+  press(button);
   check(menu.hidden, "its button closes it again");
 
   // An item does its action, and closes the menu.
@@ -2981,6 +3002,67 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+test("program: an item that asks leaves the focus on the File button once answered, and a disabled item says why", async () => {
+  // The question's <dialog> gives the focus back to whatever had it when it
+  // opened. The menu must be closed by then, the focus on its button: an
+  // item hidden meanwhile cannot take it, and it fell to the page.
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { stored: { "rover.tab": "tabProgram" } });
+  standInEditor(page);
+  const button = page.$("programMenu");
+  for (const [name, item, how] of [["an example", () => exampleItems(page)[1], "escape"], ["Clear", () => page.$("programClear"), "cancel"], ["Clear", () => page.$("programClear"), "yes"]]) {
+    page.fire(button, "keydown", { key: "ArrowDown" });
+    item().focus();
+    page.fire(item(), "click"); // as Enter on it would
+    await flush();
+    check(page.$("ask").open && page.doc.activeElement === page.$("askNo"), `${name}: asked, Cancel focused`);
+    await answer(page, how);
+    check(page.$("programMenuList").hidden && page.doc.activeElement === button, `${name}, ${how}: the focus on ${page.doc.activeElement.id || page.doc.activeElement.tagName}`);
+  }
+
+  // Mid-run, the items that would change the editor say so; an empty
+  // editor has nothing to clear.
+  const titles = () => [...exampleItems(page), page.$("programImport"), page.$("programClear")].map((b) => `${b.disabled ? "off" : "on"}:${b.title}`);
+  check(titles().join("|") === "on:|on:|on:|on:|on:Open a program saved with Export|on:Remove every block", `idle: ${titles()}`);
+  startProgram(page, "await api.wait(5);");
+  await flush();
+  check(titles().every((t) => t === "off:Stop the program first"), `mid-run: ${titles()}`);
+  check(page.$("programExport").disabled === false, "Export still works");
+  page.evalIn("runner.abort('done')");
+  await liveForAsync(page, ws, 200);
+  page.evalIn("__editor.empty = true; programTab.refresh();");
+  check(titles().at(-1) === "off:Nothing to clear", `empty: ${titles().at(-1)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: Blockly's own questions are asked in the page's dialog, Cancel focused", async () => {
+  // Blockly asks before deleting every block, or a variable still in use,
+  // in a dialog of its own with OK focused: a reflexive Enter deleted the
+  // program. This page has no Blockly, so a stand-in takes its place, with
+  // the one call app.js makes of it and an editor that starts.
+  const page = loadPage();
+  const asked = questionsAsked(page);
+  page.evalIn(`
+    globalThis.__confirm = null;
+    globalThis.Blockly = { dialog: { setConfirm(fn) { __confirm = fn; } } };
+    globalThis.javascript = { javascriptGenerator: {} };
+    BlockEditor = function () {
+      return { empty: true, stacks: 0, pivots: [], onChange() { return () => {}; }, setReadOnly() {}, resize() {} };
+    };
+    startBlockEditor();
+    globalThis.__answers = [];
+    __confirm("Delete all 8 blocks?", (yes) => __answers.push(yes));
+  `);
+  await flush();
+  check(asked.join() === "Delete all 8 blocks?" && page.doc.activeElement === page.$("askNo"), `asked ${asked}, focus ${page.doc.activeElement.id}`);
+  check(page.$("askYes").textContent === "Delete" && page.$("ask").getAttribute("aria-label") === "Delete blocks?", "named for what it does");
+  await answer(page, "escape");
+  page.evalIn(`__confirm("Delete 2 uses of the 'x' variable?", (yes) => __answers.push(yes));`);
+  await flush();
+  await answer(page, "yes");
+  check(page.evalIn("__answers.join()") === "false,true", `answers ${page.evalIn("__answers.join()")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {
   // Nothing may cover Stop. The menu hangs over the editor and the
   // simulator, and opened near the foot of a phone it scrolls up clear of
@@ -2991,8 +3073,9 @@ test("program: the File menu opens over the page but under the Stop bar, and on 
   };
   check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".actions"), `the menu at ${zIndex(".menu")}, the Stop bar at ${zIndex(".actions")}`);
   const margin = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [])
-    .find((r) => r.selector === ".menu" && /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
-  check(margin !== undefined, "a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot");
+    .find((r) => /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
+  const popups = margin ? margin.selector.split(",").map((part) => part.trim()) : [];
+  check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot: ${popups}`);
 });
 
 test("program: an example, Import and Clear ask in the page before they replace a program, never with confirm()", async () => {
@@ -3048,8 +3131,10 @@ test("program: an example, Import and Clear ask in the page before they replace 
   // Clear: asked, with Undo named; Escape keeps every block.
   page.fire(page.$("programClear"), "click");
   await flush();
-  check(asked.length === 5 && /Remove every block\? Undo \(Ctrl\+Z\) brings them back\./.test(asked[4]), `asked ${asked[4]}`);
-  check(page.$("askYes").textContent === "Clear", "the yes says Clear");
+  // Undo is Blockly's, on its own keys: Cmd+Z on a Mac, and only in the
+  // editor.
+  check(asked.length === 5 && asked[4] === "Remove every block? Ctrl+Z (Cmd+Z on a Mac) in the editor brings them back.", `asked ${asked[4]}`);
+  check(page.$("askYes").textContent === "Clear" && page.$("ask").getAttribute("aria-label") === "Clear the program?", "the yes says Clear, under its own name");
   await answer(page, "escape");
   check(editor().cleared === 0, "Escape: nothing cleared");
   page.fire(page.$("programClear"), "click");
