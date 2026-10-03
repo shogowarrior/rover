@@ -261,25 +261,30 @@ test("no echo beyond 400 cm or off a surface met more than 60 degrees off its no
   near(square, (1 - SIM_CHASSIS.lengthM / 2) * 100, 0.06, "square on, from the front of the chassis");
 });
 
+// The pings a target's sweep makes in the next `ms`, a 5 ms step at a time,
+// in order: [bearing, simulated ms].
+async function pingsDuring(target, ms) {
+  const last = new Map(target.state.readings.map(({ bearing, reading }) => [bearing, reading]));
+  const pings = [];
+  for (let t = 0; t < ms; t += 5) {
+    await target.pump(5);
+    for (const { bearing, reading } of target.state.readings) {
+      if (reading !== last.get(bearing)) pings.push([bearing, reading.at]);
+      last.set(bearing, reading);
+    }
+  }
+  return pings;
+}
+
 test("the sweep visits the bearings in turn, at Explorer's pace", async () => {
   const target = new SimTarget({ bearings: BEARINGS, room: "box" });
   // Put down as if it had been sweeping: a whole sweep, left to right, that
   // ended as the preview began, 60 + 87 ms a step.
   assert.deepEqual(target.state.readings.map((r) => [r.bearing, r.reading.at]),
     [[70, -588], [35, -441], [0, -294], [-35, -147], [-70, 0]]);
-  const pings = [];
-  const seen = new Set();
   const frames = [];
   target.onTelemetry((frame) => frames.push(frame));
-  for (let t = 0; t < 1500; t += 5) {
-    await target.pump(5);
-    for (const { bearing, reading } of target.state.readings) {
-      if (!seen.has(`${bearing}@${reading.at}`)) {
-        seen.add(`${bearing}@${reading.at}`);
-        if (reading.at > 0) pings.push([bearing, reading.at]);
-      }
-    }
-  }
+  const pings = await pingsDuring(target, 1500);
   // The next sweep comes back the other way, starting with the bearing just
   // read: 70 ms (the ping interval) to ping it again, then 60 + 87 ms for each
   // 35-degree step. Each ping comes on the first 5 ms step at or after it is
@@ -294,6 +299,27 @@ test("the sweep visits the bearings in turn, at Explorer's pace", async () => {
   // measured each bearing.
   assert.ok(frames.length >= 3);
   for (const frame of frames) for (const b of BEARINGS) assert.equal(typeof frame[b.key], "number", b.key);
+});
+
+// Rover::setMode() calls Explorer::startSweep(): every change of mode turns
+// the sweep round at once, from the end it now faces, and keeps what each
+// bearing last read.
+test("a change of mode starts a fresh sweep, the other way, keeping the readings", async () => {
+  const target = new SimTarget({ bearings: BEARINGS, room: "box" });
+  assert.deepEqual(await pingsDuring(target, 400), [[-70, 70], [-35, 220], [0, 370]], "right to left, 35 next");
+  const kept = target.state.readings.map((r) => r.reading);
+
+  // RESUME_AUTONOMOUS: from the left end, the servo swinging from 35, where
+  // it was headed, to 70 (60 + 87 ms).
+  target.explore();
+  assert.deepEqual(target.state.readings.map((r) => r.reading), kept, "the readings are kept");
+  assert.deepEqual(await pingsDuring(target, 250), [[70, 550]], "turned round, to the left end");
+
+  // A drive command takes it back to manual: round again, from the right
+  // end, the servo swinging the 105 degrees from 35, where it was headed,
+  // to -70 (60 + 262 ms).
+  target.hold(protocol.MOVE_FORWARD, 64);
+  assert.deepEqual(await pingsDuring(target, 330), [[-70, 975]], "turned round, to the right end");
 });
 
 test("a reading is as old as its ping, not the rover's position now", async () => {
@@ -1003,6 +1029,82 @@ test("the view: a tap on the rover leaves a preview running; a drag places it", 
   assert.deepEqual(lost, [SimTarget.LOST.placed]);
   near(sim.state.pose.x, pose.x + 0.3, 1e-9, "dropped 30 cm to the right");
   assert.equal(sim.state.moving, false);
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: the turn handle turns the rover where it stands, and a turned rover is not at its start", async () => {
+  const { page, sim, byClass } = pageWithView();
+  sim.setRoom("box");
+  assert.ok(sim.place({ x: 1, y: 1, heading: 0 }));
+  const lost = [];
+  sim.onLost((reason) => lost.push(reason));
+
+  // The handle, ahead of the nose, dragged round to straight up the screen.
+  // Its grip is the one set ahead of the centre; the body has one too.
+  const handle = byClass("sim-grip").find((n) => Number(n.getAttribute("cx")) > 0);
+  const press = { button: 0, ctrlKey: false, pointerId: 4, target: handle };
+  const rover = byClass("sim-rover")[0];
+  page.fire(rover, "pointerdown", { ...press, clientX: 130, clientY: -100 });
+  page.fire(rover, "pointermove", { ...press, clientX: 100, clientY: -150 });
+  page.fire(rover, "pointerup", { ...press, clientX: 100, clientY: -150 });
+  assert.deepEqual(lost, [SimTarget.LOST.placed], "a turn is a placement");
+  const { pose } = sim.state;
+  near(pose.heading, Math.PI / 2, 1e-9, "facing up");
+  near(Math.hypot(pose.x - 1, pose.y - 1), 0, 1e-9, "where it stood");
+  assert.equal(sim.state.atStart, true, "placed there, so that is its start");
+
+  // Turned on the spot by a preview, it stands where it started, facing
+  // elsewhere: the next preview goes on from here.
+  sim.hold(protocol.ROTATE_CLOCKWISE, 128);
+  await pageFrames(page, 300, sim);
+  sim.release();
+  await pageFrames(page, 600, sim);
+  const turned = sim.state;
+  assert.ok(!turned.moving && Math.abs(RoverSim.wrap(turned.pose.heading - Math.PI / 2)) > 0.1, `turned ${turned.pose.heading}`);
+  near(Math.hypot(turned.pose.x - 1, turned.pose.y - 1), 0, 1e-6, "on the spot");
+  assert.equal(turned.atStart, false, "facing elsewhere is not at the start");
+  sim.reset();
+  assert.equal(sim.state.atStart, true, "reset");
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: a bearing to the rover's left reads, and is drawn, on its left", async () => {
+  const { page, sim, byClass, button } = pageWithView();
+  // Facing along the top wall of the 2 x 2 m box, 30 cm from it: near on
+  // the left, far on the right.
+  sim.setRoom("box");
+  assert.ok(sim.place({ x: 1, y: 1.7, heading: 0 }));
+  await pageFrames(page, 20, sim);
+  const frame = sim.telemetry().data;
+  const readings = BEARINGS.map((b) => frame[b.key]);
+  assert.deepEqual([...readings].sort((a, b) => a - b), readings, `nearest on the left, left to right: ${readings}`);
+  near(frame.distanceLeft, (0.3 / Math.sin((70 * Math.PI) / 180)) * 100, 0.1, "distanceLeft: the top wall, 70 degrees left");
+
+  page.fire(button("1×"), "click"); // anything that draws
+  const rays = all(byClass("sim-rays")[0]).filter((n) => n.tagName === "LINE");
+  const end = (ray) => ["x1", "y1", "x2", "y2"].map((name) => Number(ray.getAttribute(name)));
+  const [, leftFromY, , leftToY] = end(rays[0]);
+  const [, rightFromY, , rightToY] = end(rays[rays.length - 1]);
+  near(leftToY, 200, 0.1, "the left ray ends on the top wall, the rover's left");
+  assert.ok(leftToY > leftFromY && rightToY < rightFromY, `left ray up the map, right ray down: ${end(rays[0])} ${end(rays[rays.length - 1])}`);
+  assert.deepEqual(page.errors, []);
+});
+
+test("the view: paused, Pause is pressed and no playback speed is", () => {
+  const { page, sim, byClass, button } = pageWithView();
+  const pause = byClass("sim-pause")[0];
+  const pressed = () => SimTarget.PLAYBACKS.filter((rate) => button(`${rate}×`).getAttribute("aria-pressed") === "true");
+  page.fire(button("2×"), "click");
+  assert.deepEqual(pressed(), [2]);
+  assert.equal(pause.getAttribute("aria-pressed"), "false");
+  page.fire(pause, "click");
+  assert.equal(sim.paused, true);
+  assert.deepEqual(pressed(), [], "no speed pressed while paused");
+  assert.equal(pause.getAttribute("aria-pressed"), "true");
+  page.fire(button("4×"), "click");
+  assert.equal(sim.paused, false, "a speed plays");
+  assert.deepEqual(pressed(), [4]);
+  assert.equal(pause.getAttribute("aria-pressed"), "false");
   assert.deepEqual(page.errors, []);
 });
 
