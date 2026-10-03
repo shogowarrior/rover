@@ -227,8 +227,9 @@ class ProgramTab {
   }
 
   // Ask in ui.ask, the page's <dialog>. True only for Run on rover: Cancel,
-  // Escape or anything else that closes it is a no. Escape closes it with no value,
-  // which would leave the last answer standing, so that is cleared first.
+  // Escape or anything else that closes it is a no. Escape closes it with
+  // no value, which would leave the last answer standing, so that is
+  // cleared first.
   #ask(question) {
     const { ask, askText } = this.#ui;
     askText.textContent = question;

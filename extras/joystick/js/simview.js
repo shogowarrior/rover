@@ -13,11 +13,12 @@
  *
  * A timer advances the simulation by the real time elapsed times the
  * playback speed (the target steps it in fixed steps of its own), and it
- * draws at the display's rate with requestAnimationFrame. While the page is hidden it does
- * nothing at all, and the preview simply waits; while only the view is out of
- * sight (the Drive tab showing, or the view folded away on a phone to watch
- * the blocks) a preview in progress runs on, undrawn, and an idle one asks
- * for no frames at all until it is shown or a program starts on it.
+ * draws at the display's rate with requestAnimationFrame. While the page is
+ * hidden it does nothing at all, and the preview simply waits; while only
+ * the view is out of sight (the Drive tab showing, or the view folded away
+ * on a phone to watch the blocks) a preview in progress runs on, undrawn,
+ * and an idle one asks for no frames at all until it is shown or a program
+ * starts on it.
  *
  * The rover can be dragged to set where it starts, and turned by the handle
  * ahead of its nose; focused, the arrow keys move it and Q and E turn it.

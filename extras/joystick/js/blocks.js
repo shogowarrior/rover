@@ -508,10 +508,11 @@ class RoverBlocks {
 
   // A deep copy of state, a workspace as Blockly.serialization saves it,
   // checked to be a rover program, with every block id dropped and every
-  // comment's line breaks made plain \n; state itself is left as it was. Throws an Error saying why when it is not one. The ids
-  // are written into the program's code (STATEMENT_PREFIX), so a file must
-  // not choose them; Blockly makes new ones. Every load goes through here: an
-  // import, an example, the autosave.
+  // comment's line breaks made plain \n; state itself is left as it was.
+  // Throws an Error saying why when it is not one. The ids are written into
+  // the program's code (STATEMENT_PREFIX), so a file must not choose them;
+  // Blockly makes new ones. Every load goes through here: an import, an
+  // example, the autosave.
   static sanitize(state) {
     const isObject = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
     const notProgram = (why) => new Error(`This is not a rover program: ${why}`);
