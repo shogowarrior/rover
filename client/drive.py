@@ -75,6 +75,11 @@ ARRIVAL_SLACK_S = 0.5
 DISTANCE_FAR_CM = 999
 NO_ECHO = "no echo"
 
+# The mode telemetry reports while the rover explores: the name
+# writeTelemetry() in src/Protocol.cpp gives MODE_AUTONOMOUS.
+# tools/check_protocol.py checks it.
+MODE_AUTONOMOUS = "AUTONOMOUS"
+
 # Shown in place of the move while telemetry says "motorsReady": false. The
 # warning says what a reset does: whoever reads it may have hands on the
 # wiring, and a power-on or EN reset starts exploring.
@@ -255,7 +260,7 @@ def describe(message) -> str:
         return f"  {message}"
 
     state = _text(data.get("mode"))
-    if state == "AUTONOMOUS":
+    if state == MODE_AUTONOMOUS:
         state = "AUTO"  # in full, it takes columns the distances need
     phase = data.get("phase")
     if phase is not None:

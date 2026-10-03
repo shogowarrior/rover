@@ -126,22 +126,34 @@ MIRRORS = [
 ]
 
 # Two-valued enums src/Protocol.cpp names on the wire with a ternary,
-# `X == Enum::A ? "NAME" : "OTHER"`. The panel's copy of each name must be the
-# one the ternary gives it; the copies are string constants in protocol.js,
-# named as the enumerators are (SCHEME_NORMAL, MODE_AUTONOMOUS):
+# `X == Enum::A ? "NAME" : "OTHER"`. A client's copy of each name must be the
+# one the ternary gives it; the copies are string constants, named as the
+# enumerators are (SCHEME_NORMAL, MODE_AUTONOMOUS):
 #   (what they are, the enum's header, the enum, the function the ternary is
-#    in, the ternary, why a misspelt copy matters)
+#    in, the ternary, the clients that copy them)
+# and each client is
+#   (its file, the enumerators it copies, or None for both, why a misspelt
+#    copy matters there)
 WIRE_NAMES = [
     ("scheme names", KINEMATICS_H, "ControlScheme", "schemeName",
      r'\breturn\s+\w+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
-     "the rover ignores a scheme name it does not know, so the toggle would silently do nothing"),
+     [(PANEL_PROTOCOL_JS, None,
+       "the rover ignores a scheme name it does not know, so the toggle would silently do nothing")]),
     ("mode names", ROVER_H, "Mode", "writeTelemetry",
      r'\bdoc\[\s*"mode"\s*\]\s*=\s*[\w.]+\s*==\s*(?:\w+::)*(\w+)\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"\s*;',
-     "the panel would never see the rover in that mode: its readouts, a program's "
-     "\"rover is exploring\" and the simulator's telemetry all go by it"),
+     [(PANEL_PROTOCOL_JS, None,
+       "the panel would never see the rover in that mode: its readouts, a program's "
+       "\"rover is exploring\" and the simulator's telemetry all go by it"),
+      (DRIVE_PY, ("MODE_AUTONOMOUS",),
+       "drive.py would print an exploring rover's mode in full, not as AUTO, and its rows "
+       "would outgrow 80 columns and wrap")]),
 ]
-WIRE_NAME_CLIENT = PANEL_PROTOCOL_JS
-STRING_CONSTANT = r'^\s*const\s+NAME\s*=\s*"([^"\n]*)"\s*;'
+# How each client language spells a string constant, and how a problem shows
+# the line it looks for.
+STRING_CONSTANT = {
+    ".js": (r'^\s*const\s+NAME\s*=\s*"([^"\n]*)"\s*;', 'const {name} = "{value}";'),
+    ".py": (r'^NAME\s*=\s*"([^"\n]*)"\s*(?:#.*)?$', '{name} = "{value}"'),
+}
 
 # Where each client reads telemetry keys and writes command fields, once its
 # comments are removed (a comment that mentions data.foo is not a read). A
@@ -488,9 +500,10 @@ class Checker:
                     f"{angles[bearing]} ({bearing} in Explorer::angleOf, ExploreParams in {EXPLORER_H})"
                 )
 
-    def wire_names(self, header: str, enum: str, function: str, ternary: str, why: str) -> int:
-        """The panel names each value of a two-valued enum as src/Protocol.cpp
-        puts it on the wire (a row of WIRE_NAMES).
+    def wire_names(self, header: str, enum: str, function: str, ternary: str,
+                   clients: list[tuple[str, tuple[str, ...] | None, str]]) -> int:
+        """Each client names the values of a two-valued enum it copies as
+        src/Protocol.cpp puts them on the wire (a row of WIRE_NAMES).
 
         Reads the enum's two enumerators, then the name the ternary in
         `function` gives each: `X == Enum::A ? "NAME" : "OTHER"`. A third
@@ -499,8 +512,7 @@ class Checker:
         """
         enums = self.text(header)
         protocol = self.text(PROTOCOL_CPP)
-        panel = self.text(WIRE_NAME_CLIENT)
-        if enums is None or protocol is None or panel is None:
+        if enums is None or protocol is None:
             return 0
 
         body = enum_body(enums, enum)
@@ -516,13 +528,22 @@ class Checker:
         which, yes, no = found.groups()
         names = {value: yes if value == which else no for value in values}
 
-        for value, name in names.items():
-            match = re.search(STRING_CONSTANT.replace("NAME", re.escape(value)), panel, re.M)
-            if not match:
-                self.unreadable(WIRE_NAME_CLIENT, f'{value} (const {value} = "{name}";)')
-            elif match.group(1) != name:
-                self.problem(f'{WIRE_NAME_CLIENT}: {value} = "{match.group(1)}", but {function}() in {PROTOCOL_CPP} '
-                             f'names it "{name}" -- {why}')
+        for client, copied, why in clients:
+            text = self.text(client)
+            if text is None:
+                continue
+            pattern, spelling = STRING_CONSTANT[Path(client).suffix]
+            for value in copied or values:
+                if value not in names:
+                    self.unreadable(header, f"{value} in `enum {enum}`, which {client} copies")
+                    continue
+                name = names[value]
+                match = re.search(pattern.replace("NAME", re.escape(value)), text, re.M)
+                if not match:
+                    self.unreadable(client, f"{value} ({spelling.format(name=value, value=name)})")
+                elif match.group(1) != name:
+                    self.problem(f'{client}: {value} = "{match.group(1)}", but {function}() in {PROTOCOL_CPP} '
+                                 f'names it "{name}" -- {why}')
         return len(names)
 
     def scheme_wire(self) -> None:
