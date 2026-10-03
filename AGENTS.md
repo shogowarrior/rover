@@ -173,7 +173,8 @@ a second route to `Motors`.
 command ends within `COMMAND_DURATION_MAX_MS`, whatever it asked for, so a
 client that stops sending stops the rover. Clients keep moving by re-sending
 (the panel and the gamepad every 200 ms, `drive.py` through key auto-repeat).
-Any client's repeat interval must stay well inside the cap.
+Any client's repeat interval must stay well inside the duration it asks for,
+which the cap bounds.
 
 **Loss of control stops the rover.** Each of these ends with the motors
 released:
@@ -321,17 +322,19 @@ against in `src/` and `test/vectors/`, and `test/harness.js` sets the time
 limit an asynchronous test runs under, so one that never ends fails by name.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
-`js/protocol.js`), each asking for 400 ms. `REPEAT_MS` must stay well under
-`COMMAND_DURATION_MAX_MS`. A new direction goes out at once, a new speed in the
-same direction at most every 100 ms (`STICK_SEND_MS`, the gamepad's rule
-below). Letting go, blurring the window or hiding the tab stops what the panel
-is driving and leaves an exploring rover alone. Its Drive and Program tabs
-switch only what is shown, with one exception: leaving the Drive tab lets go
-of a held stick (one STOP, only if it was driving), which hidden could be
-neither steered nor centred. A held rotate button carries on. The scan, the
-readouts and the Stop and Autonomous buttons stay on screen on both tabs. Stop and Autonomous
-stay in the same place; the scan gives the Program tab room, as a strip above
-it on a phone and a narrower column beside it on a wide screen.
+`js/protocol.js`), each asking for 400 ms (`MOVE_DURATION_MS`). `REPEAT_MS`
+must stay well under `MOVE_DURATION_MS`, or a held move stutters
+(`tools/check_protocol.py` holds it to half), and so under the cap. A new
+direction goes out at once, a new speed in the same direction at most every
+100 ms (`STICK_SEND_MS`, the gamepad's rule below). Letting go, blurring the
+window or hiding the tab stops what the panel is driving and leaves an
+exploring rover alone. Its Drive and Program tabs switch only what is shown,
+with one exception: leaving the Drive tab lets go of a held stick (one STOP,
+only if it was driving), which hidden could be neither steered nor centred.
+A held rotate button carries on. The scan, the readouts and the Stop and
+Autonomous buttons stay on screen on both tabs. Stop and Autonomous stay in
+the same place; the scan gives the Program tab room, as a strip above it on
+a phone and a narrower column beside it on a wide screen.
 
 The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
