@@ -16,6 +16,16 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent / "extras" / "joystick"
 
 
 class NoStoreHandler(http.server.SimpleHTTPRequestHandler):
+    # The pane opens the server's root. Without this it showed a bare
+    # directory listing, which looks like the panel with no CSS or JS.
+    def do_GET(self):
+        if self.path in ("/", "/index.html"):
+            self.send_response(302)
+            self.send_header("Location", "/joystick.html")
+            self.end_headers()
+            return
+        super().do_GET()
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
