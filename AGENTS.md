@@ -337,13 +337,13 @@ direction goes out at once, a new speed in the same direction at most every
 100 ms (`STICK_SEND_MS`, the gamepad's rule below). Letting go, blurring the
 window or hiding the tab stops what the panel is driving and leaves an
 exploring rover alone. Its Drive and Program tabs switch only what is shown,
-with one exception: leaving the Drive tab lets go of a held stick (one STOP,
-only if it was driving), which hidden could be neither steered nor centred.
+with one exception: leaving the Drive tab lets go of both sticks (one STOP,
+only if one was driving), which hidden could be neither steered nor centred.
 A held rotate button carries on, except on the simulator target (below).
 The scan, the readouts and the Stop and Autonomous buttons stay on screen on
 both tabs, connected or not, but for one exception: on the simulator target
 the Drive tab's view of the simulator takes the scan's place on a phone, and
-in the rail from 960 to 1179 px wide under 761 px tall.
+in the rail from 960 to 1179 px wide.
 Until the rover's first frame the scan's card says no rover is connected, at
 its full size, and after a link goes it keeps the last scan, dimmed. Stop
 and Autonomous stay in the same place; on a phone the scan gives the Program
@@ -351,21 +351,28 @@ tab room as a strip above it.
 
 The layout is `css/panel.css`'s, on its tokens (type, space, radii) and the
 look's colours.
-On a phone the Drive tab is a dock at the foot of the screen, the stick under
-the left thumb, rotate, speed and Stop under the right, and the scan takes
-what height is left; on a wide screen (960 px by 521 px and up) the open tab
-fills the left, and the rail, one width (`--rail`) beside both tabs, holds
-the address, the note, the scan and the readouts on the right, so the tab
+The Drive tab has two sticks side by side on every layout: the translate
+stick on the left, the pivot stick on the right with its family's row over
+it, and the rotate buttons and the speed under the two. On a phone the
+Drive tab is a dock at the foot of the screen, over Stop, and the scan
+takes what height is left. On a phone on its side the sticks run down the
+two edges, the rotate buttons under the left and the speed under the right,
+and the header, the scan, and Stop and Autonomous sit in the middle column
+between them, in reach of either thumb; the dock stops at the screen's
+height, so a middle column that outgrows a short screen moves neither
+stick. On a wide screen (960 px by 521 px and up) the open tab fills the
+left, and the rail, one width (`--rail`) beside both tabs, holds the
+address, the note, the scan and the readouts on the right, so the tab
 switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
 under the left pane (at most 480 px) and Autonomous under the rail. From
-1180 px wide, or 761 px tall, the Drive tab splits the left pane: the dock
-as wide as its controls, and beside it the simulator's view, or on the rover
-target a card holding its place, so a switch of target moves nothing. On a
-screen 761 px tall or more the dock's controls stack in one column under the
-stick, which leaves the view most of the pane; on a shorter one the dock
-keeps two columns and the stick takes at most two fifths of the pane's
-width. Narrower and shorter the pane has no room for both, so the dock is
-the same on either target and the view takes the scan's cell in the rail.
+1180 px wide the Drive tab splits the left pane: the dock as wide as its
+sticks, each at most a quarter of the pane, and beside it the simulator's
+view, or on the rover target a card holding its place, so a switch of
+target moves nothing. Narrower the pane has no room for both, so the dock
+is the same on either target and the view takes the scan's cell in the
+rail. Each stick is as large as what is above and under it, and the width
+around it, leave; `css/panel.css` sums each layout's budget, from the
+viewport alone (`--stick`).
 In the scan's place, there or on a phone, the view is its row's height,
 under 300 px on most phones, so it shows the wheels and the motion rather
 than a room too small to read (`css/sim.css`), and on a short phone the
@@ -375,24 +382,27 @@ it), with
 the console under it on a screen 861 px tall or more and under the editor on
 a shorter one; the view folds away to a strip on every layout, and starts
 folded unless the target is the simulator. The editor refits as its box
-changes size, which Blockly does only for a window's resize. No ancestor of the
-stick may be positioned, transformed, filtered or contained: joy.js places a
-touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
-for it. Any move of the stick's box on the screen under a held stick lets go
-of it, as a scheme change does: a thumb resting where it was would otherwise
-steer the moved stick another way. A window resize or a turned phone lets go
-at once (a 375 px phone turned on its side moves the stick and keeps its
-size); a move nothing reports, a row above the stick coming or going or the
+changes size, which Blockly does only for a window's resize. No ancestor of
+either stick may be positioned, transformed, filtered or contained: joy.js
+places a touch by its canvas's offsetParent, and `panel.test.js` reads every
+stylesheet for it. Any move of a stick's box on the screen while it is held
+lets go of that stick: a thumb resting where it was would otherwise steer
+the moved stick another way. A window resize or a turned phone lets go at
+once; a move nothing reports, a row above the sticks coming or going or the
 page scrolling, lets go at joy.js's next report, before it can drive. So
-nothing above the stick changes height while it is held: the pivot caveat
-keeps its line on a phone on its side, and the stick's caption stays on one
-line, which keeps a family chosen under a held stick a re-steer. joy.js
-sizes its canvas once, as it is built, so when the box settles at a new size
-the Driver builds the stick again; it paints it once too, so it builds it
-again when the look changes, in the new look's `--live`, `--stick-rim` and
-`--stick-ring` (`js/drive.js`), letting go of a held stick first as a scheme
-change does. A look picked while the Drive tab is hidden is drawn as the
-tab is shown, before a press can land.
+nothing above the sticks changes height while one is held, nor does a
+fault, a link going or a scheme change: the family's row is there under
+either scheme, the translate stick's caption and the pivot stick's line keep
+to one line whatever they say (`FamilySelector` keeps their words short),
+which keeps a family chosen under a held pivot stick a re-steer, and on a
+phone up to 760 px tall the Drive tab on the simulator target leaves the
+address to the Program tab. joy.js sizes its canvas once, as it is built,
+so when the boxes settle at a new size (a turned phone's, say) the Driver
+builds the sticks again; it paints them once too, so it builds them again
+when the look changes, in the new look's `--live`, `--stick-rim` and
+`--stick-ring` (`js/drive.js`), letting go of a held stick first. A look
+picked while the Drive tab is hidden is drawn as the tab is shown, before a
+press can land.
 
 **The look.** The page's colours are `css/looks.css`'s: six looks, three
 themes in Dark and Light, worn as `<html data-look>`. The gear in the
@@ -415,10 +425,16 @@ colours the same in every look.
 stays disabled until a frame names a scheme. On the simulator target it is
 the simulator's instead (below). Its `{"scheme": ...}` message is
 configuration, never a command: it neither takes control nor stops an
-exploring rover. A change, from anyone, lets go of a held stick (one STOP, and
-only if the stick was driving), which drives again only from a fresh press; a
-held rotate button and a running program carry on. The family selector
-(Translate, Pivot, Pivot sideways) appears only under ADVANCED.
+exploring rover. The translate stick translates under either scheme. The
+pivot stick and its family selector over it (Pivot, Pivot sideways) take
+presses only under ADVANCED; under NORMAL both stay on screen, dimmed, and
+the line over the stick says the pivots are for Advanced only, so a scheme
+change moves nothing. A change to NORMAL, from anyone, lets go of a held
+pivot stick (one STOP, only if it was driving), which drives again only from
+a fresh press once ADVANCED is back, as the line over it then asks; the
+translate stick, a held rotate button and a running program carry on. A
+family chosen under a held pivot stick re-steers it at once, as on the
+gamepad.
 
 **The target switch**, Rover | Simulator in the header, is a `TargetSwitch`
 (`js/targetswitch.js`) for the whole page: what the Drive tab's controls
@@ -436,7 +452,7 @@ from it. A switch is a new way to lose control, so it stops a running program an
 go of every held control, with one STOP to the target left behind if this
 panel was driving it. On a phone 600 px tall or less, every phone on its
 side among them, the Drive tab leaves the switch to the Program tab: its row
-left the scan nothing to give way with, and the stick moved. A lost or stale
+left the scan nothing to give way with, and the sticks moved. A lost or stale
 link lets go of nothing driving the simulator. Leaving the Drive tab lets
 go of a held rotate button too: off the Drive tab the view plays at the
 operator's speed. A drive press takes the simulated rover over from a
@@ -507,8 +523,9 @@ go. START sends `RESUME_AUTONOMOUS`.
 (`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),
 so the pad and the panel always drive the same way. NORMAL is the above.
 ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
-quadrant pick a pivot, holding R1 a pivot sideways; the panel has the same
-choice as a selector. SELECT toggles the scheme, the panel's toggle on the rover target
+quadrant pick a pivot, holding R1 a pivot sideways; the panel gives the
+pivots a second stick, with the same choice as a selector over it. SELECT
+toggles the scheme, the panel's toggle on the rover target
 sends the `scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
 rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
 a Bluetooth send from the loop task, and any client can flip the scheme as
@@ -516,8 +533,9 @@ fast as it sends.
 
 Any client may change the scheme, so a change never redirects a held stick:
 the pad stops what it was driving and waits for the stick to come back to
-centre, so a toggle elsewhere can only ever stop it. The panel's stick lets
-go too: see the scheme toggle under
+centre, so a toggle elsewhere can only ever stop it. The panel's pivot
+stick lets go too, and its translate stick drives the same way under either
+scheme: see the scheme toggle under
 [The browser control panel](#the-browser-control-panel).
 
 `kinematics::moveForStick` maps the stick for the pad; the panel carries a

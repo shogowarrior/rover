@@ -11,8 +11,8 @@ controller, and hand control back with one button.
   path is clear, turns toward the more open side when it is not, and halts
   if it finds itself boxed in or its sensor hears nothing for three sweeps in
   a row.
-- **Browser panel.** A joystick, a speed slider and a live fan of the five
-  distances, in a page you open straight from disk; and block programs, which
+- **Browser panel.** Two joysticks (one translates, one pivots), a speed
+  slider and a live fan of the five distances, in a page you open straight from disk; and block programs, which
   a simulator previews before they drive the rover. Six looks (three themes,
   each dark and light) under the gear.
 - **Keyboard client.** Drive and watch telemetry from a terminal.
@@ -57,8 +57,9 @@ default install path, `~/.platformio/penv/bin/pio`.
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. The header's Normal | Advanced toggle is the rover's control
-   scheme (below), or on the simulator the simulator's own. The Drive tab has the joystick; the Program tab has block
-   programs. The header's Rover | Simulator switch puts both tabs on a
+   scheme (below), or on the simulator the simulator's own. The Drive tab
+   has the two joysticks, the left one to translate and the right one to
+   pivot; the Program tab has block programs. The header's Rover | Simulator switch puts both tabs on a
    simulated rover instead, to try the controls or preview a program with no
    rover connected: then they drive only the simulated rover, and Stop stops
    both. The gear picks the page's look. The Program tab loads its block
@@ -82,7 +83,8 @@ stops within half a second.
 
 | | Browser panel | Keyboard (`drive.py`) | PS3 pad |
 |---|---|---|---|
-| Move | Joystick, eight directions; under Advanced, pick Pivot or Pivot sideways and the stick's quadrant picks the pivot | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions; under Advanced, hold L1 (pivot) or R1 (pivot sideways) |
+| Move | Left joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
+| Pivot (Advanced only) | Right joystick: pick Pivot or Pivot sideways over it, and its quadrant picks the pivot; under Normal it is shown, off | -- | Hold L1 (pivot) or R1 (pivot sideways) and push the left stick |
 | Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
 | Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
 | Control scheme | Normal \| Advanced, in the header | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
@@ -98,7 +100,8 @@ if it loses WiFi or an OTA flash starts.
 The rover holds one **control scheme** for every controller. Normal drives
 the eight translations and the two rotations. Advanced adds the eight pivots,
 which nobody has checked on the bench yet ([docs/mecanum.md](docs/mecanum.md)).
-Changing the scheme stops a held stick, which then needs a fresh push.
+Changing the scheme stops a pivot under way (a held pivot stick, on the
+panel; the held stick, on the pad), which then needs a fresh push.
 
 ## Programs and the simulator
 
