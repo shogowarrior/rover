@@ -3218,11 +3218,6 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
     check(/var\(--rail\)/.test(stick), `${where}: the stick budgets the one rail: ${stick}`);
   }
   check(!short.some((r) => /\.actions button/.test(r.selector) && /min-height/.test(r.body)), "short: Stop and Autonomous stay 56 px");
-  // A renamed variable left behind reads as nothing: the stick at 0.
-  const declared = new Set(fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((f) => f.endsWith(".css"))
-    .flatMap((f) => [...stylesheet(f).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1])));
-  const undeclared = [...new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]))].filter((v) => !declared.has(v));
-  check(undeclared.length === 0, `panel.css reads only variables a stylesheet declares: ${undeclared}`);
   // The scan fills its column beside both tabs: no card sized to its drawing.
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
 });

@@ -205,13 +205,13 @@ test("every token the stylesheets and scripts read is declared", () => {
 
   const undeclared = [];
   for (const file of sheets) {
-    for (const [, name] of stylesheet(file).matchAll(/var\((--[\w-]+)/g)) {
+    for (const [, name] of stylesheet(file).matchAll(/var\(\s*(--[\w-]+)/g)) {
       if (!everywhere.has(name) && !own.get(file).has(name) && !editor.has(name) && !scripted.has(name)) undeclared.push(`${name} in css/${file}`);
     }
   }
   for (const file of scriptFiles) {
     const text = fs.readFileSync(path.join(scripts, file), "utf8");
-    for (const [, name] of [...text.matchAll(/var\((--[\w-]+)/g), ...text.matchAll(/["'](--[\w-]+)["']/g)]) {
+    for (const [, name] of [...text.matchAll(/var\(\s*(--[\w-]+)/g), ...text.matchAll(/["'](--[\w-]+)["']/g)]) {
       if (!everywhere.has(name) && !scripted.has(name)) undeclared.push(`${name} in js/${file}`);
     }
   }
