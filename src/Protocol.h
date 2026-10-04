@@ -60,6 +60,26 @@ const char* schemeName(kinematics::ControlScheme scheme);
 // test_longest_command_fits checks the longest a client sends against this.
 constexpr size_t COMMAND_MAX_BYTES = 256;
 
+// A firmware update over the link (FirmwareUpdate.h). A message carrying a
+// string "ota" and no "move" is part of one: never a command, so it takes no
+// control and stops nothing by itself. These are its actions and replies,
+// which OTA_BEGIN and the rest in extras/joystick/js/protocol.js copy, and
+// tools/check_protocol.py checks.
+constexpr char OTA_BEGIN[] = "begin";    // client: {"ota", "size", "md5"}
+constexpr char OTA_AUTH[] = "auth";      // rover: {"ota", "nonce"}; client: {"ota", "cnonce", "response"}
+constexpr char OTA_CANCEL[] = "cancel";  // client: {"ota"}
+constexpr char OTA_NEXT[] = "next";      // rover: {"ota", "offset"}
+constexpr char OTA_DONE[] = "done";      // rover: {"ota"}
+constexpr char OTA_FAILED[] = "failed";  // rover: {"ota", "reason"}
+
+// The most image one binary frame carries. Firefox sends a payload over 1000
+// bytes as two writes, and WebSockets 2.6.1, under WEBSOCKETS_TCP_TIMEOUT=2
+// (platformio.ini), drops a frame whose segments arrive more than 2 ms apart
+// and disconnects its client. 1000 bytes and an 8-byte header fit one
+// 1436-byte segment. OTA_CHUNK_BYTES in extras/joystick/js/protocol.js may
+// not exceed it, and tools/check_protocol.py checks.
+constexpr size_t OTA_CHUNK_MAX_BYTES = 1000;
+
 // RemoteControl's buffer for one telemetry frame, terminator included. A frame
 // that does not fit is not sent at all, so telemetry would freeze in exactly
 // the states that outgrow it. test_longest_telemetry_fits checks the worst
