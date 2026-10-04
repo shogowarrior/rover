@@ -599,7 +599,7 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--warn)", "30 cm amber");
   check(by.distanceFront.wedge.getAttribute("fill") === "var(--live)", "150 cm teal");
   // Drawn whole: looks.test.js audits the wedges at full strength, and the
-  // red one falls under 3:1 on the dark looks at 0.85.
+  // red one falls under 3:1 in Console Dark and Blueprint Dark at 0.85.
   check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo drawn whole");
   const fr = by.distanceFrontRight;
   check(fr.wedge.getAttribute("fill") === "var(--dim)" && fr.wedge.getAttribute("opacity") === "0.4", "no echo faded");
@@ -2112,12 +2112,12 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
 // given none, and program.css paints the lines from the look. (That every
 // token a script reads is declared, and the stop block's copy of --stop,
 // are looks.test.js's.)
-test("Blockly is given no grid colour; program.css paints the grid from the look", () => {
+// Blockly draws the grid's lines once, with its colour as their stroke
+// attribute: a literal would stay in the look the page loaded in.
+test("Blockly draws the grid in the look's --raised-hi, through var()", () => {
   const blocks = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
   const grid = blocks.match(/\bgrid:\s*\{[^}]*\}/);
-  check(grid && !/\bcolour\b/.test(grid[0]), `Blockly is given no grid colour to draw once: ${grid}`);
-  check(cssRules(stylesheet("program.css")).some((r) => /\bpattern\b.*\bline$/.test(r.selector) && /\bstroke:\s*var\(--raised-hi\)/.test(r.body)),
-    "program.css paints the grid's lines from the look");
+  check(grid && /\bcolour:\s*"var\(--raised-hi\)"/.test(grid[0]), `the grid's colour: ${grid}`);
 });
 
 test("schemes: each quadrant of each family sends the move test/vectors/stick_moves.json gives it", () => {
@@ -3586,8 +3586,10 @@ test("look: the stick's knob is painted from the look's tokens", () => {
 // colour, and the panel stopped loading before Stop was wired. The stick
 // takes joy.js's own colours instead, and the rest of the panel loads.
 test("look: with no look to read, the panel still loads, and Stop still stops", () => {
-  const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { --live: ; --stick-rim: ; --stick-ring: ; }` }); // exploring
+  const blank = [...lookBlocks()[0].declared.keys()].filter((name) => name.startsWith("--")).map((name) => `${name}: ;`).join(" ");
+  const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { ${blank} }` }); // exploring
   check(page.errors.length === 0, `errors ${page.errors}`);
+  check(page.headThemeColor === "#0b0d11" && themeColor(page) === "#0b0d11", `the browser's bar as joystick.html gives it: ${page.headThemeColor}, ${themeColor(page)}`);
   const knob = page.joyParameters;
   check(!("internalFillColor" in knob) && !("internalStrokeColor" in knob) && !("externalStrokeColor" in knob), `joy.js's own colours: ${JSON.stringify(knob)}`);
   page.fire(page.$("stop"), "click");
@@ -3606,10 +3608,15 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   check(names(ws, mark).join() === "STOP" && ws.sentAt.at(-1) === page.clock.now(), `the change sent ${names(ws, mark)}`);
   check(page.$("stickLabel").textContent === page.evalIn("FamilySelector.PRESS_AGAIN"), `the caption asks for a fresh press: '${page.$("stickLabel").textContent}'`);
   check(page.canvas !== first && first.parentNode === null && stickCanvases(page).length === 1, "one new canvas in place of the old");
+  check(first.width === 0 && first.height === 0, `the old canvas emptied: ${first.width} x ${first.height}`);
   const knob = page.joyParameters;
   check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#054a42" && knob.externalStrokeColor === "#a3adb8",
     `the knob in field-light: ${JSON.stringify(knob)}`);
   check(page.joy.GetWidth() === 230, `built at the box's size: ${page.joy.GetWidth()}`);
+  // A second change before the fresh press sends nothing, and still asks for one.
+  pickLook(page, "blueprint-dark");
+  check(count(ws) === mark + 1, `the second change sent ${names(ws, mark + 1)}`);
+  check(page.$("stickLabel").textContent === page.evalIn("FamilySelector.PRESS_AGAIN"), `still asks for a fresh press: '${page.$("stickLabel").textContent}'`);
   mark = count(ws);
   thumb.move(30, -60); thumb.move(0, -80);
   page.clock.advance(1000);
@@ -3623,7 +3630,7 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   // A held rotate button drives on: the change lets go of the stick alone.
   press(page, page.$("cw"), 4);
   mark = count(ws);
-  pickLook(page, "blueprint-dark");
+  pickLook(page, "field-light");
   page.clock.advance(1000);
   const after = names(ws, mark);
   check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a change ${after}`);
@@ -3633,9 +3640,11 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
 test("look: a change with nothing held sends nothing, and builds the knob in the new look", () => {
   const { page, ws } = connected(telemetry(), { looks: TEST_LOOKS }); // exploring
   const first = page.canvas;
+  const caption = page.$("stickLabel").textContent;
   pickLook(page, "blueprint-dark");
   page.clock.advance(1000);
   check(count(ws) === 0, `sent ${names(ws)}`);
+  check(page.$("stickLabel").textContent === caption, `the caption asks for nothing: '${page.$("stickLabel").textContent}', was '${caption}'`);
   check(page.canvas !== first && page.joyParameters.internalFillColor === "#3fc9b8", `the knob ${page.joyParameters.internalFillColor}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });

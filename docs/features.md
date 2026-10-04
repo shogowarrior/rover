@@ -941,11 +941,11 @@ word-finder project to see how it does that"
 **Where it came from.** Word Finder's code (`BeeBeRBaB/word-finder` at
 `71d24bf`) and its project's own account of it. There, seven fixed palettes,
 each Light and Dark, are one radio set of 14 tiles on the Theme page of
-Settings, under a gear in the header; its owner chose no palette option and no follow-the-system
-mode. A pick sets attributes on `<html>` that select a block of custom
-properties, a classic script in `<head>` puts the remembered look on before
-the first paint, `theme-color` is read from the tokens again on each change,
-and a script holds every look to WCAG AA.
+Settings, under a gear in the header; its owner chose no custom palette and
+no follow-the-system mode. A pick sets attributes on `<html>` that select a
+block of custom properties, a classic script in `<head>` puts the remembered
+look on before the first paint, `theme-color` is read from the tokens again
+on each change, and a script holds every look to WCAG AA.
 
 **Done.** All of that, in the panel's shape:
 - Three themes, each Dark and Light: Console, the default, the panel's own
@@ -975,9 +975,10 @@ and a script holds every look to WCAG AA.
   fresh press), Blockly's theme and the browser's `theme-color`, which
   `look.js` paints in `<head>`, with the first paint. The stick's knob
   shades toward a rim of its look's own (`--stick-rim`): Console Dark's is
-  joy.js's old one, and a light look's is its dark teal, where the case
-  colour had faded the knob into its well. A look
-  picked on the Program tab is drawn on the stick as the Drive tab is shown.
+  the one `drive.js` gave joy.js before (`#1c1e21`), and a light look's is
+  its dark teal, where the case colour had faded the knob into its well. A
+  look picked on the Program tab is drawn on the stick as the Drive tab is
+  shown.
   Where no look can be read (`css/looks.css` missing), the stick takes
   joy.js's own colours, and Stop still works.
 - `test/looks.test.js` holds every look to the same tokens, fails a colour

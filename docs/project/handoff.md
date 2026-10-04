@@ -121,8 +121,8 @@ Finder's (features.md, F5, says what carried over and what did not):
   faint, both fixed, and the header's pills cut on narrow phones, fixed
   but for "Motors OK" at 480 x 320.
 
-Panel tests and the protocol check pass. Its container could not build the
-firmware either (same registry block); it changed no firmware.
+Panel tests 232/232 and the protocol check pass. Its container could not
+build the firmware either (same registry block); it changed no firmware.
 
 ## Current work
 

@@ -324,10 +324,10 @@ joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`), the stick mapping
 (`mecanum.test.js`) and the looks' tokens and contrast (`looks.test.js`) on
-their own. `test/firmware.js` reads what they check
-against in `src/` and `test/vectors/`, `test/css.js` reads the stylesheets
-as they check them, and `test/harness.js` sets the time limit an
-asynchronous test runs under, so one that never ends fails by name.
+their own. `test/firmware.js` reads what they check against in `src/` and
+`test/vectors/`, `test/css.js` reads the stylesheets as they check them, and
+`test/harness.js` sets the time limit an asynchronous test runs under, so
+one that never ends fails by name.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms (`MOVE_DURATION_MS`). `REPEAT_MS`
@@ -389,13 +389,12 @@ phone under 440 px, and on a phone on its side, the mode pill gives way to
 the gear; Autonomous lights while the rover explores. What takes a colour as
 a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
 it again on a change, through `lookToken()`; everything else follows
-through `var()`. A new colour is a
-token in every look, never a literal: `test/looks.test.js` fails a
-stylesheet that writes one, a token missing from a look, and a pairing in
-its contrast audit that falls short. The audit is a hand-kept list, so a
-rule that paints a token on a new surface adds its pairing. The blocks'
-`PALETTE` (`js/blocks.js`) is the one set of colours the same in every
-look.
+through `var()`. A new colour is a token in every look, never a literal:
+`test/looks.test.js` fails a stylesheet that writes one, a token missing
+from a look, and a pairing in its contrast audit that falls short. The
+audit is a hand-kept list, so a rule that paints a token on a new surface
+adds its pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
+colours the same in every look.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is

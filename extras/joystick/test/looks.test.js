@@ -69,11 +69,12 @@ const AUDIT = [
   ["--case", ["--live", "--sim-back"], MARK, "the arrow on a turning wheel"],
   // joy.js shades the stick's knob from --live at the canvas's centre
   // toward --stick-rim 200 px out (js/drive.js), and the well under it
-  // shades from --raised toward --case (css/panel.css). Where the knob's
-  // edge meets the well at rest, the well is about 0.35 along, and the knob
-  // 0.07 along on the smallest stick and 0.45 on the largest (400 px).
-  ["--live toward --stick-rim by 0.07", ["--raised toward --case by 0.35"], MARK, "the smallest stick's knob, at its edge"],
-  ["--live toward --stick-rim by 0.45", ["--raised toward --case by 0.35"], MARK, "the largest stick's knob, at its edge"],
+  // shades from --raised toward --case (css/panel.css). Either side of the
+  // knob's 2 px edge at rest, the well is about 0.34 along, and the knob
+  // 0.08 along on the smallest stick (112 px) and 0.46 on the largest
+  // (400 px).
+  ["--live toward --stick-rim by 0.08", ["--raised toward --case by 0.34"], MARK, "the smallest stick's knob, at its edge"],
+  ["--live toward --stick-rim by 0.46", ["--raised toward --case by 0.34"], MARK, "the largest stick's knob, at its edge"],
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
@@ -84,13 +85,13 @@ const AUDIT = [
   ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],
   ["--chosen", ["--raised"], QUIET, "the chosen segment in its track; its ink says so too"],
   ["--raised-hi", ["--raised"], QUIET, "a box on the room's floor"],
+  ["--raised-hi", ["--case"], QUIET, "Blockly's grid"],
   ["--sim-grid", ["--raised"], QUIET, "the room's grid"],
   ["--sim-grid-major", ["--raised"], QUIET, "the room's grid, every metre"],
 ];
 
 /* --- reading the looks --------------------------------------------------- */
 
-const readLooks = () => lookBlocks();
 const tokensOf = (look) => [...look.declared.keys()].filter((name) => name.startsWith("--"));
 
 // [r, g, b, alpha], from the forms looks.css writes: #rgb, #rrggbb and
@@ -152,7 +153,7 @@ function contrast(a, b) {
 /* --- the tests ----------------------------------------------------------- */
 
 test("looks.css holds the six looks, in the options' order, the default first and on :root", () => {
-  const looks = readLooks();
+  const looks = lookBlocks();
   assert.deepEqual(looks.map((look) => look.id), LOOKS);
   assert.equal(looks[0].selector, DEFAULT_SELECTOR);
   for (const look of looks.slice(1)) assert.equal(look.selector, `[data-look="${look.id}"]`);
@@ -165,7 +166,7 @@ test("looks.css holds the six looks, in the options' order, the default first an
 });
 
 test("every look declares exactly the default look's tokens", () => {
-  const [first, ...rest] = readLooks();
+  const [first, ...rest] = lookBlocks();
   const expected = tokensOf(first);
   for (const look of rest) {
     const tokens = tokensOf(look);
@@ -183,7 +184,7 @@ test("every look declares exactly the default look's tokens", () => {
 // script sets some on the element it styles (simview.js's --room-aspect);
 // and blocks.js gives the editor --block-<category> from its PALETTE.
 test("every token the stylesheets and scripts read is declared", () => {
-  const everywhere = new Set(readLooks().flatMap(tokensOf));
+  const everywhere = new Set(lookBlocks().flatMap(tokensOf));
   const sheets = fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css"));
   const own = new Map(); // stylesheet -> the tokens it declares in other rules
   for (const file of sheets) {
@@ -238,7 +239,7 @@ test("no stylesheet but looks.css writes a colour of its own", () => {
 // or loses to it, by selector and load order, and the audit below never sees
 // the value painted.
 test("no other stylesheet declares a look's token", () => {
-  const tokens = new Set(tokensOf(readLooks()[0]));
+  const tokens = new Set(tokensOf(lookBlocks()[0]));
   const again = [];
   for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
     for (const { selector, body } of cssRules(stylesheet(file))) {
@@ -250,7 +251,7 @@ test("no other stylesheet declares a look's token", () => {
 
 // Blockly's zoom and trash icons are drawn for a light ground.
 test("a dark look turns light art light, a light look leaves it, and Blockly's icons take it", () => {
-  for (const look of readLooks()) {
+  for (const look of lookBlocks()) {
     const art = look.declared.get("--light-art");
     assert.ok(look.id.endsWith("-light") ? art === "none" : /^invert\(1\)/.test(art), `${look.id}'s --light-art is ${art}`);
   }
@@ -263,7 +264,7 @@ test("a dark look turns light art light, a light look leaves it, and Blockly's i
 // takes the stop block's red as a plain value (blocks.js's PALETTE), so that
 // copy is the same red too.
 test("every look's Stop is #d23c37 with its word in #ffffff, and so is the stop block", () => {
-  for (const look of readLooks()) {
+  for (const look of lookBlocks()) {
     assert.equal(look.declared.get("--stop"), "#d23c37", `${look.id}'s --stop`);
     assert.equal(look.declared.get("--on-stop"), "#ffffff", `${look.id}'s --on-stop`);
   }
@@ -278,20 +279,20 @@ test("joystick.html's theme-color is the default look's --case", () => {
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const meta = html.match(/<meta name="theme-color" content="([^"]+)">/);
   assert.ok(meta, "joystick.html has a theme-color");
-  assert.equal(meta[1].toLowerCase(), readLooks()[0].declared.get("--case").toLowerCase());
+  assert.equal(meta[1].toLowerCase(), lookBlocks()[0].declared.get("--case").toLowerCase());
 });
 
 // The browser draws its own parts (a select's list, scrollbars, the
 // caret) dark or light by color-scheme.
 test("every look's color-scheme is its flavour", () => {
-  for (const look of readLooks()) {
+  for (const look of lookBlocks()) {
     assert.equal(look.declared.get("color-scheme"), look.id.split("-").pop(), `${look.id}'s color-scheme`);
   }
 });
 
 for (const id of LOOKS) {
   test(`${id}: every audited pair holds its contrast`, () => {
-    const look = readLooks().find((each) => each.id === id);
+    const look = lookBlocks().find((each) => each.id === id);
     assert.ok(look, `looks.css has no ${id}`);
     const field = id.startsWith("field-");
     const short = [];

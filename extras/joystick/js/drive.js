@@ -144,7 +144,7 @@ class Driver {
   #speed;
   #stick;
   #joy = null; // the JoyStick drawn in the stick now
-  #lookStale = false; // drawn in a look no longer worn
+  #painted = ""; // the look's colours the stick was last drawn in
   #pressedOn = null; // the stick's box on screen at its last primary press (#stickBox)
   #family = FAMILY_TRANSLATE;
 
@@ -213,7 +213,6 @@ class Driver {
   }
 
   restyle() {
-    this.#lookStale = true;
     return this.#refit();
   }
 
@@ -394,16 +393,7 @@ class Driver {
   // a refit replaced still listens on the document, and would go on
   // reporting the thumb or mouse that pressed it.
   #buildJoy() {
-    // The knob in the page's teal, shading toward the look's rim, inside the
-    // look's ring (--stick-rim and --stick-ring in css/looks.css). A colour
-    // the page cannot read (css/looks.css missing, or styles turned off) is
-    // left to joy.js's own: handed an empty one, its canvas throws, and
-    // app.js stops before Stop is wired.
-    const colours = {};
-    for (const [parameter, name] of [["internalFillColor", "--live"], ["internalStrokeColor", "--stick-rim"], ["externalStrokeColor", "--stick-ring"]]) {
-      const colour = lookToken(name);
-      if (colour) colours[parameter] = colour;
-    }
+    const colours = Driver.#lookColours();
     const joy = new JoyStick(this.#stick.id, {
       ...colours,
       internalLineWidth: 2,
@@ -413,7 +403,21 @@ class Driver {
       if (joy === this.#joy) this.#onStick(status);
     });
     this.#joy = joy;
-    this.#lookStale = false;
+    this.#painted = JSON.stringify(colours);
+  }
+
+  // The knob in the page's teal, shading toward the look's rim, inside the
+  // look's ring (--stick-rim and --stick-ring in css/looks.css), as joy.js
+  // names them. A colour the page cannot read (css/looks.css missing, or
+  // styles turned off) is left to joy.js's own: handed an empty one, its
+  // canvas throws, and app.js stops before Stop is wired.
+  static #lookColours() {
+    const colours = {};
+    for (const [parameter, name] of [["internalFillColor", "--live"], ["internalStrokeColor", "--stick-rim"], ["externalStrokeColor", "--stick-ring"]]) {
+      const colour = lookToken(name);
+      if (colour) colours[parameter] = colour;
+    }
+    return colours;
   }
 
   // A window resized or a phone turned can move the stick's box, resize it
@@ -461,14 +465,21 @@ class Driver {
   #refit() {
     const { clientWidth: width, clientHeight: height } = this.#stick;
     if (width === 0 || height === 0) return false;
-    if (!this.#lookStale && width === this.#joy.GetWidth() && height === this.#joy.GetHeight()) return false;
+    const sameLook = JSON.stringify(Driver.#lookColours()) === this.#painted;
+    if (sameLook && width === this.#joy.GetWidth() && height === this.#joy.GetHeight()) return false;
     const deflected = (this.#held.stick || this.#held.stickArmed) && this.releaseStick();
     // A mouse still pressing the old JoyStick would have it measure its
     // removed canvas, and throw, on every move: hand it the ending it listens
     // for, as touchcancel does. (A touch on a removed canvas reaches the
     // document no more.)
     document.dispatchEvent(new Event("mouseup"));
-    for (const old of [...this.#stick.children]) if (old.tagName === "CANVAS") old.remove();
+    // The old JoyStick still listens on the document, which keeps its
+    // canvas alive: emptied, it holds no pixels.
+    for (const old of [...this.#stick.children]) {
+      if (old.tagName !== "CANVAS") continue;
+      old.width = old.height = 0;
+      old.remove();
+    }
     this.#buildJoy();
     return deflected;
   }

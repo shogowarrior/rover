@@ -239,7 +239,6 @@ class RoverBlocks {
   // Define the blocks and their code, once.
   static install(Blockly, generator) {
     if (RoverBlocks.#installed) return;
-    RoverBlocks.#installed = true;
 
     RoverBlocks.#defineBlocks(Blockly);
     RoverBlocks.#defineCode(generator);
@@ -254,6 +253,9 @@ class RoverBlocks {
     // natural way out of one: Blockly enables it only inside the loop types
     // it knows.
     Blockly.libraryBlocks.loops.loopTypes.add("rover_forever");
+
+    // Only now: an install that threw part way is tried again.
+    RoverBlocks.#installed = true;
   }
 
   // The compiled program runs with the page's globals in reach (`link`,
@@ -576,11 +578,13 @@ class RoverBlocks {
   // blocks in PALETTE. Blockly paints the workspace, the toolbox and the
   // flyout from these plain values, so each look needs a theme of its own;
   // program.css styles the rest with var() (the toolbox pills, menus,
-  // tooltips, the running block's glow, the grid). Every theme has the one
-  // name: Blockly lets a theme be defined again over an earlier one.
+  // tooltips, the running block's glow), and the grid takes var() itself.
+  // Every theme has the one name: Blockly lets a theme be defined again over
+  // an earlier one.
   static theme(Blockly) {
-    // Every name read here is declared in every look, which looks.test.js
-    // checks: no fallback, and so no second copy of a colour to drift.
+    // Every colour read here is declared in every look, and --sans on
+    // panel.css's :root, which looks.test.js checks: no fallback, and so no
+    // second copy of a colour to drift.
     const ink = lookToken("--readout");
     const style = (colour) => ({
       colourPrimary: colour,
@@ -805,9 +809,9 @@ class BlockEditor {
       trashcan: true,
       horizontalLayout: narrow,
       toolboxPosition: "start",
-      // Its lines take their colour from program.css, which follows the look:
-      // Blockly draws them once, and has no way to recolour them.
-      grid: { spacing: 24, length: 2, snap: true },
+      // Blockly draws the grid's lines once, with this as their stroke
+      // attribute: var() follows the look, as the scan's fills do.
+      grid: { spacing: 24, length: 2, colour: "var(--raised-hi)", snap: true },
       zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },
       maxTrashcanContents: 16,
