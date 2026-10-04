@@ -1619,8 +1619,9 @@ test("stick: a rebuild under a held stick sends one STOP, then nothing until a f
 });
 
 // A resize of the window that leaves the stick's box at (left, top), its
-// size unchanged: a phone turned, where 54vw upright is 54vmin on its side.
-// joy.js measures a thumb against where the box is now.
+// size unchanged (one that changes the size builds the stick again, which
+// the rebuild tests hold). joy.js measures a thumb against where the box
+// is now.
 function moveStick(page, left, top, id = "stick") {
   page.$(id).offsetLeft = left;
   page.$(id).offsetTop = top;
@@ -1738,7 +1739,7 @@ test("stick: a resize that changes the stick's size lets go of a held stick at o
 });
 
 // A move of the stick that no resize reports: a row above it coming or going
-// (on a phone on its side, the address put away as the link comes up), or
+// (on a short phone, the address put away as the link comes up), or
 // the page scrolling. joy.js measures the resting thumb against the box where
 // it is now, so its next report would be another motion.
 test("stick: a move no resize reports lets go of a held stick at its next report, then nothing until a fresh press", () => {
@@ -2243,7 +2244,7 @@ test("schemes: the pivot stick and its family are off under NORMAL and on under 
 // rules inside one @media block of panel.css (css.js).
 const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
 // Where the Drive tab's view of the simulator sits beside the dock (F1).
-const DRIVE_BESIDE = "@media (min-width: 1180px) and (min-height: 521px), (min-width: 960px) and (min-height: 761px) {";
+const DRIVE_BESIDE = "@media (min-width: 1180px) and (min-height: 521px) {";
 const panelCss = () => stylesheet("panel.css");
 const mediaRules = (opening) => blockRules(panelCss(), opening);
 
@@ -2361,6 +2362,47 @@ test("motorsReady: the fault beside a phone's stick takes no height of its own, 
   check(contained.every((r) => r.selector.split(",").every(besideStick)), `contained beyond the Drive tab: ${contained.map((r) => r.selector)}`);
   const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
+});
+
+// A phone on its side, held like a gamepad: a stick down each edge, and
+// between them the header, the scan, and Stop and Autonomous at the foot.
+// Layout itself is measured in a browser (568 x 320 to 1000 x 500); this
+// holds the shape, and the rules that keep the sticks where they are.
+test("on its side: a stick down each edge, Stop between them, and nothing in the middle moves a stick", () => {
+  const side = mediaRules(LANDSCAPE_PHONE) || [];
+  const narrow = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
+  const body = (rules, selector) => rules.filter((r) => r.selector.replace(/\s+/g, " ") === selector).map((r) => r.body).join("");
+  const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
+  // The shell's columns and the dock's are the same three, the dock's
+  // middle left empty for the header, the scan and Stop.
+  const columns = "grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);";
+  check(body(side, ".shell").includes(columns) && body(side, ".controls").includes(columns), "the shell's columns are the dock's");
+  check(areas(body(side, ".shell")) === '". head ." ". fault ." ". scan ." ". read ." ". act ."', `the middle column: ${areas(body(side, ".shell"))}`);
+  check(areas(body(side, ".controls")) === '"label . family" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
+  for (const rules of [side, narrow]) {
+    const gap = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
+    const pad = body(rules, ".shell:has(> #driveTab[hidden]) .actions").match(/padding-inline:\s*calc\(var\(--stick\) \+ ([^)]+\))\);/);
+    check(gap && pad && gap[1].trim() === pad[1].trim(), `beside the Program tab, Stop keeps to the middle column, as on the Drive tab: gap ${gap && gap[1]}, padding ${pad && pad[1]}`);
+  }
+  // The dock spans every row, and the middle column outgrows a short screen
+  // with no rover connected (568 x 320): the dock stops at the screen's
+  // height, less the shell's padding above, so the sticks centred in it stay
+  // where they are as lines come and go.
+  const dock = body(side, ".shell > .dock:not([hidden])");
+  check(/grid-row:\s*1 \/ -1;/.test(dock), `the dock spans every row: ${dock}`);
+  const top = (body(side, ".shell").match(/padding-top:\s*calc\(([^;]+)\);/) || [])[1];
+  const cap = (dock.match(/max-height:\s*calc\(100 \* var\(--svh\) - ([^;]+)\);/) || [])[1];
+  check(top === "var(--s-2) + env(safe-area-inset-top, 0px)" && cap === "var(--s-2) - env(safe-area-inset-top, 0px)", `the dock as tall as the screen less the padding above it: padding ${top}, cap ${cap}`);
+  check(/align-content:\s*center;/.test(body(side, ".controls")), "the sticks centred in it");
+  // Each stick takes what the height leaves (150 px and the home bar's
+  // inset) and what the width leaves the middle column (320 px, where the
+  // tabs and the scheme share a row; 240 px under 780 px wide, a row each).
+  const stick = (rules) => (body(rules, ":root").match(/--stick:([^;]*);/) || [])[1] || "";
+  check(stick(side).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 204px"), `on its side: ${stick(side)}`);
+  check(stick(narrow).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 156px"), `under 780 px wide: ${stick(narrow)}`);
+  check(/padding:\s*0 0 env\(safe-area-inset-bottom, 0px\);/.test(dock), `the home bar's inset clear under the sticks: ${dock}`);
+  // Stop and Autonomous share the middle column evenly.
+  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(body(side, ".actions")), `Stop and Autonomous: ${body(side, ".actions")}`);
 });
 
 // Blockly draws the grid's lines once, with its colour as their stroke
@@ -2653,18 +2695,38 @@ test("schemes: a pivot stick a scheme change let go of asks for a fresh press on
 // What is above the stick holds its height as the family and the caption
 // change, so the stick stays where a held thumb pressed it (js/drive.js). A
 // browser measured it; this keeps the two rules that made it so.
-test("schemes: the caption and the pivot caveat change nothing's height above the stick", () => {
+test("schemes: the caption and the pivot stick's line change nothing's height above the sticks", () => {
   const page = loadPage();
   const request = page.evalIn("FamilySelector.PRESS_AGAIN");
   const longest = Math.max(...page.evalIn("FamilySelector.OPTIONS").map((option) => option.label.length));
   check(request.length <= longest, `the press-again request '${request}' is no longer than a family's name (${longest}): it wrapped`);
 
-  // The phone on its side has the family's row above the stick: there the
-  // caveat keeps its line while hidden, as long as the selector shows.
-  const kept = (mediaRules(LANDSCAPE_PHONE) || [])
-    .find((rule) => rule.selector.split(",").some((s) => /\.caveat\[hidden\]$/.test(s.trim())));
-  check(kept && /visibility:\s*hidden/.test(kept.body) && !/display:\s*none/.test(kept.body),
-    `the landscape layout keeps the hidden caveat's line: ${kept && kept.selector} { ${kept && kept.body.trim()} }`);
+  // The pivot stick's line says one of three things, each on one line: none
+  // longer than the caveat, which fits the stick's narrowest column (128 px
+  // on its side at 568 x 320, measured headless: 18 characters, where 22
+  // ran 5 px past it). It never hides, which would take its height too.
+  const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
+  check(said[0].length <= 18 && said.every((text) => text.length > 0 && text.length <= said[0].length), `the line's words: ${said}`);
+  const rules = cssRules(outside(panelCss(), "@media"));
+  for (const selector of [".caveat", "#stickLabel"]) {
+    const rule = rules.find((r) => r.selector === selector);
+    check(rule && /white-space:\s*nowrap/.test(rule.body), `${selector} never wraps: ${rule && rule.body.trim()}`);
+  }
+  const note = page.$("pivotNote");
+  const lines = [];
+  const look = () => lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}`);
+  look();
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  look();
+  const thumb = pivotTouch(page);
+  thumb.start(); thumb.move(0, -40);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" })); // lets go of the pivot stick held
+  look();
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" })); // which waits for a fresh press
+  look();
+  check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => `shown ${page.evalIn(`FamilySelector.${name}`)}`).join(" | "), `the line: ${lines.join(" | ")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change until telemetry resumes", () => {
@@ -3540,9 +3602,9 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
     for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
   }
 
-  // Wide, from 1180 px or 761 px tall: the left pane split, and the view in
-  // its column on either target (the rail test holds the grid). Nothing
-  // there follows the target, so a switch moves nothing.
+  // Wide, from 1180 px: the left pane split, and the view in its column on
+  // either target (the rail test holds the grid). Nothing there follows the
+  // target, so a switch moves nothing.
   const beside = mediaRules(DRIVE_BESIDE) || [];
   const wideView = beside.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
   check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
@@ -3551,23 +3613,24 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector));
   const strays = anywhere.flatMap((r) => r.selector.split(",").map((x) => x.trim())).filter((x) => !/(\.driveViewOff|#driveSimSlot)$/.test(x));
   check(anywhere.length > 0 && strays.length === 0, `outside every @media, the target picks only the card or the view: ${strays}`);
-  // Beside the view under 761 px tall the dock keeps its two columns, the
-  // stick at most two fifths of the pane's width.
-  for (const opening of [
-    "@media (min-width: 1180px) and (min-height: 521px) and (max-height: 760.98px) {",
-    "@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {",
+  // The dock's two sticks side by side, each a share of the left pane and
+  // of the height left over: half of the pane's width less the dock's own,
+  // and beside the view a quarter, which leaves the view about half. The
+  // pixels are the sums css/panel.css lists; the short block's height is
+  // its own.
+  for (const [opening, height, width] of [
+    ["@media (min-width: 960px) and (min-height: 521px) {", 452, "140px) / 2"],
+    ["@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {", 388, "140px) / 2"],
+    [DRIVE_BESIDE, 452, "88px) / 4"],
+    ["@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {", 388, "88px) / 4"],
   ]) {
     const formula = ((((mediaRules(opening) || []).find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(/\(100vw - var\(--rail\) - \d+px\) \* 0\.4/.test(formula), `${opening}: the stick at most 2/5 of the pane: ${formula}`);
+    check(formula.includes(`100 * var(--svh) - ${height}px`) && formula.includes(`(100vw - var(--rail) - ${width}`), `${opening}: the stick from the viewport and the rail: ${formula}`);
   }
-  // There the caveat takes two lines in the short layout's type, and the
-  // family's held-open slot holds both: with one, a pivot moved the stick.
-  const twoLines = ((mediaRules("@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {") || []).find((r) => r.selector === "#familySlot") || {}).body || "";
-  check(/min-height:[^;]*2 \* var\(--lh-body\) \* var\(--t-xs\)/.test(twoLines), `short, beside the view: the slot holds two caveat lines: ${twoLines}`);
-  // Narrower and under 761 px tall, the view takes the fan's place in the
-  // rail on the simulator, as on a phone, and the dock is left alone: the
-  // target there picks only the scan or the view.
-  const rail = mediaRules("@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) and (max-height: 760.98px) {") || [];
+  // Narrower, the view takes the fan's place in the rail on the simulator,
+  // as on a phone, and the dock is left alone: the target there picks only
+  // the scan or the view.
+  const rail = mediaRules("@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {") || [];
   const onTarget = rail.filter((r) => /data-target/.test(r.selector));
   check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `the rail: the target picks the scan or the view: ${onTarget.map((r) => r.selector)}`);
   const inRail = onTarget.find((r) => /\.driveView/.test(r.selector));
@@ -3576,16 +3639,9 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   // The row's height, so that sim.css's steps for a short view apply.
   const railSim = rail.find((r) => r.selector === "#driveSimSlot .sim");
   check(railSim && /container-type:\s*size;/.test(railSim.body), `the rail: the view a size container: ${railSim && railSim.body}`);
-  // Tall enough, the dock's controls in one column, the family's held-open
-  // slot last, so a scheme change moves nothing; the stick budgets the
-  // rail, and 573 px of height for what is above and under it, the sum
-  // css/panel.css lists.
-  const tall = mediaRules("@media (min-width: 960px) and (min-height: 761px) {") || [];
-  const controls = (tall.find((r) => r.selector === ".controls") || {}).body || "";
-  const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).join(" ");
-  check(areas === '"stick" "spin" "speed" "family"', `tall wide: one column, the family last: ${areas}`);
-  const stick = (((tall.find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(/var\(--rail\)/.test(stick) && /100 \* var\(--svh\) - 573px/.test(stick), `tall wide: the stick from the viewport and the rail: ${stick}`);
+  // The dock's grid is the same at every height: no block for tall screens
+  // stacks its controls, which would put the family under the stick.
+  check(!/min-height: 761px/.test(panelCss()), "no tall-screen layout of its own");
   // From 960 to 999 px wide the tabs, the scheme and the target share a row:
   // a step narrower, or Advanced ran under Rover.
   const narrow = mediaRules("@media (min-width: 960px) and (max-width: 999.98px) and (min-height: 521px) {") || [];
@@ -3658,8 +3714,8 @@ test("program: the File menu opens over the page but under the Stop bar, and on 
     .find((r) => /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
   const popups = margin ? margin.selector.split(",").map((part) => part.trim()) : [];
   check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot: ${popups}`);
-  // A phone on its side has Stop at the side: a margin there pushed the File
-  // button off the top of the screen as its menu opened.
+  // A phone on its side is too short for one: a margin there pushed the
+  // File button off the top of the screen as its menu opened.
   const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) {") || []).find((r) => /scroll-margin-bottom/.test(r.body));
   const sidePopups = side ? side.selector.split(",").map((part) => part.trim()) : [];
   check(sidePopups.includes(".menu") && sidePopups.includes(".sim-more") && /scroll-margin-bottom:\s*0\s*;/.test(side.body), `no margin on a phone on its side: ${side && side.body}`);

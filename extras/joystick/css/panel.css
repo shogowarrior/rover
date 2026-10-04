@@ -100,7 +100,10 @@
      whenever --stick changes, letting go of a stick held then. So --stick
      must not depend on anything that settles later (a web font, a
      scrollbar); the viewport is enough. */
-  --stick: clamp(148px, min(54vw, 25 * var(--svh)), 236px);
+  --stick: clamp(112px, min(var(--stick-w), 20 * var(--svh)), 236px);
+  /* Half the shell's width, less a gutter and half the gap between the
+     two sticks: the widest each can be side by side, upright. */
+  --stick-w: calc(min(50vw, var(--shell-max) / 2) - var(--gutter) - var(--s-2));
   --gutter: var(--s-4);
   --cell-y: var(--s-2); /* a readout line's padding above and below */
   --scan-strip: 132px;
@@ -1108,43 +1111,54 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* --- the dock: the Drive tab ------------------------------------------------- */
 
 /* A sheet across the foot of the screen, joined to the Stop bar below it.
-   Stick on the left, for the left thumb; rotate and speed on the right. */
+   Two sticks, as on a gamepad: the translate stick under the left thumb,
+   the pivot stick under the right. */
 .dock {
   margin-inline: calc(-1 * var(--edge-l)) calc(-1 * var(--edge-r));
-  padding: var(--s-4) var(--edge-r) var(--s-4) var(--edge-l);
+  padding: var(--s-3) var(--edge-r) var(--s-3) var(--edge-l);
   background: var(--panel);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--lift-sheet);
 }
 
+/* Over each stick what it drives: the translate stick's caption, and the
+   pivot stick's family with its line. Under them the rotate buttons and
+   the speed. The same areas on every layout; a phone on its side opens a
+   column between them. */
 .controls {
   display: grid;
-  grid-template-columns: var(--stick) minmax(0, 1fr);
-  grid-template-rows: auto 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas:
-    "family family"
-    "stick  spin"
-    "stick  speed";
-  column-gap: var(--s-4);
+    "label family"
+    "move  pivot"
+    "spin  speed";
+  gap: var(--s-2) var(--s-4);
 }
 
-#familySlot { grid-area: family; min-width: 0; }
-
-.stickPad {
-  grid-area: stick;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: var(--s-1);
+/* On the row's foot, just over its stick, where the thumb on it does not
+   hide it. One line: the row's height is the family's, which holds it on
+   every scheme, so nothing above either stick changes height. */
+#stickLabel {
+  grid-area: label;
+  align-self: end;
+  justify-self: center;
+  white-space: nowrap;
 }
 
-/* A scheme change let go of the stick under the operator's thumb: the
+/* A stick let go of under the operator's thumb (a new look, say): the
    caption asks for a fresh press until the next one. */
 #stickLabel[data-tone="warn"] { color: var(--warn); }
 
-/* The stick and its quadrant hints share one grid cell, so the hints lie
+#movePad { grid-area: move; }
+
+#pivotPad { grid-area: pivot; }
+
+/* A stick and its quadrant hints share one grid cell, so the hints lie
    over the stick without anything being positioned. */
-.stickArea { display: grid; }
+.stickArea {
+  display: grid;
+  justify-self: center;
+}
 
 .stickArea > * { grid-area: 1 / 1; }
 
@@ -1154,7 +1168,8 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    size and builds the stick again at it. Anything that moves or resizes
    the box under a held stick lets go of it (js/drive.js), so nothing above
    it may change height while it is held. */
-#stick {
+#stick,
+#pivotStick {
   display: grid;
   place-items: center;
   width: var(--stick);
@@ -1169,6 +1184,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   box-shadow: inset 0 3px 14px var(--shade), inset 0 0 0 1px var(--rule);
 }
 
+/* Off under NORMAL (family.js): drawn faded, its hints with it, and deaf
+   to a touch, which lands on the pad instead, whose title says why. The
+   Driver takes no press from it either. Opacity, which no rule on a
+   stick's ancestors may be a containing block for (panel.test.js). */
+#pivotPad[data-off="yes"] { opacity: 0.45; }
+
+#pivotPad[data-off="yes"] #pivotStick { pointer-events: none; }
+
 /* The stick's own box, a label in each corner, clear of the stick's ring.
    pointer-events: none, so every touch still lands on joy.js's canvas. It
    reaches a little past the stick on each side, into the column gap: on a
@@ -1181,8 +1204,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   grid-template: 1fr 1fr / 1fr 1fr;
   pointer-events: none;
 }
-
-.hints[hidden] { display: none; }
 
 /* A label wraps within its corner ("Right" over "back") rather than run
    into its neighbour, on a short phone's smaller stick. */
@@ -1219,13 +1240,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; text-align: right; }
 
 .family {
+  grid-area: family;
   display: grid;
+  align-content: end;
   gap: var(--s-1);
-  margin-bottom: var(--s-3);
+  min-width: 0;
 }
 
-.family[hidden] { display: none; }
-
+/* The icon over the name, which wraps on a phone's narrow column. */
 .family .segmented button {
   flex-direction: column;
   gap: 0;
@@ -1234,12 +1256,26 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   line-height: var(--lh-tight);
 }
 
-/* Amber, as the motor warning is: a caution, not a stop. */
+/* Off, the family chosen stays lit but faded, as a stale scheme does: it
+   is the one the stick takes up again under ADVANCED. */
+.family[data-off="yes"] .segmented { opacity: 0.55; }
+
+.family[data-off="yes"] .segmented button[aria-pressed="true"] {
+  color: var(--readout);
+  background: var(--chosen);
+  box-shadow: inset 0 0 0 3px var(--raised);
+}
+
+/* The stick's line: the caveat while it is on, amber as the motor warning
+   is (a caution, not a stop), what it waits for while it is off, or a
+   request for a fresh press. One line whatever it says (family.js keeps
+   each short enough), so no change of words moves the stick under it. */
 .caveat {
   display: flex;
   align-items: baseline;
   gap: var(--s-2);
   margin: 0;
+  white-space: nowrap;
   font-size: var(--t-xs);
   line-height: var(--lh-tight);
   color: var(--dim);
@@ -1250,26 +1286,28 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   transform: translateY(-1px);
 }
 
-.caveat[hidden] { display: none; }
+.caveat[data-tone="off"]::before { background: var(--faint); }
+
+.caveat[data-tone="warn"] { color: var(--warn); }
 
 .spin {
   grid-area: spin;
-  align-self: end;
+  align-self: start;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--s-2);
 }
 
+/* The word beside the icon: one row's height under the stick. */
 .spin button {
-  flex-direction: column;
   gap: var(--s-1);
-  min-height: calc(var(--tap-lg) + var(--s-3));
-  padding: var(--s-2) var(--s-1);
+  min-height: calc(var(--tap) + var(--s-1));
+  padding: var(--s-1);
   font-size: var(--t-sm);
   border-radius: var(--r-lg);
 }
 
-.spin .icon { width: var(--icon-lg); height: var(--icon-lg); }
+.spin .icon { width: var(--icon); height: var(--icon); }
 
 /* No transition on press: a control that moves a robot must feel
    instantaneous, not eased. */
@@ -1279,14 +1317,16 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   background: var(--live);
 }
 
+/* One line, no taller than the rotate buttons beside it: the caption and
+   the value, then the slider. */
 .speed {
   grid-area: speed;
   align-self: start;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "caption value" "slider slider";
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas: "caption value slider";
   align-items: center;
-  margin-top: var(--s-2);
+  column-gap: var(--s-2);
 }
 
 #speedLabel { grid-area: caption; }
@@ -1510,14 +1550,14 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 /* A short phone screen (its browser's bars showing), 760 px or less: most
-   phones in a browser. The readouts' lines, the bar and the stick a step
-   smaller, and the address put away while a link is up, so the stick
-   family fits above the Stop bar with the scan still showing. The Program
-   tab shows the address, Disconnect with it; a link going down brings it
-   back here too, when nothing can be driving. */
+   phones in a browser. The readouts' lines, the bar and the sticks a step
+   smaller, and the address put away while a link is up, so both sticks fit
+   above the Stop bar with the scan still showing. The Program tab shows the
+   address, Disconnect with it; a link going down brings it back here too,
+   when nothing can be driving. */
 @media (max-width: 959.98px) and (max-height: 760px) {
   :root {
-    --stick: clamp(140px, min(54vw, 23 * var(--svh)), 236px);
+    --stick: clamp(112px, min(var(--stick-w), 18 * var(--svh)), 236px);
     --cell-y: calc(var(--s-1) + var(--s-0));
   }
 
@@ -1530,10 +1570,6 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     font-size: var(--t-xs);
   }
 
-  .dock { padding-top: var(--s-3); }
-
-  .family { margin-bottom: var(--s-2); }
-
   .actions { padding-block: var(--s-2) calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
 
   .actions button { min-height: calc(var(--tap) + var(--s-3)); }
@@ -1544,7 +1580,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
    under the Stop bar: everything around it a step smaller again. */
 @media (max-width: 959.98px) and (max-height: 600px) {
   :root {
-    --stick: clamp(112px, min(54vw, 21 * var(--svh)), 236px);
+    --stick: clamp(112px, min(var(--stick-w), 18 * var(--svh)), 236px);
     --cell-y: var(--s-1);
   }
 
@@ -1559,8 +1595,16 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
      view in the scan's place says which it is. */
   .shell:has(> #driveTab:not([hidden])) .switches > .target { display: none; }
 
+  /* With the simulator driven, the address waits on the Program tab too,
+     with the target: its row coming as the rover's link went (or before it
+     came) ran the page past the screen, and the rotate buttons under the
+     Stop bar. On the rover nothing drives without a link, so the address
+     comes back here when it goes. */
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .link { display: none; }
+
   /* The scan gives way to the dock down to nothing: with its padding it
-     could not, and the family's slot opening moved the stick (360 x 560). */
+     could not, and a row opening above the dock moved the stick (360 x 560,
+     when the family's row opened under ADVANCED only). */
   .scan { padding-block: var(--s-1) 0; }
 
   /* So does the motor fault in its place on the Drive tab, its text centred
@@ -1572,9 +1616,9 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     padding-block: 0;
   }
 
-  .dock { padding-bottom: var(--s-3); }
+  .dock { padding-block: var(--s-2); }
 
-  .spin button { min-height: calc(var(--tap) + var(--s-2)); }
+  .spin button { min-height: var(--tap); }
 
   .actions button { min-height: calc(var(--tap) + var(--s-2)); }
 }
@@ -1602,11 +1646,15 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
    nothing. The Program tab scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
-    /* As much stick as the screen's height and the dock's width allow. 324
-       px of height is the header, the bar and the dock's own padding and
-       caption; 368 px of width the gutters, the rail's gap and the dock's
-       other column. */
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 324px, 100vw - var(--rail) - 368px), 400px);
+    /* As much stick as the screen's height and half the dock's width
+       allow. Of the height, 452 px is the rest of the left column at
+       960 x 641: the shell's padding and the header with its margin (142),
+       the dock's padding (48), the family's row over the sticks and the
+       rotate buttons' row under them with their gaps (156), Stop's bar
+       with its margin (101), and 5 to spare. Of the width, 140 px is the
+       gutters (48), the rail's gap (20), the dock's padding (48) and the
+       gap between the sticks (24). */
+    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 140px) / 2), 300px);
     --shell-max: 1600px;
     --pill-h: 34px;
   }
@@ -1722,46 +1770,21 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     background: radial-gradient(70% 60% at 30% 55%, var(--live-glow), transparent), var(--panel);
   }
 
-  /* The stick on the left; rotate, speed and the stick family down the
-     right, the family last. The grid takes its content's height, and only
-     the family's row is flexible, so the stick's extra height goes there:
-     the stick sets the grid's height, and the family coming and going with
-     the scheme moves nothing. */
+  /* The two sticks at their size, the grid as tall as its content. */
   .controls {
-    grid-template-columns: var(--stick) minmax(220px, 300px);
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas:
-      "stick spin"
-      "stick speed"
-      "stick family";
-    gap: var(--s-6) var(--s-7);
+    grid-template-columns: repeat(2, var(--stick));
+    gap: var(--s-3) var(--s-6);
   }
 
-  .stickPad { align-content: start; }
-
-  .spin { align-self: start; gap: var(--s-3); }
-
   .spin button {
-    min-height: calc(var(--tap-lg) + 2 * var(--s-5));
+    gap: var(--s-2);
+    min-height: var(--tap-lg);
     font-size: var(--t-md);
   }
 
-  .spin .icon { width: var(--icon-xl); height: var(--icon-xl); }
+  .spin .icon { width: var(--icon-lg); height: var(--icon-lg); }
 
-  .speed { margin-top: 0; }
-
-  #speedOut { font-size: var(--t-2xl); }
-
-  /* Held open, a little more than the selector and two lines of its
-     caveat, so the scheme changing never changes the grid's height, and the
-     stick and the buttons stay where the mouse left them. */
-  #familySlot { min-height: calc(var(--tap) + 3 * var(--s-2) + 2 * var(--lh-body) * var(--t-sm)); }
-
-  .family { margin-bottom: 0; gap: var(--s-2); }
-
-  .family .segmented button { min-height: calc(var(--tap) + var(--s-2)); }
-
-  .caveat { font-size: var(--t-sm); line-height: var(--lh-body); }
+  #speedOut { font-size: var(--t-xl); }
 
   /* A strip across the foot of the page, its cells under the columns
      above: Stop under the left pane, from its left edge and no wider than
@@ -1795,13 +1818,20 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 /* The Drive tab's view of the simulator (F1) sits beside the dock wherever
-   the left pane has room for both: from 1180 px wide, or 761 px tall, where
-   the dock's controls go into one column (below). There the pane is split,
-   the dock as wide as its controls and the view the rest, at its room's
-   shape. The place is kept on the rover target too, with a card saying
-   what it is for, so a switch of target never moves the stick, and the
-   rail's column is the same as beside the Program tab. */
-@media (min-width: 1180px) and (min-height: 521px), (min-width: 960px) and (min-height: 761px) {
+   the left pane has room for both: from 1180 px wide. There the pane is
+   split, the dock as wide as its two sticks and the view the rest, at its
+   room's shape. The place is kept on the rover target too, with a card
+   saying what it is for, so a switch of target never moves a stick, and
+   the rail's column is the same as beside the Program tab. Each stick takes
+   at most a quarter of the pane, which leaves the view about half of it,
+   less the dock's padding and the gap between the sticks. Of the width,
+   88 px is the gutters (48) and the two gaps between the dock, the view
+   and the rail (40). */
+@media (min-width: 1180px) and (min-height: 521px) {
+  :root {
+    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 88px) / 4), 300px);
+  }
+
   .shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden])) {
     grid-template-columns: auto minmax(0, 1fr) var(--rail);
     grid-template-areas:
@@ -1821,12 +1851,12 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   }
 }
 
-/* Narrower and under 761 px tall the pane has no room for it beside the
-   dock's two columns (it was a strip, 112 px wide at 960 x 540): on the
-   simulator the view takes the fan's place in the rail instead, as on a
-   phone, and the readouts stay. The dock is the same on both targets, so a
-   switch never moves the stick. */
-@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) and (max-height: 760.98px) {
+/* Narrower, the pane has no room for the view beside two sticks (at 1024 x
+   768 it would have left each stick 130 px): on the simulator the view
+   takes the fan's place in the rail instead, as on a phone, and the
+   readouts stay. The dock is the same on both targets, so a switch never
+   moves a stick. */
+@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {
   body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
 
   body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
@@ -1854,15 +1884,14 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 /* Side by side on a short screen, 640 px or less (a laptop's browser):
-   the dock's right column -- the rotate buttons, the speed, the stick
-   family's held-open slot -- was taller than the dock and spilled over the
-   tabs, the scheme and the bar, where a click on Advanced rotated the
-   rover. Everything around the stick a step smaller, the caveat to one
-   line, so the column fits whatever the height. --stick's 264 px and 344 px
-   are the side-by-side layout's 324 px and 368 px, for these sizes. */
+   everything around the sticks a step smaller, so they keep what size the
+   height allows. 388 px is the rest of the left column at 960 x 540: the
+   shell's padding and the header with its margin (134), the dock's
+   padding (32), the family's row and the rotate buttons' with their gaps
+   (128), Stop's bar with its margin (89), and 5 to spare. */
 @media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 264px, 100vw - var(--rail) - 344px), 400px);
+    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 140px) / 2), 300px);
   }
 
   .shell { padding-top: var(--s-4); }
@@ -1871,13 +1900,9 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .dock { padding: var(--s-4); }
 
-  .controls { gap: var(--s-3) var(--s-6); }
+  .controls { gap: var(--s-2) var(--s-6); }
 
-  .spin button { min-height: var(--tap-lg); }
-
-  #familySlot { min-height: calc(var(--tap) + 2 * var(--s-2) + var(--lh-body) * var(--t-sm)); }
-
-  .caveat { font-size: var(--t-xs); }
+  .spin button { min-height: var(--tap); }
 
   .actions {
     margin-top: var(--s-3);
@@ -1885,138 +1910,99 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   }
 }
 
-/* Beside the view under 761 px tall, the dock keeps two columns, its right
-   one 220 px, and the stick takes at most two fifths of the pane's width.
-   388 px and 364 px are the side-by-side layout's 368 px and 344 px, and
-   the view's gap. */
-@media (min-width: 1180px) and (min-height: 521px) and (max-height: 760.98px) {
-  :root {
-    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 324px, (100vw - var(--rail) - 388px) * 0.4), 400px);
-  }
-
-  .controls { grid-template-columns: var(--stick) 220px; }
-}
-
-/* There the caveat takes two lines in the short layout's smaller type, so
-   the family's held-open slot holds two: with one, choosing Pivot moved the
-   stick 8 px. */
 @media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 264px, (100vw - var(--rail) - 364px) * 0.4), 400px);
-  }
-
-  #familySlot { min-height: calc(var(--tap) + 3 * var(--s-2) + 2px + 2 * var(--lh-body) * var(--t-xs)); }
-}
-
-/* Side by side on a screen 761 px tall or more, as most laptops and an iPad
-   on its side are: the dock's controls in one column, the stick at its
-   head, so the simulator's view beside the dock takes most of the left
-   pane. With two columns the view had a strip (about 260 px at 1280 x 800,
-   160 at 1024 x 768). The rotate buttons put their word beside their icon,
-   and the family's held-open slot comes last, so the scheme changing moves
-   nothing. 573 px of height is the header, the bar, the dock's padding and
-   the stick's caption, and the rotate buttons, the speed and the family's
-   slot under the stick; 420 px of width leaves the view 300 px at least. */
-@media (min-width: 960px) and (min-height: 761px) {
-  :root {
-    --stick: clamp(160px, min(100 * var(--svh) - 573px, 100vw - var(--rail) - 420px), 360px);
-  }
-
-  .dock { padding: var(--s-4); }
-
-  .controls {
-    grid-template-columns: max(var(--stick), 248px);
-    grid-template-rows: auto auto auto auto;
-    grid-template-areas: "stick" "spin" "speed" "family";
-    gap: var(--s-3);
-  }
-
-  .spin button {
-    flex-direction: row;
-    gap: var(--s-2);
-    min-height: var(--tap-lg);
+    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 88px) / 4), 300px);
   }
 }
 
-/* A phone on its side, held like a gamepad: the stick down the left edge,
-   the rotate buttons and Stop down the right, the header and the scan
-   between them. The dock spans the screen behind them, on the same three
-   columns, with its middle left empty for them. --stick is 54vmin, what
-   the portrait layout's never exceeds, so a stick sized there still fits. */
+/* A phone on its side, held like a gamepad: the translate stick down the
+   left edge with the rotate buttons under it, the pivot stick down the
+   right with the speed under it, and between them the header, the scan,
+   and Stop and Autonomous at the foot, in reach of either thumb. The dock
+   spans the screen behind them, on the same three columns, with its
+   middle left empty for them. Of the height, 150 px is the family's row
+   over the pivot stick (68 at most), the row of the rotate buttons and the
+   speed under the sticks (44), the gaps between the rows (16), the shell's
+   padding above (8) and 14 to spare; the home bar's inset is kept clear
+   below. Of the width, 204 px is half of the gutters (48), the two column
+   gaps (40) and the 320 px the middle column needs for the tabs and the
+   scheme side by side: at 780 x 480 they had 224 px, and "Program" and
+   "Advanced" ran past their segments. */
 @media (orientation: landscape) and (max-height: 520px) {
-  /* Stop is a column at the side, not a bar across the foot: a margin for
-     one would push a popup's own button off the top of so short a screen. */
+  /* Stop's row is at the foot, but a margin for it would push a popup's
+     own button off the top of so short a screen. */
   .menu,
   .sim-more { scroll-margin-bottom: 0; }
 
   :root {
-    --stick: clamp(140px, 54vmin, 240px);
-    --side: clamp(150px, 22vw, 260px);
+    --stick: clamp(112px, min(100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px), 50vw - 204px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
     --shell-max: none;
   }
 
   .shell {
-    grid-template-columns: var(--stick) minmax(0, 1fr) var(--side);
+    grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);
     column-gap: var(--s-5);
-    padding-bottom: var(--s-3);
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    padding-top: calc(var(--s-2) + env(safe-area-inset-top, 0px));
+    padding-bottom: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       ". head  ."
       ". fault ."
-      ". scan  act"
-      ". read  act";
+      ". scan  ."
+      ". read  ."
+      ". act   .";
   }
 
+  /* The Program tab takes the three columns, and the bar its foot, with
+     Stop and Autonomous where the Drive tab has them (.actions, below). */
   .shell:has(> #programTab:not([hidden])) {
-    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-rows: auto auto auto auto 1fr auto;
     grid-template-areas:
-      "head  head  ."
-      "fault fault ."
-      "scan  scan  ."
-      "read  read  ."
-      "main  main  act";
+      "head  head  head"
+      "fault fault fault"
+      "scan  scan  scan"
+      "read  read  read"
+      "main  main  main"
+      "act   act   act";
   }
 
   /* Not while hidden: this display would outrank the hidden attribute's,
-     and the rotate buttons stayed live beside the Program tab. */
+     and the rotate buttons stayed live beside the Program tab. At most the
+     screen's height, less the shell's padding above: the middle column
+     outgrows the screen at 568 x 320 while no rover is connected, and the
+     sticks, centred in a dock as tall as the page, moved as its lines came
+     and went (5 px for a motor fault, 29 for a lost link). */
   .shell > .dock:not([hidden]) {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
     display: grid;
+    max-height: calc(100 * var(--svh) - var(--s-2) - env(safe-area-inset-top, 0px));
     margin: 0;
-    padding: 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
     background: none;
     border-radius: 0;
     box-shadow: none;
   }
 
+  /* Both sticks centred in the screen's height, each in its own column. */
   .controls {
-    grid-template-columns: var(--stick) minmax(0, 1fr) var(--side);
-    grid-template-rows: auto auto 1fr;
+    grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);
     grid-template-areas:
-      "family . spin"
-      "stick  . speed"
-      "stick  . .";
+      "label . family"
+      "move  . pivot"
+      "spin  . speed";
+    align-content: center;
     column-gap: var(--s-5);
   }
 
   /* Over the dock, which comes later in the page and would paint over it. */
   .bar { z-index: 1; }
 
-  /* Beside the stick rather than above it, the middle column cannot move
-     it: the note and the phase need not hold their lines here. */
+  /* Beside the sticks rather than above them, the middle column cannot
+     move them: the note and the phase need not hold their lines here. */
   #note:empty,
   #phaseCell[hidden] { display: none; }
-
-  /* The family's row is above the stick, though: while the selector is
-     offered, the caveat keeps its line under Translate too, as the phase
-     keeps its line in the portrait layouts. Without it, choosing a pivot
-     under a held stick moved the stick 12 px under the thumb, and the next
-     report turned a backward pivot into a forward one (js/drive.js). */
-  .family:not([hidden]) .caveat[hidden] {
-    display: flex;
-    visibility: hidden;
-  }
 
   /* The motor fault takes the scan's place (the rule for every phone,
      above), and beside the stick that place is only what the head and the
@@ -2039,49 +2025,75 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   /* The header's column also holds the gear, and the mode pill beside the
      other two wrapped the status to a second row: it gives way to the
-     Autonomous button at the side, lit while the rover explores. */
+     Autonomous button, lit while the rover explores. */
   .modePill { display: none; }
 
   .status { flex-wrap: wrap; }
 
-  .stickPad { align-self: center; }
-
-  .spin { align-self: start; }
-
+  /* The foot of the middle column, on both tabs, in the page's colour: with
+     no rover connected the column outgrows a short screen (568 x 320,
+     740 x 360), and the readouts scroll under it. Beside the Program tab
+     the bar spans the page, so the program scrolls under its panel, and
+     its buttons keep to the middle column. */
   .actions {
     align-self: end;
-    grid-template-columns: minmax(0, 1fr);
-    bottom: var(--s-3);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0;
-    padding: 0;
-    background: none;
+    padding: var(--s-2) 0 calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
+    background: var(--case);
   }
 
-  /* In its column beside the Program tab, not a sheet across the foot. Kept
-     apart from the rule above: a browser without :has() drops a whole
-     selector list that names it. */
+  /* The middle column is 256 px at 568 x 320: at two fifths of it the
+     word "Autonomous" ran past its button, so the two share it evenly,
+     closer to their edges. Both are a plain tap's height, which leaves the
+     scan a strip at 667 x 375 with no rover connected. */
+  .actions button {
+    min-height: var(--tap);
+    padding-inline: var(--s-2);
+  }
+
+  /* The tabs and the scheme closer to their segments' edges too, which
+     leaves "Advanced" a few pixels to spare in a quarter of the 320 px. */
+  .tabs [role="tab"],
+  .segmented button { padding-inline: var(--s-2); }
+
+  /* The speed's caption over its value, which leaves the slider 82 px of
+     the stick's column at 568 x 320 rather than 51. */
+  .speed {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "caption slider" "value slider";
+  }
+
   .shell:has(> #driveTab[hidden]) .actions {
     margin: 0;
-    background: none;
+    padding-inline: calc(var(--stick) + var(--s-5));
+    background: var(--panel);
     border-radius: 0;
     box-shadow: none;
   }
-
-  #auto { min-height: var(--tap); }
 }
 
 /* On its side and narrower than about 780 px (640 x 360, 732 x 412), the
    middle column is too narrow for the tabs and the scheme side by side:
    their labels ran into each other's segments, and a tap on "Normal" could
    land on Advanced. They take a row each, and the columns close up (the
-   shell's and the dock's together, as they must). The status keeps to one
+   shell's, the dock's and Stop's bar beside the Program tab together, as
+   they must, or Stop moved as the tab changed). The status keeps to one
    row beside the gear: it takes the mark's place, and its pills close up
    and drop their lamps, whose colour their tint already shows (with them,
    "No link" was cut short at 480 x 320). The readouts take the type size a
    portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
+  /* 156 px: half of the gutters (48), the gaps (24) and the 240 px the
+     middle column keeps for the tabs and the scheme, a row each. */
+  :root {
+    --stick: clamp(112px, min(100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px), 50vw - 156px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
+  }
+
   .shell,
   .controls { column-gap: var(--s-3); }
+
+  .shell:has(> #driveTab[hidden]) .actions { padding-inline: calc(var(--stick) + var(--s-3)); }
 
   .switches { grid-template-columns: minmax(0, 1fr); }
 
@@ -2094,6 +2106,10 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .pill > .lamp { display: none; }
 
   .cell output { font-size: var(--t-sm); }
+
+  /* Autonomous drops its icon, as under 360 px upright: in half of the
+     240 px the word alone fits, and with the icon it ran past its edges. */
+  #auto .icon { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

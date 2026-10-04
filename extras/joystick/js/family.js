@@ -71,11 +71,14 @@ class FamilySelector {
   static PRESS_AGAIN = "Press again";
 
   // The pivot stick's line: the caveat while it is on, and what it waits
-  // for while it is off. Two lines at most on the narrowest stick, which
-  // the page holds open (css/panel.css), so that no change of words moves
-  // the stick under it.
-  static CAVEAT = "Not bench-verified yet: go slowly.";
-  static OFF = "Off until the scheme is Advanced.";
+  // for while it is off. One line in the stick's column wherever it is
+  // narrowest (128 px, on its side at 568 x 320), as is PRESS_AGAIN, so no
+  // change of words moves the stick under it: "Unverified: go slowly." ran
+  // 5 px past it. Off, the pad's title says why; on, it has none, to hang
+  // over a stick in use.
+  static CAVEAT = "Untested: go slow.";
+  static OFF = "Advanced only.";
+  static OFF_TITLE = "Advanced only: the NORMAL scheme keeps the pivots off the sticks and the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
   // is forward. Each is labelled with the move its quadrant sends.
@@ -152,7 +155,7 @@ class FamilySelector {
     for (const button of this.#buttons.values()) button.disabled = !offered;
     group.dataset.off = offered ? "no" : "yes";
     pad.dataset.off = offered ? "no" : "yes";
-    pad.title = offered ? "" : "Advanced only: the NORMAL scheme keeps the pivots off the sticks and the pad.";
+    pad.title = offered ? "" : FamilySelector.OFF_TITLE;
 
     FamilySelector.#say(label, this.#awaiting.has("move") ? FamilySelector.PRESS_AGAIN : FamilySelector.TRANSLATE, this.#awaiting.has("move") ? "warn" : null);
     // A request for a press is for a stick that can take one.
