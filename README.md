@@ -13,7 +13,8 @@ controller, and hand control back with one button.
   a row.
 - **Browser panel.** A joystick, a speed slider and a live fan of the five
   distances, in a page you open straight from disk; and block programs, which
-  a simulator previews before they drive the rover.
+  a simulator previews before they drive the rover. Six looks (three themes,
+  each dark and light) under the gear.
 - **Keyboard client.** Drive and watch telemetry from a terminal.
 - **PS3 controller** over Bluetooth, optional.
 - **Fails safe.** Every command expires within 1.5 s, losing the driver or
@@ -57,9 +58,10 @@ default install path, `~/.platformio/penv/bin/pio`.
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. The header's Normal | Advanced toggle is the rover's control
    scheme (below). The Drive tab has the joystick; the Program tab has block
-   programs and the simulator. The Program tab loads its block editor from
-   cdn.jsdelivr.net, so it needs the internet the first time (the browser may
-   keep a copy); driving never does. Or, from a terminal:
+   programs and the simulator. The gear picks the page's look. The Program
+   tab loads its block editor from cdn.jsdelivr.net, so it needs the internet
+   the first time (the browser may keep a copy); driving never does. Or, from
+   a terminal:
    ```
    pip install websockets
    python3 client/drive.py                   # or --host rover.local

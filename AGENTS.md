@@ -322,11 +322,12 @@ its family names and the move names telemetry reports (`js/mecanum.js`), and
 the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
-(`program.test.js`), the simulator (`sim.test.js`) and the stick mapping
-(`mecanum.test.js`) on their own. `test/firmware.js` reads what they check
-against in `src/` and `test/vectors/`, `test/css.js` reads the stylesheets
-as they check them, and `test/harness.js` sets the time limit an
-asynchronous test runs under, so one that never ends fails by name.
+(`program.test.js`), the simulator (`sim.test.js`), the stick mapping
+(`mecanum.test.js`) and the looks' tokens and contrast (`looks.test.js`) on
+their own. `test/firmware.js` reads what they check against in `src/` and
+`test/vectors/`, `test/css.js` reads the stylesheets as they check them, and
+`test/harness.js` sets the time limit an asynchronous test runs under, so
+one that never ends fails by name.
 
 The panel holds a move by re-sending it every 200 ms (`REPEAT_MS` in
 `js/protocol.js`), each asking for 400 ms (`MOVE_DURATION_MS`). `REPEAT_MS`
@@ -345,7 +346,8 @@ size, and after a link goes it keeps the last scan, dimmed. Stop and
 Autonomous stay in the same place; on a phone the scan gives the Program tab
 room as a strip above it.
 
-The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
+The layout is `css/panel.css`'s, on its tokens (type, space, radii) and the
+look's colours.
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
 the left thumb, rotate, speed and Stop under the right, and the scan takes
 what height is left; on a wide screen (960 px by 521 px and up) the open tab
@@ -371,8 +373,28 @@ nothing above the stick changes height while it is held: the pivot caveat
 keeps its line on a phone on its side, and the stick's caption stays on one
 line, which keeps a family chosen under a held stick a re-steer. joy.js
 sizes its canvas once, as it is built, so when the box settles at a new size
-the Driver builds the stick again. The stick's teal is joy.js's own
-(`js/drive.js`), and the theme's accent follows it.
+the Driver builds the stick again; it paints it once too, so it builds it
+again when the look changes, in the new look's `--live`, `--stick-rim` and
+`--stick-ring` (`js/drive.js`), letting go of a held stick first as a scheme
+change does. A look picked while the Drive tab is hidden is drawn as the
+tab is shown, before a press can land.
+
+**The look.** The page's colours are `css/looks.css`'s: six looks, three
+themes in Dark and Light, worn as `<html data-look>`. The gear in the
+header opens Options, where `js/look.js` offers them and remembers the
+choice; it loads in `<head>`, so the page is drawn in that look from the
+first paint, and paints the browser's bar (`theme-color`) then too. The
+popover is not modal: Stop stays one press while it is open. On an upright
+phone under 440 px, and on a phone on its side, the mode pill gives way to
+the gear; Autonomous lights while the rover explores. What takes a colour as
+a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
+it again on a change, through `lookToken()`; everything else follows
+through `var()`. A new colour is a token in every look, never a literal:
+`test/looks.test.js` fails a stylesheet that writes one, a token missing
+from a look, and a pairing in its contrast audit that falls short. The
+audit is a hand-kept list, so a rule that paints a token on a new surface
+adds its pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
+colours the same in every look.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
@@ -408,10 +430,10 @@ desktop app's browser pane dismisses native dialogs unseen. Blockly's own
 questions (deleting every block, or a variable in use) go through it too
 (`app.js`), with Cancel focused; only its prompts for a variable's name (new
 or renamed), which need a text field, and its note that a name is taken stay
-Blockly's own in-page dialogs. The File menu
-and the simulator's settings share `Popover` (`js/popover.js`), and the
-Rover | Simulator switch is a `TargetSwitch` (`js/targetswitch.js`), whose
-change stops a run.
+Blockly's own in-page dialogs. The File menu, the simulator's settings
+and Options share `Popover` (`js/popover.js`), and the Rover | Simulator
+switch is a `TargetSwitch` (`js/targetswitch.js`), whose change stops a
+run.
 
 **The simulator** holds no Link and no Driver: a preview sends nothing, and
 its telemetry never reaches the scan fan or the readouts. It follows the

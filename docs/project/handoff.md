@@ -100,10 +100,34 @@ kinds of regression through. Panel tests 201/201 and the protocol check
 pass. Still open from F3b: the tab and scheme labels overflow at 480 x
 320.
 
+A second thread, beside the first, did F5 from the owner's second message
+that evening: themes and the Options gear, after Word
+Finder's (features.md, F5, says what carried over and what did not):
+
+- six looks, three themes (Console, the panel's own colours and the
+  default; Field, the most contrast; Blueprint) each Dark and Light, every
+  colour a token in `css/looks.css`, worn as `<html data-look>`;
+- `LookPicker` (`js/look.js`, loaded in `<head>` so the first paint is in
+  the remembered look): the gear in the header opens Options, a non-modal
+  `Popover` with a tile per look, so Stop stays one press;
+- the stick, Blockly's theme and the browser bar repaint on a change (the
+  bar from `<head>`, with the first paint), the stick's knob shading toward
+  a rim of its look's own;
+- `test/looks.test.js`: every look has every token, no other stylesheet
+  writes a colour, and every pairing of ink and surface in its audit (a
+  hand-kept list) meets its contrast. It found the red echo wedge under
+  3:1, now drawn whole. A headless check of every look against `main`
+  found the light looks' knob faded into its well and Blockly's key hints
+  faint, both fixed, and the header's pills cut on narrow phones, fixed
+  but on a few phones on their side (features.md, F5).
+
+Panel tests 232/232 and the protocol check pass. Its container could not
+build the firmware either (same registry block); it changed no firmware.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
-quotes them verbatim and maps each to an item (F1-F4) with today's code, the
+quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
 when it is done. Do them in this order; 1 to 4 are done, so the next thread
 starts at 5:
@@ -144,6 +168,15 @@ and the next thread's task names that branch.
 
 ## Open, not started
 
+- F5's checks for the owner, which need a real screen: features.md, F5,
+  lists them, and what it left as it was (Blockly's focus colours, its
+  faint zoom and trash icons).
+- The gear sits at the end of the header's first group, which on a wide
+  screen is mid-header. A later header change (F1 moves the Rover |
+  Simulator switch into the header) can give it the header's right end.
+  Moving it means updating the panel test that pins it to the masthead's
+  end, and keeping it within `--tap-lg` of the top, which the popover's
+  height cap assumes.
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
   traceback, and no committed stand-in rover.

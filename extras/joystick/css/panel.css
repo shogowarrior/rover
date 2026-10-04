@@ -1,6 +1,7 @@
-/* The control panel's styles. joystick.html links this file first, and
-   program.css and sim.css build on its tokens; the scripts in js/ set the
-   classes, attributes and data-* values it keys on.
+/* The control panel's styles. joystick.html links this after
+   css/looks.css, whose colours it paints in, and program.css and sim.css
+   build on both; the scripts in js/ set the classes, attributes and data-*
+   values it keys on.
 
    Thumb-first. On a phone the Drive tab is a dock at the foot of the screen,
    the stick under the left thumb, the rotate buttons and Stop under the
@@ -20,46 +21,9 @@
 
 /* --- tokens -------------------------------------------------------------- */
 
-/* Three signal hues, each with one job. Teal is the accent: the operator's
-   own controls and the rover doing well (linked, a clear way, exploring).
-   It is the teal joy.js paints the stick's knob in (js/drive.js), so the
-   page takes its colour from the stick rather than repainting a canvas CSS
-   cannot reach. Amber is caution: something closing in, a fault. Red is
-   Stop and danger and nothing else -- anywhere else it would stop meaning
-   anything. Every text colour holds 4.5:1 on the surfaces it is used on. */
+/* The colours are the look's: css/looks.css. These are the rest: elevation
+   built on the look's shade, type, space, sizes and layout. */
 :root {
-  color-scheme: dark;
-
-  /* surfaces, darkest first */
-  --case: #0b0d11;
-  --panel: #151920;
-  --raised: #1f242c;
-  --raised-hi: #2b323c;
-  --chosen: #39414d; /* the chosen segment, raised out of its track */
-  --rule: #2a3039;
-  --shade: rgb(0 0 0 / 0.5);
-
-  /* ink */
-  --readout: #f1f3f6;
-  --dim: #9aa4b1;
-  --faint: #4a525d; /* marks, never text */
-
-  /* signals */
-  --live: #4db8a8;
-  --on-live: #062420;
-  --live-ink: #86d9cc; /* teal text on a teal tint */
-  --live-soft: rgb(77 184 168 / 0.16);
-  --live-glow: rgb(77 184 168 / 0.08);
-  --warn: #ffb547;
-  --warn-soft: rgb(255 181 71 / 0.12);
-  --stop: #d23c37;
-  --stop-hi: #bb302b;
-  --on-fill: #ffffff; /* text on a saturated fill: Stop, a block's menu */
-  --on-stop: var(--on-fill);
-  --stop-ink: #ff7a6e; /* red text on a dark surface */
-  --stop-soft: rgb(210 60 55 / 0.16);
-  --stop-glow: rgb(210 60 55 / 0.32);
-
   /* elevation */
   --lift-sheet: 0 -12px 32px var(--shade);
   --lift-pop: 0 10px 28px var(--shade);
@@ -177,9 +141,11 @@ body {
   color: var(--dim);
 }
 
-/* Read aloud, not shown: the scheme's name and the mode pill's. */
+/* Read aloud, not shown: the scheme's name, the mode pill's, and a look
+   tile's radio, whose state its preview shows (below). */
 .srOnly,
-.scheme > .label {
+.scheme > .label,
+.lookTile input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -376,6 +342,197 @@ input[type="range"]::-moz-range-thumb {
   background: var(--rule);
 }
 
+/* --- options (look.js) ------------------------------------------------------- */
+
+/* The gear ends the masthead's row, the status against it on a phone (on a
+   wide screen it holds the row's far end alone: see that layout). Drawn a
+   status pill's size, so the row keeps its height; its ::before is the full
+   touch target round it, over the row's gaps and the gutter. */
+.masthead > .status { margin-left: auto; }
+
+.optionsButton {
+  position: relative;
+  width: var(--pill-h);
+  min-height: var(--pill-h);
+  padding: 0;
+  color: var(--dim);
+  border-radius: var(--r-full);
+}
+
+.optionsButton::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--pill-h) - var(--tap)) / 2);
+}
+
+.optionsButton[aria-expanded="true"] {
+  color: var(--readout);
+  background: var(--raised-hi);
+}
+
+/* The popover wears the File menu's .menu, above: under its button, right
+   edges together, over the page and under the Stop bar. As wide as a phone
+   on its side leaves left of the gear, and never taller than the screen
+   below the gear, which sits within --tap-lg of the top in every layout: it
+   scrolls inside rather than scroll the page, which would move the stick. */
+.options {
+  gap: var(--s-1);
+  width: min(18rem, calc(100vw - 2 * var(--gutter)));
+  max-height: calc(100 * var(--svh) - var(--tap-lg));
+  overflow-y: auto;
+  padding: var(--s-2) var(--s-3) var(--s-3);
+}
+
+.options .menuLabel {
+  margin: 0;
+  padding: 0;
+}
+
+/* A row per theme: its name, then its Dark and Light tiles. Close-set, so
+   that the three fit a phone on its side unscrolled. */
+.looks {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.lookTheme {
+  display: grid;
+  grid-template-columns: 4.5rem repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.lookThemeName {
+  font-size: var(--t-sm);
+  font-weight: var(--fw-semi);
+}
+
+/* A tile: its radio, out of sight but in the focus order (the arrow keys
+   move between the looks), the preview, and the name. The checked tile and
+   the focused one show through the radio's own state, never :has(), which
+   a browser without it would drop. */
+.lookTile {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-0);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.lookTile input { pointer-events: none; }
+
+/* The page's frame round the look's own colours. */
+.lookPreview {
+  display: block;
+  width: 100%;
+  padding: var(--s-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+
+@media (hover: hover) {
+  .lookTile:hover .lookPreview { border-color: var(--dim); }
+}
+
+.lookTile input:checked ~ .lookPreview {
+  border-color: var(--live);
+  box-shadow: 0 0 0 1px var(--live);
+}
+
+.lookTile input:focus-visible ~ .lookPreview {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+}
+
+.lookName {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-tight);
+  color: var(--dim);
+}
+
+/* The look in force: its name lit, behind a lamp. */
+.lookTile input:checked ~ .lookName { color: var(--readout); }
+
+.lookTile input:checked ~ .lookName::before {
+  content: "";
+  width: var(--lamp);
+  height: var(--lamp);
+  border-radius: 50%;
+  background: var(--live);
+}
+
+/* The panel in miniature (look.js builds it), painted only in the tokens
+   its data-look gives it: --case, --panel, --raised, --rule, --readout,
+   --dim, --live, --on-live, --warn, --stop and --on-stop. A card on the
+   case, with two lines of text and a status pill of a teal lamp and an
+   amber one; under it, Autonomous lit and Stop. */
+.lookSwatch {
+  display: grid;
+  gap: var(--s-0);
+  padding: var(--s-1);
+  background: var(--case);
+  border-radius: var(--r-xs);
+}
+
+.lookCard {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-0);
+  padding: var(--s-0) var(--s-1);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xs);
+}
+
+.lookText {
+  width: 70%;
+  height: 3px;
+  border-radius: var(--r-full);
+  background: var(--readout);
+}
+
+.lookText.dim {
+  width: 45%;
+  background: var(--dim);
+}
+
+.lookLamps {
+  display: flex;
+  gap: var(--s-0);
+  padding: var(--s-0) var(--s-1);
+  border-radius: var(--r-full);
+  background: var(--raised);
+}
+
+.lookLamp {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.lookLamp.live { background: var(--live); }
+.lookLamp.warn { background: var(--warn); }
+
+.lookFoot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-0);
+}
+
+/* Each with a mark in its own ink: a word on Autonomous, Stop's square. */
+.lookGo,
+.lookStop {
+  height: 9px;
+  border-radius: 2px;
+}
+
+.lookGo { background: linear-gradient(var(--on-live), var(--on-live)) center / 50% 2px no-repeat, var(--live); }
+.lookStop { background: linear-gradient(var(--on-stop), var(--on-stop)) center / 4px 4px no-repeat, var(--stop); }
+
 /* --- the question (ask.js) --------------------------------------------------- */
 
 .ask {
@@ -488,9 +645,11 @@ input[type="range"]::-moz-range-thumb {
   background: radial-gradient(circle, var(--case) 0 3px, transparent 3.5px), var(--live);
 }
 
-/* A phone keeps the row for the status: the mark alone says whose panel
-   this is. So does a phone on its side, whose header has a column only. */
-@media (max-width: 439.98px), (orientation: landscape) and (max-height: 520px) {
+/* A phone keeps the row for the status and the gear: the mark alone says
+   whose panel this is. Up to 500 px, because beside the word three pills
+   were cut short in a wide font up to 480. So does a phone on its side,
+   whose header has a column only. */
+@media (max-width: 499.98px), (orientation: landscape) and (max-height: 520px) {
   .wordmark .word { display: none; }
 }
 
@@ -587,9 +746,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* A pill gives way before it overflows: what it says is cut short, never
-   drawn over its neighbour (the layouts size them so it is not: the three
-   longest, "Link", "Autonomous" and "No motor shield", fit beside the mark
-   at 360 px). */
+   drawn over its neighbour or the gear. The layouts size them so it
+   seldom is: below 440 px, and on a phone on its side, the mode pill gives
+   way altogether (below), so the longest set there is "Link" and "No motor
+   shield" beside the mark and the gear. */
 .pill {
   --pill-x: calc(var(--s-1) + var(--s-0));
   display: inline-flex;
@@ -638,6 +798,14 @@ body[data-link="connecting"] .lamp { animation: pending 600ms ease-in-out infini
 /* Nothing to say about the rover until a link brings word of it. */
 body[data-link="down"] :is(.modePill, .motorsPill),
 body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
+
+/* An upright phone's row also holds the gear, and three pills beside it
+   ran out of room: the mode pill gives way to the Autonomous button at the
+   foot, lit while the rover explores, as it does on a phone on its side
+   (see that layout). */
+@media (max-width: 439.98px) {
+  .modePill { display: none; }
+}
 
 /* readouts.js reports "MANUAL" and "AUTONOMOUS"; the pill says them in
    sentence case. */
@@ -1363,6 +1531,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   .status { gap: var(--s-2); }
 
+  /* The status stays by the mark, and the gear goes to the row's far end,
+     where the status changing its words never moves it. */
+  .masthead > .status { margin-left: 0; }
+  .masthead > .menuHolder { margin-left: auto; }
+
   .pill {
     --pill-x: var(--s-3);
     gap: var(--s-2);
@@ -1636,6 +1809,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     padding: var(--s-2) var(--s-3);
   }
 
+  /* The header's column also holds the gear, and the mode pill beside the
+     other two wrapped the status to a second row: it gives way to the
+     Autonomous button at the side, lit while the rover explores. */
+  .modePill { display: none; }
+
   .status { flex-wrap: wrap; }
 
   .stickPad { align-self: center; }
@@ -1669,17 +1847,23 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    their labels ran into each other's segments, and a tap on "Normal" could
    land on Advanced. They take a row each, and the columns close up (the
    shell's and the dock's together, as they must). The status keeps to one
-   row: it takes the mark's place, and the mode pill gives way to the
-   Autonomous button beside it, lit while the rover explores. The readouts
-   take the type size a portrait phone of this width would. */
+   row beside the gear: it takes the mark's place, and its pills close up
+   and drop their lamps, whose colour their tint already shows (with them,
+   "No link" was cut short at 480 x 320). The readouts take the type size a
+   portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   .shell,
   .controls { column-gap: var(--s-3); }
 
   .switches { grid-template-columns: minmax(0, 1fr); }
 
-  .wordmark,
-  .modePill { display: none; }
+  .wordmark { display: none; }
+
+  .masthead { gap: var(--s-1); }
+
+  .pill { --pill-x: var(--s-1); }
+
+  .pill > .lamp { display: none; }
 
   .cell output { font-size: var(--t-sm); }
 }
