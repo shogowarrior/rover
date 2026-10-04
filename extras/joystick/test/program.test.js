@@ -923,6 +923,24 @@ test("tooltips quote the runner's own limits, name the motion, and warn about pi
   }
 });
 
+// F3g: a pivot under NORMAL says so on its block before Run is pressed, as
+// Run on the rover asks; under ADVANCED, or with no scheme known, nothing.
+// The menu keeps all 18 whatever the scheme (MOTION_MENU's test, above).
+test("a pivot drive block warns under NORMAL only, and no other motion ever does", () => {
+  assert.equal(MOTIONS.length, 18);
+  for (const motion of MOTIONS) {
+    assert.equal(RoverBlocks.schemeWarning(motion.name, P.SCHEME_NORMAL), motion.advanced ? RoverBlocks.PIVOT_WARNING : null, `${motion.name} under NORMAL`);
+    for (const scheme of [P.SCHEME_ADVANCED, null, "EXPERT"]) {
+      assert.equal(RoverBlocks.schemeWarning(motion.name, scheme), null, `${motion.name} under ${scheme}`);
+    }
+  }
+  for (const move of ["STOP", "RESUME_AUTONOMOUS", "WARP", undefined, null]) {
+    assert.equal(RoverBlocks.schemeWarning(move, P.SCHEME_NORMAL), null, `${move}`);
+  }
+  assert.match(RoverBlocks.PIVOT_WARNING, /NORMAL/);
+  assert.match(RoverBlocks.PIVOT_WARNING, /Run on the rover asks/);
+});
+
 /* --- what the generator writes besides a block's own code (blocks.js) ------ */
 
 // Line terminators, spelt out: written as escapes in this file, a raw one

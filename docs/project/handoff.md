@@ -131,11 +131,11 @@ The first thread then did F1, the first half of step 5, in a PR of its own
   simulator the Drive tab's Driver sends to `SimTarget.command()` in the
   Link's place, so no move reaches the rover and only Stop stops it too,
   and Autonomous takes only the simulated rover's mode; the scheme toggle
-  is still the rover's until F3g;
+  stayed the rover's until F3g;
 - a switch lets go of everything on the target left behind (a running
   program, held controls, one STOP if driving), a lost or stale link lets
-  go of nothing driving the simulator but a held stick (the rover's scheme
-  goes with the link), and a drive press ends a preview;
+  go of nothing driving the simulator (until F3g, a held stick, since the
+  rover's scheme went with the link), and a drive press ends a preview;
 - one view of the simulator, moved beside the Drive tab's controls while
   they drive it and held at 1x there; from 1180 px wide or 761 px tall its
   place beside the dock is kept on the rover target too, with the dock's
@@ -154,13 +154,26 @@ either target; F1 in features.md says what winning it back would take. On
 a phone 600 px tall or less the Drive tab leaves the switch to the Program
 tab. Panel tests 245/245 and the protocol check pass.
 
+It then did F3g, the second half of step 5, in a PR of its own:
+
+- on the simulator target the scheme toggle shows and sets the simulator's
+  own scheme (`SchemeToggle.bind()`), always known and set at once, with
+  nothing sent over the Link, so Normal | Advanced and the Drive tab's
+  pivots work with no rover; while the rover is the target the simulator
+  takes the rover's scheme, so a switch starts from it;
+- under NORMAL, the target's, each pivot drive block that would run
+  carries Blockly's warning before Run is pressed; the motion menu keeps
+  all 18, and Run on the rover still asks.
+
+Panel tests 251/251 and the protocol check pass.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 4 are done, and F1 of 5, so the
-next thread starts at F3g:
+when it is done. Do them in this order; 1 to 5 are done, so the next thread
+starts at F3h:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -172,7 +185,7 @@ next thread starts at F3g:
 3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
    simulator's 1x / 2x / 4x as a list only in a narrow view.
 4. **Done.** F3 with F3a to F3e: one layout for both tabs.
-5. **F1 done.** F1: a simulator for the Drive tab; then F3g: Normal |
+5. **Done.** F1: a simulator for the Drive tab; then F3g: Normal |
    Advanced usable on both tabs, with or without a rover.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
    disabled.
@@ -202,7 +215,7 @@ and the next thread's task names that branch.
   lists them, and what it left as it was (Blockly's focus colours, its
   faint zoom and trash icons).
 - The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. A later header change (F1 moves the Rover |
+  screen is mid-header. A later header change (F1 moved the Rover |
   Simulator switch into the header) can give it the header's right end.
   Moving it means updating the panel test that pins it to the masthead's
   end, and keeping it within `--tap-lg` of the top, which the popover's

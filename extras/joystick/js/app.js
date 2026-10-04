@@ -24,7 +24,8 @@
  *   scan.js          BEARINGS, ScanView: the scan fan
  *   readouts.js      Readouts: mode, move, phase, chip temperature, motor warning
  *   drive.js         Driver: the stick, rotate buttons and speed, and what to send
- *   scheme.js        SchemeToggle: the rover's control scheme, NORMAL or ADVANCED
+ *   scheme.js        SchemeToggle: the control scheme, NORMAL or ADVANCED: the
+ *                    rover's, or on the simulator target the simulator's
  *   family.js        FamilySelector: the stick family, and the stick's labels
  *   tabs.js          Tabs: the Drive and Program tabs
  *   ask.js           AskDialog: the page's one way to ask the operator something
@@ -131,8 +132,8 @@ link.onState((state) => {
 // the wheels itself when the client driving it disconnects. The motor warning
 // belongs to the link it came over, so it goes too. While the Driver drives
 // the simulator the link is not its concern: a rover rebooting must not let
-// go of what drives the simulated one. Only a held stick goes, because the
-// rover's scheme goes with the link (the scheme's block, below).
+// go of what drives the simulated one, and the scheme there is the
+// simulator's own (the target's block, below).
 link.onState((state, cause) => {
   if (state === "down") {
     if (!driven.simulator) driver.standDown(cause);
@@ -172,7 +173,8 @@ byId("auto").addEventListener("click", () => driver.resumeAutonomous());
 // may change it: this toggle, another panel, the gamepad's SELECT. The toggle
 // shows what telemetry reports; its message is configuration, sent straight
 // over the link, and never a command, so it neither takes control nor stops
-// an exploring rover.
+// an exploring rover. On the simulator target it is the simulator's scheme
+// instead (the target's block, below).
 const schemeToggle = new SchemeToggle({
   link,
   group: byId("scheme"),
@@ -236,8 +238,11 @@ const runner = new ProgramRunner();
 // simulator holds no Link and no Driver, so nothing done to it reaches the
 // rover whatever the link is doing, and its telemetry reaches only a program
 // and its view, never the scan fan or the readouts. Only the rover's scheme
-// crosses over, the other way. If its scripts did not load, the page offers
-// the rover alone.
+// crosses over, the other way: while the rover is the target the simulator
+// takes it, so a switch to the simulator starts from the rover's scheme.
+// From there the toggle shows and sets the simulator's own, so what it
+// passes on here is that (the target's block, next). If its scripts did not
+// load, the page offers the rover alone.
 let simView = null;
 if (typeof SimTarget === "function" && typeof SimView === "function") {
   const simulator = new SimTarget({ bearings: BEARINGS });
@@ -265,8 +270,12 @@ const targetSwitch = new TargetSwitch({
 });
 const autoButton = byId("auto");
 const autoTitle = autoButton.getAttribute("title");
+// The scheme toggle shows and sets the target's scheme: the simulator's is
+// its own, so Normal | Advanced work with no rover, and the Drive tab's
+// family follows it as it follows the rover's.
 function driveTarget(kind) {
   driven.simulator = kind === "simulator" ? targets.simulator : null;
+  schemeToggle.bind(driven.simulator);
   document.body.dataset.target = kind;
   autoButton.setAttribute("title", driven.simulator
     ? "On the simulator: the simulated rover takes the mode, but exploring is not simulated, so it stands still. The rover is left alone."
@@ -350,8 +359,10 @@ byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));
 
 // Run on the rover needs a live link, and asks before it drives a pivot
-// unless the rover reports ADVANCED.
+// unless the rover reports ADVANCED; under NORMAL, the target's, the editor
+// marks each pivot before Run is pressed.
 link.onState(() => programTab.refresh());
+programTab.setScheme(schemeToggle.scheme);
 schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 
 // A program driving the rover from the Program tab goes on while the Drive

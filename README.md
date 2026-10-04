@@ -57,7 +57,7 @@ default install path, `~/.platformio/penv/bin/pio`.
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. The header's Normal | Advanced toggle is the rover's control
-   scheme (below). The Drive tab has the joystick; the Program tab has block
+   scheme (below), or on the simulator the simulator's own. The Drive tab has the joystick; the Program tab has block
    programs. The header's Rover | Simulator switch puts both tabs on a
    simulated rover instead, to try the controls or preview a program with no
    rover connected: then they drive only the simulated rover, and Stop stops

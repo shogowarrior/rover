@@ -1779,7 +1779,7 @@ const SCHEMES = ["NORMAL", "ADVANCED"];
 const schemeButton = (page, scheme) => all(page.$("schemeChoice")).find((n) => n.dataset.scheme === scheme);
 const familyButton = (page, family) => all(page.$("familyChoice")).find((n) => n.dataset.family === family);
 const isPressed = (button) => button.getAttribute("aria-pressed") === "true";
-// The scheme the toggle shows as the rover's, or "unknown".
+// The scheme the toggle shows (the target's), or "unknown".
 const shownScheme = (page) => SCHEMES.filter((s) => isPressed(schemeButton(page, s))).join() || "unknown";
 const pendingScheme = (page) => SCHEMES.filter((s) => schemeButton(page, s).dataset.pending === "yes").join() || null;
 const hintMoves = (page) => all(page.$("stickHints")).filter((n) => n.dataset.corner).map((n) => `${n.dataset.corner}:${n.dataset.move}`).join();
@@ -2446,11 +2446,12 @@ const segments = (page) => page.$("target").children;
 function standInEditor(page, program = "await api.step('b1'); await api.drive(MOVE_FORWARD, 50, 0.5); await api.log('hi');") {
   page.evalIn(`
     globalThis.__editor = {
-      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, restyled: 0, loaded: [], cleared: 0,
+      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, restyled: 0, loaded: [], cleared: 0, schemes: [],
       compile() { return async (api) => { ${program} }; },
       onChange() { return () => {}; },
       highlight(id) { this.highlighted.push(id); },
       setReadOnly(on) { this.readOnly.push(on); },
+      setScheme(scheme) { this.schemes.push(scheme); },
       resize() { this.resized++; },
       restyle() { this.restyled++; },
       load(state) { this.loaded.push(state); },
@@ -3160,7 +3161,7 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
     globalThis.Blockly = { dialog: { setConfirm(fn) { __confirm = fn; } } };
     globalThis.javascript = { javascriptGenerator: {} };
     BlockEditor = function () {
-      return { empty: true, stacks: 0, pivots: [], onChange() { return () => {}; }, setReadOnly() {}, resize() {} };
+      return { empty: true, stacks: 0, pivots: [], onChange() { return () => {}; }, setReadOnly() {}, setScheme() {}, resize() {} };
     };
     startBlockEditor();
     globalThis.__answers = [];
@@ -3693,7 +3694,7 @@ test("target: a switch under a held control sends one STOP to the target left be
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: a lost or stale link lets go of nothing driving the simulator but a held stick, whose scheme goes with it", () => {
+test("target: a lost or stale link lets go of nothing driving the simulator", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const sim = simCommands(page);
   toSimulator(page);
@@ -3705,19 +3706,191 @@ test("target: a lost or stale link lets go of nothing driving the simulator but 
   lift(page, page.$("ccw"), 1);
   check(sim().slice(-1)[0] === "STOP", "let go: STOP");
 
-  // The rover's scheme goes with the link, and a change of scheme lets go
-  // of a held stick, as ever: under ADVANCED a held pivot would otherwise
-  // turn into a translation with no fresh press.
+  // Nor a held stick: the scheme it drives with is the simulator's, which
+  // the rover's link does not carry (F3g). Before, the rover's scheme went
+  // with the link and the stick was let go.
   const ws2 = connectOpen(page);
-  ws2.serverMsg(telemetry({ mode: "MANUAL" }));
+  ws2.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   const s = stickTouch(page, 0);
   s.start(); s.move(0, -100);
   const mark = sim.count();
   ws2.serverDrop();
-  check(sim(mark).join() === "STOP", `one STOP to the simulator: ${sim(mark)}`);
   page.clock.advance(1000);
-  check(sim.count() === mark + 1, `then nothing: ${sim(mark)}`);
+  check(sim(mark).length >= 4 && sim(mark).every((m) => m === "MOVE_FORWARD"), `driving on: ${sim(mark)}`);
   s.end();
+  check(sim().slice(-1)[0] === "STOP", "let go: STOP");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The scheme toggle shows and sets the target's scheme (F3g): on the
+// simulator its own, so Normal | Advanced work with no rover, and nothing of
+// it reaches the Link.
+test("target: on the simulator the scheme toggle sets the simulator's scheme, with no rover, and sends nothing", () => {
+  const page = loadPage();
+  // With no socket a send goes nowhere, so the Link is watched instead.
+  page.evalIn("globalThis.__linkSent = []; const send = link.send.bind(link); link.send = (frame) => (__linkSent.push(frame), send(frame));");
+  const scheme = () => page.evalIn("targets.simulator.scheme");
+  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => schemeButton(page, x).disabled), "the rover's, unknown, at first");
+  toSimulator(page);
+  check(shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "known", `the simulator's: ${shownScheme(page)} ${page.$("scheme").dataset.state}`);
+  check(SCHEMES.every((x) => !schemeButton(page, x).disabled), "offered");
+  check(/simulator/i.test(page.$("scheme").title), `its title says whose: ${page.$("scheme").title}`);
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(scheme() === "ADVANCED" && shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `set at once: ${scheme()} ${shownScheme(page)} pending ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false", "never busy");
+  check(page.$("family").hidden === false, "the Drive tab's family follows it");
+  page.fire(familyButton(page, "PIVOT"), "click");
+  const sim = simCommands(page);
+  const s = stickTouch(page, 0);
+  s.start(); s.move(60, -60);
+  check(/^PIVOT_/.test(sim().slice(-1)[0]), `a pivot on the simulated rover: ${sim()}`);
+  s.end();
+  // Back to NORMAL: the family goes, as under the rover's.
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(scheme() === "NORMAL" && page.$("family").hidden === true && page.evalIn("driver.family") === "TRANSLATE", "NORMAL: translating");
+  check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
+  check(page.evalIn("__linkSent.length") === 0, `the Link was handed ${page.evalIn("JSON.stringify(__linkSent)")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: the simulator's scheme starts from the rover's and is its own while it is the target", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const scheme = () => page.evalIn("targets.simulator.scheme");
+  check(scheme() === "ADVANCED", "on the rover target the simulator takes the rover's");
+  toSimulator(page);
+  check(shownScheme(page) === "ADVANCED", "a switch starts from it");
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(count(ws) === 0, `the rover was sent ${ws.sent}`);
+  // The rover's reports go on, kept and not shown; the rover changing its
+  // scheme leaves the simulator's alone.
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "NORMAL" && scheme() === "NORMAL", `its own: ${shownScheme(page)} ${scheme()}`);
+  // The rover's link stale or gone changes nothing shown.
+  page.clock.advance(3000);
+  check(page.$("scheme").dataset.state === "known" && SCHEMES.every((x) => !schemeButton(page, x).disabled), "stale link: still offered");
+  ws.serverDrop();
+  check(shownScheme(page) === "NORMAL", "link gone: still the simulator's");
+  // Back on the rover: the rover's again, unknown with no link, and the
+  // simulator keeps its own until the rover reports one.
+  toRover(page);
+  check(shownScheme(page) === "unknown" && scheme() === "NORMAL", `the rover's: ${shownScheme(page)}, the simulator's ${scheme()}`);
+  const ws2 = connectOpen(page);
+  ws2.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "ADVANCED" && scheme() === "ADVANCED", `then follows it: ${scheme()}`);
+  check(count(ws2) === 0, `sent ${ws2.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: a request to the rover still pending is not shown on the simulator, and lands as ever", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(pendingScheme(page) === "ADVANCED", "pending");
+  toSimulator(page);
+  check(pendingScheme(page) === null && page.$("scheme").dataset.state === "known" && shownScheme(page) === "NORMAL", `the simulator's, with no mark: ${pendingScheme(page)} ${shownScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "NORMAL", "the rover's report is not shown here");
+  toRover(page);
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `the rover's, confirmed: ${shownScheme(page)}`);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: the editor is told the scheme the toggle shows, the target's, so that a pivot under NORMAL says so", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  standInEditor(page);
+  const told = () => page.evalIn("__editor.schemes.join()");
+  check(told() === "ADVANCED", `on attaching: ${told()}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(told() === "ADVANCED,NORMAL", `the rover's change: ${told()}`);
+  toSimulator(page);
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(told() === "ADVANCED,NORMAL,ADVANCED", `the simulator's: ${told()}`);
+  toRover(page);
+  check(told() === "ADVANCED,NORMAL,ADVANCED,NORMAL", `the rover's again: ${told()}`);
+  ws.serverDrop();
+  check(page.evalIn("__editor.schemes[__editor.schemes.length - 1]") === null, `unknown with the link gone: ${told()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // A page that opens on the simulator: the editor, built later, is told
+  // the simulator's scheme, not nothing.
+  const onSim = loadPage({ stored: { "rover.target": "simulator" } });
+  standInEditor(onSim);
+  check(onSim.evalIn("__editor.schemes.join()") === "NORMAL", `opened on the simulator: ${onSim.evalIn("__editor.schemes.join()")}`);
+  check(onSim.errors.length === 0, `errors ${onSim.errors}`);
+});
+
+// Blockly never loads here, so the editor gets a stand-in workspace of a few
+// blocks, as far as BlockEditor reaches them, and the warnings they carry.
+test("program: the editor warns each pivot that runs, under NORMAL only, and clears what Blockly echoes on a folded block", () => {
+  const page = loadPage();
+  page.evalIn(`
+    // A block as Blockly gives it: its warnings by id, and what it holds.
+    const block = (type, move, { enabled = true, inherited = false, collapsed = false, holds = [] } = {}) => ({
+      type, move, enabled, inherited, collapsed, holds, next: null, warnings: new Map(),
+      getFieldValue() { return this.move; },
+      isEnabled() { return this.enabled; },
+      getInheritedDisabled() { return this.inherited; },
+      isCollapsed() { return this.collapsed; },
+      getNextBlock() { return this.next; },
+      // Blockly's own counts the blocks after it too.
+      getDescendants() { return [this, ...[...this.holds, this.next].filter(Boolean).flatMap((b) => b.getDescendants())]; },
+      getIcon(type) { return type === "warning" && this.warnings.size > 0 ? {} : null; },
+      setWarningText(text, id) { if (text) this.warnings.set(id, text); else this.warnings.delete(id); },
+    });
+    const pivot = block("rover_drive_for", "PIVOT_RIGHT_FORWARD");
+    const forward = block("rover_drive_until", "MOVE_FORWARD");
+    const off = block("rover_drive_for", "PIVOT_LEFT_FORWARD", { enabled: false });
+    const inside = block("rover_drive_for", "PIVOT_LEFT_BACKWARD", { inherited: true });
+    const folded = block("rover_drive_for", "PIVOT_SIDEWAYS_FORWARD_RIGHT");
+    const fold = block("controls_repeat_ext", null, { collapsed: true, holds: [folded] });
+    // A warned pivot after the folded block is not in it.
+    fold.next = block("rover_drive_for", "PIVOT_RIGHT_BACKWARD");
+    // Blockly's echo, as it puts it on a folded block holding a warning.
+    fold.warnings.set("TEMP_COLLAPSED_WARNING_", "Collapsed blocks contain warnings.");
+    globalThis.__blocks = { pivot, forward, off, inside, folded, fold, after: fold.next };
+    const all = Object.values(__blocks);
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    const workspace = new Proxy({
+      getAllBlocks: () => all,
+      getTopBlocks: () => [pivot, forward, off, fold],
+      addChangeListener: (fn) => { globalThis.__changed = fn; },
+    }, { get: (t, key) => t[key] || any });
+    const stub = {
+      inject: () => workspace,
+      Theme: { defineTheme: (_, theme) => theme },
+      icons: { IconType: { WARNING: "warning" } },
+      BlockSvg: { COLLAPSED_WARNING_ID: "TEMP_COLLAPSED_WARNING_" },
+    };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const warned = () => JSON.parse(page.evalIn(`JSON.stringify(Object.fromEntries(Object.entries(__blocks).map(([k, b]) => [k, [...b.warnings.keys()].join()])))`));
+  const pivots = () => page.evalIn("__editor.pivots.join('; ')");
+  check(Object.entries(warned()).every(([k, ids]) => k === "fold" ? ids === "TEMP_COLLAPSED_WARNING_" : ids === ""), `no scheme yet, nothing marked: ${JSON.stringify(warned())}`);
+  page.evalIn('__editor.setScheme("NORMAL")');
+  let w = warned();
+  check(w.pivot === "scheme" && w.folded === "scheme" && w.after === "scheme", `the pivots that run are marked: ${JSON.stringify(w)}`);
+  check(w.forward === "" && w.off === "" && w.inside === "", `a translation, a disabled pivot and one in a disabled block are not: ${JSON.stringify(w)}`);
+  check(page.evalIn("__blocks.pivot.warnings.get('scheme')") === page.evalIn("RoverBlocks.PIVOT_WARNING"), "in the pivot warning's words");
+  check(w.fold === "TEMP_COLLAPSED_WARNING_", `the folded block keeps Blockly's echo while it holds a warning: ${JSON.stringify(w)}`);
+  check(!/Pivot left, backward|Pivot left, forward/.test(pivots()), `Run asks about no pivot that never runs: ${pivots()}`);
+  page.evalIn('__editor.setScheme("ADVANCED")');
+  w = warned();
+  check(Object.values(w).every((ids) => ids === ""), `under ADVANCED nothing, Blockly's echo on the folded block included: ${JSON.stringify(w)}`);
+  // A change re-marks: the disabled pivot enabled under NORMAL.
+  page.evalIn('__editor.setScheme("NORMAL"); __blocks.off.enabled = true; __changed({ isUiEvent: false })');
+  check(warned().off === "scheme", `an enabled pivot is marked at the next change: ${JSON.stringify(warned())}`);
+  page.evalIn('__blocks.off.move = "MOVE_LEFT"; __changed({ isUiEvent: false })');
+  check(warned().off === "", `and cleared once it drives otherwise: ${JSON.stringify(warned())}`);
+  // The folded pivot driving otherwise leaves the folded block holding no
+  // warning, though the pivot after it still has one.
+  page.evalIn('__blocks.fold.warnings.set("TEMP_COLLAPSED_WARNING_", "echo"); __blocks.folded.move = "MOVE_FORWARD"; __changed({ isUiEvent: false })');
+  w = warned();
+  check(w.folded === "" && w.after === "scheme" && w.fold === "", `the echo goes with what it folds: ${JSON.stringify(w)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

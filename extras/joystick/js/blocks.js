@@ -88,6 +88,10 @@ class RoverBlocks {
 
   static PIVOT_NOTE = " Pivots are not bench-verified yet (docs/mecanum.md): watch the rover the first time.";
 
+  // Blockly's bubble does not wrap: a line each.
+  static PIVOT_WARNING = "A pivot: the NORMAL scheme keeps these off the stick and the pad.\n" +
+    "Run on the rover asks first; under Advanced it does not.";
+
   static #installed = false; // the blocks and their code are defined
 
   // A number input holding n, as a shadow block: for the examples and the
@@ -444,6 +448,16 @@ class RoverBlocks {
     return motion && motion.advanced ? text + RoverBlocks.PIVOT_NOTE : text;
   }
 
+  // What a drive block of this motion says under this scheme (the target's,
+  // as the toggle shows it), or null: a pivot under NORMAL says so before
+  // Run is pressed, as Run on the rover would ask. Every motion stays in the
+  // menu whatever the scheme: Blockly puts the menu's first choice in place
+  // of a value it does not offer, and a saved pivot would drive forward.
+  static schemeWarning(move, scheme) {
+    const motion = motionNamed(move);
+    return motion && motion.advanced && scheme === SCHEME_NORMAL ? RoverBlocks.PIVOT_WARNING : null;
+  }
+
   static #bearingMenu() {
     return RoverBlocks.BEARING_WORDS.map(([label, words]) => {
       const bearing = BEARINGS.find((b) => b.label === label);
@@ -653,6 +667,10 @@ class RoverBlocks {
  *   pivots             the pivot motions (codes 9 to 16) its enabled drive
  *                      blocks name, each once, as MOTIONS labels them: what
  *                      the NORMAL scheme keeps off the stick and the pad.
+ *   setScheme(scheme)  the scheme the toggle shows, or null: under NORMAL
+ *                      each enabled drive block that pivots carries a
+ *                      warning (RoverBlocks.schemeWarning), kept as blocks
+ *                      change.
  *   save() / load(state)
  *                      the program in Blockly's JSON form. load() checks the
  *                      shape first and throws, keeping the current program,
@@ -685,6 +703,8 @@ class BlockEditor {
   #readOnly = false;
   #placed = false; // the program has been scrolled into a view with a size
   #saveTimer = null;
+  #scheme = null;
+  #warned = new WeakMap(); // block -> the scheme warning it carries, or null
   #changeListeners = new Listeners();
 
   constructor(container, { Blockly, generator, storageKey }) {
@@ -730,7 +750,7 @@ class BlockEditor {
   get pivots() {
     const labels = new Set();
     for (const block of this.#workspace.getAllBlocks(false)) {
-      if (!block.isEnabled() || !RoverBlocks.DRIVES.includes(block.type)) continue;
+      if (!BlockEditor.#runs(block) || !RoverBlocks.DRIVES.includes(block.type)) continue;
       const motion = motionNamed(block.getFieldValue("MOVE"));
       if (motion && motion.advanced) labels.add(motion.label);
     }
@@ -739,6 +759,11 @@ class BlockEditor {
 
   onChange(fn) {
     return this.#changeListeners.add(fn);
+  }
+
+  setScheme(scheme) {
+    this.#scheme = scheme;
+    this.#markPivots();
   }
 
   compile() {
@@ -828,11 +853,50 @@ class BlockEditor {
     if (this.#readOnly) workspace.setIsReadOnly(true);
     this.#showTopLeft();
 
+    this.#markPivots();
     workspace.addChangeListener((event) => {
       if (event.isUiEvent) return;
+      this.#markPivots();
       this.#scheduleSave();
       this.#changeListeners.emit();
     });
+  }
+
+  // A block inside a disabled one is drawn disabled and writes no code, but
+  // still reports itself enabled.
+  static #runs(block) {
+    return block.isEnabled() && !block.getInheritedDisabled();
+  }
+
+  // As pivots counts them: a disabled block never runs, so it is not marked.
+  // A warning of the scheme's own id leaves any other a block carries, and
+  // one already right is left alone, so that the blocks are not redrawn on
+  // every change.
+  //
+  // Blockly echoes a warning inside a collapsed block on the block that
+  // folds it, and takes the echo away only when that block is expanded: so
+  // once the marks change, a collapsed block left holding no warning loses
+  // its echo here.
+  #markPivots() {
+    let changed = false;
+    for (const block of this.#workspace.getAllBlocks(false)) {
+      if (!RoverBlocks.DRIVES.includes(block.type)) continue;
+      const text = BlockEditor.#runs(block) ? RoverBlocks.schemeWarning(block.getFieldValue("MOVE"), this.#scheme) : null;
+      if ((this.#warned.get(block) || null) === text) continue;
+      block.setWarningText(text, "scheme");
+      this.#warned.set(block, text);
+      changed = true;
+    }
+    if (!changed) return;
+    const warning = this.#Blockly.icons.IconType.WARNING;
+    for (const block of this.#workspace.getAllBlocks(false)) {
+      if (!block.isCollapsed()) continue;
+      // What it folds: its descendants, but not the blocks after it.
+      const next = block.getNextBlock();
+      const after = new Set(next ? next.getDescendants(false) : []);
+      const folded = block.getDescendants(false).filter((held) => held !== block && !after.has(held));
+      if (!folded.some((held) => held.getIcon(warning))) block.setWarningText(null, this.#Blockly.BlockSvg.COLLAPSED_WARNING_ID);
+    }
   }
 
   // Scroll a block into view, if there is a view: on the Drive tab the

@@ -1455,7 +1455,10 @@ test("the view's frames: with the room hidden, the view still draws the motion",
   assert.deepEqual(page.errors, []);
 });
 
-test("the preview reports the rover's scheme; nothing of its own reaches the page", async () => {
+// On the simulator target its scheme is its own, set by the toggle
+// (panel.test.js, "target: ..."); while the rover is the target it takes the
+// rover's, so a switch to the simulator starts from it.
+test("on the rover target the preview reports the rover's scheme, and sends the rover nothing", async () => {
   const { page, sim } = pageWithView();
   const ws = connectOpen(page);
   assert.equal(sim.scheme, protocol.SCHEME_NORMAL, "NORMAL until the rover says");

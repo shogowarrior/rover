@@ -1,7 +1,7 @@
 /**
  * The control scheme toggle in the header: which layout the rover's
  * controllers drive with, NORMAL or ADVANCED (docs/mecanum.md "Control
- * schemes").
+ * schemes"). On the simulator target it is the simulator's instead (bind()).
  *
  * The rover holds one scheme for every controller, and any of them may change
  * it: this toggle, another panel, the gamepad's SELECT. So the toggle shows
@@ -23,19 +23,29 @@
  * rover explores and leaves it exploring. It goes straight to the Link, not
  * through the Driver, and is not manual input.
  *
+ * Bound to the simulator, the toggle shows and sets the simulated rover's
+ * scheme, which lives on the page: always known, never stale, and set at
+ * once by a choice, with nothing to confirm and nothing sent over the Link.
+ * So Normal | Advanced work with no rover. The rover's reports are kept
+ * meanwhile, and shown again when the toggle is unbound.
+ *
  *   new SchemeToggle({ link, group, choice })
  *     link     a Link, to send the scheme message;
  *     group    the toggle's container, which gets data-state = "unknown",
  *              "known", "pending" or "stale" for the page's CSS;
  *     choice   the empty element the two segments are built in.
  *
- *   show(data)    update from a telemetry object.
+ *   show(data)    update from the rover's telemetry.
  *   linkStale()   telemetry has stopped, though the socket is open.
  *   linkDown()    the link telemetry came over has gone.
- *   scheme        SCHEME_NORMAL or SCHEME_ADVANCED as telemetry last reported
- *                 it, or null while unknown.
- *   onChange(fn)  fn(scheme, previous) whenever the reported scheme changes,
- *                 to or from null included -- whoever changed it.
+ *   bind(local)   show and set local's scheme instead of the rover's: a
+ *                 SimTarget, or anything with scheme and setScheme(name).
+ *                 null shows the rover's again.
+ *   scheme        the scheme shown, SCHEME_NORMAL or SCHEME_ADVANCED: the
+ *                 bound simulator's, or the rover's as telemetry last
+ *                 reported it, null while unknown.
+ *   onChange(fn)  fn(scheme, previous) whenever the scheme shown changes, to
+ *                 or from null included -- whoever changed it, a bind too.
  */
 class SchemeToggle {
   // Telemetry arrives every TELEMETRY_MS (protocol.js). Three frames without
@@ -51,7 +61,8 @@ class SchemeToggle {
   #link;
   #group;
   #buttons = new Map(); // scheme -> its segment
-  #scheme = null; // as telemetry last reported it, or null
+  #reported = null; // the rover's, as telemetry last reported it, or null
+  #local = null; // what bind() gave: shown and set instead, or null
   #stale = false; // telemetry has stopped since it was reported
   #pending = null; // the scheme asked for and not yet reported, or null
   #pendingTimer = null;
@@ -70,7 +81,7 @@ class SchemeToggle {
   }
 
   get scheme() {
-    return this.#scheme;
+    return this.#local ? this.#local.scheme : this.#reported;
   }
 
   onChange(fn) {
@@ -101,15 +112,32 @@ class SchemeToggle {
     this.#set(null);
   }
 
+  // A request to the rover still pending goes on, unseen, and its report is
+  // kept for when the rover's scheme is shown again.
+  bind(local) {
+    const previous = this.scheme;
+    this.#local = local;
+    this.#render();
+    if (this.scheme !== previous) this.#listeners.emit(this.scheme, previous);
+  }
+
   // A click on the scheme already shown, confirmed or pending, sends nothing.
   // A click on the other sends one frame, and a later click replaces it: the
   // rover takes them in order, so the last one asked for is what it ends on.
   #choose(scheme) {
+    if (this.#local) {
+      const previous = this.#local.scheme;
+      if (scheme === previous) return;
+      this.#local.setScheme(scheme);
+      this.#render();
+      this.#listeners.emit(this.#local.scheme, previous);
+      return;
+    }
     // A disabled button takes no clicks in a browser; this keeps the rule in
     // the code as well as in the attribute. A stale link may be half-open:
     // a request only goes out on one whose telemetry can confirm it.
-    if (this.#scheme === null || this.#stale) return;
-    if (scheme === (this.#pending || this.#scheme)) return;
+    if (this.#reported === null || this.#stale) return;
+    if (scheme === (this.#pending || this.#reported)) return;
     if (!this.#link.send({ scheme })) return;
     clearTimeout(this.#pendingTimer);
     this.#pending = scheme;
@@ -128,28 +156,34 @@ class SchemeToggle {
 
   // Rendered every time, changed or not: a frame after a stale spell brings
   // back the same scheme, and the toggle must still light up again.
-  #set(scheme) {
-    const previous = this.#scheme;
-    this.#scheme = scheme;
+  #set(reported) {
+    const previous = this.scheme;
+    this.#reported = reported;
     this.#render();
-    if (scheme !== previous) this.#listeners.emit(scheme, previous);
+    if (this.scheme !== previous) this.#listeners.emit(this.scheme, previous);
   }
 
-  // Pressed is what the rover reports; pending is only ever a mark on the
-  // segment asked for, so a request that never lands cannot look applied.
+  // Pressed is what the rover reports, or the bound simulator's scheme;
+  // pending is only ever a mark on the segment asked for, so a request that
+  // never lands cannot look applied.
   #render() {
-    const known = this.#scheme !== null;
-    this.#group.dataset.state = !known ? "unknown" : this.#stale ? "stale" : this.#pending ? "pending" : "known";
-    this.#group.setAttribute("aria-busy", String(this.#pending !== null));
-    this.#group.title = !known
-      ? "The rover has not reported a control scheme. Firmware from before schemes never does."
-      : this.#stale
-        ? "Telemetry has stopped: the scheme cannot be changed until the rover reports it again."
-        : "";
-    pressSegment(this.#buttons, this.#scheme);
-    for (const [scheme, button] of this.#buttons) {
-      button.disabled = !known || this.#stale;
-      if (scheme === this.#pending) button.dataset.pending = "yes";
+    const scheme = this.scheme;
+    const known = scheme !== null;
+    const stale = !this.#local && this.#stale;
+    const pending = this.#local ? null : this.#pending;
+    this.#group.dataset.state = !known ? "unknown" : stale ? "stale" : pending ? "pending" : "known";
+    this.#group.setAttribute("aria-busy", String(pending !== null));
+    this.#group.title = this.#local
+      ? "The simulator's control scheme. The rover's stays as it is."
+      : !known
+        ? "The rover has not reported a control scheme. Firmware from before schemes never does."
+        : stale
+          ? "Telemetry has stopped: the scheme cannot be changed until the rover reports it again."
+          : "";
+    pressSegment(this.#buttons, scheme);
+    for (const [option, button] of this.#buttons) {
+      button.disabled = !known || stale;
+      if (option === pending) button.dataset.pending = "yes";
       else delete button.dataset.pending;
     }
   }

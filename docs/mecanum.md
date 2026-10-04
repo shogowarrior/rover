@@ -106,8 +106,9 @@ switching to ADVANCED (below), or saying yes.
 The rover holds one control scheme for every controller, so the gamepad and
 the panel always drive the same way. It starts as `DEFAULT_CONTROL_SCHEME` in
 [`src/Features.h`](../src/Features.h); the gamepad's SELECT button and the
-panel's toggle change it until the next reset, and telemetry reports it as
-`scheme`.
+panel's toggle on the Rover target change it until the next reset, and
+telemetry reports it as `scheme`. On the Simulator target the panel's toggle
+sets only the simulator's own.
 
 | | NORMAL | ADVANCED |
 |---|---|---|
@@ -115,7 +116,7 @@ panel's toggle change it until the next reset, and telemetry reports it as
 | Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
 | Pivot (9 to 12) | -- | Hold L1, or pick Pivot on the panel |
 | Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways on the panel |
-| Program tab | Any motion; Run on the rover asks before a pivot | Any motion |
+| Program tab | Any motion; a pivot block carries a warning, and Run on the rover asks before a pivot | Any motion |
 | Gamepad LEDs | Player 1 | Player 2 |
 
 A scheme change never redirects a held stick: the stick stops what it was
