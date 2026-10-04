@@ -20,10 +20,13 @@ namespace {
 // 32 hex digits, made up: a digest or nonce of the right shape.
 const char HEX32[] = "0123456789abcdef0123456789abcdef";
 
+// Parsed into one document that lasts until the next call: an update
+// message's strings point into it.
+JsonDocument parsed;
+
 protocol::Message message(const char* json) {
-  JsonDocument doc;
-  TEST_ASSERT_FALSE(deserializeJson(doc, json));
-  return protocol::readMessage(doc.as<JsonVariantConst>());
+  TEST_ASSERT_FALSE(deserializeJson(parsed, json));
+  return protocol::readMessage(parsed.as<JsonVariantConst>());
 }
 
 // A malformed message degrades to STOP, speed 0 -- releasing the motors --
@@ -79,9 +82,10 @@ Rover::Status statusOf(JsonObjectConst frame) {
 
 // writeTelemetry()'s frame for `status`, parsed. Fails the test when nothing
 // was written.
-JsonDocument written(const Rover::Status& status, kinematics::ControlScheme scheme, float temperatureC) {
+JsonDocument written(const Rover::Status& status, kinematics::ControlScheme scheme, float temperatureC,
+                     const char* firmware) {
   char out[protocol::TELEMETRY_MAX_BYTES];
-  const size_t length = protocol::writeTelemetry(status, scheme, temperatureC, out, sizeof(out));
+  const size_t length = protocol::writeTelemetry(status, scheme, temperatureC, firmware, out, sizeof(out));
   TEST_ASSERT_TRUE(length > 0);
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
@@ -107,6 +111,11 @@ std::string replyText(const FirmwareUpdate::Reply& reply) {
   char out[protocol::OTA_REPLY_MAX_BYTES];
   const size_t length = protocol::writeOtaReply(reply, out, sizeof(out));
   return std::string(out, length);
+}
+
+void assertUpdateMessage(const protocol::Message& m, protocol::OtaRequest::Action action, const char* json) {
+  TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::OTA, m.kind, json);
+  TEST_ASSERT_EQUAL_INT_MESSAGE(action, m.ota.action, json);
 }
 
 }  // namespace
@@ -145,7 +154,8 @@ void test_longest_command_fits(void) {
 // describes: each key it holds, and no other. Between them the frames pin
 // that the distances appear only once every bearing has been measured
 // (before that there is nothing true to report), "phase" only while
-// exploring and "halt" only when halted, and that the two flags each carry
+// exploring and "halt" only when halted, that "firmware" is always there (a
+// client sends no update without it), and that the two flags each carry
 // their own value, false included, as a boolean: serialised from the wrong
 // field, as a constant or as a number, "motorsReady" hides the dead shield it
 // exists to report, and telemetry names a move that never reaches the wheels.
@@ -153,7 +163,9 @@ void test_telemetry_frames_match_the_vectors(void) {
   const JsonDocument vectors = loadVectors("telemetry.json");
   for (JsonPairConst named : vectors["frames"].as<JsonObjectConst>()) {
     const JsonObjectConst frame = named.value();
-    const JsonDocument out = written(statusOf(frame), schemeNamed(frame["scheme"]), frame["temperature"]);
+    TEST_ASSERT_TRUE_MESSAGE(frame["firmware"].is<const char*>(), named.key().c_str());
+    const JsonDocument out =
+        written(statusOf(frame), schemeNamed(frame["scheme"]), frame["temperature"], frame["firmware"]);
     TEST_ASSERT_EQUAL_INT_MESSAGE(frame.size(), out.size(), named.key().c_str());
     for (JsonPairConst key : frame) {
       char label[64];
@@ -166,8 +178,8 @@ void test_telemetry_frames_match_the_vectors(void) {
 // The largest frame must fit RemoteControl's buffer, or telemetry silently
 // stops in exactly those states. Every field at its longest, whether or not
 // the states can occur together: the longest move name, the longest phase and
-// halt reason, "false" for both flags, a negative temperature and distances
-// with seven significant digits.
+// halt reason, "false" for both flags, a negative temperature, distances
+// with seven significant digits, and the running image's MD5.
 void test_longest_telemetry_fits(void) {
   Rover::Status status;
   status.mode = Rover::MODE_AUTONOMOUS;
@@ -183,8 +195,9 @@ void test_longest_telemetry_fits(void) {
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) status.scanCm[i] = 399.9999f;
   status.motorsReady = false;
 
-  const JsonDocument doc = written(status, kinematics::SCHEME_ADVANCED, -12.34568f);
+  const JsonDocument doc = written(status, kinematics::SCHEME_ADVANCED, -12.34568f, HEX32);
   TEST_ASSERT_EQUAL_STRING(moveName(status.move), doc["move"]);
+  TEST_ASSERT_EQUAL_STRING(HEX32, doc["firmware"]);
 }
 
 void test_scheme_message_sets_the_scheme(void) {
@@ -221,7 +234,87 @@ void test_too_small_a_buffer_writes_nothing(void) {
   const JsonDocument vectors = loadVectors("telemetry.json");
   char out[16];
   TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(statusOf(vectors["frames"]["cruising"]), kinematics::SCHEME_NORMAL,
-                                                     40.0f, out, sizeof(out)));
+                                                     40.0f, HEX32, out, sizeof(out)));
+}
+
+// An update's messages, each field as the client wrote it. None is a drive
+// command: each would otherwise be a STOP that takes control of the rover,
+// and stops it exploring, from a client that only meant to update it.
+void test_update_messages_are_read(void) {
+  const char begin[] = "{\"ota\":\"begin\",\"size\":1900000,\"md5\":\"0123456789abcdef0123456789abcdef\"}";
+  protocol::Message m = message(begin);
+  assertUpdateMessage(m, protocol::OtaRequest::BEGIN, begin);
+  TEST_ASSERT_EQUAL_UINT32(1900000, m.ota.size);
+  TEST_ASSERT_EQUAL_STRING(HEX32, m.ota.md5);
+
+  const char auth[] =
+      "{\"ota\":\"auth\",\"cnonce\":\"00000000000000000000000000000001\","
+      "\"response\":\"fedcba9876543210fedcba9876543210\"}";
+  m = message(auth);
+  assertUpdateMessage(m, protocol::OtaRequest::AUTH, auth);
+  TEST_ASSERT_EQUAL_STRING("00000000000000000000000000000001", m.ota.cnonce);
+  TEST_ASSERT_EQUAL_STRING("fedcba9876543210fedcba9876543210", m.ota.response);
+
+  assertUpdateMessage(message("{\"ota\":\"cancel\"}"), protocol::OtaRequest::CANCEL, "cancel");
+}
+
+// A field absent or of the wrong type reads as one FirmwareUpdate refuses,
+// size 0 or "", and never as a null pointer it would read through. A size
+// that is negative, fractional or past 32 bits is no size.
+void test_update_fields_default_to_refusals(void) {
+  const char* const malformed[] = {
+      "{\"ota\":\"begin\"}",
+      "{\"ota\":\"begin\",\"size\":\"1000\",\"md5\":5}",
+      "{\"ota\":\"begin\",\"size\":-1,\"md5\":null}",
+      "{\"ota\":\"begin\",\"size\":1.5}",
+      "{\"ota\":\"begin\",\"size\":4294967296}",
+      "{\"ota\":\"auth\",\"cnonce\":[],\"response\":{}}",
+  };
+  for (const char* json : malformed) {
+    const protocol::Message m = message(json);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::OTA, m.kind, json);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, m.ota.size, json);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("", m.ota.md5, json);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("", m.ota.cnonce, json);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("", m.ota.response, json);
+  }
+}
+
+// The rover's own replies, a misspelt action, an empty one: none is an
+// action the rover takes, and RemoteControl ignores them -- they are not the
+// STOP a malformed command is.
+void test_unknown_update_actions_change_nothing(void) {
+  const char* const unknown[] = {"{\"ota\":\"next\",\"offset\":0}", "{\"ota\":\"BEGIN\"}", "{\"ota\":\"\"}"};
+  for (const char* json : unknown) assertUpdateMessage(message(json), protocol::OtaRequest::UNKNOWN, json);
+}
+
+// "ota" makes an update message only as a string and without "move", as
+// "scheme" makes a scheme message: otherwise the message drives. An update
+// message naming a scheme as well is an update message, and sets no scheme.
+void test_update_messages_need_a_string_and_no_move(void) {
+  assertDefaultsToStop("{\"ota\":1}");
+  const protocol::Message moving = message("{\"move\":1,\"speed\":10,\"duration\":100,\"ota\":\"cancel\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, moving.kind);
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, moving.command.move);
+  assertUpdateMessage(message("{\"ota\":\"cancel\",\"scheme\":\"ADVANCED\"}"), protocol::OtaRequest::CANCEL,
+                      "with a scheme");
+}
+
+// The longest update messages a client sends fit, as the longest command
+// must: every field at its longest, spaced as json.dumps writes it.
+void test_longest_update_messages_fit(void) {
+  char longest[protocol::COMMAND_MAX_BYTES + 1];
+  int length = snprintf(longest, sizeof(longest), "{\"ota\": \"%s\", \"size\": %u, \"md5\": \"%s\"}",
+                        protocol::OTA_BEGIN, 4294967295u, HEX32);
+  TEST_ASSERT_TRUE(length > 0 && static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
+  protocol::Message m = message(longest);
+  assertUpdateMessage(m, protocol::OtaRequest::BEGIN, longest);
+  TEST_ASSERT_EQUAL_UINT32(4294967295u, m.ota.size);
+
+  length = snprintf(longest, sizeof(longest), "{\"ota\": \"%s\", \"cnonce\": \"%s\", \"response\": \"%s\"}",
+                    protocol::OTA_AUTH, HEX32, HEX32);
+  TEST_ASSERT_TRUE(length > 0 && static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
+  assertUpdateMessage(message(longest), protocol::OtaRequest::AUTH, longest);
 }
 
 // Each reply, key for key and type for type, as the client reads it.
@@ -262,6 +355,11 @@ int main(int, char**) {
   RUN_TEST(test_unknown_scheme_is_ignored);
   RUN_TEST(test_other_messages_drive);
   RUN_TEST(test_a_move_with_a_scheme_still_drives);
+  RUN_TEST(test_update_messages_are_read);
+  RUN_TEST(test_update_fields_default_to_refusals);
+  RUN_TEST(test_unknown_update_actions_change_nothing);
+  RUN_TEST(test_update_messages_need_a_string_and_no_move);
+  RUN_TEST(test_longest_update_messages_fit);
   RUN_TEST(test_update_replies_are_written);
   RUN_TEST(test_update_replies_write_nothing_rather_than_too_little);
   return UNITY_END();

@@ -16,16 +16,26 @@
 //
 //   client -> rover   {"move": <MoveCode>, "speed": 0..255, "duration": ms}
 //                     {"scheme": "NORMAL" | "ADVANCED"}
+//                     {"ota": "begin", "size": bytes, "md5": hex}
+//                     {"ota": "auth", "cnonce": hex, "response": hex}
+//                     {"ota": "cancel"}
+//                     binary frames: the image, from the offset "next" names
 //   rover -> clients  {"mode", "move", "moving", "temperature", "motorsReady",
-//                      "scheme", "phase"?, "halt"?, "distanceLeft"?,
-//                      "distanceFrontLeft"?, "distanceFront"?,
+//                      "scheme", "firmware", "phase"?, "halt"?,
+//                      "distanceLeft"?, "distanceFrontLeft"?, "distanceFront"?,
 //                      "distanceFrontRight"?, "distanceRight"?}
+//   rover -> the client updating it
+//                     {"ota": "auth", "nonce"}, {"ota": "next", "offset"},
+//                     {"ota": "done"} or {"ota": "failed", "reason"}
 //
 // "phase" and "halt" appear only while exploring; the distances appear once
 // every bearing has been measured. A distance of 999 means no echo.
 // "motorsReady" is false when the motor shield did not answer at boot, which
 // otherwise looks like a rover that reports moves but never moves. "scheme"
 // is the control scheme every controller shares (kinematics::ControlScheme).
+// "firmware" is the running image's MD5. It also says the rover takes
+// updates over the link: older firmware reads an "ota" message as a STOP
+// that takes control, so a client sends none without it.
 namespace protocol {
 
 struct Command {
@@ -34,22 +44,37 @@ struct Command {
   int durationMs;
 };
 
+// A firmware update's message; FirmwareUpdate.h has the rules. The strings
+// point into the parsed document, so they last as long as it does. A field
+// absent or of the wrong type reads as 0 or "", which FirmwareUpdate refuses.
+struct OtaRequest {
+  enum Action { BEGIN, AUTH, CANCEL, UNKNOWN };
+  Action action;
+  uint32_t size;         // BEGIN: the image's length in bytes
+  const char* md5;       // BEGIN: the image's MD5, 32 hex digits
+  const char* cnonce;    // AUTH: the client's nonce, 32 hex digits
+  const char* response;  // AUTH: md5hex(md5hex(password):nonce:cnonce)
+};
+
 // What one client message asks for.
 struct Message {
   enum Kind {
     DRIVE,       // a drive command: `command`
     SET_SCHEME,  // choose the control scheme: `scheme`
     IGNORE,      // a scheme message naming no scheme we know
+    OTA,         // part of a firmware update: `ota`
   };
   Kind kind;
   Command command;
   kinematics::ControlScheme scheme;
+  OtaRequest ota;
 };
 
-// Read any client message. One carrying "scheme" (and no "move") sets the
-// control scheme: it never takes control and never stops the rover, and an
-// unknown scheme name is ignored. Everything else is a drive command,
-// defaults and all.
+// Read any client message. One carrying a string "ota" (and no "move") is
+// part of a firmware update, and one carrying "scheme" (and no "move") sets
+// the control scheme: neither takes control or stops the rover by itself,
+// and an unknown action or scheme name changes nothing. Everything else is a
+// drive command, defaults and all.
 Message readMessage(JsonVariantConst json);
 
 // "NORMAL" or "ADVANCED".
@@ -94,13 +119,14 @@ size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capac
 // RemoteControl's buffer for one telemetry frame, terminator included. A frame
 // that does not fit is not sent at all, so telemetry would freeze in exactly
 // the states that outgrow it. test_longest_telemetry_fits checks the worst
-// case against this, about 315 bytes today: a new key must keep it inside.
+// case against this, about 360 bytes today: a new key must keep it inside.
 constexpr size_t TELEMETRY_MAX_BYTES = 384;
 
-// Serialise telemetry into `out`. Returns the length written, or 0 if it did
-// not fit (never a truncated, invalid document).
+// Serialise telemetry into `out`, `firmware` being the running image's MD5.
+// Returns the length written, or 0 if it did not fit (never a truncated,
+// invalid document).
 size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,
-                      float temperatureC, char* out, size_t capacity);
+                      float temperatureC, const char* firmware, char* out, size_t capacity);
 
 }  // namespace protocol
 

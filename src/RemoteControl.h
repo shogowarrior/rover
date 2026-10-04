@@ -4,7 +4,9 @@
 #include <WebSocketsServer.h>
 #include <stdint.h>
 
+#include "FirmwareUpdate.h"
 #include "Kinematics.h"
+#include "Protocol.h"
 #include "Rover.h"
 
 // WebSocketsServer 2.6.1 never clears a client slot's count of missed pongs
@@ -30,27 +32,32 @@ class HeartbeatServer : public WebSocketsServer {
   }
 };
 
-// The WebSocket link: drive commands in, telemetry out (Protocol.h has the
-// format). Network starts it once WiFi is up and calls update() every loop.
-// `scheme` is the rover's one control scheme, shared with the gamepad: a
-// client may change it, and telemetry reports it.
+// The WebSocket link: drive commands in, telemetry out, and firmware updates
+// (Protocol.h has the format). Network starts it once WiFi is up and calls
+// update() every loop. `scheme` is the rover's one control scheme, shared
+// with the gamepad: a client may change it, and telemetry reports it.
 class RemoteControl {
  public:
-  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme);
+  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware);
 
   // Start serving. Safe to call again after a WiFi reconnect.
   void begin();
 
-  // Serve clients and broadcast telemetry. Call every loop while online.
+  // Serve clients and broadcast telemetry, and move a firmware update on,
+  // restarting into the new image once it is due. Call every loop while
+  // online.
   void update(uint32_t now);
 
  private:
   void onEvent(uint8_t client, WStype_t type, uint8_t* payload, size_t length);
   void onCommand(uint8_t client, const uint8_t* payload, size_t length);
+  void onUpdateRequest(uint8_t client, const protocol::OtaRequest& request);
+  void send(const FirmwareUpdate::Reply& reply);
   void broadcastTelemetry();
 
   Rover& rover;
   kinematics::ControlScheme& scheme;
+  FirmwareUpdate& firmware;
   HeartbeatServer server;
   bool started = false;
   uint32_t lastBroadcastMs = 0;

@@ -3,6 +3,8 @@
 
 #include "DriveTrain.h"
 #include "Features.h"
+#include "FirmwareUpdate.h"
+#include "FlashSlot.h"
 #include "Gamepad.h"
 #include "Network.h"
 #include "RemoteControl.h"
@@ -20,8 +22,10 @@ Scanner scanner;
 Rover rover(driveTrain, scanner);
 // One control scheme for every controller, so the gamepad and the panel agree.
 kinematics::ControlScheme controlScheme = features::DEFAULT_CONTROL_SCHEME;
-RemoteControl remote(rover, controlScheme);
-Network network(rover, remote);
+FlashSlot flashSlot;
+FirmwareUpdate firmwareUpdate(rover, flashSlot);
+RemoteControl remote(rover, controlScheme, firmwareUpdate);
+Network network(rover, remote, firmwareUpdate);
 Gamepad gamepad(rover, controlScheme);
 
 // Only a power-on explores (Features.h, AUTONOMOUS_AT_POWER_ON, says why).
@@ -40,6 +44,7 @@ void setup() {
   rover.begin(startupMode(), millis());
   // Before WiFi: pairing rewrites the board's MAC address.
   if (features::GAMEPAD) gamepad.begin(features::PS3_HOST_MAC);
+  flashSlot.begin();  // reads the whole running image, which loop() could not afford
   network.begin();
 
   // The backstop for a blocked loop: a pass over 5 s resets the board, and

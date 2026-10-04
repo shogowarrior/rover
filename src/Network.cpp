@@ -1,6 +1,7 @@
 #include "Network.h"
 
 #include <ArduinoOTA.h>
+#include <MD5Builder.h>
 #include <WiFi.h>
 
 #include "Features.h"
@@ -26,9 +27,32 @@ const IPAddress SUBNET(255, 255, 255, 0);
 const IPAddress PRIMARY_DNS(8, 8, 8, 8);
 const IPAddress SECONDARY_DNS(8, 8, 4, 4);
 
+// The OTA password as both update paths check a client against it:
+// md5hex(password), which is what ArduinoOTA keeps (setPassword() hashes the
+// password, setPasswordHash() takes the hash as given), or "" for none. It
+// goes to ArduinoOTA and FirmwareUpdate and nowhere else: never log or send
+// it.
+String otaSecret() {
+#if defined(OTA_PASSWORD_HASH)
+  // FirmwareUpdate keeps 32 digits, so a longer hash would let the panel in
+  // where espota is refused.
+  static_assert(sizeof(OTA_PASSWORD_HASH) == 33, "OTA_PASSWORD_HASH must be md5(password), 32 hex digits");
+  return OTA_PASSWORD_HASH;
+#elif defined(OTA_PASSWORD)
+  MD5Builder md5;
+  md5.begin();
+  md5.add(OTA_PASSWORD);
+  md5.calculate();
+  return md5.toString();
+#else
+  return String();
+#endif
+}
+
 }  // namespace
 
-Network::Network(Rover& rover, RemoteControl& remote) : rover(rover), remote(remote) {}
+Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware)
+    : rover(rover), remote(remote), firmware(firmware) {}
 
 void Network::begin() {
   lastReconnectMs = millis();
@@ -108,11 +132,11 @@ void Network::configureOta() {
   // Advertise the configured name over mDNS (rover.local by default) rather
   // than esp32-<mac>. Both setters are ignored once begin() has run.
   ArduinoOTA.setHostname(WIFI_HOSTNAME);
-#if defined(OTA_PASSWORD_HASH)
-  ArduinoOTA.setPasswordHash(OTA_PASSWORD_HASH);
-#elif defined(OTA_PASSWORD)
-  ArduinoOTA.setPassword(OTA_PASSWORD);
-#endif
+  // Before goOnline() starts the WebSocket, so no update over the link can
+  // begin without the password.
+  const String secret = otaSecret();
+  if (secret.length() > 0) ArduinoOTA.setPasswordHash(secret.c_str());
+  firmware.setSecret(secret.c_str());
 
   ArduinoOTA
       .onStart([this]() {

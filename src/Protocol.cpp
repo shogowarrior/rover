@@ -20,6 +20,24 @@ Command readCommand(JsonVariantConst json) {
   return command;
 }
 
+// Reads `json` as part of a firmware update into `request`, and says whether
+// it is one. Like a scheme message it is not a command: a client updating
+// the rover must not take control of it, or stop it exploring, by sending
+// one. FirmwareUpdate stands the rover down itself, once it has checked the
+// request.
+bool readOtaRequest(JsonVariantConst json, OtaRequest& request) {
+  const char* action = json["ota"] | "";
+  request.action = strcmp(action, OTA_BEGIN) == 0    ? OtaRequest::BEGIN
+                   : strcmp(action, OTA_AUTH) == 0   ? OtaRequest::AUTH
+                   : strcmp(action, OTA_CANCEL) == 0 ? OtaRequest::CANCEL
+                                                     : OtaRequest::UNKNOWN;
+  request.size = json["size"] | static_cast<uint32_t>(0);
+  request.md5 = json["md5"] | "";
+  request.cnonce = json["cnonce"] | "";
+  request.response = json["response"] | "";
+  return json["ota"].is<const char*>() && json["move"].isNull();
+}
+
 }  // namespace
 
 Message readMessage(JsonVariantConst json) {
@@ -27,6 +45,10 @@ Message readMessage(JsonVariantConst json) {
   message.kind = Message::DRIVE;
   message.command = readCommand(json);
   message.scheme = kinematics::SCHEME_NORMAL;
+  if (readOtaRequest(json, message.ota)) {
+    message.kind = Message::OTA;
+    return message;
+  }
 
   // A scheme message is configuration, not a command: a client that only
   // switches layouts must not take control from an exploring rover.
@@ -79,7 +101,7 @@ size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capac
 }
 
 size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,
-                      float temperatureC, char* out, size_t capacity) {
+                      float temperatureC, const char* firmware, char* out, size_t capacity) {
   // Built fresh each time from typed state: a long-lived JsonDocument used as
   // a state store is what let stale distances and move names leak into
   // telemetry before.
@@ -93,6 +115,7 @@ size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme sch
   doc["temperature"] = temperatureC;
   doc["motorsReady"] = status.motorsReady;
   doc["scheme"] = schemeName(scheme);
+  doc["firmware"] = firmware;
   if (status.phase != nullptr) doc["phase"] = status.phase;
   if (status.haltReason != nullptr) doc["halt"] = status.haltReason;
 

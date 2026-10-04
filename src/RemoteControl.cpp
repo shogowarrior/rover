@@ -1,6 +1,5 @@
 #include "RemoteControl.h"
 
-#include "Protocol.h"
 #include "Timing.h"
 #include "Tuning.h"
 
@@ -27,8 +26,8 @@ constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
 
 }  // namespace
 
-RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme)
-    : rover(rover), scheme(scheme), server(tuning::WEBSOCKET_PORT) {}
+RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware)
+    : rover(rover), scheme(scheme), firmware(firmware), server(tuning::WEBSOCKET_PORT) {}
 
 void RemoteControl::begin() {
   if (started) return;
@@ -42,6 +41,16 @@ void RemoteControl::begin() {
 }
 
 void RemoteControl::update(uint32_t now) {
+  if (firmware.restartDue(now)) {
+    // At rest already: restartDue() waits for it. Standing down as well
+    // writes the release once more on the way into the reset, as an
+    // ArduinoOTA upload's start does.
+    rover.standDown(now);
+    Serial.println("Restarting into the new firmware.");
+    ESP.restart();
+  }
+  send(firmware.update(now));
+
   server.loop();
 
   if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
@@ -53,6 +62,19 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
   switch (type) {
     case WStype_TEXT:
       onCommand(client, payload, length);
+      break;
+
+    case WStype_BIN:
+      send(firmware.receive(client, payload, length, millis()));
+      break;
+
+    // No client of the rover sends a message in pieces, and the image is
+    // taken one whole frame at a time: a fragment is a gap in it.
+    case WStype_FRAGMENT_TEXT_START:
+    case WStype_FRAGMENT_BIN_START:
+    case WStype_FRAGMENT:
+    case WStype_FRAGMENT_FIN:
+      send(firmware.fragmented(client));
       break;
 
     case WStype_CONNECTED: {
@@ -71,6 +93,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
     case WStype_DISCONNECTED:
       Serial.printf("[%u] Disconnected\n", client);
       server.forgetMissedPongs(client);  // the slot's next client starts afresh
+      firmware.disconnected(client);
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
         // stopping leaves the rover driving on its last instruction.
@@ -113,12 +136,45 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
     case protocol::Message::IGNORE:
       Serial.printf("[%u] Ignored an unknown control scheme\n", client);
       break;
+    case protocol::Message::OTA:
+      onUpdateRequest(client, message.ota);  // its strings live in `input`
+      break;
   }
+}
+
+void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& request) {
+  const uint32_t now = millis();
+  switch (request.action) {
+    case protocol::OtaRequest::BEGIN:
+      send(firmware.begin(client, request.size, request.md5, now));
+      break;
+    case protocol::OtaRequest::AUTH:
+      send(firmware.authenticate(client, request.cnonce, request.response, now));
+      break;
+    case protocol::OtaRequest::CANCEL:
+      send(firmware.cancel(client));
+      break;
+    case protocol::OtaRequest::UNKNOWN:
+      Serial.printf("[%u] Ignored an unknown update message\n", client);
+      break;
+  }
+}
+
+// Replies go to the one client updating the rover, never to every client.
+void RemoteControl::send(const FirmwareUpdate::Reply& reply) {
+  char frame[protocol::OTA_REPLY_MAX_BYTES];
+  const size_t length = protocol::writeOtaReply(reply, frame, sizeof(frame));
+  if (length == 0) return;  // nothing to say
+  if (reply.kind == FirmwareUpdate::Reply::FAILED) {
+    Serial.printf("[%u] Firmware update failed: %s\n", reply.client, reply.reason);
+  }
+  server.sendTXT(reply.client, frame, length);
 }
 
 void RemoteControl::broadcastTelemetry() {
   char frame[protocol::TELEMETRY_MAX_BYTES];
-  const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), frame, sizeof(frame));
+  const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), firmware.running(),
+                                                 frame, sizeof(frame));
   if (length == 0) {
     // Clients would only see telemetry freeze. Say why once, not every
     // TELEMETRY_INTERVAL_MS.
