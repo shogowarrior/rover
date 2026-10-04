@@ -224,8 +224,13 @@ schemeToggle.onChange((scheme) => {
   if (scheme === null) answerPresses();
   else if (letGo) familySelector.awaitPress("pivot", true);
 });
-// Pressing anything answers a request: the operator is driving again.
-driver.onManualInput(answerPresses);
+// A press answers a request: a stick's press its own, since a thumb still
+// resting on the other stick drives nothing; a press of anything else both,
+// since the operator has taken the rover in hand again.
+driver.onManualInput((stick) => {
+  if (stick !== "pivot") familySelector.awaitPress("move", false);
+  if (stick !== "move") familySelector.awaitPress("pivot", false);
+});
 
 /* --- tabs ---------------------------------------------------------------- */
 

@@ -131,13 +131,14 @@
  *       through a link that has gone quiet.
  *
  *   onManualInput(fn)
- *       fn() on every operator press of a drive control: a primary press on
- *       a stick that takes one (once armed, before joy.js reports a
- *       deflection), a press of a rotate button (after it has taken
- *       effect), and the Stop and Autonomous buttons (after they have
- *       acted). Never on a hover, a
- *       right-, middle- or ctrl-click, or a press on a button already held,
- *       nor on a program's own stop or start exploring.
+ *       fn(stick) on every operator press of a drive control: a primary
+ *       press on a stick that takes one (once armed, before joy.js reports
+ *       a deflection), with stick its name; a press of a rotate button
+ *       (after it has taken effect), and the Stop and Autonomous buttons
+ *       (after they have acted), with stick undefined. Never on a hover, a
+ *       right-, middle- or ctrl-click, a press on a button already held or
+ *       on the pivot stick while it is off, nor on a program's own stop or
+ *       start exploring.
  *
  *   onStandDown(fn)
  *       fn(reason) after the driver stands down or halts, whether or not
@@ -415,7 +416,7 @@ class Driver {
       if (stick === this.#pivot && !this.#pivots) return;
       stick.armed = true;
       stick.pressed = ++this.#presses;
-      this.#manualInputListeners.emit();
+      this.#manualInputListeners.emit(name);
       stick.pressedOn = Driver.#boxOf(stick);
     };
     box.addEventListener("mousedown", (event) => {

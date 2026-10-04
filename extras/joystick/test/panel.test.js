@@ -1032,17 +1032,19 @@ function near(a, b) { return Math.abs(a[0] - b[0]) < 0.6 && Math.abs(a[1] - b[1]
 /* --- the Driver's extension points ------------------------------------------ */
 
 // Records what the Driver reports, in the page: __downs (onStandDown reasons,
-// with whether anything was still being driven) and __presses (onManualInput).
+// with whether anything was still being driven) and __pressed (onManualInput,
+// the stick named or "-" for another control).
 function listen(page) {
   page.evalIn(`
     globalThis.__downs = [];
-    globalThis.__presses = 0;
+    globalThis.__pressed = [];
     driver.onStandDown((reason) => __downs.push(reason + (driver.driving ? " while driving" : "")));
-    driver.onManualInput(() => { __presses++; });
+    driver.onManualInput((stick) => { __pressed.push(stick || "-"); });
   `);
   return {
     downs: () => page.evalIn("__downs.join()"),
-    presses: () => page.evalIn("__presses"),
+    presses: () => page.evalIn("__pressed.length"),
+    pressed: () => page.evalIn("__pressed.join()"),
   };
 }
 
@@ -1290,12 +1292,19 @@ test("onManualInput: an armed stick press and a rotate press, never a hover or a
   page.fire(page.$("stop"), "click");
   page.fire(page.$("auto"), "click");
   check(heard.presses() === 4, `Stop and Autonomous: ${heard.presses()}`);
+  // The pivot stick takes no press while it is off, and names itself once on.
+  mouseStick(page, page.pivotCanvas).down();
+  page.fire(page.doc, "mouseup", { button: 0 });
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  mouseStick(page, page.pivotCanvas).down();
+  check(heard.pressed() === "move,-,-,-,pivot", `named: ${heard.pressed()}`);
 
   const touch = loadPage();
   connectOpen(touch);
   const touched = listen(touch);
   stickTouch(touch, 0).start();
-  check(touched.presses() === 1, `touch on the stick: ${touched.presses()}`);
+  pivotTouch(touch, 1).start(); // off: the scheme is unknown
+  check(touched.pressed() === "move", `touch on the sticks: ${touched.pressed()}`);
   check(page.errors.length === 0 && touch.errors.length === 0, `errors ${page.errors} ${touch.errors}`);
 });
 
@@ -1612,9 +1621,9 @@ test("stick: a rebuild under a held stick sends one STOP, then nothing until a f
 // A resize of the window that leaves the stick's box at (left, top), its
 // size unchanged: a phone turned, where 54vw upright is 54vmin on its side.
 // joy.js measures a thumb against where the box is now.
-function moveStick(page, left, top) {
-  page.$("stick").offsetLeft = left;
-  page.$("stick").offsetTop = top;
+function moveStick(page, left, top, id = "stick") {
+  page.$(id).offsetLeft = left;
+  page.$(id).offsetTop = top;
   page.fire(page.win, "resize", { bubbles: false });
 }
 
@@ -1799,6 +1808,171 @@ test("stick: a press is measured against the box its own redraw leaves", () => {
   check(count(ws) >= 5 && names(ws).every((n) => n === "MOVE_FORWARD"), `the press drove ${names(ws)}`);
   thumb.end();
   check(names(ws).slice(-1).join() === "STOP", `let go ${names(ws).slice(-1)}`);
+});
+
+/* --- two sticks ------------------------------------------------------------ */
+
+// The translate stick and the pivot stick, held at once by two thumbs, as
+// on a gamepad. Each JoyStick follows only the touch that started on its
+// own canvas (joy.js checks the touch's target and identifier), and the
+// Driver tracks each stick apart.
+
+test("sticks: two thumbs at once: the stick pressed last drives, and letting go of it hands the rover to the other", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const limit = Number(page.$("speed").value);
+  const move = stickTouch(page, 0);
+  const pivot = pivotTouch(page, 1);
+  move.start(); pushTo(page, move, 0, 70);
+  pivot.start(); pushTo(page, pivot, 60, 60);
+  check(names(ws).join() === "MOVE_FORWARD,PIVOT_RIGHT_FORWARD", `the pivot stick, pressed last ${names(ws)}`);
+
+  // The translate thumb steering changes nothing sent while the pivot
+  // stick holds the rover; it is remembered.
+  let mark = count(ws);
+  page.clock.advance(150);
+  pushTo(page, move, -70, 0);
+  page.clock.advance(40);
+  check(names(ws, mark).every((n) => n === "PIVOT_RIGHT_FORWARD"), `under the pivot stick ${names(ws, mark)}`);
+
+  // Lifting the pivot thumb hands the rover to the translate stick, in its
+  // latest direction and at its own deflection, at once.
+  mark = count(ws);
+  pivot.end();
+  check(names(ws, mark).join() === "MOVE_LEFT" && ws.sentAt[mark] === page.clock.now(), `handed back ${names(ws, mark)}`);
+  check(ws.moves()[mark].speed === Math.round(0.7 * limit), `at the translate stick's speed: ${ws.moves()[mark].speed}`);
+
+  // A fresh press of the pivot stick takes the rover again; centred under
+  // the thumb, the stick hands it back, and deflected, takes it again: it
+  // is still the stick pressed last.
+  mark = count(ws);
+  const again = pivotTouch(page, 2);
+  again.start(); pushTo(page, again, -60, -60);
+  pushTo(page, again, 2, 2);
+  pushTo(page, again, -60, -60);
+  check(names(ws, mark).join() === "PIVOT_LEFT_BACKWARD,MOVE_LEFT,PIVOT_LEFT_BACKWARD", `centred and back ${names(ws, mark)}`);
+
+  // Lifting the stick not driving changes nothing; lifting both stops once.
+  mark = count(ws);
+  move.end();
+  check(count(ws) === mark, `lifting the translate thumb sent ${names(ws, mark)}`);
+  again.end();
+  page.clock.advance(1000);
+  check(names(ws, mark).join() === "STOP", `both lifted ${names(ws, mark)}`);
+
+  // A rotate button wins over both, and lets go to the stick pressed last.
+  mark = count(ws);
+  const t = stickTouch(page, 3);
+  t.start(); pushTo(page, t, 0, 70);
+  press(page, page.$("cw"), 9);
+  const p = pivotTouch(page, 4);
+  p.start(); pushTo(page, p, 60, -60);
+  lift(page, page.$("cw"), 9);
+  check(names(ws, mark).join() === "MOVE_FORWARD,ROTATE_CLOCKWISE,PIVOT_RIGHT_BACKWARD", `rotate over both ${names(ws, mark)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("sticks: a touchcancel lets go of its own stick, and the other drives on", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const move = stickTouch(page, 0);
+  const pivot = pivotTouch(page, 1);
+  move.start(); pushTo(page, move, 0, 70);
+  pivot.start(); pushTo(page, pivot, 60, 60);
+  let mark = count(ws);
+  pivot.cancel();
+  check(names(ws, mark).join() === "MOVE_FORWARD", `the pivot touch taken away ${names(ws, mark)}`);
+  check(page.pivotJoy.GetX() === "0" && page.joy.GetY() !== "0", `the pivot knob recentred, the translate knob held: ${page.pivotJoy.GetX()} ${page.joy.GetY()}`);
+  mark = count(ws);
+  page.clock.advance(450);
+  check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `the translate stick drives on ${names(ws, mark)}`);
+  move.cancel();
+  check(names(ws, mark).slice(-1).join() === "STOP", `then the other ${names(ws, mark)}`);
+});
+
+test("sticks: the pivot stick takes no press while off, and turning it off stops only what it was driving", () => {
+  // Off, on an exploring rover: a press and a push send nothing and take
+  // nothing from exploration.
+  {
+    const { page, ws } = connected(telemetry({ scheme: "NORMAL" })); // exploring
+    const heard = listen(page);
+    const p = pivotTouch(page, 0);
+    p.start(); pushTo(page, p, 60, 60);
+    page.clock.advance(1000);
+    p.end();
+    check(count(ws) === 0 && heard.presses() === 0, `sent ${names(ws)}, presses ${heard.presses()}`);
+    check(page.evalIn("driver.enablePivots(false)") === false, "turning it off again let go of nothing");
+  }
+
+  // On, held but not pressed last: turned off, it lets go without a STOP,
+  // and the translate stick drives on.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const p = pivotTouch(page, 0);
+    const t = stickTouch(page, 1);
+    p.start(); pushTo(page, p, 60, 60);
+    t.start(); pushTo(page, t, 0, 70);
+    const mark = count(ws);
+    check(page.evalIn("driver.enablePivots(false)") === true, "let go of a deflected stick");
+    page.clock.advance(450);
+    check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `the translate stick drove on ${names(ws, mark)}`);
+    t.end();
+    page.evalIn("driver.enablePivots(true)");
+    pushTo(page, p, 60, -60);
+    page.clock.advance(450);
+    check(names(ws, mark).slice(-1).join() === "STOP", `the pivot thumb, never pressed again, sent ${names(ws, mark)}`);
+  }
+
+  // Pressed but centred: nothing to let go of, nothing sent.
+  {
+    const { page, ws } = connected(telemetry({ scheme: "ADVANCED" })); // exploring
+    pivotTouch(page, 0).start();
+    check(page.evalIn("driver.enablePivots(false)") === false && count(ws) === 0, `a centred stick: ${names(ws)}`);
+  }
+});
+
+test("sticks: a resize that moves the pivot stick under its thumb lets go of it at once, and leaves the translate stick driving", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const move = stickTouch(page, 0);
+  const pivot = pivotTouch(page, 1);
+  move.start(); pushTo(page, move, 0, 70);
+  pivot.start(); pushTo(page, pivot, 60, 60);
+  let mark = count(ws);
+  moveStick(page, 8, -100, "pivotStick");
+  check(names(ws, mark).join() === "MOVE_FORWARD" && ws.sentAt[mark] === page.clock.now(), `moved under the pivot thumb ${names(ws, mark)}`);
+  mark = count(ws);
+  pivot.move(40, -40);
+  page.clock.advance(450);
+  check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `the resting pivot thumb sent ${names(ws, mark)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("sticks: a rebuild of either stick lets go of both: one STOP, then nothing until a fresh press of each", () => {
+  const page = loadPage({ frames: true });
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const move = stickTouch(page, 0);
+  const pivot = pivotTouch(page, 1);
+  move.start(); pushTo(page, move, 0, 70);
+  pivot.start(); pushTo(page, pivot, 60, 60);
+  const translateCanvas = page.canvas;
+  let mark = count(ws);
+  page.$("pivotStick").clientWidth = 180;
+  page.$("pivotStick").clientHeight = 180;
+  page.resized();
+  page.clock.advance(page.evalIn("Driver.REFIT_MS"));
+  check(stoppedByRebuild(page, ws, mark, "PIVOT_RIGHT_FORWARD"), `rebuilt under both thumbs ${names(ws, mark)}`);
+  check(page.pivotCanvas.width === 180 && page.canvas === translateCanvas, "the pivot stick alone built again");
+  check(page.$("stick").resizeObserved && page.$("pivotStick").resizeObserved, "both boxes watched for a new size");
+  mark = count(ws);
+  move.move(-60, 0); pivot.move(40, -40);
+  page.clock.advance(1000);
+  move.end(); pivot.end();
+  check(count(ws) === mark, `the thumbs let go of sent ${names(ws, mark)}`);
+  const fresh = stickTouch(page, 2);
+  fresh.start(); pushTo(page, fresh, 0, 70);
+  pivotTouch(page, 3).start();
+  pivotTouch(page, 3).move(0, -50);
+  check(names(ws, mark).join() === "MOVE_FORWARD,PIVOT_RIGHT_FORWARD", `fresh presses drove ${names(ws, mark)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 /* --- mirrored constants -------------------------------------------------- */
@@ -2101,7 +2275,7 @@ function lastCompoundMatches(selector, node) {
     Boolean(tag || ids.length || classes.length || attrs.length);
 }
 
-test("schemes: the stick hints cannot take a touch from joy.js, and nothing above the stick is positioned", () => {
+test("schemes: the stick hints cannot take a touch from joy.js, and nothing above either stick is positioned", () => {
   // Every stylesheet the page links, not only panel.css: a rule in any of
   // them can reach the stick's ancestors.
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
@@ -2116,12 +2290,15 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   const hints = rules.find((r) => r.sheet === "css/panel.css" && r.selector === ".hints");
   check(hints && /pointer-events:\s*none/.test(hints.body), `.hints lets touches through: ${hints && hints.body}`);
 
-  // joy.js places a touch by its canvas's offsetParent: no ancestor of the
-  // canvas may become one, by a stylesheet or its own style attribute.
+  // joy.js places a touch by its canvas's offsetParent: no ancestor of
+  // either stick's canvas may become one, by a stylesheet or its own style
+  // attribute.
   const page = loadPage();
   const ancestors = [];
-  for (let n = page.canvas.parentNode; n && n.tagName !== "BODY"; n = n.parentNode) ancestors.push(n);
-  check(ancestors.some((n) => n.id === "stick") && ancestors.some((n) => n.id === "driveTab"), `ancestors ${ancestors.map((n) => n.id || n.tagName)}`);
+  for (const canvas of [page.canvas, page.pivotCanvas]) {
+    for (let n = canvas.parentNode; n && n.tagName !== "BODY"; n = n.parentNode) if (!ancestors.includes(n)) ancestors.push(n);
+  }
+  check(["stick", "pivotStick", "movePad", "pivotPad", "driveTab"].every((id) => ancestors.some((n) => n.id === id)), `ancestors ${ancestors.map((n) => n.id || n.tagName)}`);
   let checked = 0;
   for (const rule of rules) {
     if (!CONTAINING_BLOCK.test(rule.body)) continue;
@@ -3359,7 +3536,9 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   const siblings = view.parentNode.children.filter((n) => n.tagName);
   check(view.parentNode === page.$("driveTab").parentNode && siblings[siblings.indexOf(page.$("driveTab")) + 1] === view, "the dock's next sibling, as the wide grid's selector reads it");
   check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
-  for (let n = page.canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of the stick");
+  for (const canvas of [page.canvas, page.pivotCanvas]) {
+    for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
+  }
 
   // Wide, from 1180 px or 761 px tall: the left pane split, and the view in
   // its column on either target (the rail test holds the grid). Nothing
@@ -4334,6 +4513,53 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   page.clock.advance(1000);
   const after = names(ws, mark);
   check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a change ${after}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a change under both sticks lets go of both with one STOP, and each asks for its own fresh press", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }), { looks: TEST_LOOKS });
+  const PRESS_AGAIN = page.evalIn("FamilySelector.PRESS_AGAIN");
+  const caption = page.$("stickLabel");
+  const note = page.$("pivotNote");
+  const asks = () => `${caption.textContent === PRESS_AGAIN ? "move" : "-"},${note.textContent === PRESS_AGAIN ? "pivot" : "-"}`;
+  const move = stickTouch(page, 0);
+  const pivot = pivotTouch(page, 1);
+  move.start(); pushTo(page, move, 0, 70);
+  pivot.start(); pushTo(page, pivot, 60, 60);
+  let mark = count(ws);
+  pickLook(page, "field-light");
+  check(names(ws, mark).join() === "STOP", `the change sent ${names(ws, mark)}`);
+  check(asks() === "move,pivot", `both ask: ${asks()}`);
+  check(page.pivotJoyParameters.internalFillColor === "#0a6f63" && page.joyParameters.internalFillColor === "#0a6f63", "both knobs in the new look");
+  move.end(); pivot.end();
+
+  // A fresh press of one stick answers its own request; the other still
+  // asks, since a thumb resting on it drives nothing. The pivot stick first,
+  // then the translate stick, and the other way round.
+  mark = count(ws);
+  const p1 = pivotTouch(page, 2);
+  p1.start(); pushTo(page, p1, 60, 60);
+  check(asks() === "move,-" && names(ws, mark).join() === "PIVOT_RIGHT_FORWARD", `the pivot stick pressed: ${asks()}, ${names(ws, mark)}`);
+  const t1 = stickTouch(page, 3);
+  t1.start();
+  check(asks() === "-,-", `the translate stick pressed: ${asks()}`);
+  pushTo(page, t1, 0, 70);
+  pickLook(page, "blueprint-dark");
+  check(asks() === "move,pivot", `both asked again: ${asks()}`);
+  t1.end(); p1.end();
+  stickTouch(page, 4).start();
+  check(asks() === "-,pivot", `the translate stick pressed: ${asks()}`);
+  pivotTouch(page, 5).start();
+  check(asks() === "-,-", `the pivot stick pressed: ${asks()}`);
+
+  // One stick held: only that one asks; and a press of anything else
+  // answers every request.
+  const p = pivotTouch(page, 6);
+  p.start(); pushTo(page, p, 60, 60);
+  pickLook(page, "field-light");
+  check(asks() === "-,pivot", `the pivot stick alone held: ${asks()}`);
+  page.fire(page.$("stop"), "click");
+  check(asks() === "-,-", `Stop answers it: ${asks()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
