@@ -289,3 +289,40 @@ drive with `w` held down, then:
   telemetry shows `MANUAL`.
 
 Only when every section passes should the rover go on the floor on its own.
+
+## 10. Updating from the panel
+
+The first time, the rover needs firmware that takes updates over the link:
+flash this build over USB or with `car_ota`. Then, on the stand, running and
+connected from the panel, with the gear's Options open:
+
+1. **What it runs.** Firmware shows "Rover runs" and a short build id. A
+   rover on older firmware shows none, and Update stays off, saying why.
+2. **Choosing.** Build, then Choose file and pick
+   `.pio/build/car_wire/firmware.bin` (or `car_wire_gamepad`'s, on a gamepad
+   rover): its size and build show. Pick `bootloader.bin` or
+   `partitions.bin` from the same folder: the panel refuses it.
+3. **An update.** Press Update. The wheels stay still, the bar fills (about
+   900 KB, so give it a minute or so; note how long it takes), the rover
+   restarts, and the link goes. Telemetry after you connect again must show
+   `MANUAL` with the wheels still, and Options must say the rover runs the
+   file sent. Try it from Chrome and from Firefox.
+4. **What ends one.** Start an update each time, then:
+   - push the stick, press a drive key or press Autonomous: the update
+     stops with "The rover was driven, so the update stopped.";
+   - press Stop: the update carries on;
+   - press Cancel: it stops with "Cancelled.";
+   - close the panel's tab: the rover gives up within 5 s;
+   - start one from a second tab while the first runs: the second is
+     refused with "Another update is under way.".
+   After each, the rover runs the firmware it had: Options shows the same
+   build as before, and after EN too (EN starts it exploring: on the stand).
+5. **The password.** With an OTA password set in the WiFi settings header,
+   flashed over USB: Update with no password or a wrong one stops with
+   "Wrong OTA password." and the old firmware stays; the right one works.
+   `car_ota` with `PLATFORMIO_UPLOAD_FLAGS=--auth=...` still works too.
+6. **Trial boot.** Build a copy whose WiFi settings name a network that is
+   not there, and send it from the panel. It restarts and never comes back
+   on the link. Press EN (on the stand: EN starts it exploring). The board
+   must come back on the previous firmware, on WiFi, and Options must show
+   the build it ran before.

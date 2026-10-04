@@ -2,7 +2,8 @@
 
 The owner's requests for the browser panel and the controls, from
 2026-10-03. All seven steps of the [order of work](#order-of-work) are done,
-and so is [F5](#f5-themes-and-options), from a second message that evening;
+and so are [F5](#f5-themes-and-options), from a second message that evening,
+and [F6](#f6-firmware-updates-from-the-panel), from the next morning;
 what [F4](#f4-other-buttons) deferred waits for the owner. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
@@ -49,6 +50,16 @@ A second message followed at 22:28 UTC, while steps 1 to 3 were in review:
 also remind the thread to make inwdows collapsible wherever needed. keeping mind that it will mostly be landscope mode in either laptop or ipad like device seo mifght as well use more width. check with word-finder and add the support for themes and options like the gear stuff it uses. see if it helps. talk to the word-finder project to see how it does that
 ```
 
+Two more came on 2026-10-04, at 02:46 and 02:56 UTC:
+
+```text
+Remind to check for ota feature as I had  and add it the the dashboard ui
+```
+
+```text
+Make sure to not commit WiFi details
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -81,6 +92,9 @@ also remind the thread to make inwdows collapsible wherever needed. keeping mind
 | check with word-finder and add the support for themes and options like the gear stuff it uses. | Done: [F5](#f5-themes-and-options) |
 | see if it helps. | [F5](#f5-themes-and-options): what carried over, and what did not and why |
 | talk to the word-finder project to see how it does that | Done: [F5](#f5-themes-and-options), "Where it came from" |
+| Remind to check for ota feature as I had | Done: [F6](#f6-firmware-updates-from-the-panel), "What was there" |
+| and add it the the dashboard ui | Done: [F6](#f6-firmware-updates-from-the-panel) |
+| Make sure to not commit WiFi details | Done: [F6](#f6-firmware-updates-from-the-panel), the last bullet of "Done" |
 
 ## Order of work
 
@@ -107,7 +121,9 @@ also remind the thread to make inwdows collapsible wherever needed. keeping mind
    `client/drive.py`'s keys on the panel.
 
 [F5](#f5-themes-and-options), themes and the Options gear, came later and
-was done beside steps 1 to 4, by its own thread.
+was done beside steps 1 to 4, by its own thread, and
+[F6](#f6-firmware-updates-from-the-panel), firmware updates from the panel,
+beside steps 6 and 7.
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1024 x 768, 1180 x 820, 1280 and about 1600 px (see the handoff for
@@ -1259,6 +1275,74 @@ one on its side, in the phone's own font.
 zoom and trash icons, drawn at 40% (under 3:1 in Console and Blueprint, as
 on main).
 
+## F6. Firmware updates from the panel
+
+**Asked** (2026-10-04, 02:46 UTC): "Remind to check for ota feature as I had
+and add it the the dashboard ui". And at 02:56: "Make sure to not commit
+WiFi details".
+
+**What was there.** ArduinoOTA, in `src/Network.cpp` since the first commit:
+`pio run -e car_ota -t upload` sends `firmware.bin` over WiFi with espota,
+behind the OTA password `config.h` may set. Nothing had been removed: no
+branch and no commit ever held another OTA path, and the panel never had
+one. A browser cannot use espota: it starts with a UDP invitation, and the
+board then opens a TCP connection back to the computer.
+
+**Done.** The panel's own way to do what `car_ota` does, over the WebSocket
+it already holds:
+- The Options popover (the gear) has a Firmware section after Keys: the
+  rover's running build, Choose file for a `firmware.bin`, an optional OTA
+  password, Update and Cancel, a progress bar and a status line. The
+  popover stays non-modal, so Stop stays one press; an update carries on
+  with it closed. The keyboard's drive keys leave the section alone.
+- The image goes as binary frames of 1000 bytes, one at a time, each
+  answered before the next is sent: the WebSocket library drops a frame
+  whose TCP segments arrive more than 2 ms apart (`WEBSOCKETS_TCP_TIMEOUT`),
+  and a frame of 1008 bytes is one segment. `FirmwareUpdate`
+  (`src/FirmwareUpdate.{h,cpp}`, host-tested) runs the rules; `FlashSlot`
+  writes into the other OTA slot through arduino-esp32's `Update`.
+- The rover stands down as an update begins, and any motion ends the update
+  (the operator's hands win, as over a program); no chunk is written while
+  the wheels turn. Stop is not motion. A link lost, five seconds of silence,
+  Cancel, a file that is not an ESP32 app image, a wrong password or a
+  failed check ends it with the old firmware still the one that boots. When
+  the image is whole, its MD5 and the whole image are verified before it is
+  made the one to boot, and the rover restarts into it once at rest, in
+  manual, as after any reset but a power-on.
+- The OTA password, when `config.h` sets one, guards both ways in: the
+  panel answers the rover's challenge as espota does, and never keeps,
+  logs or sends the password.
+- Telemetry carries `firmware`, the MD5 of the running image, so the panel
+  knows the rover takes updates (older firmware never gets an `ota`
+  message, which it would read as a STOP), shows which build runs, and says
+  so when it is the file just sent.
+- An image that never gets online is undone: the new firmware confirms
+  itself once WiFi is up, and until then the next reset boots the previous
+  one. This covers ArduinoOTA's uploads too.
+- Starting an update stops a program running on the rover.
+- No WiFi details anywhere: the change carries no SSID, WiFi password or
+  OTA password, in code, tests, docs or commits.
+
+**Not done, and why.**
+- An HTTP update endpoint (`HTTPUpdateServer`, ElegantOTA): a second
+  server, CORS from a `file://` page, and an upload that blocks `loop()` for
+  its whole length with no timeout of its own.
+- Reconnecting by itself after the restart: the panel says to connect again.
+
+**Tests.** `test/test_firmware_update` (the rules: one owner, the password,
+stand-down and rest, motion, silence, cancel, fragments, sizes, the image
+check, the restart), `test_protocol` (the messages and the telemetry key)
+and `test_rover` (`atRest()`); the panel's `ota.test.js` (MD5 against RFC
+1321 and Node's, the Link, when Update is offered, an update end to end,
+the password, every way one ends, the restart, a program stopped);
+`tools/check_protocol.py` checks the panel's copies of the names and that
+its chunk fits the rover's.
+
+**Checks for the owner,** which need the rover: [the bench
+checklist](bench-checklist.md), section 10, "Updating from the panel". And
+the section's look in each theme on a laptop and an iPad-size screen;
+Safari is untested.
+
 ## Menu or explicit: every control
 
 | Control | Where | Menu? | Why |
@@ -1285,6 +1369,7 @@ on main).
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
 | Options (gear) | header | yes | the look: set once, moves nothing ([F5](#f5-themes-and-options)) |
 | The keys' list | Options | yes | a reference that moves nothing ([F4](#f4-other-buttons)) |
+| Firmware update | Options | yes | rare, and out of driving's way; the popover is not modal, so Stop stays one press ([F6](#f6-firmware-updates-from-the-panel)) |
 
 ## Open from earlier work
 
