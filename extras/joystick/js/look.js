@@ -15,7 +15,8 @@
  *                      give, as other parts' keys are: the look is put on
  *                      before app.js runs.
  *   LookPicker.restore()
- *                      put the remembered look on <html>.
+ *                      put the remembered look on <html>, and paint the
+ *                      browser's own bar (theme-color) in its case colour.
  *
  *   new LookPicker(group)
  *     group   the Options popover's empty radiogroup. Each theme gets a row of
@@ -53,9 +54,16 @@ class LookPicker {
   }
 
   // Put the look with this id on <html>, or the default if none has it.
+  // The browser's bar takes a colour as a plain value: in <head>, the
+  // stylesheets before this file have loaded, so it is painted with the
+  // page's first paint, not when app.js runs. A look the page cannot read
+  // leaves it as joystick.html gives it.
   static #wear(id) {
     const look = LookPicker.LOOKS.find((candidate) => candidate.id === id) || LookPicker.LOOKS[0];
     document.documentElement.setAttribute("data-look", look.id);
+    const bar = document.querySelector('meta[name="theme-color"]');
+    const colour = lookToken("--case");
+    if (bar && colour) bar.setAttribute("content", colour);
   }
 
   constructor(group) {

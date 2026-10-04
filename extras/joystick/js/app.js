@@ -372,16 +372,12 @@ const lookPicker = new LookPicker(byId("lookChoice"));
 new Popover(byId("options"), byId("optionsPanel"));
 
 // Whatever took the look's colours as plain values when it was built takes
-// the new look's: the browser's own bar (theme-color), the stick's knob,
-// which joy.js paints into its canvas, and the block editor's Blockly theme.
-// Anything styled with var() follows by itself. Rebuilt, the stick lets go
-// of a held stick as a scheme change does (one STOP, only if it was
+// the new look's: the stick's knob, which joy.js paints into its canvas,
+// and the block editor's Blockly theme (look.js paints the browser's own
+// bar). Anything styled with var() follows by itself. Rebuilt, the stick
+// lets go of a held stick as a scheme change does (one STOP, only if it was
 // driving), and its caption asks for a fresh press; nothing else is sent.
-const themeColor = document.querySelector('meta[name="theme-color"]');
-const paintBrowserBar = () => themeColor.setAttribute("content", lookToken("--case"));
-paintBrowserBar();
 lookPicker.onChange(() => {
-  paintBrowserBar();
   if (driver.restyle()) familySelector.awaitPress(true);
   programTab.restyle();
 });

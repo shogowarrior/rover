@@ -645,9 +645,11 @@ input[type="range"]::-moz-range-thumb {
   background: radial-gradient(circle, var(--case) 0 3px, transparent 3.5px), var(--live);
 }
 
-/* A phone keeps the row for the status: the mark alone says whose panel
-   this is. So does a phone on its side, whose header has a column only. */
-@media (max-width: 439.98px), (orientation: landscape) and (max-height: 520px) {
+/* A phone keeps the row for the status and the gear: the mark alone says
+   whose panel this is. Up to 480 px, because beside the word a 440 px
+   phone's three pills were cut short in a wide font. So does a phone on its
+   side, whose header has a column only. */
+@media (max-width: 479.98px), (orientation: landscape) and (max-height: 520px) {
   .wordmark .word { display: none; }
 }
 
@@ -1845,7 +1847,9 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    their labels ran into each other's segments, and a tap on "Normal" could
    land on Advanced. They take a row each, and the columns close up (the
    shell's and the dock's together, as they must). The status keeps to one
-   row: it takes the mark's place. The readouts take the type size a
+   row beside the gear: it takes the mark's place, and its pills close up
+   and drop their lamps, whose colour their tint already shows (with them,
+   "No link" was cut short at 480 x 320). The readouts take the type size a
    portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   .shell,
@@ -1854,6 +1858,12 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .switches { grid-template-columns: minmax(0, 1fr); }
 
   .wordmark { display: none; }
+
+  .masthead { gap: var(--s-1); }
+
+  .pill { --pill-x: var(--s-1); }
+
+  .pill > .lamp { display: none; }
 
   .cell output { font-size: var(--t-sm); }
 }

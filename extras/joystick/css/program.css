@@ -522,6 +522,9 @@
 .blocklyMenuItem { color: var(--readout); border-radius: var(--r-sm); }
 .blocklyMenuItemDisabled { color: var(--dim) !important; }
 .blocklyWidgetDiv .blocklyMenuItemHighlight { background: var(--raised-hi); }
+/* An item's key ("Delete", "Control + Z"): Blockly's own light grey is lost
+   on a light look's menu. */
+.blocklyMenuItemContent .blocklyShortcutContainer .blocklyShortcut { color: var(--dim); }
 
 .blocklyMenuSeparator { border-top-color: var(--rule); }
 

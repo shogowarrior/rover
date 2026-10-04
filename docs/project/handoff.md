@@ -110,11 +110,16 @@ Finder's (features.md, F5, says what carried over and what did not):
 - `LookPicker` (`js/look.js`, loaded in `<head>` so the first paint is in
   the remembered look): the gear in the header opens Options, a non-modal
   `Popover` with a tile per look, so Stop stays one press;
-- the stick, Blockly's theme and the browser bar repaint on a change;
+- the stick, Blockly's theme and the browser bar repaint on a change (the
+  bar from `<head>`, with the first paint), the stick's knob shading toward
+  a rim of its look's own;
 - `test/looks.test.js`: every look has every token, no other stylesheet
   writes a colour, and every pairing of ink and surface in its audit (a
   hand-kept list) meets its contrast. It found the red echo wedge under
-  3:1, now drawn whole.
+  3:1, now drawn whole. A headless check of every look against `main`
+  found the light looks' knob faded into its well and Blockly's key hints
+  faint, both fixed, and the header's pills cut on narrow phones, fixed
+  but for "Motors OK" at 480 x 320.
 
 Panel tests and the protocol check pass. Its container could not build the
 firmware either (same registry block); it changed no firmware.
@@ -164,7 +169,8 @@ and the next thread's task names that branch.
 ## Open, not started
 
 - F5's checks for the owner, which need a real screen: features.md, F5,
-  lists them.
+  lists them, and what it left as it was (Blockly's focus colours, its
+  faint zoom and trash icons).
 - The gear sits at the end of the header's first group, which on a wide
   screen is mid-header. A later header change (F1 moves the Rover |
   Simulator switch into the header) can give it the header's right end.

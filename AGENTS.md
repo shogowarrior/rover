@@ -374,8 +374,8 @@ keeps its line on a phone on its side, and the stick's caption stays on one
 line, which keeps a family chosen under a held stick a re-steer. joy.js
 sizes its canvas once, as it is built, so when the box settles at a new size
 the Driver builds the stick again; it paints it once too, so it builds it
-again when the look changes, in the new look's `--live`, `--case` and
-`--faint` (`js/drive.js`), letting go of a held stick first as a scheme
+again when the look changes, in the new look's `--live`, `--stick-rim` and
+`--stick-ring` (`js/drive.js`), letting go of a held stick first as a scheme
 change does. A look picked while the Drive tab is hidden is drawn as the
 tab is shown, before a press can land.
 
@@ -383,12 +383,13 @@ tab is shown, before a press can land.
 themes in Dark and Light, worn as `<html data-look>`. The gear in the
 header opens Options, where `js/look.js` offers them and remembers the
 choice; it loads in `<head>`, so the page is drawn in that look from the
-first paint. The popover is not modal: Stop stays one press while it is
-open. On an upright phone under 440 px, and on a phone on its side, the
-mode pill gives way to the gear; Autonomous lights while the rover
-explores. What takes a colour as a plain value (joy.js's canvas, Blockly's
-theme, the browser's `theme-color`) is given it again on a change, through
-`lookToken()`; everything else follows through `var()`. A new colour is a
+first paint, and paints the browser's bar (`theme-color`) then too. The
+popover is not modal: Stop stays one press while it is open. On an upright
+phone under 440 px, and on a phone on its side, the mode pill gives way to
+the gear; Autonomous lights while the rover explores. What takes a colour as
+a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
+it again on a change, through `lookToken()`; everything else follows
+through `var()`. A new colour is a
 token in every look, never a literal: `test/looks.test.js` fails a
 stylesheet that writes one, a token missing from a look, and a pairing in
 its contrast audit that falls short. The audit is a hand-kept list, so a

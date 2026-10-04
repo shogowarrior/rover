@@ -949,10 +949,11 @@ and a script holds every look to WCAG AA.
 
 **Done.** All of that, in the panel's shape:
 - Three themes, each Dark and Light: Console, the default, the panel's own
-  colours (its tokens byte for byte; the stick's ring and knob rim now take
-  `--faint` and `--case`, a shade off joy.js's old literals, and an echo's
-  wedge is drawn whole, below); Field, the most contrast, for glare or a
-  bright room; and Blueprint, tinted navy or pale blue. Six tiles in one
+  colours, the stick's among them (but for an echo's wedge, drawn whole
+  now, below; a dragged block's marker in the page's ink rather than pure
+  white; and the keys in a block's menu in `--dim` rather than Blockly's
+  grey); Field, the most contrast, for glare or a bright room; and
+  Blueprint, tinted navy or pale blue. Six tiles in one
   radio set, each a miniature of the panel in its look's colours, drawn by
   CSS alone (no `:has()`, which Firefox lacked before 121).
 - Every colour is a token in `css/looks.css`, one block per look, keyed by
@@ -963,11 +964,19 @@ and a script holds every look to WCAG AA.
 - The gear (`#options`) in the header opens Options (`#optionsPanel`), the
   tiles under Theme. On an upright phone narrower than 440 px, and on a
   phone on its side, the mode pill gives way to it: Autonomous lights while
-  the rover explores.
+  the rover explores. Under 480 px upright the wordmark keeps its mark and
+  drops its word, and on a phone on its side under 780 px the pills drop
+  their lamps, so the status keeps its row. At 480 x 320 only, "Motors OK"
+  is cut short beside the gear (main cut "No motor shield" there already;
+  the fault's card under it says it in full).
 - What takes a colour as a plain value is given it again on a change:
   joy.js's stick (built again, letting go of a held stick first as a scheme
   change does: one STOP only if it was driving, and its caption asks for a
-  fresh press), Blockly's theme and the browser's `theme-color`. A look
+  fresh press), Blockly's theme and the browser's `theme-color`, which
+  `look.js` paints in `<head>`, with the first paint. The stick's knob
+  shades toward a rim of its look's own (`--stick-rim`): Console Dark's is
+  joy.js's old one, and a light look's is its dark teal, where the case
+  colour had faded the knob into its well. A look
   picked on the Program tab is drawn on the stick as the Drive tab is shown.
   Where no look can be read (`css/looks.css` missing), the stick takes
   joy.js's own colours, and Stop still works.
@@ -976,7 +985,9 @@ and a script holds every look to WCAG AA.
   surface in its audit (a hand-kept list: a new pairing adds its row) to its
   contrast: text 4.5:1, marks 3:1, quiet marks 1.1:1, and Field's ink 7:1
   and its rules 3:1. It found the scan's red echo wedge under 3:1 on the
-  card at 85% opacity, so an echo's wedge is drawn whole now.
+  card at 85% opacity, so an echo's wedge is drawn whole now. Its audit
+  takes in the stick's knob as joy.js shades it, at the smallest and the
+  largest stick.
 
 **Not carried over, and why.**
 - Word Finder's Settings is a modal pane, the page behind it inert. Options
@@ -1005,8 +1016,14 @@ from the look in force (two stand-in looks) under one name.
 **Checks for the owner,** which need a real screen: the six looks on a
 laptop and a tablet (Field Light in sunlight; the light looks' dark amber),
 the gear and tiles by touch, the tiles' focus ring by keyboard, the browser
-bar's colour on a phone, a `<select>`'s list in a light look, and a look
-picked while holding the stick.
+bar's colour on a phone, a `<select>`'s list in a light look, a look picked
+while holding the stick, and the header on a 440 px phone and a 568 x 320
+one on its side, in the phone's own font.
+
+**Left as they were,** in every look: Blockly's keyboard-focus colours
+(its own yellow and blue, which a light workspace shows faintly), and its
+zoom and trash icons, drawn at 40% (under 3:1 in Console and Blueprint, as
+on main).
 
 ## Menu or explicit: every control
 

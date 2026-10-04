@@ -408,8 +408,11 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   }
 
   const loaded = scripts.filter((src) => !isRemote(src));
+  let headThemeColor = null;
   for (const src of loaded) {
     vm.runInContext(fs.readFileSync(path.join(PANEL_ROOT, src), "utf8"), ctx, { filename: src });
+    // The browser's bar as the scripts in <head> leave it: the first paint's.
+    if (src === "js/look.js") headThemeColor = doc.querySelector('meta[name="theme-color"]').getAttribute("content");
     if (src === "joy.js") {
       // Keep a handle on the instance the panel creates, to read its knob,
       // and on the parameters it was built with, its colours among them.
@@ -419,7 +422,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
 
   const $ = (id) => doc.getElementById(id);
   const page = {
-    doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $,
+    doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $, headThemeColor,
     get canvas() { return stick.children.find((c) => c.tagName === "CANVAS"); },
     get joy() { return ctx.__joy; },
     get joyParameters() { return ctx.__joyParameters; },

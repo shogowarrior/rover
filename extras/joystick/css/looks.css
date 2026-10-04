@@ -57,6 +57,11 @@
   --stop-soft: rgb(210 60 55 / 0.16);
   --stop-glow: rgb(210 60 55 / 0.32);
 
+  /* the stick, as joy.js paints it (js/drive.js): the knob shades from
+     --live toward its rim, and the ring marks how far it reaches */
+  --stick-rim: #1c1e21;
+  --stick-ring: #383c42;
+
   /* art drawn for a light ground (Blockly's zoom and trash icons), as this
      look shows it */
   --light-art: invert(1) brightness(0.85);
@@ -100,6 +105,9 @@
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);
 
+  --stick-rim: var(--live-ink);
+  --stick-ring: var(--faint);
+
   --light-art: none;
 
   --sim-grid: rgb(18 23 30 / 0.06);
@@ -123,7 +131,7 @@
 
   --readout: #ffffff;
   --dim: #c4c4c4;
-  --faint: #5e5e5e;
+  --faint: #575757;
 
   --live: #45dcc5;
   --on-live: #000000;
@@ -138,6 +146,9 @@
   --stop-ink: #ff8a7f;
   --stop-soft: rgb(210 60 55 / 0.22);
   --stop-glow: rgb(210 60 55 / 0.4);
+
+  --stick-rim: var(--case);
+  --stick-ring: var(--faint);
 
   --light-art: invert(1);
 
@@ -162,7 +173,7 @@
 
   --readout: #000000;
   --dim: #383838;
-  --faint: #8f8f8f;
+  --faint: #979797;
 
   --live: #005c51;
   --on-live: #ffffff;
@@ -177,6 +188,9 @@
   --stop-ink: #9d241e;
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.3);
+
+  --stick-rim: var(--live-ink);
+  --stick-ring: var(--faint);
 
   --light-art: none;
 
@@ -217,6 +231,9 @@
   --stop-soft: rgb(210 60 55 / 0.18);
   --stop-glow: rgb(210 60 55 / 0.34);
 
+  --stick-rim: var(--case);
+  --stick-ring: var(--faint);
+
   --light-art: invert(1) brightness(0.85);
 
   --sim-grid: rgb(140 190 255 / 0.07);
@@ -255,6 +272,9 @@
   --stop-ink: #ae2822;
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);
+
+  --stick-rim: var(--live-ink);
+  --stick-ring: var(--faint);
 
   --light-art: none;
 

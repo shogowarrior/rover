@@ -32,7 +32,8 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 
 // Where the panel paints text or a meaningful mark in a token, and on what:
 // [foreground, backgrounds, minimum contrast, where]. "--a over --b" is the
-// tint --a composited over --b; "--x at 0.95" is --x drawn at that opacity.
+// tint --a composited over --b; "--x at 0.95" is --x drawn at that opacity;
+// "--a toward --b by 0.4" is a gradient between them, that far along.
 // A disabled control's faded text is exempt (WCAG 1.4.3), and is left out.
 // A rule that paints a token on a surface not listed here adds its pair.
 //
@@ -43,10 +44,10 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // or pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
 // or button replaces its fill with the tint.
 const AUDIT = [
-  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--chosen", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, buttons, menus, Blockly's toolbox and flyout, the fault card"],
-  ["--dim", ["--case", "--panel", "--raised", "--live-glow over --panel"], TEXT,
-    "captions, the note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels"],
+  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--chosen", "--faint", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
+    "the page's text, the readouts, buttons, menus, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--live-glow over --panel"], TEXT,
+    "captions, the note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
   ["--live", ["--case", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
     "the log's done, a pending segment, the link and motors pills, Autonomous as last reported"],
   ["--live-ink", ["--live-soft over --raised"], TEXT, "the open tab"],
@@ -57,23 +58,30 @@ const AUDIT = [
     "the STOP tick, the link pill down, Stop program, a stall or a bump in the simulator"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
-  // The stick's well shades from --raised to --case; its knob is --live,
-  // edged in --case (js/drive.js). A fresh sonar ray is drawn at 0.95.
+  // A fresh sonar ray is drawn at 0.95.
   ["--live", ["--case", "--panel", "--live-glow over --panel", "--raised", "--raised-hi", "--chosen", "--sim-plate"], MARK,
     "the focus ring, the slider's thumb, the stick's knob, the scan's rover, the stick's and families' icons, a pressed tool, a forward wheel"],
   ["--warn at 0.95", ["--live-glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
   ["--live", ["--live-glow over --panel"], MARK, "the scan's wedge, clear"],
   ["--warn", ["--live-glow over --panel"], MARK, "the scan's wedge, closing in"],
-  ["--stop", ["--live-glow over --panel"], MARK, "the scan's wedge, inside STOP"],
-  ["--case", ["--live", "--sim-back"], MARK, "the stick knob's edge, the arrow on a turning wheel"],
+  ["--stop", ["--live-glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
+  ["--case", ["--live", "--sim-back"], MARK, "the arrow on a turning wheel"],
+  // joy.js shades the stick's knob from --live at the canvas's centre
+  // toward --stick-rim 200 px out (js/drive.js), and the well under it
+  // shades from --raised toward --case (css/panel.css). Where the knob's
+  // edge meets the well at rest, the well is about 0.35 along, and the knob
+  // 0.07 along on the smallest stick and 0.45 on the largest (400 px).
+  ["--live toward --stick-rim by 0.07", ["--raised toward --case by 0.35"], MARK, "the smallest stick's knob, at its edge"],
+  ["--live toward --stick-rim by 0.45", ["--raised toward --case by 0.35"], MARK, "the largest stick's knob, at its edge"],
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
   ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's and an input's edge"],
   ["--warn at 0.55", ["--live-glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
   ["--stop-ink at 0.65", ["--live-glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
-  ["--faint", ["--case", "--raised"], QUIET, "the stick's notches and ring, a free wheel's and a box's edge"],
+  ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],
+  ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],
   ["--chosen", ["--raised"], QUIET, "the chosen segment in its track; its ink says so too"],
   ["--raised-hi", ["--raised"], QUIET, "a box on the room's floor"],
   ["--sim-grid", ["--raised"], QUIET, "the room's grid"],
@@ -112,9 +120,19 @@ function over(top, under, opacity = 1) {
   return [0, 1, 2].map((i) => top[i] * alpha + under[i] * (1 - alpha)).concat(1);
 }
 
+// "--a toward --b by t": two opaque colours mixed, as a gradient between
+// them is drawn t of the way along. Anything else is a token's colour.
+function paint(look, spec) {
+  const mix = spec.match(/^(--[\w-]+) toward (--[\w-]+) by ([\d.]+)$/);
+  if (!mix) return colour(look, spec);
+  const [from, to] = [colour(look, mix[1]), colour(look, mix[2])];
+  assert.ok(from[3] === 1 && to[3] === 1, `${look.id}: ${spec} mixes a tint`);
+  return [0, 1, 2].map((i) => from[i] + (to[i] - from[i]) * Number(mix[3])).concat(1);
+}
+
 // "--a over --b": each tint laid on the opaque surface under it.
 function surface(look, spec) {
-  const layers = spec.split(" over ").map((token) => colour(look, token));
+  const layers = spec.split(" over ").map((layer) => paint(look, layer));
   const ground = layers.pop();
   assert.equal(ground[3], 1, `${look.id}: ${spec} does not end on an opaque surface`);
   return layers.reduceRight((under, top) => over(top, under), ground);
@@ -253,9 +271,9 @@ test("every look's Stop is #d23c37 with its word in #ffffff, and so is the stop 
   assert.equal(RoverBlocks.PALETTE.stop.toLowerCase(), "#d23c37", "blocks.js's stop block");
 });
 
-// The browser's bar is painted from the look once app.js runs; until then,
-// joystick.html's theme-color is the default look's case, so the first
-// paint and the bar agree.
+// look.js paints the browser's bar from the look in <head>; until it runs,
+// and where it cannot read the look, joystick.html's theme-color is the
+// default look's case, so the bar and the page agree.
 test("joystick.html's theme-color is the default look's --case", () => {
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const meta = html.match(/<meta name="theme-color" content="([^"]+)">/);
@@ -282,7 +300,7 @@ for (const id of LOOKS) {
       const need = field && FIELD[token] ? Math.max(min, FIELD[token]) : min;
       for (const ground of grounds) {
         const under = surface(look, ground);
-        const ratio = contrast(over(colour(look, token), under, Number(opacity)), under);
+        const ratio = contrast(over(paint(look, token), under, Number(opacity)), under);
         if (ratio < need) short.push(`${ink} on ${ground}: ${ratio.toFixed(2)}, under ${need} (${where})`);
       }
     }

@@ -62,12 +62,12 @@
  *   restyle()
  *       The page's look has changed (look.js). joy.js paints the stick into
  *       its canvas once, in the colours it was built with (the look's
- *       --live, --case and --faint), so the stick is built again in the new
- *       look's, as for a new size: a stick held now is let go of first --
- *       one STOP, and only if the stick was what this panel was sending --
- *       and drives again only from a fresh press. Returns true when the
- *       stick was deflected, as releaseStick() does. A stick in a hidden tab
- *       has no size to be built at: it is built again by shown().
+ *       --live, --stick-rim and --stick-ring), so the stick is built again
+ *       in the new look's, as for a new size: a stick held now is let go of
+ *       first -- one STOP, and only if the stick was what this panel was
+ *       sending -- and drives again only from a fresh press. Returns true
+ *       when the stick was deflected, as releaseStick() does. A stick in a
+ *       hidden tab has no size to be built at: it is built again by shown().
  *
  *   shown()
  *       The Drive tab is shown again. A stick whose look changed, or whose
@@ -394,13 +394,13 @@ class Driver {
   // a refit replaced still listens on the document, and would go on
   // reporting the thumb or mouse that pressed it.
   #buildJoy() {
-    // The knob in the page's teal, rimmed in its case colour, inside a ring
-    // drawn as the well's notches are (css/panel.css). A colour the page
-    // cannot read (css/looks.css missing, or styles turned off) is left to
-    // joy.js's own: handed an empty one, its canvas throws, and app.js stops
-    // before Stop is wired.
+    // The knob in the page's teal, shading toward the look's rim, inside the
+    // look's ring (--stick-rim and --stick-ring in css/looks.css). A colour
+    // the page cannot read (css/looks.css missing, or styles turned off) is
+    // left to joy.js's own: handed an empty one, its canvas throws, and
+    // app.js stops before Stop is wired.
     const colours = {};
-    for (const [parameter, name] of [["internalFillColor", "--live"], ["internalStrokeColor", "--case"], ["externalStrokeColor", "--faint"]]) {
+    for (const [parameter, name] of [["internalFillColor", "--live"], ["internalStrokeColor", "--stick-rim"], ["externalStrokeColor", "--stick-ring"]]) {
       const colour = lookToken(name);
       if (colour) colours[parameter] = colour;
     }

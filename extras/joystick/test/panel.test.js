@@ -3424,7 +3424,7 @@ test("program: the two Stops are named apart", () => {
 // Looks of the tests' own, read after css/looks.css, give each a colour the
 // default does not have, whatever the file holds.
 const TEST_LOOKS = `
-[data-look="field-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; }
+[data-look="field-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; --stick-rim: #054a42; --stick-ring: var(--faint); }
 [data-look="blueprint-dark"] { --case: #0b1a33; --live: #3fc9b8; --faint: #34507c; }`;
 const LOOK_IDS = require("../js/look.js").LookPicker.LOOKS.map((look) => look.id);
 const lookRadios = (page) => page.$("lookChoice").querySelectorAll('input[name="look"]');
@@ -3495,7 +3495,7 @@ test("look: a remembered look is on <html> from the start; an unknown one, or st
   const page = loadPage({ stored: { "rover.look": "blueprint-dark" }, looks: TEST_LOOKS });
   check(worn(page) === "blueprint-dark", `wears ${worn(page)}`);
   check(lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join() === "blueprint-dark", "its tile checked");
-  check(themeColor(page) === "#0b1a33", `the browser's bar in its --case: ${themeColor(page)}`);
+  check(page.headThemeColor === "#0b1a33" && themeColor(page) === "#0b1a33", `the browser's bar in its --case from <head>: ${page.headThemeColor}, then ${themeColor(page)}`);
   check(page.joyParameters.internalFillColor === "#3fc9b8", `the knob in its --live: ${page.joyParameters.internalFillColor}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 
@@ -3576,8 +3576,8 @@ test("look: the stick's knob is painted from the look's tokens", () => {
   const root = lookBlocks()[0].declared;
   const knob = page.joyParameters;
   check(knob.internalFillColor === root.get("--live"), `fill ${knob.internalFillColor}, --live ${root.get("--live")}`);
-  check(knob.internalStrokeColor === root.get("--case"), `rim ${knob.internalStrokeColor}, --case ${root.get("--case")}`);
-  check(knob.externalStrokeColor === root.get("--faint"), `ring ${knob.externalStrokeColor}, --faint ${root.get("--faint")}`);
+  check(knob.internalStrokeColor === root.get("--stick-rim"), `rim ${knob.internalStrokeColor}, --stick-rim ${root.get("--stick-rim")}`);
+  check(knob.externalStrokeColor === root.get("--stick-ring"), `ring ${knob.externalStrokeColor}, --stick-ring ${root.get("--stick-ring")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3586,7 +3586,7 @@ test("look: the stick's knob is painted from the look's tokens", () => {
 // colour, and the panel stopped loading before Stop was wired. The stick
 // takes joy.js's own colours instead, and the rest of the panel loads.
 test("look: with no look to read, the panel still loads, and Stop still stops", () => {
-  const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { --live: ; --case: ; --faint: ; }` }); // exploring
+  const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { --live: ; --stick-rim: ; --stick-ring: ; }` }); // exploring
   check(page.errors.length === 0, `errors ${page.errors}`);
   const knob = page.joyParameters;
   check(!("internalFillColor" in knob) && !("internalStrokeColor" in knob) && !("externalStrokeColor" in knob), `joy.js's own colours: ${JSON.stringify(knob)}`);
@@ -3607,7 +3607,7 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   check(page.$("stickLabel").textContent === page.evalIn("FamilySelector.PRESS_AGAIN"), `the caption asks for a fresh press: '${page.$("stickLabel").textContent}'`);
   check(page.canvas !== first && first.parentNode === null && stickCanvases(page).length === 1, "one new canvas in place of the old");
   const knob = page.joyParameters;
-  check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#f4f6f8" && knob.externalStrokeColor === "#a3adb8",
+  check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#054a42" && knob.externalStrokeColor === "#a3adb8",
     `the knob in field-light: ${JSON.stringify(knob)}`);
   check(page.joy.GetWidth() === 230, `built at the box's size: ${page.joy.GetWidth()}`);
   mark = count(ws);
