@@ -62,11 +62,12 @@ bool runningImageOnTrial() {
 // A new image, from either update path, boots once on trial: unless it is
 // kept, the bootloader goes back to the previous one at the next reset.
 // arduino-esp32 keeps it before setup() runs unless this says to wait;
-// updatesOpen() keeps it instead, once loop() has run it online for
-// tuning::IMAGE_TRIAL_MS. So an image that crashes, hangs, or never gets or
-// stays online, one that might not be replaced over the air, is undone by
-// the next reset (EN, power, the watchdog, or its own crash). Keeping it
-// once WiFi was up, as this first did, came before loop() had run at all.
+// updatesOpen() keeps it instead, once loop() has run it for
+// tuning::IMAGE_TRIAL_MS since it first got online, at a pass with the link
+// up. So an image that crashes, hangs or never gets online, one that might
+// not be replaced over the air, is undone by the next reset (EN, power, the
+// watchdog, or its own crash). Keeping it once WiFi was up, as this first
+// did, came before loop() had run at all.
 // An image flashed over USB is never on trial.
 extern "C" bool verifyRollbackLater() { return true; }
 
@@ -139,8 +140,10 @@ bool Network::connect() {
 }
 
 void Network::goOnline(uint32_t now) {
-  onlineSinceMs = now;
   if (!otaStarted) {
+    // Timed from the first time only: a link that drops more often than the
+    // trial lasts would otherwise hold a working image on trial for good.
+    firstOnlineMs = now;
     configureOta();
     otaStarted = true;
   }
@@ -156,10 +159,24 @@ void Network::goOnline(uint32_t now) {
 // mDNS: the rover answers as rover.local throughout.
 bool Network::updatesOpen(uint32_t now) {
   if (updatesOpened) return true;
-  if (onTrial && timing::since(now, onlineSinceMs) < tuning::IMAGE_TRIAL_MS) return false;
+  if (keepFailed) return false;
+  if (onTrial && timing::since(now, firstOnlineMs) < tuning::IMAGE_TRIAL_MS) return false;
   if (onTrial) {
-    esp_ota_mark_app_valid_cancel_rollback();
+    if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK) {
+      // Still on trial, so an update now could overwrite the image the next
+      // reset goes back to: none until that reset. Not retried: each try
+      // writes flash, from the loop.
+      keepFailed = true;
+      Serial.println("Could not keep the new firmware: no updates until a reset.");
+      return false;
+    }
     Serial.println("Keeping the new firmware.");
+    // espota's invitations sent during the trial wait in ArduinoOTA's socket.
+    // Answered now, a stale one would stand the rover down and hold the loop
+    // on a connection back to a computer that gave up. Restarting it drops
+    // them (and mDNS restarts with it).
+    ArduinoOTA.end();
+    ArduinoOTA.begin();
   }
   firmware.setSecret(otaSecret().c_str());
   updatesOpened = true;

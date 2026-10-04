@@ -113,7 +113,7 @@ void setUp(void) {
   rover = new Rover(*motors, *scanner);
   rover->begin(Rover::MODE_MANUAL, 0);
   slot = new FakeFirmwareSlot();
-  firmware = new FirmwareUpdate(*rover, *slot);
+  firmware = new FirmwareUpdate(*rover, *slot, false);
   firmware->setSecret("");  // as Network does once the running image is kept
 }
 
@@ -128,12 +128,31 @@ void tearDown(void) {
 // Until Network has kept the running image, an update would overwrite the
 // image it goes back to: refused, and the rover left as it was.
 void test_nothing_begins_before_the_secret_is_set(void) {
-  FirmwareUpdate fresh(*rover, *slot);
+  FirmwareUpdate fresh(*rover, *slot, false);
   rover->command(RESUME_AUTONOMOUS, 0, 0, 0);
   assertFailed(sent(fresh.begin(PANEL, IMAGE_SIZE, MD5, 10)), PANEL,
                "The rover is still trying out new firmware: try again in half a minute.");
   TEST_ASSERT_FALSE(slot->open);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
+}
+
+// Where updates need a password (features::LINK_UPDATE_NEEDS_PASSWORD), a
+// rover without one refuses every update, to its client, and changes
+// nothing; with one, it asks for it.
+void test_no_update_without_a_password_where_one_is_needed(void) {
+  FirmwareUpdate strict(*rover, *slot, true);
+  strict.setSecret("");
+  rover->command(RESUME_AUTONOMOUS, 0, 0, 0);
+  assertFailed(sent(strict.begin(PANEL, IMAGE_SIZE, MD5, 10)), PANEL,
+               "This rover has no OTA password, and updates from the panel need one: see the README.");
+  TEST_ASSERT_FALSE(slot->open);
+  TEST_ASSERT_EQUAL_INT(0, slot->beginCalls);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
+
+  strict.setSecret(SECRET);
+  const Reply challenge = sent(strict.begin(PANEL, IMAGE_SIZE, MD5, 20));
+  TEST_ASSERT_EQUAL_INT(Reply::AUTH, challenge.kind);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
 }
 
 // Without a password the slot opens at once, for the size and MD5 asked, and
@@ -615,6 +634,7 @@ void test_running_is_the_slots(void) { TEST_ASSERT_EQUAL_STRING(slot->running(),
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_nothing_begins_before_the_secret_is_set);
+  RUN_TEST(test_no_update_without_a_password_where_one_is_needed);
   RUN_TEST(test_begin_opens_the_slot);
   RUN_TEST(test_begin_lowercases_the_md5);
   RUN_TEST(test_begin_stands_the_rover_down);

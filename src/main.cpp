@@ -23,7 +23,7 @@ Rover rover(driveTrain, scanner);
 // One control scheme for every controller, so the gamepad and the panel agree.
 kinematics::ControlScheme controlScheme = features::DEFAULT_CONTROL_SCHEME;
 FlashSlot flashSlot;
-FirmwareUpdate firmwareUpdate(rover, flashSlot);
+FirmwareUpdate firmwareUpdate(rover, flashSlot, features::LINK_UPDATE_NEEDS_PASSWORD);
 RemoteControl remote(rover, controlScheme, firmwareUpdate);
 Network network(rover, remote, firmwareUpdate);
 Gamepad gamepad(rover, controlScheme);

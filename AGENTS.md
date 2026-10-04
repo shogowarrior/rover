@@ -79,7 +79,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
 | `src/Pins.h` | Every GPIO and motor terminal. A value here is a wire |
-| `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC, the default control scheme |
+| `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC, the default control scheme, whether updates over the link need a password |
 | `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, the OTA password both update paths check, confirming a new image once online, and the WiFi-loss failsafe |
@@ -230,11 +230,12 @@ released:
   starts exploring. An update over the link restarts the rover only once it
   is at rest.
 - A new image from either OTA path boots on trial (`verifyRollbackLater()`
-  in `Network.cpp`): `Network` keeps it once `loop()` has run it online for
-  `tuning::IMAGE_TRIAL_MS` (30 s), and until then the next reset of any
-  kind boots the previous image, and neither update path runs. So a build
-  that crashes, hangs, or never gets or stays online undoes itself at the
-  next reset, where it might not have been replaced over the air.
+  in `Network.cpp`): `Network` keeps it once `loop()` has run it for
+  `tuning::IMAGE_TRIAL_MS` (30 s) since it first got online, and until then
+  the next reset of any kind boots the previous image, and neither update
+  path runs. So a build that crashes, hangs or never gets online undoes
+  itself at the next reset, where it might not have been replaced over the
+  air.
 
 If you add a new way to lose the link, add its failsafe in the same change.
 
@@ -311,7 +312,8 @@ reference; in short:
   `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, and 19
   `RESUME_AUTONOMOUS`. A browser page may connect only from a file, this
   computer or the local network (`protocol::originAllowed()`): the panel
-  opens from a file, and a page served on `localhost` or the LAN works too.
+  opens from a file, and a page served from `localhost`, a private IPv4
+  address or a `.local` name works too.
 - **Client to rover, configuration:** `{"scheme": "NORMAL" | "ADVANCED"}`
   (no `move`) sets the control scheme below. It is not a command: it neither
   takes control nor stops anything, so a client may send it while the rover
@@ -585,7 +587,7 @@ Update and Cancel, a progress bar and a status line. It is the panel's own
 way to do what `pio run -e car_ota -t upload` does, which a browser cannot:
 espota starts with a UDP invitation and the board then connects back to the
 computer over TCP. ArduinoOTA keeps working beside it, and both check the
-one OTA password `config.h` may set.
+one OTA password `config.h` may set, which the panel's updates need.
 
 - **The image goes over the link the panel already holds**, one binary
   frame of at most 1000 bytes at a time, each sent only once the rover has
@@ -603,19 +605,23 @@ one OTA password `config.h` may set.
   [Loss of control stops the rover](#invariants). Beginning stands the rover
   down; the first chunk waits for it to be at rest; motion from anyone ends
   the update; the restart waits for rest too, and comes up in manual.
-- **The password** is checked as ArduinoOTA checks espota's: the rover sends
-  a single-use nonce and the client answers
-  md5hex(md5hex(password):nonce:cnonce). The panel never keeps the
-  password, logs it or sends it.
-- **Trial boot:** a new image is kept only once it has run 30 s online
-  (`Network::updatesOpen()`); until then the next reset boots the old one,
-  and both update paths wait (`FirmwareUpdate` refuses every update until
-  `setSecret()`).
+- **The password** is needed: a rover without one refuses every update
+  over the link (`features::LINK_UPDATE_NEEDS_PASSWORD`, below). It is
+  checked as ArduinoOTA checks espota's: the rover sends a single-use nonce
+  and the client answers md5hex(md5hex(password):nonce:cnonce). The panel
+  never keeps the password, logs it or sends it.
+- **Trial boot:** a new image is kept only once it has run 30 s since it
+  first got online (`Network::updatesOpen()`); until then the next reset
+  boots the old one, and both update paths wait (`FirmwareUpdate` refuses
+  every update until `setSecret()`, and ArduinoOTA's invitations go
+  unanswered, then are dropped).
 - **Who may connect:** the WebSocket server refuses the handshake of a
   browser page from anywhere but a file, this computer or the local network
-  (`protocol::originAllowed()`, checked by `HeartbeatServer`), so no web
-  page the operator has open can drive the rover or replace its firmware.
-  Clients that are not browsers send no Origin.
+  (`protocol::originAllowed()`, checked by `HeartbeatServer`), so an
+  ordinary web page the operator has open cannot drive the rover. It cannot
+  keep out a determined one: a sandboxed frame's Origin is `null`, like a
+  file's. That is why updates need the password. Clients that are not
+  browsers send no Origin.
 - **The panel** (`js/firmware.js`, with `js/md5.js`) offers Update only on a
   live link, with telemetry naming the running firmware, and a file that is
   an ESP32 app image (its first byte 0xE9 and the app description's magic

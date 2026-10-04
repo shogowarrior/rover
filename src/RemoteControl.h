@@ -22,9 +22,9 @@
 // reaches the library's protected client table.
 //
 // It also refuses the handshake of a browser page from anywhere but a file,
-// this computer or the local network (protocol::originAllowed()): the
-// library checks no Origin, so any web page the operator had open could
-// drive the rover or replace its firmware.
+// this computer or the local network (protocol::originAllowed(), which says
+// what that does not stop): the library checks no Origin, so any web page
+// the operator had open could drive the rover.
 class HeartbeatServer : public WebSocketsServer {
  public:
   explicit HeartbeatServer(uint16_t port) : WebSocketsServer(port) {}

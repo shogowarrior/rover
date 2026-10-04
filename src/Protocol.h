@@ -84,9 +84,11 @@ const char* schemeName(kinematics::ControlScheme scheme);
 // handshake, may connect: a page opened from a file ("null", or "file://"
 // in some browsers), or one served from this computer or the local network
 // (localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x, a name ending
-// ".local", or one with no dot). Any other web page the operator has open
-// could otherwise reach ws://<rover>:81 and drive the rover, or replace its
-// firmware. Clients that are not browsers send no Origin, and are let in.
+// ".local", or one with no dot). That keeps an ordinary web page the
+// operator has open from reaching ws://<rover>:81 to drive the rover. Not a
+// determined one: a sandboxed frame's Origin is "null" too, which is why
+// updates over the link need a password (features::LINK_UPDATE_NEEDS_PASSWORD).
+// Clients that are not browsers send no Origin, and are let in.
 bool originAllowed(const char* origin);
 
 // The longest client message RemoteControl reads; a longer frame is ignored

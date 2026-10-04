@@ -54,7 +54,8 @@ FirmwareUpdate::Reply failure(uint8_t client, const char* reason) {
 
 }  // namespace
 
-FirmwareUpdate::FirmwareUpdate(Rover& rover, FirmwareSlot& slot) : rover(rover), slot(slot) {}
+FirmwareUpdate::FirmwareUpdate(Rover& rover, FirmwareSlot& slot, bool passwordNeeded)
+    : rover(rover), slot(slot), passwordNeeded(passwordNeeded) {}
 
 void FirmwareUpdate::setSecret(const char* md5Hex) {
   copyLowercase(md5Hex, secret);
@@ -63,6 +64,9 @@ void FirmwareUpdate::setSecret(const char* md5Hex) {
 
 FirmwareUpdate::Reply FirmwareUpdate::begin(uint8_t client, uint32_t size, const char* md5, uint32_t now) {
   if (!ready) return failure(client, "The rover is still trying out new firmware: try again in half a minute.");
+  if (passwordNeeded && secret[0] == '\0') {
+    return failure(client, "This rover has no OTA password, and updates from the panel need one: see the README.");
+  }
   if (state == DONE) return failure(client, "The rover is about to restart into new firmware.");
   if (state != IDLE) return failure(client, "Another update is under way.");
   if (size == 0) return failure(client, "The firmware file is empty.");

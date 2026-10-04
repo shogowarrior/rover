@@ -109,11 +109,15 @@ if it loses WiFi or an OTA flash starts.
 The gear's Options has a Firmware section. Connect to the rover, press
 Choose file and pick a build's `firmware.bin` from `.pio/build/<env>/` (pick
 the environment the rover should run: `car_wire_gamepad` keeps the pad),
-type the OTA password if the rover has one, and press Update. The rover
-stops, takes the file over the panel's own link, checks it and restarts into
-it in manual; connect again and Options says whether it runs the file sent.
-It needs firmware that already supports this, so the first time is a USB or
-`car_ota` flash.
+type the rover's OTA password, and press Update. The rover stops, takes the
+file over the panel's own link, checks it and restarts into it in manual;
+connect again and Options says whether it runs the file sent. It needs
+firmware that already supports this, and an OTA password, so the first time
+is a USB or `car_ota` flash with a password set in `src/config.h`
+(`src/config.example.h` shows how). The password is what keeps a web page
+you happen to have open from sending the rover firmware of its own: the
+rover turns away ordinary web pages, but cannot tell a determined one from
+the panel opened from disk.
 
 Driving it in any way, Autonomous included, ends the update (Stop does
 not), and so do Cancel, closing the page or losing the link. However it
@@ -224,9 +228,9 @@ which way the servo turns) is covered by
   that can stop the board booting. The fix is a wire; see the bench
   checklist.
 - **No authentication.** Anyone on your WiFi can drive the rover, and can
-  flash it, from PlatformIO or the panel, unless you set an OTA password in
-  `src/config.h` (`src/config.example.h` shows how). Keep it on a network
-  you trust.
+  flash it from PlatformIO unless you set an OTA password in `src/config.h`
+  (`src/config.example.h` shows how); the panel's updates need that
+  password. Keep it on a network you trust.
 
 ## Documentation
 

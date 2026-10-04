@@ -16,7 +16,8 @@
 // The rules it keeps:
 //   * None until setSecret(): Network calls it once the running image is
 //     kept (Network.cpp says when), since an update overwrites the image it
-//     would otherwise go back to.
+//     would otherwise go back to. And none without a password where one is
+//     needed (features::LINK_UPDATE_NEEDS_PASSWORD says why).
 //   * One update at a time, owned by the client that began it: only that
 //     client's messages and frames move it on, and losing that client ends
 //     it. Any other client's are ignored, but for a second "begin", which is
@@ -60,7 +61,8 @@ class FirmwareUpdate {
     const char* reason;     // FAILED: a short sentence for the operator
   };
 
-  FirmwareUpdate(Rover& rover, FirmwareSlot& slot);
+  // `passwordNeeded`: refuse every update while the secret is "".
+  FirmwareUpdate(Rover& rover, FirmwareSlot& slot, bool passwordNeeded);
 
   // The OTA password as ArduinoOTA keeps it, md5hex(password), or "" for
   // none. Until this is called every update is refused.
@@ -109,6 +111,7 @@ class FirmwareUpdate {
 
   Rover& rover;
   FirmwareSlot& slot;
+  const bool passwordNeeded;
   hardware::Hex32 secret = {};
   bool ready = false;  // setSecret() has been called
 

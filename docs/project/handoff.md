@@ -224,11 +224,13 @@ A third thread, beside F3h and F4, did F6 from the owner's message of
   to a rover without it, shows the build, and says after the restart
   whether it runs the file sent;
 - a new image from either path boots on trial and is kept once it has run
-  30 s online, so one that crashes, hangs or never gets online undoes
+  30 s since it first got online, so one that crashes, hangs or never gets online undoes
   itself at the next reset; neither update path runs meanwhile;
-- the WebSocket server refuses browser pages from anywhere but a file, this
-  computer or the local network, which could otherwise drive the rover or
-  replace its firmware;
+- updates over the link need an OTA password, and a rover without one
+  refuses them (`features::LINK_UPDATE_NEEDS_PASSWORD`): the WebSocket
+  server refuses ordinary browser pages from anywhere but a file, this
+  computer or the local network, but a sandboxed frame's origin reads like
+  a file's;
 - the heartbeat also clears a slot's missed pongs on connect, which a
   dropped split frame showed could carry over to the slot's next client.
 
@@ -239,9 +241,14 @@ move ending an update while it is received, Options running under the Stop
 bar, the panel's "did it take" after a lost "done" or a rover not yet
 restarted, the focus a pressed button dropped, a touch screen's hint for a
 rover too old to update, and a preview on the simulator no longer stopped by
-an update.
+an update. A hardware-safety pass on those fixes then found that the origin
+check cannot stop a page posing as a file (hence the password), that a
+flapping link held a good image on trial (the 30 s now counts from first
+online), that espota invitations sent during the trial were answered after
+it (now dropped), and that a failed keep went unnoticed (updates now stay
+closed until a reset).
 
-Host tests 191/191, panel tests 301/301, the protocol check and every board
+Host tests 192/192, panel tests 301/301, the protocol check and every board
 build pass. That thread built and tested the firmware in its own container
 despite the registry block: see "Firmware builds in a cloud thread" below.
 

@@ -34,8 +34,9 @@ class Network {
   bool otaStarted = false;
   uint32_t lastReconnectMs = 0;
   bool onTrial = false;  // the running image is new, and not yet kept
-  uint32_t onlineSinceMs = 0;
+  uint32_t firstOnlineMs = 0;
   bool updatesOpened = false;
+  bool keepFailed = false;  // the image could not be kept: on trial until a reset
 };
 
 #endif

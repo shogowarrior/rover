@@ -1291,7 +1291,7 @@ board then opens a TCP connection back to the computer.
 **Done.** The panel's own way to do what `car_ota` does, over the WebSocket
 it already holds:
 - The Options popover (the gear) has a Firmware section after Keys: the
-  rover's running build, Choose file for a `firmware.bin`, an optional OTA
+  rover's running build, Choose file for a `firmware.bin`, the rover's OTA
   password, Update and Cancel, a progress bar and a status line. The
   popover stays non-modal, so Stop stays one press; an update carries on
   with it closed. The keyboard's drive keys leave the section alone.
@@ -1320,10 +1320,14 @@ it already holds:
   firmware is kept once it has run half a minute online, and until then the
   next reset boots the previous one and neither update path runs. This
   covers ArduinoOTA's uploads too.
-- No web page the operator has open can reach the rover: the WebSocket
-  server refuses a browser page from anywhere but a file, this computer or
-  the local network. That one could otherwise have driven the rover, and
-  now could have replaced its firmware.
+- Updates from the panel need an OTA password; a rover without one refuses
+  them (`LINK_UPDATE_NEEDS_PASSWORD` in `src/Features.h`). The WebSocket
+  server now refuses an ordinary web page the operator has open, from
+  anywhere but a file, this computer or the local network, which could
+  otherwise have driven the rover. A determined page can still pose as a
+  file (a sandboxed frame's origin is `null`), so only the password keeps
+  one from replacing the firmware. PlatformIO's uploads work without a
+  password, as before.
 - Starting an update stops a program running on the rover.
 - No WiFi details anywhere: the change carries no SSID, WiFi password or
   OTA password, in code, tests, docs or commits.

@@ -292,9 +292,11 @@ Only when every section passes should the rover go on the floor on its own.
 
 ## 10. Updating from the panel
 
-The first time, the rover needs firmware that takes updates over the link:
-flash this build over USB or with `car_ota`. Then, on the stand, running and
-connected from the panel, with the gear's Options open:
+The first time, the rover needs firmware that takes updates over the link,
+and an OTA password: set one in the WiFi settings header (the template shows
+how) and flash this build over USB or with `car_ota`. Then, on the stand,
+running and connected from the panel, with the gear's Options open and the
+password typed in:
 
 1. **What it runs.** Firmware shows "Rover runs" and a short build id. A
    rover on older firmware shows none, and Update stays off, saying why.
@@ -317,11 +319,12 @@ connected from the panel, with the gear's Options open:
      refused with "Another update is under way.".
    After each, the rover runs the firmware it had: Options shows the same
    build as before, and after EN too (EN starts it exploring: on the stand).
-5. **The password.** With an OTA password set in the WiFi settings header,
-   flashed over USB: Update with no password typed stops with "This rover
+5. **The password.** Update with no password typed stops with "This rover
    has an OTA password: type it in, then press Update again.", and with a
    wrong one with "Wrong OTA password."; either way the old firmware stays.
-   The right one works.
+   The right one works. A rover flashed with no OTA password set refuses
+   every update from the panel: "This rover has no OTA password, and
+   updates from the panel need one: see the README."
    `car_ota` with `PLATFORMIO_UPLOAD_FLAGS=--auth=...` still works too.
 6. **Trial boot.** Right after an update, Update again: the rover refuses,
    saying it is still trying out new firmware, until it has run half a
@@ -334,4 +337,6 @@ connected from the panel, with the gear's Options open:
    among them, does the same: telemetry's build says which runs.
 7. **Web pages.** From a page served on the internet (any site's console:
    `new WebSocket("ws://<rover>:81")`), the connection must be refused. The
-   panel from a file, and `client/drive.py`, still connect.
+   panel from a file, and `client/drive.py`, still connect. A page can still
+   get in from a sandboxed frame, whose origin reads like a file's, which is
+   why updates need the password.
