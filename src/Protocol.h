@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 
+#include "FirmwareUpdate.h"
 #include "Kinematics.h"
 #include "Rover.h"
 
@@ -79,6 +80,16 @@ constexpr char OTA_FAILED[] = "failed";  // rover: {"ota", "reason"}
 // 1436-byte segment. OTA_CHUNK_BYTES in extras/joystick/js/protocol.js may
 // not exceed it, and tools/check_protocol.py checks.
 constexpr size_t OTA_CHUNK_MAX_BYTES = 1000;
+
+// RemoteControl's buffer for one reply to an update, terminator included. A
+// reply that does not fit is not sent, and its client waits for it until its
+// own timeout. test_firmware_update writes every reply FirmwareUpdate makes
+// into one this size.
+constexpr size_t OTA_REPLY_MAX_BYTES = 128;
+
+// Serialise a reply to the client updating the rover into `out`. Returns the
+// length written, or 0 for no reply or if it did not fit.
+size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capacity);
 
 // RemoteControl's buffer for one telemetry frame, terminator included. A frame
 // that does not fit is not sent at all, so telemetry would freeze in exactly

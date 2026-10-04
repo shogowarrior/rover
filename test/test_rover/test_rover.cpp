@@ -411,6 +411,20 @@ void test_a_stop_is_written_twice_and_no_more(void) {
   TEST_ASSERT_EQUAL_INT(atBoot + 2, motors->releaseCalls);
 }
 
+// At rest only once a stop has been written twice, so that what waits for it
+// (a flash write) cannot hold up the write that repairs a lost one.
+void test_at_rest_once_a_stop_is_written_twice(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  TEST_ASSERT_TRUE(rover->atRest());
+  rover->command(MOVE_FORWARD, 100, 500, 0);
+  TEST_ASSERT_FALSE(rover->atRest());
+  rover->command(STOP, 0, 0, 100);
+  rover->update(100 + tuning::MOTOR_REFRESH_MS - 1);
+  TEST_ASSERT_FALSE(rover->atRest());
+  rover->update(100 + tuning::MOTOR_REFRESH_MS);
+  TEST_ASSERT_TRUE(rover->atRest());
+}
+
 // The second write must never stop a move that started after the first.
 void test_a_new_move_cancels_the_second_write(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
@@ -457,6 +471,7 @@ int main(int, char**) {
   RUN_TEST(test_a_lost_obstacle_stop_is_written_again);
   RUN_TEST(test_a_lost_stop_is_written_again_without_the_loop);
   RUN_TEST(test_a_stop_is_written_twice_and_no_more);
+  RUN_TEST(test_at_rest_once_a_stop_is_written_twice);
   RUN_TEST(test_a_new_move_cancels_the_second_write);
   RUN_TEST(test_status_reports_a_missing_motor_driver);
   RUN_TEST(test_status_reports_what_the_wheels_are_doing);

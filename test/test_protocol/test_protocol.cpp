@@ -17,6 +17,9 @@ void tearDown(void) {}
 
 namespace {
 
+// 32 hex digits, made up: a digest or nonce of the right shape.
+const char HEX32[] = "0123456789abcdef0123456789abcdef";
+
 protocol::Message message(const char* json) {
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, json));
@@ -91,6 +94,19 @@ std::string jsonText(JsonVariantConst value) {
   std::string text;
   serializeJson(value, text);
   return text;
+}
+
+FirmwareUpdate::Reply replyOf(FirmwareUpdate::Reply::Kind kind) {
+  FirmwareUpdate::Reply reply = {};
+  reply.kind = kind;
+  return reply;
+}
+
+// writeOtaReply()'s frame for `reply`, as text.
+std::string replyText(const FirmwareUpdate::Reply& reply) {
+  char out[protocol::OTA_REPLY_MAX_BYTES];
+  const size_t length = protocol::writeOtaReply(reply, out, sizeof(out));
+  return std::string(out, length);
 }
 
 }  // namespace
@@ -208,6 +224,31 @@ void test_too_small_a_buffer_writes_nothing(void) {
                                                      40.0f, out, sizeof(out)));
 }
 
+// Each reply, key for key and type for type, as the client reads it.
+void test_update_replies_are_written(void) {
+  FirmwareUpdate::Reply reply = replyOf(FirmwareUpdate::Reply::AUTH);
+  memcpy(reply.nonce, HEX32, sizeof(HEX32));
+  TEST_ASSERT_EQUAL_STRING("{\"ota\":\"auth\",\"nonce\":\"0123456789abcdef0123456789abcdef\"}",
+                           replyText(reply).c_str());
+
+  reply = replyOf(FirmwareUpdate::Reply::NEXT);
+  reply.offset = 4294967295u;
+  TEST_ASSERT_EQUAL_STRING("{\"ota\":\"next\",\"offset\":4294967295}", replyText(reply).c_str());
+
+  TEST_ASSERT_EQUAL_STRING("{\"ota\":\"done\"}", replyText(replyOf(FirmwareUpdate::Reply::DONE)).c_str());
+
+  reply = replyOf(FirmwareUpdate::Reply::FAILED);
+  reply.reason = "Cancelled.";
+  TEST_ASSERT_EQUAL_STRING("{\"ota\":\"failed\",\"reason\":\"Cancelled.\"}", replyText(reply).c_str());
+}
+
+// No reply sends nothing, and one that does not fit is not sent truncated.
+void test_update_replies_write_nothing_rather_than_too_little(void) {
+  TEST_ASSERT_EQUAL_STRING("", replyText(replyOf(FirmwareUpdate::Reply::NONE)).c_str());
+  char out[14];  // {"ota":"done"} without its terminator
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeOtaReply(replyOf(FirmwareUpdate::Reply::DONE), out, sizeof(out)));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_command_fields_are_read);
@@ -221,5 +262,7 @@ int main(int, char**) {
   RUN_TEST(test_unknown_scheme_is_ignored);
   RUN_TEST(test_other_messages_drive);
   RUN_TEST(test_a_move_with_a_scheme_still_drives);
+  RUN_TEST(test_update_replies_are_written);
+  RUN_TEST(test_update_replies_write_nothing_rather_than_too_little);
   return UNITY_END();
 }

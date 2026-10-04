@@ -51,6 +51,33 @@ const char* schemeName(kinematics::ControlScheme scheme) {
   return scheme == kinematics::SCHEME_ADVANCED ? "ADVANCED" : "NORMAL";
 }
 
+size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capacity) {
+  JsonDocument doc;
+  switch (reply.kind) {
+    case FirmwareUpdate::Reply::NONE:
+      return 0;
+    case FirmwareUpdate::Reply::AUTH:
+      doc["ota"] = OTA_AUTH;
+      // As a pointer: as an array, ArduinoJson would take all 32 characters
+      // to be a string literal's, by address.
+      doc["nonce"] = static_cast<const char*>(reply.nonce);
+      break;
+    case FirmwareUpdate::Reply::NEXT:
+      doc["ota"] = OTA_NEXT;
+      doc["offset"] = reply.offset;
+      break;
+    case FirmwareUpdate::Reply::DONE:
+      doc["ota"] = OTA_DONE;
+      break;
+    case FirmwareUpdate::Reply::FAILED:
+      doc["ota"] = OTA_FAILED;
+      doc["reason"] = reply.reason;
+      break;
+  }
+  if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
+  return serializeJson(doc, out, capacity);
+}
+
 size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,
                       float temperatureC, char* out, size_t capacity) {
   // Built fresh each time from typed state: a long-lived JsonDocument used as
