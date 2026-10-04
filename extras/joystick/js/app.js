@@ -23,10 +23,12 @@
  *   link.js          Link: the WebSocket, the link state, telemetry
  *   scan.js          BEARINGS, ScanView: the scan fan
  *   readouts.js      Readouts: mode, move, phase, chip temperature, motor warning
- *   drive.js         Driver: the stick, rotate buttons and speed, and what to send
+ *   drive.js         Driver: the two sticks, rotate buttons and speed, and what
+ *                    to send
  *   scheme.js        SchemeToggle: the control scheme, NORMAL or ADVANCED: the
  *                    rover's, or on the simulator target the simulator's
- *   family.js        FamilySelector: the stick family, and the stick's labels
+ *   family.js        FamilySelector: the pivot stick's family, and both
+ *                    sticks' labels
  *   tabs.js          Tabs: the Drive and Program tabs
  *   ask.js           AskDialog: the page's one way to ask the operator something
  *   popover.js       Popover: a button and the menu or panel it opens
@@ -98,6 +100,7 @@ const driven = {
 const driver = new Driver({
   link: driven,
   stick: byId("stick"),
+  pivotStick: byId("pivotStick"),
   cw: byId("cw"),
   ccw: byId("ccw"),
   speed: byId("speed"),
@@ -181,13 +184,14 @@ const schemeToggle = new SchemeToggle({
   choice: byId("schemeChoice"),
 });
 
-// Offered under ADVANCED only; TRANSLATE otherwise.
+// The pivot stick's family, on under ADVANCED only.
 const familySelector = new FamilySelector({
   choice: byId("familyChoice"),
   group: byId("family"),
+  pad: byId("pivotPad"),
   label: byId("stickLabel"),
   hints: byId("stickHints"),
-  caveat: byId("pivotCaveat"),
+  note: byId("pivotNote"),
 });
 
 link.onTelemetry((data) => schemeToggle.show(data));
@@ -196,24 +200,32 @@ link.onState((state) => {
   else if (state === "stale") schemeToggle.linkStale();
 });
 
-// The operator's own choice re-steers a held stick at once, as pressing L1 or
-// R1 does on the gamepad: the thumb is theirs, and so is the change.
+// The operator's own choice re-steers a held pivot stick at once, as
+// pressing L1 or R1 does on the gamepad: the thumb is theirs, and so is the
+// change.
 familySelector.onChange((family) => driver.setFamily(family));
 
-// A change of scheme, from anyone, never redirects a held stick: the stick
-// lets go (Driver.releaseStick: one STOP, only if it was driving) and drives
-// again only from a fresh press, which its caption asks for
-// (FamilySelector.awaitPress); a link that goes takes the request with it.
-// Learning the scheme for the first time redirects nothing -- the family was
-// TRANSLATE while it was unknown, and stays so -- so a stick held as
-// telemetry first arrives drives on.
-schemeToggle.onChange((scheme, previous) => {
-  const letGo = previous !== null && driver.releaseStick();
-  familySelector.offer(scheme === SCHEME_ADVANCED);
-  if (letGo) familySelector.awaitPress(true);
-  else if (scheme === null) familySelector.awaitPress(false);
+// The pivots are ADVANCED's: under NORMAL, or while the scheme is unknown,
+// the pivot stick is shown but off. A change of scheme, from anyone, never
+// redirects a held stick. Away from ADVANCED a held pivot stick lets go
+// (Driver.enablePivots: one STOP, only if it was driving), and it drives
+// again only from a fresh press once ADVANCED is back, which its line asks
+// for then (FamilySelector.awaitPress); a link that goes takes the requests
+// with it. The translate stick sends the same moves under either scheme, so
+// it drives on.
+const answerPresses = () => {
+  familySelector.awaitPress("move", false);
+  familySelector.awaitPress("pivot", false);
+};
+schemeToggle.onChange((scheme) => {
+  const advanced = scheme === SCHEME_ADVANCED;
+  const letGo = driver.enablePivots(advanced);
+  familySelector.offer(advanced);
+  if (scheme === null) answerPresses();
+  else if (letGo) familySelector.awaitPress("pivot", true);
 });
-driver.onManualInput(() => familySelector.awaitPress(false));
+// Pressing anything answers a request: the operator is driving again.
+driver.onManualInput(answerPresses);
 
 /* --- tabs ---------------------------------------------------------------- */
 
@@ -379,8 +391,8 @@ runner.onState((state, { kind }) => {
   }
 });
 
-// Leaving the Drive tab lets go of a held stick (one STOP, only if it was
-// driving): hidden, the stick can no longer be steered or centred, since
+// Leaving the Drive tab lets go of the held sticks (one STOP, only if one
+// was driving): hidden, a stick can no longer be steered or centred, since
 // joy.js throws on every move of a canvas with no layout, and the last move
 // went on repeating until the thumb lifted. On the rover a held rotate
 // button carries on, as it has nothing to steer and its release still
@@ -389,13 +401,13 @@ runner.onState((state, { kind }) => {
 // and at 4x each re-sent move ran out before the next (placeSimView).
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
-// size: fit it again whenever the tab is shown. So with the stick, whose
-// look or size may have changed while it was hidden (Driver.shown). The
+// size: fit it again whenever the tab is shown. So with the sticks, whose
+// look or size may have changed while they were hidden (Driver.shown). The
 // simulator's view goes with the tab that shows it.
 tabs.onChange((tab) => {
   if (tab.id === "tabDrive") driver.shown();
   else if (driven.simulator) driver.standDown("tab");
-  else driver.releaseStick();
+  else driver.releaseSticks();
   placeSimView();
   if (tab.id === "tabProgram") programTab.shown();
 });
@@ -466,10 +478,11 @@ new Popover(byId("options"), byId("optionsPanel"));
 // Whatever took the look's colours as plain values when it was built takes
 // the new look's: the stick's knob, which joy.js paints into its canvas,
 // and the block editor's Blockly theme (look.js paints the browser's own
-// bar). Anything styled with var() follows by itself. Rebuilt, the stick
-// lets go of a held stick as a scheme change does (one STOP, only if it was
-// driving), and its caption asks for a fresh press; nothing else is sent.
+// bar). Anything styled with var() follows by itself. Rebuilt, the sticks
+// let go of what they hold (one STOP, only if a stick was driving), and the
+// caption of each that was deflected asks for a fresh press; nothing else is
+// sent.
 lookPicker.onChange(() => {
-  if (driver.restyle()) familySelector.awaitPress(true);
+  for (const stick of driver.restyle()) familySelector.awaitPress(stick, true);
   programTab.restyle();
 });

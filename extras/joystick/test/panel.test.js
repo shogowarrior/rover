@@ -46,9 +46,9 @@ function connected(frame, options) {
 const names = (ws, from = 0) => ws.moves().slice(from).map((m) => NAMES[m.move]);
 const count = (ws) => ws.sent.length;
 
-// A thumb on the stick's canvas as it is now; (dx, dy) is from its centre.
-function stickTouch(page, id = 0) {
-  const c = page.canvas;
+// A thumb on a stick's canvas as it is now, the translate stick's unless
+// another is given; (dx, dy) is from its centre.
+function stickTouch(page, id = 0, c = page.canvas) {
   const touch = (dx, dy) => ({ identifier: id, target: c, pageX: c.width / 2 + dx, pageY: c.height / 2 + dy });
   return {
     start(dx = 0, dy = 0) { page.fire(c, "touchstart", { targetTouches: [touch(dx, dy)], changedTouches: [touch(dx, dy)] }); },
@@ -56,6 +56,17 @@ function stickTouch(page, id = 0) {
     end() { page.fire(c, "touchend", { targetTouches: [], changedTouches: [{ identifier: id }] }); },
     cancel() { page.fire(c, "touchcancel", { targetTouches: [], changedTouches: [{ identifier: id }] }); },
   };
+}
+// A thumb on the pivot stick's canvas.
+const pivotTouch = (page, id = 0) => stickTouch(page, id, page.pivotCanvas);
+// Whether the pivot stick and its selector are on, every way the page says
+// so: "on", "off", or what disagrees.
+function pivotsState(page) {
+  const say = [page.$("family").dataset.off, page.$("pivotPad").dataset.off, ...all(page.$("familyChoice")).filter((n) => n.dataset.family).map((b) => (b.disabled ? "yes" : "no"))];
+  const driver = page.evalIn("driver.pivots");
+  if (say.every((v) => v === "no") && driver === true) return "on";
+  if (say.every((v) => v === "yes") && driver === false) return "off";
+  return `mixed ${say} driver ${driver}`;
 }
 const press = (page, el, pointerId, extra = {}) => page.fire(el, "pointerdown", { pointerId, button: 0, ...extra });
 const lift = (page, el, pointerId, type = "pointerup") => page.fire(el, type, { pointerId, button: 0 });
@@ -413,10 +424,10 @@ test("mouse-driven stick: hovering a rotate button mid-drag does not stop it", (
 
 /* --- the stick latches, primary presses only, repeat phase ---------------- */
 
-// A mouse on the stick's canvas; (dx, dy) is from its centre. joy.js follows
-// a drag on the document, as it does the release.
-function mouseStick(page) {
-  const c = page.canvas;
+// A mouse on a stick's canvas, the translate stick's unless another is
+// given; (dx, dy) is from its centre. joy.js follows a drag on the
+// document, as it does the release.
+function mouseStick(page, c = page.canvas) {
   return {
     down(extra = {}) { page.fire(c, "mousedown", { button: 0, ...extra }); },
     move(dx, dy) { page.fire(page.doc, "mousemove", { pageX: c.width / 2 + dx, pageY: c.height / 2 + dy }); },
@@ -1044,32 +1055,27 @@ function liveFor(page, ws, ms, fields = { mode: "MANUAL" }) {
   }
 }
 
-test("setFamily: a held stick re-steers at once, into the family's quadrant move", () => {
+test("setFamily: a held pivot stick re-steers at once, into the family's quadrant move", () => {
   const page = loadPage();
   const ws = connectOpen(page);
-  check(page.evalIn("driver.family") === "TRANSLATE", `default family ${page.evalIn("driver.family")}`);
+  check(page.evalIn("driver.family") === "PIVOT", `default family ${page.evalIn("driver.family")}`);
+  page.evalIn("driver.enablePivots(true)");
 
   // Nothing held: changing the family sends nothing.
+  page.evalIn("driver.setFamily(FAMILY_PIVOT_SIDEWAYS)");
   page.evalIn("driver.setFamily(FAMILY_PIVOT)");
-  page.evalIn("driver.setFamily(FAMILY_TRANSLATE)");
   page.clock.advance(500);
   check(count(ws) === 0, `idle setFamily sent ${names(ws)}`);
 
-  const s = stickTouch(page, 0);
+  const s = pivotTouch(page, 0);
   s.start(); s.move(0, -50);
-  check(names(ws).join() === "MOVE_FORWARD", `translate ${names(ws)}`);
+  check(names(ws).join() === "PIVOT_RIGHT_FORWARD", `pivot ${names(ws)}`); // on an axis: right and forward
   page.clock.advance(30); // inside STICK_SEND_MS: only a new direction may go now
   let mark = count(ws);
-  page.evalIn("driver.setFamily(FAMILY_PIVOT)");
-  check(names(ws, mark).join() === "PIVOT_RIGHT_FORWARD", `pivot ${names(ws, mark)}`); // on an axis: right and forward
-  check(ws.sentAt[mark] === page.clock.now(), "sent at once");
-  check(page.evalIn("driver.family") === "PIVOT", "family getter");
-
-  page.clock.advance(30);
-  mark = count(ws);
   page.evalIn("driver.setFamily(FAMILY_PIVOT_SIDEWAYS)");
   check(names(ws, mark).join() === "PIVOT_SIDEWAYS_FORWARD_RIGHT", `sideways ${names(ws, mark)}`);
   check(ws.sentAt[mark] === page.clock.now(), "sent at once");
+  check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS", "family getter");
 
   mark = count(ws);
   s.move(-60, 40); // down and left
@@ -1082,24 +1088,35 @@ test("setFamily: a held stick re-steers at once, into the family's quadrant move
   page.clock.advance(450);
   check(names(ws, mark).length === 2 && names(ws, mark).every((n) => n === "PIVOT_SIDEWAYS_BACKWARD_LEFT"), `repeat ${names(ws, mark)}`);
 
-  // An unknown family throws and changes nothing.
-  mark = count(ws);
-  let threw = null;
-  try { page.evalIn('driver.setFamily("SIDEWAYS")'); } catch (err) { threw = err; }
-  check(threw && threw.name === "RangeError", `unknown family: ${threw}`);
-  check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && count(ws) === mark, "unchanged");
+  // Anything but a pivot family throws and changes nothing: the translate
+  // stick is the other stick, not a family of this one.
+  for (const family of ["FAMILY_TRANSLATE", '"SIDEWAYS"']) {
+    mark = count(ws);
+    let threw = null;
+    try { page.evalIn(`driver.setFamily(${family})`); } catch (err) { threw = err; }
+    check(threw && threw.name === "RangeError", `${family}: ${threw}`);
+    check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && count(ws) === mark, `${family} changed something`);
+  }
 
+  // The translate stick is not a pivot family's: a family change leaves a
+  // held translate stick, pressed last, alone.
+  const t = stickTouch(page, 1);
   mark = count(ws);
-  page.evalIn("driver.setFamily(FAMILY_TRANSLATE)");
-  check(names(ws, mark).join() === "MOVE_DIAGONAL225", `back to translate ${names(ws, mark)}`);
+  t.start(); t.move(0, -50);
+  check(names(ws, mark).join() === "MOVE_FORWARD", `the translate stick, pressed last ${names(ws, mark)}`);
+  mark = count(ws);
+  page.evalIn("driver.setFamily(FAMILY_PIVOT)");
+  check(count(ws) === mark, `re-steered the translate stick: ${names(ws, mark)}`);
+  t.end();
+  check(names(ws, mark).join() === "PIVOT_LEFT_BACKWARD", `the pivot stick again ${names(ws, mark)}`);
 
   // A rotate button still wins over the stick, whatever the family.
   press(page, page.$("cw"), 4);
   mark = count(ws);
-  page.evalIn("driver.setFamily(FAMILY_PIVOT)");
+  page.evalIn("driver.setFamily(FAMILY_PIVOT_SIDEWAYS)");
   check(count(ws) === mark, `re-steered under a held rotate: ${names(ws, mark)}`);
   lift(page, page.$("cw"), 4);
-  check(names(ws, mark).join() === "PIVOT_LEFT_BACKWARD", `stick again ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "PIVOT_SIDEWAYS_BACKWARD_LEFT", `stick again ${names(ws, mark)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -1360,10 +1377,11 @@ test("tabs: switching leaves a held control driving, and Stop and Autonomous on 
   page.fire(page.$("stop"), "click"); // from the Program tab
   check(names(ws, mark).join() === "STOP", `Stop on the Program tab ${names(ws, mark)}`);
 
-  // The scheme toggle sits outside the tabs, in the header; the family
-  // selector belongs to the stick, on the Drive tab.
+  // The scheme toggle sits outside the tabs, in the header; both sticks,
+  // and the family selector that belongs to the pivot stick, on the Drive
+  // tab.
   check(page.$("schemeSlot") !== null && !inside("schemeSlot", "driveTab") && !inside("schemeSlot", "programTab"), "#schemeSlot outside the tabs");
-  check(page.$("familySlot") !== null && inside("familySlot", "driveTab"), "#familySlot on the Drive tab");
+  for (const id of ["family", "movePad", "pivotPad"]) check(page.$(id) !== null && inside(id, "driveTab"), `#${id} on the Drive tab`);
   check(page.$("programTab").tagName === "SECTION", "#programTab is a section");
 });
 
@@ -1390,6 +1408,30 @@ test("tabs: leaving the Drive tab lets go of a held stick: one STOP, then nothin
     const fresh = stickTouch(page, 1);
     fresh.start(); fresh.move(0, -50);
     check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh press drove ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
+  }
+
+  // Both sticks held: one STOP for the two, and each drives again only from
+  // a fresh press of its own.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const move = stickTouch(page, 0);
+    const pivot = pivotTouch(page, 1);
+    move.start(); move.move(0, -50);
+    pivot.start(); pivot.move(50, 0);
+    check(names(ws).join() === "MOVE_FORWARD,PIVOT_RIGHT_FORWARD", `both sticks ${names(ws)}`);
+    let mark = count(ws);
+    page.fire(page.$("tabProgram"), "click");
+    check(names(ws, mark).join() === "STOP", `the switch sent ${names(ws, mark)}`);
+    page.fire(page.$("tabDrive"), "click");
+    mark = count(ws);
+    move.move(0, -60); pivot.move(60, 0);
+    page.clock.advance(1000);
+    check(count(ws) === mark, `the thumbs on the sticks let go of sent ${names(ws, mark)}`);
+    move.end(); pivot.end();
+    pivotTouch(page, 2).start();
+    pivotTouch(page, 2).move(-50, 0);
+    check(names(ws, mark).join() === "PIVOT_LEFT_FORWARD", `a fresh press of the pivot stick drove ${names(ws, mark)}`);
     check(page.errors.length === 0, `errors ${page.errors}`);
   }
 
@@ -1810,7 +1852,7 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
     check(shownScheme(page) === "unknown", `${when}: shows ${shownScheme(page)}`);
     check(SCHEMES.every((s) => schemeButton(page, s).disabled === true), `${when}: both disabled`);
     check(group.dataset.state === "unknown", `${when}: state ${group.dataset.state}`);
-    check(page.$("family").hidden === true && page.evalIn("driver.family") === "TRANSLATE", `${when}: no family selector, translating`);
+    check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT", `${when}: pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
   };
   check(SCHEMES.every((s) => schemeButton(page, s) !== undefined), "two segments built");
   unknown("at load");
@@ -1829,8 +1871,10 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
   check(shownScheme(page) === "NORMAL" && group.dataset.state === "known", `NORMAL: ${shownScheme(page)} ${group.dataset.state}`);
   check(SCHEMES.every((s) => schemeButton(page, s).disabled === false), "enabled");
   check(page.evalIn("schemeToggle.scheme") === "NORMAL", "scheme getter");
+  check(pivotsState(page) === "off", `NORMAL: pivots ${pivotsState(page)}`);
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
   check(shownScheme(page) === "ADVANCED", `follows telemetry, as after the pad's SELECT: ${shownScheme(page)}`);
+  check(pivotsState(page) === "on", `ADVANCED: pivots ${pivotsState(page)}`);
   ws.serverMsg(telemetry({ scheme: undefined })); // a frame that names none says nothing is known
   unknown("a frame without scheme");
   check(count(ws) === 0, `sent ${ws.sent}`);
@@ -1846,7 +1890,7 @@ test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, an
   // Pending: marked, not lit, until the rover reports it.
   check(pendingScheme(page) === "ADVANCED" && shownScheme(page) === "NORMAL", `pending ${pendingScheme(page)}, shown ${shownScheme(page)}`);
   check(page.$("scheme").dataset.state === "pending" && page.$("scheme").getAttribute("aria-busy") === "true", "busy while pending");
-  check(page.$("family").hidden === true, "no selector before the rover reports ADVANCED");
+  check(pivotsState(page) === "off", `pivots before the rover reports ADVANCED: ${pivotsState(page)}`);
   page.fire(schemeButton(page, "ADVANCED"), "click"); // again, impatiently
   check(count(ws) === 1, `a second click on the pending scheme sent ${ws.sent}`);
 
@@ -1854,7 +1898,7 @@ test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, an
   check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `confirmed: ${shownScheme(page)}, pending ${pendingScheme(page)}`);
   check(page.$("scheme").getAttribute("aria-busy") === "false", "not busy");
   check(page.$("mode").textContent === "AUTONOMOUS" && page.$("auto").getAttribute("aria-pressed") === "true", `mode ${page.$("mode").textContent}`);
-  check(page.$("family").hidden === false, "selector offered");
+  check(pivotsState(page) === "on", `pivots ${pivotsState(page)}`);
   page.fire(schemeButton(page, "ADVANCED"), "click"); // the scheme already in force
   liveFor(page, ws, 2000, { scheme: "ADVANCED" });
   check(count(ws) === 1, `sent ${ws.sent}`);
@@ -1863,12 +1907,14 @@ test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, an
   page.fire(schemeButton(page, "NORMAL"), "click");
   liveFor(page, ws, 500, { scheme: "NORMAL" });
   check(ws.sent.join(" ") === '{"scheme":"ADVANCED"} {"scheme":"NORMAL"}', `sent ${ws.sent.join(" ")}`);
-  check(shownScheme(page) === "NORMAL" && page.$("family").hidden === true, "back to NORMAL");
+  check(shownScheme(page) === "NORMAL" && pivotsState(page) === "off", `back to NORMAL: pivots ${pivotsState(page)}`);
   check(page.$("mode").textContent === "AUTONOMOUS", "still exploring");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 test("schemes: the toggle bypasses the Driver: a held stick drives on until the rover reports the change", () => {
+  // The translate stick sends the same moves under either scheme, so it
+  // drives on through the change, confirmed or not.
   const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   const s = stickTouch(page, 0);
   s.start(); pushTo(page, s, 0, 80);
@@ -1882,7 +1928,21 @@ test("schemes: the toggle bypasses the Driver: a held stick drives on until the 
   check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `repeat ${names(ws, mark)}`);
   mark = count(ws);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  check(names(ws, mark).join() === "STOP", `confirmed under the thumb ${names(ws, mark)}`);
+  page.clock.advance(400);
+  check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `confirmed under the translate stick ${names(ws, mark)}`);
+  s.end();
+
+  // The pivot stick drives on under ADVANCED until the rover reports
+  // NORMAL, and then lets go.
+  const p = pivotTouch(page, 1);
+  p.start(); pushTo(page, p, 0, 80);
+  mark = count(ws);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  page.clock.advance(400);
+  check(ws.sent[mark] === '{"scheme":"NORMAL"}' && names(ws, mark + 1).join() === "PIVOT_RIGHT_FORWARD,PIVOT_RIGHT_FORWARD", `before the rover reports NORMAL ${ws.sent.slice(mark)}`);
+  mark = count(ws);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(names(ws, mark).join() === "STOP", `confirmed under the pivot stick ${names(ws, mark)}`);
 });
 
 test("schemes: an unconfirmed request stops showing as pending after CONFIRM_MS", () => {
@@ -1926,46 +1986,57 @@ const MIRROR = {
 };
 let ICONS; // FamilySelector.ICONS, read from the first page loaded below
 
-test("schemes: the family selector is offered under ADVANCED only; corner hints under a pivot family", () => {
+test("schemes: the pivot stick and its family are off under NORMAL and on under ADVANCED; its corners always name its moves", () => {
   const page = loadPage();
   const ws = connectOpen(page);
   const heard = listen(page);
-  const offered = () => page.$("family").hidden === false;
-  check(familyButton(page, "TRANSLATE") && familyButton(page, "PIVOT") && familyButton(page, "PIVOT_SIDEWAYS"), "three segments built");
+  const note = page.$("pivotNote");
+  const noteSays = () => `${note.textContent}/${note.dataset.tone}`;
+  const OFF = `${page.evalIn("FamilySelector.OFF")}/off`;
+  const CAVEAT = `${page.evalIn("FamilySelector.CAVEAT")}/caveat`;
+  check(familyButton(page, "PIVOT") && familyButton(page, "PIVOT_SIDEWAYS") && !familyButton(page, "TRANSLATE"), "two segments built, the pivots'");
 
   // Each segment shows its family's icon as the up-and-right corner draws
   // it, so the segment and the corner it lights up cannot disagree. Drawn,
   // not typed: the arrow characters fell back to fonts of different weights.
   ICONS = page.evalIn("FamilySelector.ICONS");
-  check(new Set(Object.values(ICONS)).size === 3 && Object.values(ICONS).every((d) => /^M[\d. ]/.test(d)), `three icons ${JSON.stringify(ICONS)}`);
-  for (const family of ["TRANSLATE", "PIVOT", "PIVOT_SIDEWAYS"]) {
+  check(Object.keys(ICONS).join() === "PIVOT,PIVOT_SIDEWAYS" && new Set(Object.values(ICONS)).size === 2 && Object.values(ICONS).every((d) => /^M[\d. ]/.test(d)), `two icons ${JSON.stringify(ICONS)}`);
+  for (const family of ["PIVOT", "PIVOT_SIDEWAYS"]) {
     const [icon, name] = familyButton(page, family).children;
     const drawn = icon.children[0];
     check(icon.getAttribute("aria-hidden") === "true" && name.textContent.length > 0, `${family}: icon hidden, name read`);
     check(drawn.getAttribute("d") === ICONS[family] && drawn.getAttribute("transform") === MIRROR.upRight, `${family}: segment drew ${drawn.getAttribute("d")}`);
   }
 
+  const want = {
+    PIVOT: "upLeft:PIVOT_LEFT_FORWARD,upRight:PIVOT_RIGHT_FORWARD,downLeft:PIVOT_LEFT_BACKWARD,downRight:PIVOT_RIGHT_BACKWARD",
+    PIVOT_SIDEWAYS: "upLeft:PIVOT_SIDEWAYS_FORWARD_LEFT,upRight:PIVOT_SIDEWAYS_FORWARD_RIGHT,downLeft:PIVOT_SIDEWAYS_BACKWARD_LEFT,downRight:PIVOT_SIDEWAYS_BACKWARD_RIGHT",
+  };
+
+  // Off, and saying why, until the rover reports ADVANCED; shown all the
+  // same, with the moves its corners would send.
+  const off = (when) => {
+    check(pivotsState(page) === "off" && noteSays() === OFF, `${when}: pivots ${pivotsState(page)}, note ${noteSays()}`);
+    check(page.$("pivotPad").title.length > 0 && !page.$("family").hidden && !page.$("pivotPad").hidden && !page.$("stickHints").hidden, `${when}: shown, with a title`);
+    check(page.$("stickLabel").textContent === "Translate", `${when}: caption ${page.$("stickLabel").textContent}`);
+  };
+  off("before telemetry");
+  check(isPressed(familyButton(page, "PIVOT")) && hintMoves(page) === want.PIVOT, `the default family's corners ${hintMoves(page)}`);
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
-  check(!offered() && page.$("stickLabel").textContent === "Translate", "NORMAL: hidden, translating");
-  check(page.$("stickHints").hidden === true && page.$("pivotCaveat").hidden === true, "NORMAL: no hints, no caveat");
-  page.fire(familyButton(page, "PIVOT"), "click"); // hidden, so not clickable; and if it were
-  check(page.evalIn("driver.family") === "TRANSLATE", `a withdrawn selector changed the family to ${page.evalIn("driver.family")}`);
+  off("NORMAL");
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click"); // disabled, so not clickable; and if it were
+  check(page.evalIn("driver.family") === "PIVOT" && hintMoves(page) === want.PIVOT, `an off selector changed the family to ${page.evalIn("driver.family")}`);
 
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
-  check(offered() && isPressed(familyButton(page, "TRANSLATE")), "ADVANCED: offered, starting at Translate");
-  check(page.$("stickHints").hidden === true && page.$("pivotCaveat").hidden === true, "Translate: no hints, no caveat");
+  check(pivotsState(page) === "on" && isPressed(familyButton(page, "PIVOT")), `ADVANCED: pivots ${pivotsState(page)}, at Pivot`);
+  check(noteSays() === CAVEAT && page.$("pivotPad").title === "", `ADVANCED: note ${noteSays()}, title '${page.$("pivotPad").title}'`);
 
-  const want = {
-    PIVOT: ["Pivot", "upLeft:PIVOT_LEFT_FORWARD,upRight:PIVOT_RIGHT_FORWARD,downLeft:PIVOT_LEFT_BACKWARD,downRight:PIVOT_RIGHT_BACKWARD"],
-    PIVOT_SIDEWAYS: ["Pivot sideways", "upLeft:PIVOT_SIDEWAYS_FORWARD_LEFT,upRight:PIVOT_SIDEWAYS_FORWARD_RIGHT,downLeft:PIVOT_SIDEWAYS_BACKWARD_LEFT,downRight:PIVOT_SIDEWAYS_BACKWARD_RIGHT"],
-  };
-  for (const [family, [label, hints]] of Object.entries(want)) {
+  for (const [family, hints] of Object.entries(want).reverse()) {
     page.fire(familyButton(page, family), "click");
     check(page.evalIn("driver.family") === family && page.evalIn("familySelector.family") === family, `${family}: driver ${page.evalIn("driver.family")}`);
-    check(["TRANSLATE", "PIVOT", "PIVOT_SIDEWAYS"].every((f) => isPressed(familyButton(page, f)) === (f === family)), `${family}: one segment pressed`);
-    check(page.$("stickLabel").textContent === label, `${family}: caption ${page.$("stickLabel").textContent}`);
-    check(page.$("stickHints").hidden === false && hintMoves(page) === hints, `${family}: hints ${hintMoves(page)}`);
-    check(page.$("pivotCaveat").hidden === false, `${family}: caveat shown`);
+    check(["PIVOT", "PIVOT_SIDEWAYS"].every((f) => isPressed(familyButton(page, f)) === (f === family)), `${family}: one segment pressed`);
+    check(page.$("stickLabel").textContent === "Translate" && noteSays() === CAVEAT, `${family}: caption ${page.$("stickLabel").textContent}, note ${noteSays()}`);
+    check(hintMoves(page) === hints, `${family}: hints ${hintMoves(page)}`);
     // Each corner reads as mecanum.js names the move, beside the family's
     // icon mirrored into the corner's quadrant.
     for (const hint of all(page.$("stickHints")).filter((n) => n.dataset.corner)) {
@@ -1978,17 +2049,18 @@ test("schemes: the family selector is offered under ADVANCED only; corner hints 
         `${hint.dataset.corner}: drew ${drawn.getAttribute("d")} with ${drawn.getAttribute("transform")}`);
     }
   }
-  page.fire(familyButton(page, "TRANSLATE"), "click");
-  check(page.$("stickHints").hidden === true && page.$("stickLabel").textContent === "Translate", "back to Translate");
 
   page.clock.advance(1000);
   check(count(ws) === 0 && heard.presses() === 0, `choosing families sent ${ws.sent}, presses ${heard.presses()}`);
 
-  page.fire(familyButton(page, "PIVOT"), "click");
+  // NORMAL turns the pivots off and keeps the family chosen: ADVANCED again
+  // offers the one left behind.
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
-  check(!offered() && page.evalIn("driver.family") === "TRANSLATE" && page.$("stickHints").hidden === true, "NORMAL withdraws the selector and the pivot family");
+  off("NORMAL again");
+  check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && hintMoves(page) === want.PIVOT_SIDEWAYS, `kept ${page.evalIn("driver.family")}`);
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
-  check(isPressed(familyButton(page, "TRANSLATE")) && page.evalIn("driver.family") === "TRANSLATE", "offered again at Translate, not the pivot left behind");
+  check(pivotsState(page) === "on" && isPressed(familyButton(page, "PIVOT_SIDEWAYS")), "offered again at the family left behind");
   check(count(ws) === 0, `sent ${ws.sent}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
@@ -2126,14 +2198,18 @@ test("Blockly draws the grid in the look's --raised-hi, through var()", () => {
 
 test("schemes: each quadrant of each family sends the move test/vectors/stick_moves.json gives it", () => {
   const { cases: stickCases } = vectors("stick_moves.json");
+  // The translate stick under either scheme, the pivot stick in each family.
   const runs = [["NORMAL", "TRANSLATE"], ["ADVANCED", "TRANSLATE"], ["ADVANCED", "PIVOT"], ["ADVANCED", "PIVOT_SIDEWAYS"]];
   for (const [scheme, family] of runs) {
     const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme }));
-    if (scheme === "ADVANCED") page.fire(familyButton(page, family), "click");
-    check(page.evalIn("driver.family") === family, `${scheme}/${family}: driver ${page.evalIn("driver.family")}`);
+    const pivot = family !== "TRANSLATE";
+    if (pivot) {
+      page.fire(familyButton(page, family), "click");
+      check(page.evalIn("driver.family") === family, `${scheme}/${family}: driver ${page.evalIn("driver.family")}`);
+    }
     const cases = stickCases.filter((c) => c.family === family);
     check(cases.length >= 5, `${family}: ${cases.length} cases`);
-    const s = stickTouch(page, 0);
+    const s = pivot ? pivotTouch(page, 0) : stickTouch(page, 0);
     for (const { x, yUp, move } of cases) {
       const mark = count(ws);
       s.start(); pushTo(page, s, x, yUp);
@@ -2144,20 +2220,29 @@ test("schemes: each quadrant of each family sends the move test/vectors/stick_mo
     check(page.errors.length === 0, `errors ${page.errors}`);
   }
 
-  // The headline case: ADVANCED, Pivot, the stick up and to the right.
+  // Under NORMAL the pivot stick sends nothing, in any quadrant.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+    const s = pivotTouch(page, 0);
+    for (const { x, yUp } of stickCases.filter((c) => c.family === "PIVOT")) {
+      s.start(); pushTo(page, s, x, yUp); page.clock.advance(250); s.end();
+    }
+    check(count(ws) === 0, `the pivot stick under NORMAL sent ${names(ws)}`);
+  }
+
+  // The headline case: ADVANCED, Pivot, the pivot stick up and to the right.
   const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  page.fire(familyButton(page, "PIVOT"), "click");
-  const s = stickTouch(page, 0);
+  const s = pivotTouch(page, 0);
   s.start(); pushTo(page, s, 60, 60);
   check(ws.moves()[0].move === 9 && names(ws).join() === "PIVOT_RIGHT_FORWARD", `up-right under Pivot sent ${ws.sent}`);
 });
 
-test("schemes: the operator's family change re-steers a held stick at once", () => {
+test("schemes: the operator's family change re-steers a held pivot stick at once", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  const s = stickTouch(page, 0);
+  const s = pivotTouch(page, 0);
   s.start(); pushTo(page, s, 60, 60);
-  check(names(ws).join() === "MOVE_DIAGONAL45", `translate ${names(ws)}`);
-  for (const [family, move] of [["PIVOT", "PIVOT_RIGHT_FORWARD"], ["PIVOT_SIDEWAYS", "PIVOT_SIDEWAYS_FORWARD_RIGHT"], ["TRANSLATE", "MOVE_DIAGONAL45"]]) {
+  check(names(ws).join() === "PIVOT_RIGHT_FORWARD", `pivot ${names(ws)}`);
+  for (const [family, move] of [["PIVOT_SIDEWAYS", "PIVOT_SIDEWAYS_FORWARD_RIGHT"], ["PIVOT", "PIVOT_RIGHT_FORWARD"]]) {
     page.clock.advance(30); // inside STICK_SEND_MS: only a new direction may go now
     const mark = count(ws);
     page.fire(familyButton(page, family), "click");
@@ -2166,62 +2251,74 @@ test("schemes: the operator's family change re-steers a held stick at once", () 
   // A held rotate button wins over the stick: the family changes nothing sent.
   press(page, page.$("ccw"), 4);
   const mark = count(ws);
-  page.fire(familyButton(page, "PIVOT"), "click");
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
   check(count(ws) === mark, `under a held rotate: ${names(ws, mark)}`);
   lift(page, page.$("ccw"), 4);
-  check(names(ws, mark).join() === "PIVOT_RIGHT_FORWARD", `the stick again, in its new family: ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "PIVOT_SIDEWAYS_FORWARD_RIGHT", `the stick again, in its new family: ${names(ws, mark)}`);
 });
 
-test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothing until a fresh press", () => {
-  // NORMAL to ADVANCED, by touch: the family stays Translate, and the stick
-  // still lets go -- whoever flipped it, the change is not this thumb's.
+test("schemes: telemetry flipping the scheme mid-hold lets go of the pivot stick alone: one STOP, then nothing until a fresh press", () => {
+  // NORMAL to ADVANCED, by touch: the translate stick sends the same moves
+  // under either scheme, and drives on.
   {
     const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
     const s = stickTouch(page, 0);
     s.start(); pushTo(page, s, 0, 70);
     liveFor(page, ws, 500, { mode: "MANUAL", scheme: "NORMAL" });
-    check(count(ws) >= 3 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
-    let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" })); // the pad's SELECT, say
-    check(names(ws, mark).join() === "STOP", `flip ${names(ws, mark)}`);
-    mark = count(ws);
-    for (let i = 0; i < 10; i++) { pushTo(page, s, 10 * i, 70); liveFor(page, ws, 150, { mode: "MANUAL", scheme: "ADVANCED" }); }
-    check(count(ws) === mark, `the thumb still down sent ${names(ws, mark)}`);
-    s.end();
-    check(count(ws) === mark, `lifting sent ${names(ws, mark)}`);
-    s.start(); pushTo(page, s, 0, 70);
-    liveFor(page, ws, 400, { mode: "MANUAL", scheme: "ADVANCED" });
-    check(names(ws, mark).length >= 3 && names(ws, mark).every((n) => n === "MOVE_FORWARD"), `a fresh press drives: ${names(ws, mark)}`);
+    liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+    liveFor(page, ws, 500, { mode: "MANUAL", scheme: "NORMAL" });
+    check(count(ws) >= 9 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove on through both flips ${names(ws)}`);
     check(page.errors.length === 0, `errors ${page.errors}`);
   }
 
-  // ADVANCED (Pivot) to NORMAL, by touch: the pivot under the thumb must not
-  // become a diagonal.
+  // ADVANCED to NORMAL, by touch: the pivot under the thumb stops, and the
+  // thumb drives it again only from a fresh press once ADVANCED is back,
+  // however long it rests there.
   {
     const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-    page.fire(familyButton(page, "PIVOT"), "click");
-    const s = stickTouch(page, 0);
+    const s = pivotTouch(page, 0);
     s.start(); pushTo(page, s, 60, 60);
     liveFor(page, ws, 500, { mode: "MANUAL", scheme: "ADVANCED" });
-    check(names(ws).every((n) => n === "PIVOT_RIGHT_FORWARD"), `pivoted ${names(ws)}`);
+    check(count(ws) >= 3 && names(ws).every((n) => n === "PIVOT_RIGHT_FORWARD"), `pivoted ${names(ws)}`);
     let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-    check(names(ws, mark).join() === "STOP", `flip ${names(ws, mark)}`);
-    check(page.evalIn("driver.family") === "TRANSLATE" && page.$("family").hidden === true, "translating, selector withdrawn");
+    check(names(ws, mark).join() === "STOP" && pivotsState(page) === "off", `flip ${names(ws, mark)}, pivots ${pivotsState(page)}`);
     mark = count(ws);
-    pushTo(page, s, 61, 60);
-    liveFor(page, ws, 1500, { mode: "MANUAL", scheme: "NORMAL" });
+    for (let i = 0; i < 5; i++) { pushTo(page, s, 10 * i, 60); liveFor(page, ws, 150, { mode: "MANUAL", scheme: "NORMAL" }); }
+    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" })); // and back, under the same thumb
+    for (let i = 0; i < 5; i++) { pushTo(page, s, 10 * i, 60); liveFor(page, ws, 150, { mode: "MANUAL", scheme: "ADVANCED" }); }
     check(count(ws) === mark, `the thumb still down sent ${names(ws, mark)}`);
-    s.end(); s.start(); pushTo(page, s, 60, 60);
-    check(names(ws, mark).join() === "MOVE_DIAGONAL45", `a fresh press drives in the new scheme: ${names(ws, mark)}`);
+    s.end();
+    check(count(ws) === mark, `lifting sent ${names(ws, mark)}`);
+    s.start(); pushTo(page, s, 60, 60);
+    check(names(ws, mark).join() === "PIVOT_RIGHT_FORWARD", `a fresh press drives: ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
   }
 
-  // By mouse, held through the change and released afterwards.
+  // Both sticks held, the pivot stick pressed last: the flip hands the
+  // rover to the translate stick, as lifting the pivot thumb would.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const move = stickTouch(page, 0);
+    const pivot = pivotTouch(page, 1);
+    move.start(); pushTo(page, move, 0, 70);
+    pivot.start(); pushTo(page, pivot, -60, 60);
+    check(names(ws).join() === "MOVE_FORWARD,PIVOT_LEFT_FORWARD", `both ${names(ws)}`);
+    const mark = count(ws);
+    ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+    liveFor(page, ws, 500, { mode: "MANUAL", scheme: "NORMAL" });
+    check(names(ws, mark).length >= 2 && names(ws, mark).every((n) => n === "MOVE_FORWARD"), `the translate stick took over ${names(ws, mark)}`);
+  }
+
+  // By mouse, held through the change and released afterwards; under
+  // NORMAL a click on the pivot stick drives nothing.
   {
     const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }), { touch: false });
-    const m = mouseStick(page);
+    const m = mouseStick(page, page.pivotCanvas);
     m.down(); m.move(95, 0);
-    check(names(ws).join() === "MOVE_RIGHT", `mouse ${names(ws)}`);
+    check(names(ws).join() === "PIVOT_RIGHT_FORWARD", `mouse ${names(ws)}`);
     let mark = count(ws);
     ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
     m.move(90, -20);
@@ -2229,8 +2326,12 @@ test("schemes: telemetry flipping the scheme mid-hold sends one STOP, then nothi
     check(names(ws, mark).join() === "STOP", `mouse flip ${names(ws, mark)}`);
     mark = count(ws);
     m.up();
-    m.down(); m.move(0, -95);
-    check(names(ws, mark).join() === "MOVE_FORWARD", `a fresh click drives: ${names(ws, mark)}`);
+    m.down(); m.move(0, -95); m.up();
+    check(count(ws) === mark, `a click on the pivot stick under NORMAL sent ${names(ws, mark)}`);
+    const t = mouseStick(page);
+    t.down(); t.move(0, -95);
+    check(names(ws, mark).join() === "MOVE_FORWARD", `a click on the translate stick drives: ${names(ws, mark)}`);
+    check(page.errors.length === 0, `errors ${page.errors}`);
   }
 });
 
@@ -2241,8 +2342,8 @@ test("schemes: a scheme flip leaves a held rotate button driving", () => {
   liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
   check(count(ws) >= 6 && names(ws).every((n) => n === "ROTATE_CLOCKWISE"), `rotate alone ${names(ws)}`);
 
-  // The stick under the rotate button lets go; the rotation does not.
-  const s = stickTouch(page, 1);
+  // The pivot stick under the rotate button lets go; the rotation does not.
+  const s = pivotTouch(page, 1);
   s.start(); pushTo(page, s, 0, 80);
   let mark = count(ws);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
@@ -2251,7 +2352,16 @@ test("schemes: a scheme flip leaves a held rotate button driving", () => {
   mark = count(ws);
   lift(page, page.$("cw"), 2);
   liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "NORMAL" });
-  check(names(ws, mark).join() === "STOP", `the stick does not take over from a released rotate: ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "STOP", `the pivot stick does not take over from a released rotate: ${names(ws, mark)}`);
+
+  // The translate stick under it does, flip or not.
+  press(page, page.$("ccw"), 3);
+  const t = stickTouch(page, 2);
+  t.start(); pushTo(page, t, 0, 80);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  mark = count(ws);
+  lift(page, page.$("ccw"), 3);
+  check(names(ws, mark).join() === "MOVE_FORWARD", `the translate stick takes over from a released rotate: ${names(ws, mark)}`);
 });
 
 test("schemes: a scheme change with nothing held sends nothing, and an exploring rover explores on", () => {
@@ -2280,72 +2390,86 @@ test("schemes: the scheme first reported does not stop a stick held since the li
   }
 });
 
-test("schemes: losing the link makes the scheme unknown and the family Translate", () => {
+test("schemes: losing the link makes the scheme unknown and turns the pivots off, keeping the family", () => {
   const page = loadPage();
   let ws = connectOpen(page);
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
-  page.fire(familyButton(page, "PIVOT"), "click");
-  check(page.evalIn("driver.family") === "PIVOT", "pivoting");
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
+  check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && pivotsState(page) === "on", "pivoting sideways");
   ws.serverDrop();
   check(shownScheme(page) === "unknown" && SCHEMES.every((s) => schemeButton(page, s).disabled), `lost: ${shownScheme(page)}`);
-  check(page.evalIn("driver.family") === "TRANSLATE" && page.$("family").hidden === true, "translating, selector withdrawn");
-  check(page.$("stickLabel").textContent === "Translate" && page.$("stickHints").hidden === true, "caption and hints follow");
+  check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT_SIDEWAYS", `pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
+  check(page.$("pivotNote").textContent === page.evalIn("FamilySelector.OFF"), `note '${page.$("pivotNote").textContent}'`);
 
   ws = connectOpen(page);
-  check(shownScheme(page) === "unknown", "unknown until the new link reports it");
+  check(shownScheme(page) === "unknown" && pivotsState(page) === "off", "off until the new link reports ADVANCED");
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
-  check(shownScheme(page) === "ADVANCED" && isPressed(familyButton(page, "TRANSLATE")), "reported again, at Translate");
-  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
+  check(shownScheme(page) === "ADVANCED" && pivotsState(page) === "on" && isPressed(familyButton(page, "PIVOT_SIDEWAYS")), "reported again, at the family kept");
   page.fire(page.$("connect"), "click"); // a deliberate disconnect
-  check(shownScheme(page) === "unknown" && page.evalIn("driver.family") === "TRANSLATE", "disconnect too");
+  check(shownScheme(page) === "unknown" && pivotsState(page) === "off", "disconnect too");
   check(count(ws) === 0, `sent ${ws.sent}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("schemes: a stick a scheme change let go of asks for a fresh press, until one comes", () => {
+test("schemes: a pivot stick a scheme change let go of asks for a fresh press once ADVANCED is back, until one comes", () => {
   const page = loadPage();
   const ws = connectOpen(page);
+  const note = page.$("pivotNote");
   const caption = page.$("stickLabel");
-  const asking = () => caption.textContent === page.evalIn("FamilySelector.PRESS_AGAIN") && caption.dataset.tone === "warn";
-  const naming = (family) => caption.textContent === family && caption.dataset.tone === undefined;
+  const PRESS_AGAIN = page.evalIn("FamilySelector.PRESS_AGAIN");
+  const says = () => `${note.textContent}/${note.dataset.tone}`;
+  const asking = () => says() === `${PRESS_AGAIN}/warn`;
+  const caveat = () => says() === `${page.evalIn("FamilySelector.CAVEAT")}/caveat`;
+  const off = () => says() === `${page.evalIn("FamilySelector.OFF")}/off`;
+  const captionClear = () => caption.textContent === "Translate" && caption.dataset.tone === undefined;
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  page.fire(familyButton(page, "PIVOT"), "click");
 
-  // Nothing held: the caption only follows the family back to Translate.
+  // Nothing held: the line only follows the scheme.
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-  check(naming("Translate"), `nothing held: '${caption.textContent}' ${caption.dataset.tone}`);
+  check(off(), `nothing held, NORMAL: ${says()}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(caveat(), `nothing held, ADVANCED: ${says()}`);
 
   // Held: joy.js still draws the knob under the thumb, over a stopped rover.
-  const s = stickTouch(page, 0);
+  // Under NORMAL the line says the stick is off; with ADVANCED back, it asks
+  // for the press. The translate stick's caption asks nothing: it was never
+  // let go of.
+  const s = pivotTouch(page, 0);
   s.start(); pushTo(page, s, 0, 70);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(off() && captionClear(), `held through the change: ${says()}, caption '${caption.textContent}'`);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  check(asking(), `held through the change: '${caption.textContent}' ${caption.dataset.tone}`);
+  check(asking() && captionClear(), `ADVANCED again: ${says()}, caption '${caption.textContent}'`);
   pushTo(page, s, 30, 70);
   liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
   s.end();
-  check(asking(), `still asking after the thumb lifts: '${caption.textContent}'`);
+  check(asking(), `still asking after the thumb lifts: ${says()}`);
   const mark = count(ws);
   s.start(); // the fresh press it asked for
-  check(naming("Translate"), `answered: '${caption.textContent}' ${caption.dataset.tone}`);
+  check(caveat(), `answered: ${says()}`);
   pushTo(page, s, 0, 70);
-  check(names(ws, mark).join() === "MOVE_FORWARD", `and drives: ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "PIVOT_RIGHT_FORWARD", `and drives: ${names(ws, mark)}`);
 
-  // A rotate button under the stick: the stick will not take over when it is
-  // let go, so the caption asks too; pressing anything answers it.
+  // A rotate button over the stick: the stick will not take over when it is
+  // let go, so the line asks too; pressing anything answers it.
   press(page, page.$("cw"), 3);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
-  check(asking(), "asked under a held rotate button");
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(asking(), `asked under a held rotate button: ${says()}`);
   lift(page, page.$("cw"), 3);
   press(page, page.$("ccw"), 4);
-  check(naming("Translate"), `a rotate press answers it: '${caption.textContent}'`);
+  check(caveat(), `a rotate press answers it: ${says()}`);
   lift(page, page.$("ccw"), 4);
 
   // Losing the link withdraws the request with everything else.
   s.end(); s.start(); pushTo(page, s, 0, 70);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   check(asking(), "asked again");
   ws.serverDrop();
-  check(naming("Translate"), `link lost: '${caption.textContent}' ${caption.dataset.tone}`);
+  const again = connectOpen(page);
+  again.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(caveat(), `link lost and back: ${says()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2372,7 +2496,7 @@ test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change
   const group = page.$("scheme");
   const staleMs = page.evalIn("Link.STALE_MS");
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
-  page.fire(familyButton(page, "PIVOT"), "click");
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
 
   page.clock.advance(staleMs - 100);
   page.fire(schemeButton(page, "NORMAL"), "click");
@@ -2384,8 +2508,8 @@ test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change
   check(SCHEMES.every((s) => schemeButton(page, s).disabled === true) && group.title.length > 0, "nothing offered, and the title says why");
   for (const s of SCHEMES) page.fire(schemeButton(page, s), "click");
   check(count(ws) === 1, `a stale link was sent ${ws.sent.slice(1)}`);
-  // Stale is not lost: the stick still drives in the family chosen.
-  check(page.$("family").hidden === false && page.evalIn("driver.family") === "PIVOT", "the family stays");
+  // Stale is not lost: the pivot stick still drives in the family chosen.
+  check(pivotsState(page) === "on" && page.evalIn("driver.family") === "PIVOT_SIDEWAYS", `the pivots stay: ${pivotsState(page)}, ${page.evalIn("driver.family")}`);
 
   ws.serverMsg(telemetry({ scheme: "ADVANCED" })); // telemetry resumes
   check(group.dataset.state === "known" && SCHEMES.every((s) => schemeButton(page, s).disabled === false), `resumed: ${group.dataset.state}`);
@@ -2396,7 +2520,7 @@ test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change
   page.clock.advance(staleMs);
   check(group.dataset.state === "stale", "stale again");
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
-  check(shownScheme(page) === "NORMAL" && group.dataset.state === "known" && page.$("family").hidden === true, "the rebooted rover's scheme");
+  check(shownScheme(page) === "NORMAL" && group.dataset.state === "known" && pivotsState(page) === "off", "the rebooted rover's scheme");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3479,24 +3603,25 @@ test("program: a question that waits keeps the editor's tools from acting under 
 test("program: its own stop and start exploring are no press: a stick let go of still asks for one", async () => {
   const page = loadPage();
   const ws = connectOpen(page);
-  const caption = page.$("stickLabel");
-  const asking = () => caption.textContent === page.evalIn("FamilySelector.PRESS_AGAIN") && caption.dataset.tone === "warn";
+  const note = page.$("pivotNote");
+  const asking = () => note.textContent === page.evalIn("FamilySelector.PRESS_AGAIN") && note.dataset.tone === "warn";
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  const s = stickTouch(page, 0);
+  const s = pivotTouch(page, 0);
   s.start(); pushTo(page, s, 0, 70);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   s.end();
-  check(asking(), `asked for a fresh press: '${caption.textContent}'`);
+  check(asking(), `asked for a fresh press: '${note.textContent}'`);
   await flush(); // the touch's own events have all landed, as in a browser before any click
 
   const heard = listen(page);
   const mark = count(ws);
   startProgram(page, "await api.stop(); await api.explore(); await api.log('after');");
-  await liveForAsync(page, ws, 1000, { fields: { mode: "MANUAL", scheme: "NORMAL" } });
+  await liveForAsync(page, ws, 1000, { fields: { mode: "MANUAL", scheme: "ADVANCED" } });
   check(ended(page) && ended(page).outcome === "done", `ended ${JSON.stringify(ended(page))}`);
   check(names(ws, mark).join() === "STOP,RESUME_AUTONOMOUS", `sent ${names(ws, mark)}`);
   check(heard.presses() === 0 && heard.downs() === "", `the Driver raised ${heard.presses()} presses, stand-downs '${heard.downs()}'`);
-  check(asking(), `still asking: '${caption.textContent}' ${caption.dataset.tone}`);
+  check(asking(), `still asking: '${note.textContent}' ${note.dataset.tone}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3624,12 +3749,12 @@ test("target: on the simulator the Drive tab drives it, and nothing but Stop rea
   s.end();
   check(sim().slice(-1)[0] === "STOP" && !state().moving, `let go: ${sim()}`);
 
-  // The family, under ADVANCED, as on the rover.
-  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  page.evalIn("driver.setFamily(FAMILY_PIVOT)");
-  s.start(); s.move(60, -60);
-  check(/^PIVOT_/.test(sim().slice(-1)[0]), `a pivot: ${sim()}`);
-  s.end();
+  // The pivot stick, under the simulator's own ADVANCED, as on the rover.
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  const p = pivotTouch(page, 1);
+  p.start(); p.move(60, -60);
+  check(sim().slice(-1)[0] === "PIVOT_RIGHT_FORWARD", `a pivot: ${sim()}`);
+  p.end();
 
   check(count(ws) === 0, `the rover got ${names(ws)}`);
   // Autonomous: the simulator alone, which says exploring is not simulated.
@@ -3738,16 +3863,17 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   page.fire(schemeButton(page, "ADVANCED"), "click");
   check(scheme() === "ADVANCED" && shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `set at once: ${scheme()} ${shownScheme(page)} pending ${pendingScheme(page)}`);
   check(page.$("scheme").getAttribute("aria-busy") === "false", "never busy");
-  check(page.$("family").hidden === false, "the Drive tab's family follows it");
-  page.fire(familyButton(page, "PIVOT"), "click");
+  check(pivotsState(page) === "on", `the Drive tab's pivot stick follows it: ${pivotsState(page)}`);
+  page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
   const sim = simCommands(page);
-  const s = stickTouch(page, 0);
+  const s = pivotTouch(page, 0);
   s.start(); s.move(60, -60);
-  check(/^PIVOT_/.test(sim().slice(-1)[0]), `a pivot on the simulated rover: ${sim()}`);
-  s.end();
-  // Back to NORMAL: the family goes, as under the rover's.
+  check(sim().slice(-1)[0] === "PIVOT_SIDEWAYS_FORWARD_RIGHT", `a pivot on the simulated rover: ${sim()}`);
+  // Back to NORMAL: the pivot stick lets go and goes off, as under the
+  // rover's.
   page.fire(schemeButton(page, "NORMAL"), "click");
-  check(scheme() === "NORMAL" && page.$("family").hidden === true && page.evalIn("driver.family") === "TRANSLATE", "NORMAL: translating");
+  check(scheme() === "NORMAL" && pivotsState(page) === "off" && sim().slice(-1)[0] === "STOP", `NORMAL: pivots ${pivotsState(page)}, ${sim()}`);
+  s.end();
   check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
   check(page.evalIn("__linkSent.length") === 0, `the Link was handed ${page.evalIn("JSON.stringify(__linkSent)")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
