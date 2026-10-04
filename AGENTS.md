@@ -412,7 +412,8 @@ adds its pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
 colours the same in every look.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
-stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
+stays disabled until a frame names a scheme. On the simulator target it is
+the simulator's instead (below). Its `{"scheme": ...}` message is
 configuration, never a command: it neither takes control nor stops an
 exploring rover. A change, from anyone, lets go of a held stick (one STOP, and
 only if the stick was driving), which drives again only from a fresh press; a
@@ -426,16 +427,17 @@ in the Link's place (`driven` in `js/app.js`), through the same arbitration,
 re-sends and deadlines, and no move the Drive tab makes reaches the rover.
 Stop stops a connected rover too, first, so nothing the simulator does can
 keep it from the rover. Autonomous there takes the simulated rover's mode
-and leaves the rover alone. The scheme toggle still shows and sets the
-rover's scheme (F3g, in `docs/features.md`, gives the simulator its own). A
-switch is a new way to lose control, so it stops a running program and lets
+and leaves the rover alone. The scheme toggle there shows and sets the
+simulator's own scheme (`SchemeToggle.bind()`): always known, set at once,
+and never sent over the Link, so Normal | Advanced work with no rover, and
+the Drive tab's family follows it. While the rover is the target the
+simulator takes the rover's scheme, so a switch to the simulator starts
+from it. A switch is a new way to lose control, so it stops a running program and lets
 go of every held control, with one STOP to the target left behind if this
 panel was driving it. On a phone 600 px tall or less, every phone on its
 side among them, the Drive tab leaves the switch to the Program tab: its row
 left the scan nothing to give way with, and the stick moved. A lost or stale
-link lets go of nothing driving the simulator but a held stick, because the
-rover's scheme goes with the link and a change of scheme lets go of a held
-stick. Leaving the Drive tab lets
+link lets go of nothing driving the simulator. Leaving the Drive tab lets
 go of a held rotate button too: off the Drive tab the view plays at the
 operator's speed. A drive press takes the simulated rover over from a
 preview, as it does the rover from a program. There is one view of the
@@ -458,7 +460,11 @@ page's globals in reach, so a program loaded from anywhere goes through
 `RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
 keeps comments out of the code. On the rover, Run asks first when the editor
 holds several stacks, and when the program drives a pivot while the rover is
-not on ADVANCED. A program's own stop and start exploring are not presses:
+not on ADVANCED. Under NORMAL, the target's, each enabled drive block that
+pivots carries Blockly's warning before Run is pressed
+(`RoverBlocks.schemeWarning()`). The motion menu keeps all 18 motions
+whatever the scheme: Blockly puts the menu's first choice in place of a
+saved value it does not offer, so a saved pivot would drive forward. A program's own stop and start exploring are not presses:
 the Driver raises no event for them. The tab's File menu holds the
 examples, Import, Export and Clear; loading an example or importing over a
 program, and Clear, ask first too. Every question the panel asks goes

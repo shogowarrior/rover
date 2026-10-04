@@ -2446,11 +2446,12 @@ const segments = (page) => page.$("target").children;
 function standInEditor(page, program = "await api.step('b1'); await api.drive(MOVE_FORWARD, 50, 0.5); await api.log('hi');") {
   page.evalIn(`
     globalThis.__editor = {
-      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, restyled: 0, loaded: [], cleared: 0,
+      empty: false, stacks: 1, pivots: [], highlighted: [], readOnly: [], resized: 0, restyled: 0, loaded: [], cleared: 0, schemes: [],
       compile() { return async (api) => { ${program} }; },
       onChange() { return () => {}; },
       highlight(id) { this.highlighted.push(id); },
       setReadOnly(on) { this.readOnly.push(on); },
+      setScheme(scheme) { this.schemes.push(scheme); },
       resize() { this.resized++; },
       restyle() { this.restyled++; },
       load(state) { this.loaded.push(state); },
@@ -3160,7 +3161,7 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
     globalThis.Blockly = { dialog: { setConfirm(fn) { __confirm = fn; } } };
     globalThis.javascript = { javascriptGenerator: {} };
     BlockEditor = function () {
-      return { empty: true, stacks: 0, pivots: [], onChange() { return () => {}; }, setReadOnly() {}, resize() {} };
+      return { empty: true, stacks: 0, pivots: [], onChange() { return () => {}; }, setReadOnly() {}, setScheme() {}, resize() {} };
     };
     startBlockEditor();
     globalThis.__answers = [];
@@ -3693,7 +3694,7 @@ test("target: a switch under a held control sends one STOP to the target left be
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: a lost or stale link lets go of nothing driving the simulator but a held stick, whose scheme goes with it", () => {
+test("target: a lost or stale link lets go of nothing driving the simulator", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const sim = simCommands(page);
   toSimulator(page);
@@ -3705,20 +3706,116 @@ test("target: a lost or stale link lets go of nothing driving the simulator but 
   lift(page, page.$("ccw"), 1);
   check(sim().slice(-1)[0] === "STOP", "let go: STOP");
 
-  // The rover's scheme goes with the link, and a change of scheme lets go
-  // of a held stick, as ever: under ADVANCED a held pivot would otherwise
-  // turn into a translation with no fresh press.
+  // Nor a held stick: the scheme it drives with is the simulator's, which
+  // the rover's link does not carry (F3g). Before, the rover's scheme went
+  // with the link and the stick was let go.
   const ws2 = connectOpen(page);
-  ws2.serverMsg(telemetry({ mode: "MANUAL" }));
+  ws2.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   const s = stickTouch(page, 0);
   s.start(); s.move(0, -100);
   const mark = sim.count();
   ws2.serverDrop();
-  check(sim(mark).join() === "STOP", `one STOP to the simulator: ${sim(mark)}`);
   page.clock.advance(1000);
-  check(sim.count() === mark + 1, `then nothing: ${sim(mark)}`);
+  check(sim(mark).length >= 4 && sim(mark).every((m) => m === "MOVE_FORWARD"), `driving on: ${sim(mark)}`);
   s.end();
+  check(sim().slice(-1)[0] === "STOP", "let go: STOP");
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The scheme toggle shows and sets the target's scheme (F3g): on the
+// simulator its own, so Normal | Advanced work with no rover, and nothing of
+// it reaches the Link.
+test("target: on the simulator the scheme toggle sets the simulator's scheme, with no rover, and sends nothing", () => {
+  const page = loadPage();
+  const scheme = () => page.evalIn("targets.simulator.scheme");
+  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => schemeButton(page, x).disabled), "the rover's, unknown, at first");
+  toSimulator(page);
+  check(shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "known", `the simulator's: ${shownScheme(page)} ${page.$("scheme").dataset.state}`);
+  check(SCHEMES.every((x) => !schemeButton(page, x).disabled), "offered");
+  check(/simulator/i.test(page.$("scheme").title), `its title says whose: ${page.$("scheme").title}`);
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(scheme() === "ADVANCED" && shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `set at once: ${scheme()} ${shownScheme(page)} pending ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false", "never busy");
+  check(page.$("family").hidden === false, "the Drive tab's family follows it");
+  page.fire(familyButton(page, "PIVOT"), "click");
+  const sim = simCommands(page);
+  const s = stickTouch(page, 0);
+  s.start(); s.move(60, -60);
+  check(/^PIVOT_/.test(sim().slice(-1)[0]), `a pivot on the simulated rover: ${sim()}`);
+  s.end();
+  // Back to NORMAL: the family goes, as under the rover's.
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(scheme() === "NORMAL" && page.$("family").hidden === true && page.evalIn("driver.family") === "TRANSLATE", "NORMAL: translating");
+  check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: the simulator's scheme starts from the rover's and is its own while it is the target", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  const scheme = () => page.evalIn("targets.simulator.scheme");
+  check(scheme() === "ADVANCED", "on the rover target the simulator takes the rover's");
+  toSimulator(page);
+  check(shownScheme(page) === "ADVANCED", "a switch starts from it");
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(count(ws) === 0, `the rover was sent ${ws.sent}`);
+  // The rover's reports go on, kept and not shown; the rover changing its
+  // scheme leaves the simulator's alone.
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "NORMAL" && scheme() === "NORMAL", `its own: ${shownScheme(page)} ${scheme()}`);
+  // The rover's link stale or gone changes nothing shown.
+  page.clock.advance(3000);
+  check(page.$("scheme").dataset.state === "known" && SCHEMES.every((x) => !schemeButton(page, x).disabled), "stale link: still offered");
+  ws.serverDrop();
+  check(shownScheme(page) === "NORMAL", "link gone: still the simulator's");
+  // Back on the rover: the rover's again, unknown with no link, and the
+  // simulator keeps its own until the rover reports one.
+  toRover(page);
+  check(shownScheme(page) === "unknown" && scheme() === "NORMAL", `the rover's: ${shownScheme(page)}, the simulator's ${scheme()}`);
+  const ws2 = connectOpen(page);
+  ws2.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "ADVANCED" && scheme() === "ADVANCED", `then follows it: ${scheme()}`);
+  check(count(ws2) === 0, `sent ${ws2.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: a request to the rover still pending is not shown on the simulator, and lands as ever", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(pendingScheme(page) === "ADVANCED", "pending");
+  toSimulator(page);
+  check(pendingScheme(page) === null && page.$("scheme").dataset.state === "known" && shownScheme(page) === "NORMAL", `the simulator's, with no mark: ${pendingScheme(page)} ${shownScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(shownScheme(page) === "NORMAL", "the rover's report is not shown here");
+  toRover(page);
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null, `the rover's, confirmed: ${shownScheme(page)}`);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: the editor is told the scheme the toggle shows, the target's, so that a pivot under NORMAL says so", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  standInEditor(page);
+  const told = () => page.evalIn("__editor.schemes.join()");
+  check(told() === "ADVANCED", `on attaching: ${told()}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(told() === "ADVANCED,NORMAL", `the rover's change: ${told()}`);
+  toSimulator(page);
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(told() === "ADVANCED,NORMAL,ADVANCED", `the simulator's: ${told()}`);
+  toRover(page);
+  check(told() === "ADVANCED,NORMAL,ADVANCED,NORMAL", `the rover's again: ${told()}`);
+  ws.serverDrop();
+  check(page.evalIn("__editor.schemes[__editor.schemes.length - 1]") === null, `unknown with the link gone: ${told()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // A page that opens on the simulator: the editor, built later, is told
+  // the simulator's scheme, not nothing.
+  const onSim = loadPage({ stored: { "rover.target": "simulator" } });
+  standInEditor(onSim);
+  check(onSim.evalIn("__editor.schemes.join()") === "NORMAL", `opened on the simulator: ${onSim.evalIn("__editor.schemes.join()")}`);
+  check(onSim.errors.length === 0, `errors ${onSim.errors}`);
 });
 
 test("target: leaving the Drive tab on the simulator lets go of a held rotate button too", () => {

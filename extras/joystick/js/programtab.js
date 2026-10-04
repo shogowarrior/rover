@@ -26,8 +26,11 @@
  *                           box changes size.
  *   restyle()               the page's look has changed: the editor takes it.
  *                           An editor not yet built is built in it.
- *   setScheme(scheme)       the rover's control scheme, as telemetry reports
- *                           it (SchemeToggle), or null while unknown.
+ *   setScheme(scheme)       the control scheme the toggle shows (SchemeToggle):
+ *                           the rover's on the rover target, the
+ *                           simulator's on the simulator target, or null
+ *                           while unknown. Under NORMAL the editor marks
+ *                           each pivot before Run is pressed.
  *   note(text, tone)        add a line to the console, for what the runner
  *                           does not say itself (app.js: the simulator's
  *                           word). tone as the runner's log lines, or "bump".
@@ -68,7 +71,7 @@ class ProgramTab {
   #editor = null;
   #editorWhy = "Loading the block editor…";
   #outcome = null; // how the last run ended: {tone, text}, until something changes
-  #scheme = null; // the rover's control scheme, as last reported, or null
+  #scheme = null; // the scheme the toggle shows: the rover's on the rover target
 
   constructor({ runner, targetSwitch, examples, ask, ui }) {
     this.#runner = runner;
@@ -126,6 +129,7 @@ class ProgramTab {
     this.#editor = editor;
     this.#editorWhy = "";
     this.#ui.offline.hidden = true;
+    editor.setScheme(this.#scheme);
     editor.onChange(() => this.#update());
     this.#update();
   }
@@ -151,6 +155,7 @@ class ProgramTab {
 
   setScheme(scheme) {
     this.#scheme = scheme;
+    if (this.#editor) this.#editor.setScheme(scheme);
   }
 
   note(text, tone = "info") {
