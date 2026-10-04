@@ -232,7 +232,16 @@ A third thread, beside F3h and F4, did F6 from the owner's message of
 - the heartbeat also clears a slot's missed pongs on connect, which a
   dropped split frame showed could carry over to the slot's next client.
 
-Host tests 186/186, panel tests 298/298, the protocol check and every board
+Its review round (firmware, panel, layout, simplicity, each finding checked
+by a skeptic) kept 11 findings and fixed them all: the 30 s trial above (a
+build that got online, then hung, was being kept), the web-page refusal, any
+move ending an update while it is received, Options running under the Stop
+bar, the panel's "did it take" after a lost "done" or a rover not yet
+restarted, the focus a pressed button dropped, a touch screen's hint for a
+rover too old to update, and a preview on the simulator no longer stopped by
+an update.
+
+Host tests 191/191, panel tests 301/301, the protocol check and every board
 build pass. That thread built and tested the firmware in its own container
 despite the registry block: see "Firmware builds in a cloud thread" below.
 
