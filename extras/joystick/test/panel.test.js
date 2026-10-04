@@ -2448,7 +2448,7 @@ function startProgram(page, body = "await api.drive(MOVE_FORWARD, 50, 10); await
 }
 const ended = (page) => page.evalIn("__end");
 const logLines = (page) => page.$("programLog").children.map((li) => li.textContent);
-const segments = (page) => page.$("programTarget").children;
+const segments = (page) => page.$("target").children;
 
 // What app.js would get from a BlockEditor, reduced to what the tab uses.
 function standInEditor(page, program = "await api.step('b1'); await api.drive(MOVE_FORWARD, 50, 0.5); await api.log('hi');") {
@@ -2547,7 +2547,8 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   // when its scripts registered one; its view's place shows only then.
   const sim = page.evalIn("'simulator' in targets");
   check(segments(page).length === (sim ? 2 : 1), `segments ${segments(page).map((b) => b.textContent)}`);
-  check(page.$("programTarget").hidden === !sim && page.$("programSim").hidden === !sim, "switch and view follow the registry");
+  check(page.$("target").hidden === !sim && page.$("programSim").hidden === !sim && page.$("driveView").hidden === !sim,
+    "the switch and both places for the view follow the registry");
   check(page.$("programStage").dataset.sim === (sim ? "yes" : "no"), "stage layout follows it");
   check(page.$("simSlot") !== null && all(page.$("programTab")).includes(page.$("simSlot")), "#simSlot is in the Program tab");
 });
@@ -2702,7 +2703,7 @@ test("program: switching the target mid-run stops the program, and the choice is
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   standInEditor(page);
   check(segments(page).map((b) => b.textContent).join() === "Rover,Simulator", `segments ${segments(page).map((b) => b.textContent)}`);
-  check(!page.$("programTarget").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
+  check(!page.$("target").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
   check(segments(page)[0].getAttribute("aria-pressed") === "true", "the rover chosen");
 
   startProgram(page);
@@ -2716,7 +2717,7 @@ test("program: switching the target mid-run stops the program, and the choice is
   const end = ended(page);
   check(end && end.outcome === "stopped" && /switched to the simulator/.test(end.reason), `ended ${JSON.stringify(end)}`);
   check(names(ws, mark).join() === "STOP", `sent ${names(ws, mark)}`);
-  check(page.evalIn("targetSwitch.kind") === "simulator" && page.store["rover.programTarget"] === "simulator", "chosen and remembered");
+  check(page.evalIn("targetSwitch.kind") === "simulator" && page.store["rover.target"] === "simulator", "chosen and remembered");
   check(page.$("programRunLabel").textContent === "Preview" && page.$("programRun").disabled === false, "Preview, ready whatever the link");
   check(segments(page)[1].getAttribute("aria-pressed") === "true", "pressed");
 
@@ -2735,8 +2736,8 @@ test("program: switching the target mid-run stops the program, and the choice is
   await flush();
   check(page.evalIn("runner.state") === "idle" && /Stop was pressed/.test(page.$("programState").textContent), `the panel's Stop: ${page.$("programState").textContent}`);
   check(names(ws, before).join() === "STOP", "and the panel's Stop still stops the rover");
-  // So does the panel's Autonomous: for a preview it is app.js that stops it,
-  // since the simulator does not hear the Driver.
+  // So does the panel's Autonomous. On the simulator it hands the
+  // simulated rover to its exploring, and leaves the rover alone.
   page.fire(page.$("programRun"), "click");
   await flush();
   check(page.evalIn("runner.target && runner.target.kind") === "simulator", "previewing again");
@@ -2744,7 +2745,8 @@ test("program: switching the target mid-run stops the program, and the choice is
   page.fire(page.$("auto"), "click");
   await flush();
   check(page.evalIn("runner.state") === "idle" && /Stopped: Autonomous was pressed/.test(page.$("programState").textContent), `the panel's Autonomous: ${page.$("programState").textContent}`);
-  check(names(ws, handed).join() === "RESUME_AUTONOMOUS", `and the rover was handed to its own exploring: ${names(ws, handed)}`);
+  check(count(ws) === handed, `the rover was left alone: ${names(ws, handed)}`);
+  check(page.evalIn("targets.simulator.state.mode") === "AUTONOMOUS", "the simulated rover took the mode");
   // How the last run ended belongs to its target: a switch clears it.
   page.fire(segments(page)[0], "click");
   check(page.$("programState").textContent === "Ready to run on the rover.", `after a switch: ${page.$("programState").textContent}`);
@@ -2797,13 +2799,18 @@ test("program: switching the target mid-run stops the program, and the choice is
   const narrowPane = blockRules(programCss, "@container program (max-width: 599.98px) {") || [];
   check(narrowPane.some((r) => /\.programBar > button/.test(r.selector) && /padding-inline:\s*var\(--s-2\)/.test(r.body)), "a narrow pane's toolbar a step narrower");
 
-  const again = loadPage({ stored: { "rover.programTarget": "simulator" } });
+  const again = loadPage({ stored: { "rover.target": "simulator" } });
   check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
-  check(loadPage({ stored: { "rover.programTarget": "moon" } }).evalIn("targetSwitch.kind") === "rover", "a kind it does not offer is the rover");
+  check(loadPage({ stored: { "rover.target": "moon" } }).evalIn("targetSwitch.kind") === "rover", "a kind it does not offer is the rover");
+  // The switch was the Program tab's, under a key of its own: a choice
+  // made there is read once, and the new key wins once it holds one.
+  check(loadPage({ stored: { "rover.programTarget": "simulator" } }).evalIn("targetSwitch.kind") === "simulator", "the Program tab's choice carried over");
+  check(loadPage({ stored: { "rover.programTarget": "simulator", "rover.target": "rover" } }).evalIn("targetSwitch.kind") === "rover",
+    "the page's own key wins over the old one");
   // With only the rover there is nothing to switch.
   const roverOnly = again.evalIn(`(() => {
     const group = document.createElement("div");
-    const only = new TargetSwitch({ group, targets: { rover: targets.rover }, storageKey: "rover.programTarget" });
+    const only = new TargetSwitch({ group, targets: { rover: targets.rover }, storageKey: "rover.target" });
     return { hidden: group.hidden, kind: only.kind, kinds: only.kinds.join() };
   })()`);
   check(roverOnly.hidden && roverOnly.kind === "rover" && roverOnly.kinds === "rover", `the rover alone: ${JSON.stringify(roverOnly)}`);
@@ -3426,6 +3433,223 @@ test("program: the two Stops are named apart", () => {
   check(/Stop program/.test(words), `the Program tab's: ${words}`);
   check(/End the program/.test(page.$("programStop").getAttribute("title") || ""), "its title says what it does");
   check(page.$("stop").textContent === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the bar's always stops the rover, and says so");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+/* --- the target: the Drive tab on the simulator ---------------------------- */
+
+// Every command the page's simulator takes from the Driver, as move names,
+// with the speed and duration of the last.
+function simCommands(page) {
+  page.evalIn(`
+    globalThis.__simTook = [];
+    const simulator = targets.simulator;
+    const take = simulator.command.bind(simulator);
+    simulator.command = (move, speed, duration) => {
+      __simTook.push({ move, speed, duration });
+      take(move, speed, duration);
+    };
+  `);
+  return Object.assign((from = 0) => page.evalIn("__simTook").slice(from).map((c) => NAMES[c.move]), {
+    count: () => page.evalIn("__simTook.length"),
+    last: () => page.evalIn("__simTook[__simTook.length - 1]"),
+  });
+}
+const toSimulator = (page) => page.fire(segments(page)[1], "click");
+const toRover = (page) => page.fire(segments(page)[0], "click");
+
+test("target: one switch in the header, after the tabs and the scheme, for both tabs", () => {
+  const page = loadPage();
+  const switches = page.doc.documentElement.querySelectorAll(".switches")[0];
+  const order = switches.children.map((n) => n.id || n.getAttribute("class"));
+  check(order.join() === "tabs,schemeSlot,target", `the switch row: ${order}`);
+  check(page.$("target").getAttribute("role") === "group" && /Drive and run programs on/.test(page.$("target").getAttribute("aria-label")),
+    "named for what it picks");
+  check(!all(page.$("programTab")).some((n) => n.getAttribute("class") === "segmented" && n.parentNode.getAttribute("role") === "toolbar"),
+    "the Program toolbar has no switch of its own");
+  check(page.$("programTarget") === null, "the old switch is gone");
+  check(page.doc.body.dataset.target === "rover", "the rover at first");
+  toSimulator(page);
+  check(page.doc.body.dataset.target === "simulator", "the page knows the target, for its layout");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: on the simulator the Drive tab drives it, and nothing but Stop reaches the open Link", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  const sim = simCommands(page);
+  const state = () => page.evalIn("targets.simulator.state");
+  toSimulator(page);
+  check(count(ws) === 0 && sim.count() === 0, `the switch with nothing held sent ${names(ws)} and ${sim()}`);
+
+  press(page, page.$("cw"), 1);
+  page.clock.advance(450);
+  check(state().move === CODES.ROTATE_CLOCKWISE && state().moving, `rotating: ${JSON.stringify(state().move)}`);
+  lift(page, page.$("cw"), 1);
+  check(sim().join() === "ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,STOP", `rotate: ${sim()}`);
+  check(!state().moving, "let go: stopped");
+
+  const s = stickTouch(page, 0);
+  s.start(); s.move(0, -100);
+  check(sim().slice(-1)[0] === "MOVE_FORWARD" && state().moving, `the stick: ${sim()}`);
+  check(sim.last().speed === Number(page.$("speed").value) && sim.last().duration === page.evalIn("MOVE_DURATION_MS"),
+    `at the slider's speed, for one command's time: ${JSON.stringify(sim.last())}`);
+  page.$("speed").value = "128";
+  page.fire(page.$("speed"), "input");
+  page.clock.advance(250);
+  check(sim.last().speed === 128, `the speed follows the slider: ${JSON.stringify(sim.last())}`);
+  s.end();
+  check(sim().slice(-1)[0] === "STOP" && !state().moving, `let go: ${sim()}`);
+
+  // The family, under ADVANCED, as on the rover.
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  page.evalIn("driver.setFamily(FAMILY_PIVOT)");
+  s.start(); s.move(60, -60);
+  check(/^PIVOT_/.test(sim().slice(-1)[0]), `a pivot: ${sim()}`);
+  s.end();
+
+  check(count(ws) === 0, `the rover got ${names(ws)}`);
+  // Autonomous: the simulator alone, which says exploring is not simulated.
+  page.fire(page.$("auto"), "click");
+  check(count(ws) === 0 && state().mode === "AUTONOMOUS", `Autonomous: ${names(ws)}, ${state().mode}`);
+  check(/exploring is not simulated/.test(page.$("auto").getAttribute("title")), `its title says so: ${page.$("auto").getAttribute("title")}`);
+  // Stop: everything, the rover included.
+  page.fire(page.$("stop"), "click");
+  check(names(ws).join() === "STOP", `Stop reached the rover: ${names(ws)}`);
+  check(sim().slice(-1)[0] === "STOP" && state().mode === "MANUAL", `and the simulator: ${sim()}`);
+  // With no link, Stop still stops the simulator, and nothing fails.
+  ws.serverDrop();
+  page.fire(page.$("stop"), "click");
+  check(sim().slice(-1)[0] === "STOP", "Stop with the link down");
+  toRover(page);
+  check(/Let the rover explore/.test(page.$("auto").getAttribute("title")), "back on the rover, Autonomous's own title");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: a switch under a held control sends one STOP to the target left behind, then nothing until a fresh press", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  const sim = simCommands(page);
+
+  // From the rover, a rotate button held.
+  press(page, page.$("cw"), 1);
+  page.clock.advance(250);
+  check(names(ws).join() === "ROTATE_CLOCKWISE,ROTATE_CLOCKWISE", `rotating: ${names(ws)}`);
+  toSimulator(page);
+  check(names(ws).join() === "ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,STOP", `one STOP to the rover: ${names(ws)}`);
+  page.clock.advance(1000);
+  lift(page, page.$("cw"), 1);
+  check(count(ws) === 3 && sim.count() === 0, `then nothing anywhere: ${names(ws, 3)}, ${sim()}`);
+  check(page.$("cw").dataset.held === undefined, "the button no longer shows held");
+
+  // From the simulator, the stick held.
+  const s = stickTouch(page, 0);
+  s.start(); s.move(0, -100);
+  check(sim().join() === "MOVE_FORWARD", `driving the simulator: ${sim()}`);
+  toRover(page);
+  check(sim().join() === "MOVE_FORWARD,STOP" && count(ws) === 3, `one STOP to the simulator, nothing to the rover: ${sim()}, ${names(ws, 3)}`);
+  s.move(0, -90);
+  page.clock.advance(1000);
+  s.end();
+  check(count(ws) === 3 && sim.count() === 2, `then nothing until a fresh press: ${names(ws, 3)}, ${sim(2)}`);
+  s.start(); s.move(0, -100);
+  check(names(ws, 3).join() === "MOVE_FORWARD", `a fresh press drives the rover: ${names(ws, 3)}`);
+  s.end();
+
+  // Nothing held: a switch sends nothing either way.
+  const mark = count(ws);
+  toSimulator(page);
+  toRover(page);
+  check(count(ws) === mark && sim.count() === 2, `nothing held: ${names(ws, mark)}, ${sim(2)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: a lost or stale link lets go of nothing driving the simulator, and stops what drives the rover", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  const sim = simCommands(page);
+  toSimulator(page);
+  press(page, page.$("ccw"), 1);
+  page.clock.advance(3000); // no telemetry meanwhile: the link goes stale
+  ws.serverDrop();
+  page.clock.advance(400);
+  check(sim().every((m) => m === "ROTATE_COUNTERCLOCKWISE") && sim.count() >= 15, `driving on: ${sim.count()} ${sim().slice(-2)}`);
+  lift(page, page.$("ccw"), 1);
+  check(sim().slice(-1)[0] === "STOP", "let go: STOP");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: a drive press takes the simulated rover over from a preview, and only the Driver's moves reach it then", async () => {
+  const { page } = connected(telemetry({ mode: "MANUAL" }));
+  const sim = simCommands(page);
+  toSimulator(page);
+  page.evalIn("globalThis.__end = null; runner.run(async (api) => { for (;;) await api.drive(MOVE_BACKWARD, 100, 5); }, targets.simulator).then((end) => { __end = end; });");
+  await pageFrames(page, 300, page.evalIn("targets.simulator"));
+  check(page.evalIn("targets.simulator.state.held && targets.simulator.state.held.move") === CODES.MOVE_BACKWARD, "the preview drives");
+  const s = stickTouch(page, 0);
+  s.start(); s.move(0, -100);
+  await pageFrames(page, 600, page.evalIn("targets.simulator"));
+  const end = ended(page);
+  check(end && end.outcome === "stopped" && /driven by hand/.test(end.reason), `ended ${JSON.stringify(end)}`);
+  const state = page.evalIn("targets.simulator.state");
+  check(state.move === CODES.MOVE_FORWARD && state.moving && state.held === null, `the stick's move, not the program's: ${state.move}`);
+  check(sim().every((m) => m === "MOVE_FORWARD"), `the Driver's moves alone: ${sim()}`);
+  s.end();
+
+  // The same for a rotate button, which acts before it says it was pressed.
+  page.evalIn("globalThis.__end = null; runner.run(async (api) => { for (;;) await api.drive(MOVE_BACKWARD, 100, 5); }, targets.simulator).then((end) => { __end = end; });");
+  await pageFrames(page, 300, page.evalIn("targets.simulator"));
+  press(page, page.$("cw"), 1);
+  await pageFrames(page, 300, page.evalIn("targets.simulator"));
+  check(ended(page) && /driven by hand/.test(ended(page).reason), `rotate: ${JSON.stringify(ended(page))}`);
+  check(page.evalIn("targets.simulator.state.move") === CODES.ROTATE_CLOCKWISE && page.evalIn("targets.simulator.state.moving"), "rotating, the program's release stopped nothing");
+  lift(page, page.$("cw"), 1);
+
+  // Stop names itself, as on the rover.
+  page.evalIn("globalThis.__end = null; runner.run(async (api) => { await api.wait(5); }, targets.simulator).then((end) => { __end = end; });");
+  await flush();
+  page.fire(page.$("stop"), "click");
+  await pageFrames(page, 100, page.evalIn("targets.simulator"));
+  check(ended(page) && /Stop was pressed/.test(ended(page).reason), `Stop: ${JSON.stringify(ended(page))}`);
+  // On the rover, the simulator's preview is not there to stop: a press on
+  // the rover's target never reaches it.
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: one view of the simulator, on the Drive tab while it is driven, held at 1x there", () => {
+  const page = loadPage();
+  const view = () => page.doc.documentElement.querySelectorAll(".sim")[0];
+  const slot = () => view().parentNode.id;
+  const sim = page.evalIn("targets.simulator");
+  const speeds = () => all(view()).filter((n) => n.parentNode && n.parentNode.getAttribute("class") === "segmented sim-speed");
+  const options = () => all(view()).filter((n) => n.tagName === "OPTION" && n.parentNode.getAttribute("class") === "sim-speed-pick");
+  check(page.doc.documentElement.querySelectorAll(".sim").length === 1, "one view");
+  check(slot() === "simSlot", "on the Program tab's slot, at first");
+  page.fire(speeds()[2], "click");
+  check(sim.playback === 4, "4x chosen on the Program tab's view");
+
+  toSimulator(page);
+  check(slot() === "driveSimSlot", `beside the Drive tab's controls: ${slot()}`);
+  check(sim.playback === 1, `held at 1x: ${sim.playback}`);
+  check(page.$("driveSimSlot").style.getPropertyValue("--room-aspect") === (4 / 3).toFixed(4), "the room's shape went with it");
+  for (const list of [speeds(), options()]) {
+    const [one, two, four] = list;
+    check(!one.disabled && two.disabled && four.disabled, `2x and 4x disabled: ${list.map((b) => b.disabled)}`);
+    check(/real time/.test(two.getAttribute("title")) && /real time/.test(four.getAttribute("title")) && /Play at 1 times/.test(one.getAttribute("title")),
+      `the disabled ones say why: ${two.getAttribute("title")}`);
+  }
+  check(/real time/.test(view().querySelectorAll(".sim-speed-pick")[0].getAttribute("title")), "and so does the list");
+  check(speeds()[0].getAttribute("aria-pressed") === "true", "1x shows pressed");
+  page.fire(speeds()[2], "click");
+  const pick = view().querySelectorAll(".sim-speed-pick")[0];
+  pick.value = "4";
+  page.fire(pick, "change");
+  check(sim.playback === 1, `a choice past the hold does nothing: ${sim.playback}`);
+
+  page.fire(page.$("tabProgram"), "click");
+  check(slot() === "simSlot" && sim.playback === 4, `back on the Program tab, at the speed chosen there: ${slot()} ${sim.playback}`);
+  check(!speeds()[2].disabled && /Play at 4 times/.test(speeds()[2].getAttribute("title")), "4x offered again");
+  page.fire(page.$("tabDrive"), "click");
+  check(slot() === "driveSimSlot" && sim.playback === 1, "and held again on the Drive tab");
+  toRover(page);
+  check(slot() === "simSlot" && sim.playback === 4, "on the rover, the Program tab's view keeps it");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

@@ -15,6 +15,20 @@
  *              around it (PAD).
  *     target   the SimTarget it shows, and whose clock it runs.
  *
+ *   moveTo(slot)
+ *       Draw the view in another empty slot instead, with everything it
+ *       shows and its settings: one view serves both tabs (app.js moves it
+ *       to the Drive tab's slot and back). The room's shape goes onto the
+ *       new slot.
+ *
+ *   holdPlayback(why)
+ *       Hold the playback at 1x, the faster speeds disabled with why as
+ *       their title, as buttons and in the playback list alike; null lets
+ *       go, back to the speed chosen last. For the Drive tab: its Driver
+ *       re-sends a held move every 200 ms of real time, each lasting 400 ms
+ *       of simulated time, so at 2x or 4x each ran out before the next
+ *       came and the simulated rover drove in jerks.
+ *
  * A timer advances the simulation by the real time elapsed times the
  * playback speed (the target steps it in fixed steps of its own), and it
  * draws at the display's rate with requestAnimationFrame. While the page is
@@ -51,6 +65,8 @@ class SimView {
 
   #slot;
   #target;
+  #chosen = 1; // the playback speed chosen last, held or not
+  #held = null; // why the playback is held at 1x, or null
   #ui = {}; // elements, by name
   #rover = {}; // the rover's drawing
   #inset = []; // the wheel diagram's four wheels
@@ -71,9 +87,8 @@ class SimView {
   constructor(slot, target) {
     this.#slot = slot;
     this.#target = target;
-    const { PAD } = SimView;
-    slot.style.setProperty("--room-pad-x", `${PAD.left + PAD.right}px`);
-    slot.style.setProperty("--room-pad-y", `${PAD.top + PAD.bottom}px`);
+    this.#chosen = target.playback;
+    this.#shape(slot);
     this.#build();
     this.#drawRoom();
     this.#render();
@@ -88,6 +103,42 @@ class SimView {
     }
     target.onWake(() => this.#wake());
     this.#wake();
+  }
+
+  moveTo(slot) {
+    if (slot === this.#slot) return;
+    this.#slot = slot;
+    this.#shape(slot);
+    slot.appendChild(this.#ui.root);
+    this.#fit();
+    this.#wake();
+  }
+
+  holdPlayback(why) {
+    this.#held = why || null;
+    for (const controls of [this.#ui.speeds, this.#ui.speedOptions]) {
+      for (const [rate, control] of controls) SimView.#offer(control, rate, this.#held);
+    }
+    this.#ui.speedPick.setAttribute("title", this.#held || "Playback speed");
+    this.#target.playback = this.#held ? 1 : this.#chosen;
+    this.#render();
+  }
+
+  // A speed above 1x, while the playback is held, is disabled and says why;
+  // otherwise it says what it does.
+  static #offer(control, rate, held) {
+    control.disabled = Boolean(held) && rate !== 1;
+    control.setAttribute("title", control.disabled ? held : `Play at ${rate} times real speed`);
+  }
+
+  // The room's shape, on the slot that sizes the view to it (css/sim.css):
+  // its margins here, its aspect as each room is drawn.
+  #shape(slot) {
+    const { PAD } = SimView;
+    slot.style.setProperty("--room-pad-x", `${PAD.left + PAD.right}px`);
+    slot.style.setProperty("--room-pad-y", `${PAD.top + PAD.bottom}px`);
+    const room = this.#target.room;
+    slot.style.setProperty("--room-aspect", (room.width / room.height).toFixed(4));
   }
 
   /* --- the loops --------------------------------------------------------- */
@@ -164,6 +215,7 @@ class SimView {
   #build() {
     const ui = this.#ui;
     const root = dom.html("div", { class: "sim" }, this.#slot);
+    ui.root = root;
 
     // The controls, in one row.
     const bar = dom.html("div", { class: "sim-bar" }, root);
@@ -179,7 +231,7 @@ class SimView {
     ui.speeds = new Map(SimTarget.PLAYBACKS.map((rate) => {
       const button = segment(speed, () => this.#play(rate));
       button.textContent = `${rate}×`;
-      button.setAttribute("title", `Play at ${rate} times real speed`);
+      SimView.#offer(button, rate, null);
       return [rate, button];
     }));
     // The same choice as a list, for a bar too narrow to show the buttons
@@ -187,7 +239,11 @@ class SimView {
     // it shows none, as no button is pressed then, so any choice resumes,
     // the speed it was at included.
     ui.speedPick = dom.html("select", { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" }, bar);
-    for (const rate of SimTarget.PLAYBACKS) dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
+    ui.speedOptions = new Map(SimTarget.PLAYBACKS.map((rate) => {
+      const option = dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
+      SimView.#offer(option, rate, null);
+      return [rate, option];
+    }));
     ui.speedPick.addEventListener("change", () => this.#play(Number(ui.speedPick.value)));
     ui.pause = this.#tool(bar, "Pause the preview", "M5 3.5v9M11 3.5v9", "sim-pause");
     ui.pause.addEventListener("click", () => {
@@ -364,7 +420,10 @@ class SimView {
     return button;
   }
 
+  // A held playback offers 1x alone, so a choice never goes past the hold.
   #play(rate) {
+    if (this.#held && rate !== 1) return;
+    this.#chosen = rate;
     this.#target.playback = rate;
     this.#target.paused = false;
     this.#render();
@@ -406,7 +465,7 @@ class SimView {
     this.#drawn = { room };
     for (const mark of this.#bumpMarks) mark.remove();
     this.#bumpMarks = [];
-    this.#slot.style.setProperty("--room-aspect", (room.width / room.height).toFixed(4));
+    this.#shape(this.#slot);
     this.#fit();
   }
 

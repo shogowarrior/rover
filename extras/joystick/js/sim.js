@@ -823,7 +823,13 @@ class SimSonar {
  * always fresh; sleep() waits simulated time; onLost fires, with a reason from
  * SimTarget.LOST, on a reset, a change of room or the rover moved by hand.
  *
- * Beyond the Target, for SimView:
+ * Beyond the Target, for the Drive tab:
+ *   command(move, speed, durationMs)
+ *                      one command as the rover takes it over the Link, for
+ *                      the Driver to drive the simulator with (app.js); see
+ *                      below
+ *
+ * And for SimView:
  *   pump(realMs)       advance by a frame of real time (see below)
  *   playback, paused   the speed of simulated time, 1, 2 or 4; and a pause
  *   reset()            put the rover back where it starts
@@ -862,6 +868,10 @@ class SimTarget {
   // going first, as the trail's oldest points do.
   static BUMP_SAME_M = 0.03;
   static BUMP_MARKS = 100;
+  // tuning::COMMAND_DURATION_MAX_MS in src/Tuning.h, the firmware's deadman:
+  // no command drives for longer, whatever it asks. sim.test.js checks the
+  // copy.
+  static COMMAND_DURATION_MAX_MS = 1500;
 
   // Simulated time, and timers on it. Only #step() moves it on.
   static #Clock = class {
@@ -979,6 +989,29 @@ class SimTarget {
 
   telemetry() {
     return { data: this.#latest && { ...this.#latest }, fresh: true };
+  }
+
+  /* --- the Drive tab --- */
+
+  // A command as the rover takes one over the Link: the Drive tab's, while
+  // the page drives the simulator (app.js hands the Driver this in the
+  // Link's place). It does what Rover::command() does: RESUME_AUTONOMOUS
+  // hands the rover to its exploring, which is not simulated; any other code
+  // takes it out of autonomous mode; STOP, a code that is not a motion and a
+  // speed of 0 release the wheels; and the speed and the duration are
+  // clamped as the firmware clamps them. It is the operator's hands, so it
+  // takes over from a program's held motion, as a drive press takes over
+  // from a program on the rover: a release() after it stops nothing it
+  // started.
+  command(move, speed, durationMs) {
+    if (move === RESUME_AUTONOMOUS) {
+      this.explore();
+      return;
+    }
+    this.#held = null;
+    const duration = clamp(Number(durationMs) || 0, 0, SimTarget.COMMAND_DURATION_MAX_MS);
+    this.#commandRover(move, speed, duration);
+    this.#wakeListeners.emit();
   }
 
   // Counted, so that the preview knows a program is waiting on it (idle).
@@ -1226,7 +1259,7 @@ class SimTarget {
 
   // The firmware's Rover::command(), as far as a preview needs it. Every
   // command but RESUME_AUTONOMOUS takes the rover out of autonomous mode.
-  #commandRover(move, speed) {
+  #commandRover(move, speed, durationMs = MOVE_DURATION_MS) {
     const now = this.#clock.now;
     this.#lastCommandAt = now;
     if (move === RESUME_AUTONOMOUS) {
@@ -1234,7 +1267,7 @@ class SimTarget {
       return;
     }
     this.#enterMode(MODE_MANUAL, now);
-    this.#sim.command(move, speed, MOVE_DURATION_MS);
+    this.#sim.command(move, speed, durationMs);
   }
 
   // Rover::setMode(): a change of mode releases the wheels and starts a

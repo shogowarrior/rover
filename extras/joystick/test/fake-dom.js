@@ -91,7 +91,8 @@ class Node_ {
   getAttribute(n) { return n in this.attributes ? this.attributes[n] : null; }
   hasAttribute(n) { return n in this.attributes; }
   removeAttribute(n) { delete this.attributes[n]; }
-  appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  // A node already in the page moves, as in a browser: it leaves its old parent.
+  appendChild(c) { if (c.parentNode) c.remove(); c.parentNode = this; this.children.push(c); return c; }
   remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter((c) => c !== this); this.parentNode = null; } }
   // A listener for the capture phase (a third argument of true, or
   // {capture: true}) runs on the way down to the target, before any on the

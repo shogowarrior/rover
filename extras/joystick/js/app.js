@@ -29,11 +29,12 @@
  *   program.js       ProgramRunner, RoverTarget: running a block program on a
  *                    target
  *   blocks.js        RoverBlocks, BlockEditor: the rover's blocks, on Blockly
- *   targetswitch.js  TargetSwitch: the Rover | Simulator switch
+ *   targetswitch.js  TargetSwitch: the Rover | Simulator switch, what the page
+ *                    drives
  *   programtab.js    ProgramTab: the Program tab's toolbar, File menu, editor and
  *                    console
- *   sim.js           RoverSim, Room, SimSonar, SimTarget: the simulator a program
- *                    previews on
+ *   sim.js           RoverSim, Room, SimSonar, SimTarget: the simulator, which a
+ *                    program previews on and the Drive tab can drive
  *   simview.js       SimView: the simulator on screen, and its own controls
  *   app.js           this file, last
  *
@@ -75,11 +76,24 @@ const readouts = new Readouts({
   motorsFault: byId("motorsFault"),
 });
 
+// Where the Driver's commands go: over the Link to the rover, or, while the
+// target switch says Simulator, to the simulator in its place, so that
+// nothing the Drive tab does reaches the rover (the target's block, below,
+// sets which). The simulator takes each as the rover would (SimTarget).
+const driven = {
+  simulator: null, // the simulator's Target while it is the one driven
+  send(frame) {
+    if (!this.simulator) return link.send(frame);
+    this.simulator.command(frame.move, frame.speed, frame.duration);
+    return true;
+  },
+};
+
 // Built while the Drive tab is still showing, before the tabs restore the one
 // last chosen: joy.js sizes the stick from its container as it is built, and a
 // hidden container has no size.
 const driver = new Driver({
-  link,
+  link: driven,
   stick: byId("stick"),
   cw: byId("cw"),
   ccw: byId("ccw"),
@@ -113,12 +127,14 @@ link.onState((state) => {
 // own socket, the Link runs this first, so the STOP still goes out on it; a
 // socket that closed under the panel cannot carry one, and the firmware stops
 // the wheels itself when the client driving it disconnects. The motor warning
-// belongs to the link it came over, so it goes too.
+// belongs to the link it came over, so it goes too. While the Driver drives
+// the simulator the link is not its concern: a rover rebooting must not let
+// go of the stick driving the simulated one.
 link.onState((state, cause) => {
   if (state === "down") {
-    driver.standDown(cause);
+    if (!driven.simulator) driver.standDown(cause);
     readouts.linkDown();
-  } else if (state === "stale") {
+  } else if (state === "stale" && !driven.simulator) {
     driver.linkStale();
   }
 });
@@ -135,9 +151,15 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 /* --- Stop and Autonomous ------------------------------------------------- */
 
 // Outside the tabs, so both are in reach whatever tab is showing. Stop always
-// sends STOP, driving or not: it is also how to stop an exploring rover. Both
-// also stop a program, a preview included: see the Program tab's block.
-byId("stop").addEventListener("click", () => driver.stopRover());
+// sends STOP, driving or not: it is also how to stop an exploring rover. On
+// the simulator the Driver's STOP goes there, and Stop sends one to a
+// connected rover too, since Stop means everything; Autonomous acts on the
+// simulator alone. Both also stop a program, a preview included: see the
+// Program tab's block.
+byId("stop").addEventListener("click", () => {
+  driver.stopRover();
+  if (driven.simulator) link.send({ move: STOP, speed: 0, duration: MOVE_DURATION_MS });
+});
 byId("auto").addEventListener("click", () => driver.resumeAutonomous());
 
 /* --- control scheme ------------------------------------------------------ */
@@ -199,38 +221,90 @@ const tabs = new Tabs([byId("tabDrive"), byId("tabProgram")], { storageKey: "rov
 // What a program can run on, by kind; the Target interface is described in
 // js/program.js. The rover is always here. The simulator's block, next, adds
 // it when its scripts loaded; the target switch, after that, offers whatever
-// is here.
+// is here. Programs run one at a time, through the runner.
 const targets = { rover: new RoverTarget(driver, link) };
+const runner = new ProgramRunner();
 
 /* --- the simulator ------------------------------------------------------- */
 
-// A preview: the same program on a simulated rover, drawn in #simSlot. The
-// simulator holds no Link and no Driver, so a preview sends nothing whatever
-// the link is doing, and its telemetry reaches only the program and its
-// view, never the scan fan or the readouts. Only the rover's scheme crosses
-// over, the other way. If its scripts did not load, the tab offers the rover
-// alone.
+// A simulated rover, drawn in #simSlot: a program previews on it, and the
+// Drive tab's controls can drive it (the target's block, next). The
+// simulator holds no Link and no Driver, so nothing done to it reaches the
+// rover whatever the link is doing, and its telemetry reaches only a program
+// and its view, never the scan fan or the readouts. Only the rover's scheme
+// crosses over, the other way. If its scripts did not load, the page offers
+// the rover alone.
+let simView = null;
 if (typeof SimTarget === "function" && typeof SimView === "function") {
   const simulator = new SimTarget({ bearings: BEARINGS });
   targets.simulator = simulator;
-  new SimView(byId("simSlot"), simulator);
+  simView = new SimView(byId("simSlot"), simulator);
   schemeToggle.onChange((scheme) => {
     if (scheme !== null) simulator.setScheme(scheme);
   });
 }
 
+/* --- the target: the rover or the simulator ------------------------------ */
+
+// One switch, in the header, for the whole page: what the Drive tab's
+// controls drive and what a program runs on. On the simulator the Driver's
+// commands go to it in the Link's place (driven, above). A switch is a new
+// way to lose control, so it lets go of everything first, on the target
+// left behind: a running program stops, and the held controls are let go,
+// with one STOP if this panel was driving. The switch was the Program
+// tab's once, and its choice is read from the key it had then.
+const targetSwitch = new TargetSwitch({
+  group: byId("target"),
+  targets,
+  storageKey: "rover.target",
+  formerKey: "rover.programTarget",
+});
+const autoButton = byId("auto");
+const autoTitle = autoButton.getAttribute("title");
+function driveTarget(kind) {
+  driven.simulator = kind === "simulator" ? targets.simulator : null;
+  document.body.dataset.target = kind;
+  autoButton.setAttribute("title", driven.simulator
+    ? "On the simulator: the simulated rover takes the mode, but exploring is not simulated, so it stands still. The rover is left alone."
+    : autoTitle);
+}
+driveTarget(targetSwitch.kind);
+targetSwitch.onChange((kind) => {
+  runner.abort(`the target was switched to the ${kind}.`);
+  driver.standDown("target");
+  driveTarget(kind);
+});
+
+// A press of a drive control takes the simulated rover over from a preview,
+// as a press takes the rover over from a program (RoverTarget). One
+// microtask later, as there, so that Stop's and Autonomous's own reasons,
+// given as they act, are the ones the console shows.
+driver.onManualInput(() => {
+  if (driven.simulator) Promise.resolve().then(() => runner.abort("the simulated rover was driven by hand."));
+});
+
+// The one view: the Program tab's, or beside the Drive tab's controls while
+// they drive the simulator. Driven from there it runs at 1x: the Driver
+// re-sends a held move every 200 ms of real time, each lasting 400 ms of the
+// simulator's (SimView.holdPlayback). Without a simulator the Drive tab
+// keeps no place for one.
+const driveTab = byId("driveTab");
+const driveView = byId("driveView");
+driveView.hidden = !simView;
+function placeSimView() {
+  if (!simView) return;
+  const driving = !driveTab.hidden && targetSwitch.kind === "simulator";
+  simView.moveTo(byId(driving ? "driveSimSlot" : "simSlot"));
+  simView.holdPlayback(driving
+    ? "Driven from the Drive tab, the simulator runs in real time: 2× and 4× are for previews on the Program tab."
+    : null);
+}
+
 /* --- the Program tab ----------------------------------------------------- */
 
-// Programs run one at a time, through the runner, on the target the switch
-// picks from the registry, which is complete by now. A program reaches the
-// rover only through its Target, which drives it through the Driver like any
-// held control. Every question the tab asks is the page's one AskDialog.
-const runner = new ProgramRunner();
-const targetSwitch = new TargetSwitch({
-  group: byId("programTarget"),
-  targets,
-  storageKey: "rover.programTarget",
-});
+// Programs run on the target the switch picks. A program reaches the rover
+// only through its Target, which drives it through the Driver like any held
+// control. Every question the tab asks is the page's one AskDialog.
 const ask = new AskDialog({
   dialog: byId("ask"),
   text: byId("askText"),
@@ -270,7 +344,6 @@ const programTab = new ProgramTab({
 byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab."));
 byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));
-targetSwitch.onChange((kind) => runner.abort(`the target was switched to the ${kind}.`));
 
 // Run on the rover needs a live link, and asks before it drives a pivot
 // unless the rover reports ADVANCED.
@@ -299,11 +372,15 @@ runner.onState((state, { kind }) => {
 // exploring rover is left alone.
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
-// size: fit it again whenever the tab is shown.
+// size: fit it again whenever the tab is shown. The simulator's view goes
+// with the tab that shows it.
 tabs.onChange((tab) => {
   if (tab.id !== "tabDrive") driver.releaseStick();
+  placeSimView();
   if (tab.id === "tabProgram") programTab.shown();
 });
+targetSwitch.onChange(placeSimView);
+placeSimView();
 
 // Blockly is deferred (joystick.html): once the page is parsed, it has run,
 // or failed to load. Only then is the editor built. Without Blockly the tab
