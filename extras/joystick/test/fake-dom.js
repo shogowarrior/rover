@@ -139,6 +139,11 @@ class Node_ {
     doc.activeElement = back && back.rendered && doc.contains(back) ? back : doc.body;
     setImmediate(() => dispatch(this, { type: "close", bubbles: false }));
   }
+  // As in a browser, blur() hands the focus back to the body, if it had it.
+  blur() {
+    const doc = this.ownerDocument;
+    if (doc && doc.activeElement === this) doc.activeElement = doc.body;
+  }
   // As in a browser, click() fires a click that bubbles. A file <input>'s
   // picker is the browser's: here a test counts the clicks (pickerOpened)
   // and fires "change" itself.

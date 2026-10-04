@@ -391,6 +391,9 @@ input[type="range"]::-moz-range-thumb {
   padding: 0;
 }
 
+/* Each section after the first, the keys', set off from the one above. */
+.options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
+
 /* A row per theme: its name, then its Dark and Light tiles. Close-set, so
    that the three fit a phone on its side unscrolled. */
 .looks {
@@ -466,6 +469,50 @@ input[type="range"]::-moz-range-thumb {
   height: var(--lamp);
   border-radius: 50%;
   background: var(--live);
+}
+
+/* The keyboard's keys (keys.js), under the looks: a row per pair, the keys
+   as caps, then what they do, set as the looks' rows are. */
+.keys {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+}
+
+.keysRow {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.keys dt {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.keys dd {
+  margin: 0;
+  font-size: var(--t-sm);
+}
+
+.keys kbd {
+  min-width: var(--icon);
+  padding: 0 var(--s-1);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  line-height: var(--icon);
+  text-align: center;
+  color: var(--readout);
+  background: var(--raised);
+  border-radius: var(--r-xs);
+}
+
+.keysNote {
+  margin: 0;
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
+  color: var(--dim);
 }
 
 /* The panel in miniature (look.js builds it), painted only in the tokens

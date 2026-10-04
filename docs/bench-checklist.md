@@ -206,6 +206,9 @@ On the stand:
   Earlier firmware reached its top rotate speed at half a pull.
 - Holding the stick keeps the wheels turning; releasing it stops them.
   **START** switches to autonomous, or restarts exploration that has halted.
+- **Cross** stops an exploring rover and leaves it in manual. Pressed while
+  the stick is held, it stops the wheels, and the stick drives again only
+  once released and pushed again.
 - Switching the pad off while holding the stick stops the wheels within half
   a second.
 - **SELECT** switches to ADVANCED (the LEDs show player 2). Holding **L1**
@@ -219,7 +222,7 @@ If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`
 ([src/Kinematics.cpp](../src/Kinematics.cpp)); fix it there together with its
 test in `test/test_kinematics`. The timing rules (re-sending, silence, START,
-SELECT, when the player LEDs are rewritten) are in `GamepadSession`, tested in
+SELECT, Cross, when the player LEDs are rewritten) are in `GamepadSession`, tested in
 `test/test_gamepad`.
 
 ## 7. Reset behaviour
