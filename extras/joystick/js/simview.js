@@ -311,8 +311,9 @@ class SimView {
     ui.key = this.#buildKey(root, "sim-key inline");
 
     // Folded away until asked for: the less used controls, what the drag
-    // setting means, the key and what "idealised" leaves out.
-    ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings" }, root);
+    // setting means, the key and what "idealised" leaves out. Its keys are
+    // its own while it has the focus, not the panel's drive keys (keys.js).
+    ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings", "data-keys": "own" }, root);
     const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
     ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {

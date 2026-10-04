@@ -190,13 +190,28 @@ The PS3 pad is unchanged: its right stick is still not read, and the README
 and `docs/mecanum.md` list the panel's and the pad's controls side by side.
 Panel tests 259/259 and the protocol check pass.
 
+It then did F4, step 7, in a PR of its own (features.md has the details):
+
+- the PS3 pad's Cross sends STOP, driving or not, so the pad stops an
+  exploring rover without driving it first; a stick held through it waits
+  for centre, and with START in one report Cross wins (`GamepadSession`,
+  five new host tests, both board builds);
+- the panel takes `client/drive.py`'s keys: W A S D, Q E, - and +, Space for
+  Stop and T for Autonomous (`js/keys.js`). A drive key is held through the
+  Driver like a rotate button, so every stand-down lets go of it; the drive
+  and speed keys act on the Drive tab, Space and T on both; keys are left to
+  text fields, menus, Options, dialogs and the block editor, and Ctrl, Alt
+  or Cmd, or a context menu, lets go of every held key. Options lists them.
+
+Host tests 142/142, panel tests 279/279 and the protocol check pass.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 6 are done, so the next thread
-starts at F4:
+when it is done. They were done in this order, and all seven are done; what
+F4 deferred is under "Open, not started" below:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -212,7 +227,7 @@ starts at F4:
    Advanced usable on both tabs, with or without a rover.
 6. **Done.** F3h: both sticks shown in Drive mode, the one NORMAL cannot
    use visibly disabled.
-7. F4: other buttons (PS3 Cross as STOP, keyboard keys).
+7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -233,6 +248,13 @@ and the next thread's task names that branch.
    unfinished.
 
 ## Open, not started
+
+- What F4 deferred, unless the owner asks: the pad's D-pad stepping its top
+  speed, rumble, player LEDs 3 and 4, its right stick (F3h), a battery key in
+  telemetry, and the browser Gamepad API (features.md, F4). The keyboard's
+  checks for the owner, which need a real browser and keyboard: holding a key
+  and pressing Cmd on a Mac, a non-English layout, and Space with a button
+  focused.
 
 - F5's checks for the owner, which need a real screen: features.md, F5,
   lists them, and what it left as it was (Blockly's focus colours, its

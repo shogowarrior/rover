@@ -1,7 +1,7 @@
 /**
- * Driving: turns what the operator holds -- the stick and the rotate buttons
- * -- and what a program asks for into the one command this panel sends, and
- * keeps re-sending it while it is held.
+ * Driving: turns what the operator holds -- the sticks, the rotate buttons
+ * and the drive keys -- and what a program asks for into the one command
+ * this panel sends, and keeps re-sending it while it is held.
  *
  * One rule shapes most of this file: any command, STOP included, takes the
  * rover out of autonomous mode. So the panel sends only when the operator does
@@ -30,8 +30,8 @@
  *     cw, ccw   the rotate buttons;
  *     speed     the speed slider (0..SPEED_MAX), and speedOut its readout.
  *
- * Which input wins: the rotate button pressed last, then the stick pressed
- * last, then a program. Each input is tracked separately, so letting go of
+ * Which input wins: the rotate button or drive key pressed last, then the
+ * stick pressed last, then a program. Each input is tracked separately, so letting go of
  * one hands the rover straight back to the next still held. With nothing
  * held the rover stops -- but only if this panel was driving it. A held
  * input is re-sent every REPEAT_MS, each frame asking for MOVE_DURATION_MS;
@@ -67,7 +67,7 @@
  *       Let go of both sticks behind the operator's back: each drives again
  *       only from a fresh primary press, however long the thumb stays down.
  *       What a stick was driving stops -- one STOP, and only if a stick was
- *       what this panel was sending. A held rotate button or a program
+ *       what this panel was sending. A held rotate button, key or program
  *       carries on, as when the operator lets go of a stick. For the Drive
  *       tab hidden, and for a touch the system takes away (that stick
  *       alone). Returns the names of the sticks that were deflected: a thumb
@@ -91,13 +91,29 @@
  *       press can land on it: built a moment later, it would let go of the
  *       press.
  *
+ *   holdKey(key, move)
+ *   releaseKey(key)
+ *   releaseKeys()
+ *       A drive key on the keyboard (js/keys.js), named by key (a string:
+ *       anything else throws a TypeError, or does nothing for a release),
+ *       is an input like a rotate button: held from holdKey() to releaseKey(), driving
+ *       at the slider's speed and re-sent meanwhile, and the rotate button
+ *       or key pressed last wins. move is a motion code (1 to 18; anything
+ *       else throws a RangeError). holdKey() of a key already held changes
+ *       nothing, and is not a press; otherwise it is one (onManualInput).
+ *       releaseKey() of a key not held does nothing. releaseKeys() lets go
+ *       of every held key, for a release that may never arrive: one STOP,
+ *       and only if a key was what this panel was sending. A key let go of
+ *       any way but its own release, a stand-down's included, drives again
+ *       only from a fresh holdKey().
+ *
  *   program(move, speed)
  *   endProgram()
  *       A third input, for a program runner. move is a motion code (1 to 18;
  *       anything else throws a RangeError, as does a speed that is not a
  *       finite number). speed is absolute, 0..SPEED_MAX, rounded and clamped,
- *       and not scaled by the slider. A held stick or rotate button wins over
- *       it; the program drives again once they are let go, unless it has
+ *       and not scaled by the slider. A held stick, rotate button or key
+ *       wins over it; the program drives again once they are let go, unless it has
  *       ended. It is sent and re-sent like any held input. A later program()
  *       replaces the earlier one. endProgram() lets go of it: STOP goes out
  *       only if the program was what this panel was driving. Every stand-down
@@ -125,16 +141,16 @@
  *       input and stop only what this panel is driving.
  *
  *   linkStale()
- *       Telemetry stopped though the socket is open. A held stick or rotate
- *       button keeps driving, as it always has: the operator is there and
+ *       Telemetry stopped though the socket is open. A held stick, rotate
+ *       button or key keeps driving, as it always has: the operator is there and
  *       the lamp turns amber. A program is ended, since nobody is watching it
  *       through a link that has gone quiet.
  *
  *   onManualInput(fn)
  *       fn(stick) on every operator press of a drive control: a primary
  *       press on a stick that takes one (once armed, before joy.js reports
- *       a deflection), with stick its name; a press of a rotate button
- *       (after it has taken effect), and the Stop and Autonomous buttons
+ *       a deflection), with stick its name; a press of a rotate button or a
+ *       drive key (after it has taken effect), and the Stop and Autonomous buttons
  *       (after they have acted), with stick undefined. Never on a hover, a
  *       right-, middle- or ctrl-click, a press on a button already held or
  *       on the pivot stick while it is off, nor on a program's own stop or
@@ -171,7 +187,9 @@ class Driver {
   // What else is held. #steer() combines it with the sticks into the one
   // command to send.
   #held = {
-    rotate: [], // rotate buttons held, oldest first: {button, pointerId, move}
+    // Rotate buttons and drive keys held, oldest first: {button, pointerId,
+    // move} for a button, {key, move} for a key.
+    buttons: [],
     program: null, // {move, speed} a program is holding
   };
 
@@ -249,6 +267,31 @@ class Driver {
     this.#refit();
   }
 
+  holdKey(key, move) {
+    if (typeof key !== "string") throw new TypeError(`holdKey() takes a key's name, not ${key}`);
+    if (!motionFor(move)) throw new RangeError(`holdKey() takes a motion code, 1 to 18, not ${move}`);
+    const held = this.#held;
+    if (held.buttons.some((h) => h.key === key)) return;
+    held.buttons.push({ key, move });
+    this.#steer();
+    this.#manualInputListeners.emit();
+  }
+
+  releaseKey(key) {
+    if (typeof key !== "string") return; // a rotate button's entry has no key
+    const held = this.#held;
+    const i = held.buttons.findIndex((h) => h.key === key);
+    if (i < 0) return;
+    held.buttons.splice(i, 1);
+    this.#steer();
+  }
+
+  releaseKeys() {
+    const held = this.#held;
+    held.buttons = held.buttons.filter((h) => h.key === undefined);
+    this.#steer();
+  }
+
   program(move, speed) {
     this.#held.program = heldMotion("program()", move, speed);
     this.#steer();
@@ -297,8 +340,8 @@ class Driver {
   #wanted() {
     const held = this.#held;
     const limit = Number(this.#speed.value);
-    const rotate = held.rotate[held.rotate.length - 1];
-    if (rotate) return { move: rotate.move, speed: limit };
+    const button = held.buttons[held.buttons.length - 1];
+    if (button) return { move: button.move, speed: limit };
     let last = null;
     for (const stick of this.#sticks) {
       if (stick.held && (!last || stick.pressed > last.pressed)) last = stick;
@@ -368,8 +411,8 @@ class Driver {
   #releaseInputs() {
     const held = this.#held;
     for (const stick of this.#sticks) this.#letGo(stick);
-    for (const { button } of held.rotate) delete button.dataset.held;
-    held.rotate = [];
+    for (const { button } of held.buttons) if (button) delete button.dataset.held;
+    held.buttons = [];
     held.program = null;
   }
 
@@ -594,18 +637,18 @@ class Driver {
       if (!isPrimaryPress(event)) return;
       event.preventDefault();
       const held = this.#held;
-      if (held.rotate.some((h) => h.button === button)) return;
+      if (held.buttons.some((h) => h.button === button)) return;
       button.dataset.held = "yes";
-      held.rotate.push({ button, pointerId: event.pointerId, move });
+      held.buttons.push({ button, pointerId: event.pointerId, move });
       this.#steer();
       this.#manualInputListeners.emit();
     });
 
     const release = (event) => {
       const held = this.#held;
-      const i = held.rotate.findIndex((h) => h.button === button && h.pointerId === event.pointerId);
+      const i = held.buttons.findIndex((h) => h.button === button && h.pointerId === event.pointerId);
       if (i < 0) return;
-      held.rotate.splice(i, 1);
+      held.buttons.splice(i, 1);
       delete button.dataset.held;
       this.#steer();
     };

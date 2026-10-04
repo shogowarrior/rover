@@ -13,6 +13,7 @@ struct GamepadReport {
   uint32_t lastReportMs = 0;   // when the latest report arrived
   bool startPressed = false;   // START went down since the last update
   bool selectPressed = false;  // SELECT went down since the last update
+  bool crossPressed = false;   // Cross went down since the last update
 
   // Whether a report arrived less than GAMEPAD_SILENCE_MS before `now`. The
   // age is unsigned, so a report 24.8 days old is not fresh, as a signed age
@@ -26,8 +27,8 @@ struct GamepadReport {
 // stamp in the mailbox is later than it (Gamepad::update says why).
 //   * A pad silent for GAMEPAD_SILENCE_MS is forgotten outright, so its last
 //     stick position can never read as fresh again, however long the silence.
-//   * START and SELECT are edges: the copy carries them and the mailbox drops
-//     them, so each press is acted on once.
+//   * START, SELECT and Cross are edges: the copy carries them and the mailbox
+//     drops them, so each press is acted on once.
 GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 
 // Turns gamepad reports into rover commands. Pure, like Rover: the PS3
@@ -42,6 +43,12 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 //   * A pad silent for GAMEPAD_SILENCE_MS is gone (the library never reports
 //     a disconnect), and whatever it was driving stops.
 //   * START hands control back to autonomous exploration.
+//   * Cross stops the rover, whatever it is doing, as the panel's Stop does:
+//     sent even when the pad is driving nothing, because it is how the pad
+//     stops an exploring rover without driving it first. A stick or trigger
+//     held through it must come back to centre before it drives again, or the
+//     next pass would re-drive it and Cross would do nothing under a thumb
+//     resting on the stick. Pressed with START in the same report, Cross wins.
 //   * SELECT toggles the rover's control scheme (kinematics::ControlScheme),
 //     the one the panel shows too.
 //   * A scheme change never redirects a held stick. Whatever the pad was
@@ -81,7 +88,7 @@ class GamepadSession {
   Rover& rover;
   kinematics::ControlScheme& scheme;
   kinematics::ControlScheme schemeInUse;  // what the pad last drove under
-  bool awaitingRelease = false;           // stopped by a scheme change
+  bool awaitingRelease = false;           // stopped by a scheme change or Cross
   kinematics::DriveRequest lastSent = {STOP, 0};
   uint32_t lastSentMs = 0;
   int shownLed = 0;  // what the pad's LEDs show; 0 when unknown (no pad, or a new one)

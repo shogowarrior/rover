@@ -23,8 +23,9 @@
  *   link.js          Link: the WebSocket, the link state, telemetry
  *   scan.js          BEARINGS, ScanView: the scan fan
  *   readouts.js      Readouts: mode, move, phase, chip temperature, motor warning
- *   drive.js         Driver: the two sticks, rotate buttons and speed, and what
- *                    to send
+ *   drive.js         Driver: the two sticks, rotate buttons, keys and speed, and
+ *                    what to send
+ *   keys.js          Keyboard: client/drive.py's keys, driving through the Driver
  *   scheme.js        SchemeToggle: the control scheme, NORMAL or ADVANCED: the
  *                    rover's, or on the simulator target the simulator's
  *   family.js        FamilySelector: the pivot stick's family, and both
@@ -172,6 +173,21 @@ byId("stop").addEventListener("click", () => {
   driver.stopRover();
 });
 byId("auto").addEventListener("click", () => driver.resumeAutonomous());
+
+/* --- the keyboard -------------------------------------------------------- */
+
+// drive.py's keys: the drive keys are held as a rotate button is, through
+// the Driver, so every stand-down above lets go of them too; Space and T
+// press Stop and Autonomous, and do all that those do. Options lists them.
+new Keyboard({
+  driver,
+  speed: byId("speed"),
+  stop: byId("stop"),
+  auto: byId("auto"),
+  driveTab: byId("driveTab"),
+  dialog: byId("ask"),
+  legend: byId("keyList"),
+});
 
 /* --- control scheme ------------------------------------------------------ */
 

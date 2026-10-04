@@ -14,6 +14,7 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now) {
   const GamepadReport report = mailbox;
   mailbox.startPressed = false;  // consumed
   mailbox.selectPressed = false;
+  mailbox.crossPressed = false;
   return report;
 }
 
@@ -37,16 +38,29 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
       awaitingRelease = true;
     }
   }
-  if (report.startPressed) {
-    rover.command(RESUME_AUTONOMOUS, 0, 0, now);
-    lastSent = {STOP, 0};
-    return;
-  }
 
   const kinematics::DriveRequest wanted =
       report.freshAt(now) ? kinematics::translateGamepad(report.controls, tuning::GAMEPAD_DEADZONE,
                                                          tuning::GAMEPAD_MAX_SPEED, scheme)
                           : kinematics::DriveRequest{STOP, 0};
+
+  // Before START, so that Cross wins when both arrive in one report and the
+  // rover is left stopped in manual: two buttons at once fail toward stopped.
+  if (report.crossPressed) {
+    // Always sent, driving or not: like the panel's Stop, it is how the pad
+    // stops an exploring rover, and any command takes control.
+    rover.command(STOP, 0, 0, now);
+    lastSent = {STOP, 0};
+    // A stick or trigger still held waits for centre, or the next pass would
+    // drive it again and Cross would do nothing under a resting thumb.
+    awaitingRelease = wanted.move != STOP;
+    return;
+  }
+  if (report.startPressed) {
+    rover.command(RESUME_AUTONOMOUS, 0, 0, now);
+    lastSent = {STOP, 0};
+    return;
+  }
 
   if (awaitingRelease) {
     if (wanted.move == STOP) awaitingRelease = false;

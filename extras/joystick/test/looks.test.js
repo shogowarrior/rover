@@ -45,9 +45,9 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // or button replaces its fill with the tint.
 const AUDIT = [
   ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--chosen", "--faint", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, buttons, menus, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+    "the page's text, the readouts, buttons, menus, the keys' caps, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
   ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--live-glow over --panel"], TEXT,
-    "captions, the note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
+    "captions, the note, the keys' note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
   ["--live", ["--case", "--panel", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
     "the log's done, a firmware update's, a pending segment, the link and motors pills, Autonomous as last reported"],
   ["--live-ink", ["--live-soft over --raised"], TEXT, "the open tab"],

@@ -115,6 +115,7 @@ sets only the simulator's own.
 |---|---|---|
 | Stick | Eight-way translation (codes 1 to 8): the pad's left stick, the panel's left stick | The same; on the pad, unless L1 or R1 is held |
 | Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
+| Stop (0) | Cross, the panel's Stop; a stick held through Cross drives again only from centre | The same |
 | Pivot (9 to 12) | -- (the panel's right stick is shown, off) | Hold L1, or pick Pivot over the panel's right stick |
 | Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways over the panel's right stick |
 | Program tab | Any motion; a pivot block carries a warning, and Run on the rover asks before a pivot | Any motion |
