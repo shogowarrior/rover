@@ -1,11 +1,11 @@
 /**
  * Most values the panel shares with the firmware: the wire protocol's move
  * codes, scheme names and mode names, the speed limits, the port, the
- * telemetry interval, the distances the scan fan is drawn at, and the command
- * timing the firmware's deadman depends on. The rest are elsewhere: the
- * sweep's bearings and their telemetry keys (BEARINGS in scan.js), the stick
- * mapping and the move names telemetry reports (mecanum.js), and the
- * simulator's own copies (sim.js).
+ * telemetry interval, the distances the scan fan is drawn at, the command
+ * timing the firmware's deadman depends on, and a firmware update's names
+ * and piece size. The rest are elsewhere: the sweep's bearings and their
+ * telemetry keys (BEARINGS in scan.js), the stick mapping and the move names
+ * telemetry reports (mecanum.js), and the simulator's own copies (sim.js).
  *
  * The wire format itself is in src/Protocol.h. The panel is a set of classic
  * scripts that share one global scope (see app.js), so the constants below
@@ -108,6 +108,25 @@ const REPEAT_MS = 200;
 // (tuning::GAMEPAD_SPEED_CHANGE_MS in src/Tuning.h); keep the two equal.
 const STICK_SEND_MS = 100;
 
+/* --- firmware updates ---------------------------------------------------- */
+
+// What a message about a firmware update says under "ota" (firmware.js), as
+// src/Protocol.h names each: the panel's begin, auth and cancel, and the
+// rover's auth, next, done and failed. The rover ignores an action it does
+// not know, so a misspelt copy would leave an update waiting on nothing;
+// check_protocol.py compares these with Protocol.h.
+const OTA_BEGIN = "begin";
+const OTA_AUTH = "auth";
+const OTA_CANCEL = "cancel";
+const OTA_NEXT = "next";
+const OTA_DONE = "done";
+const OTA_FAILED = "failed";
+
+// The most of the image one binary frame carries: at most
+// protocol::OTA_CHUNK_MAX_BYTES in src/Protocol.h, which says why. The rover
+// fails an update over a bigger piece.
+const OTA_CHUNK_BYTES = 1000;
+
 if (typeof module !== "undefined") {
   module.exports = {
     STOP, MOVE_FORWARD, MOVE_BACKWARD, MOVE_RIGHT, MOVE_LEFT,
@@ -119,5 +138,6 @@ if (typeof module !== "undefined") {
     SCHEME_NORMAL, SCHEME_ADVANCED, MODE_AUTONOMOUS, MODE_MANUAL,
     SPEED_MAX, MOTOR_SPEED_LIMIT, PORT, TELEMETRY_MS, STOP_CM, GO_CM, FAR_CM,
     MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,
+    OTA_BEGIN, OTA_AUTH, OTA_CANCEL, OTA_NEXT, OTA_DONE, OTA_FAILED, OTA_CHUNK_BYTES,
   };
 }

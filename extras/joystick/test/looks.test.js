@@ -48,8 +48,8 @@ const AUDIT = [
     "the page's text, the readouts, buttons, menus, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
   ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--live-glow over --panel"], TEXT,
     "captions, the note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
-  ["--live", ["--case", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
-    "the log's done, a pending segment, the link and motors pills, Autonomous as last reported"],
+  ["--live", ["--case", "--panel", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
+    "the log's done, a firmware update's, a pending segment, the link and motors pills, Autonomous as last reported"],
   ["--live-ink", ["--live-soft over --raised"], TEXT, "the open tab"],
   ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, a held rotate button, the mode pill while exploring"],
   ["--warn", ["--case", "--panel", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
@@ -86,6 +86,7 @@ const AUDIT = [
   ["--chosen", ["--raised"], QUIET, "the chosen segment in its track; its ink says so too"],
   ["--raised-hi", ["--raised"], QUIET, "a box on the room's floor"],
   ["--raised-hi", ["--case"], QUIET, "Blockly's grid"],
+  ["--raised-hi", ["--panel"], QUIET, "a firmware update's bar, in the Options popover"],
   ["--sim-grid", ["--raised"], QUIET, "the room's grid"],
   ["--sim-grid-major", ["--raised"], QUIET, "the room's grid, every metre"],
 ];

@@ -40,6 +40,9 @@
  *   sim.js           RoverSim, Room, SimSonar, SimTarget: the simulator, which a
  *                    program previews on and the Drive tab can drive
  *   simview.js       SimView: the simulator on screen, and its own controls
+ *   md5.js           md5: the MD5 of bytes or text, as the rover writes one
+ *   firmware.js      FirmwareUpdate: new firmware sent to the rover over the
+ *                    link, from the Options popover
  *   app.js           this file, last
  *
  * Every part's on...(fn) returns a function that unsubscribes fn
@@ -473,3 +476,28 @@ lookPicker.onChange(() => {
   if (driver.restyle()) familySelector.awaitPress(true);
   programTab.restyle();
 });
+
+/* --- firmware updates ---------------------------------------------------- */
+
+// New firmware for the rover, sent over the link from the Options popover.
+// The rover stands itself down for an update, and ends one that anything
+// drives it during: a program left running would only end the update, so
+// starting one ends the program.
+const firmwareUpdate = new FirmwareUpdate({
+  link,
+  ui: {
+    build: byId("firmwareBuild"),
+    choose: byId("firmwareChoose"),
+    file: byId("firmwareFile"),
+    chosen: byId("firmwareChosen"),
+    password: byId("firmwarePassword"),
+    start: byId("firmwareStart"),
+    cancel: byId("firmwareCancel"),
+    progress: byId("firmwareProgress"),
+    status: byId("firmwareStatus"),
+  },
+});
+link.onTelemetry((data) => firmwareUpdate.show(data));
+link.onState((state) => firmwareUpdate.linkState(state));
+link.onOta((message) => firmwareUpdate.reply(message));
+firmwareUpdate.onStart(() => runner.abort("the rover's firmware is being updated."));
