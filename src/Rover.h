@@ -59,6 +59,12 @@ class Rover {
   // why).
   void servicePendingRelease(uint32_t now);
 
+  // Idle, with no stop still to be written again (see release()): nothing a
+  // lost write could have left turning. FirmwareUpdate waits for it before
+  // writing flash, which can hold the loop, and that second write with it,
+  // for seconds.
+  bool atRest() const { return !moving && !releasePending; }
+
   Status status() const;
 
  private:

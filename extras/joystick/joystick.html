@@ -55,12 +55,14 @@
         </div>
 
         <!-- Options, under the gear: the page's look, which look.js fills in
-             and remembers, and the keys, which keys.js lists. popover.js
-             opens and closes it. It is not modal, and not a dialog: nothing
-             behind it is made inert and nothing holds the focus, so Stop
-             stays one press while it is open, and that press closes it.
-             data-keys="own": the arrows and Space are its while the focus is
-             in it, not the keyboard's drive keys (keys.js). -->
+             and remembers, the keys, which keys.js lists, and a firmware
+             update over the link, which firmware.js runs. popover.js opens
+             and closes it. It is not modal, and not a dialog: nothing behind
+             it is made inert and nothing holds the focus, so Stop stays one
+             press while it is open, and that press closes it. An update
+             carries on with it closed. data-keys="own": the arrows and Space
+             are its while the focus is in it, not the keyboard's drive keys
+             (keys.js). -->
         <div class="menuHolder">
           <button type="button" class="optionsButton" id="options" aria-label="Options" title="Options">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.33 9.63 21.88 10.45V13.55L19.33 14.37 18.86 15.51 20.08 17.89 17.89 20.08 15.51 18.86 14.37 19.33 13.55 21.88H10.45L9.63 19.33 8.49 18.86 6.11 20.08 3.92 17.89 5.14 15.51 4.67 14.37 2.12 13.55V10.45L4.67 9.63 5.14 8.49 3.92 6.11 6.11 3.92 8.49 5.14 9.63 4.67 10.45 2.12H13.55L14.37 4.67 15.51 5.14 17.89 3.92 20.08 6.11 18.86 8.49Z"/><circle cx="12" cy="12" r="3.4"/></svg>
@@ -71,6 +73,23 @@
             <h2 class="menuLabel" id="keysLabel">Keys</h2>
             <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>
             <p class="keysNote">Driving and speed on the Drive tab; Stop and Autonomous on both.</p>
+            <h2 class="menuLabel" id="firmwareLabel">Firmware</h2>
+            <div class="firmware" role="group" aria-labelledby="firmwareLabel">
+              <p class="firmwareRunning"><span class="label">Rover runs</span><output id="firmwareBuild">—</output></p>
+              <div class="firmwareFile">
+                <button type="button" id="firmwareChoose">Choose file…</button>
+                <span id="firmwareChosen">No file chosen</span>
+                <input type="file" id="firmwareFile" accept=".bin" hidden>
+              </div>
+              <label class="label" for="firmwarePassword">The rover's OTA password</label>
+              <input type="password" id="firmwarePassword" autocomplete="off" spellcheck="false">
+              <div class="firmwareButtons">
+                <button type="button" id="firmwareStart" disabled>Update</button>
+                <button type="button" id="firmwareCancel" disabled>Cancel</button>
+              </div>
+              <progress id="firmwareProgress" aria-label="Sent to the rover" hidden></progress>
+              <p id="firmwareStatus" aria-live="polite"></p>
+            </div>
           </div>
         </div>
       </div>
@@ -381,6 +400,10 @@
        and hides. -->
   <script src="js/sim.js"></script>
   <script src="js/simview.js"></script>
+
+  <!-- A firmware update over the link, in the Options popover. -->
+  <script src="js/md5.js"></script>
+  <script src="js/firmware.js"></script>
 
   <!-- The composition root, after every part it builds. -->
   <script src="js/app.js"></script>

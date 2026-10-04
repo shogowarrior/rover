@@ -19,10 +19,12 @@
 // OTA flashing needs the address updated in both places (or use rover.local).
 #define WIFI_IS_STATIC_IP true
 
-// Optional: require a password for OTA flashing. Without one, anything on the
-// network can flash the rover. Define ONE of these; the hash keeps the
-// plaintext out of the firmware image (`printf '%s' 'secret' | md5`). Then
-// pass the password to each OTA upload from your shell:
+// A password for OTA flashing. Updates from the panel need one
+// (LINK_UPDATE_NEEDS_PASSWORD in Features.h says why); PlatformIO's uploads
+// work without, but then anything on the network can flash the rover. Define
+// ONE of these; the hash keeps the plaintext out of the firmware image
+// (`printf '%s' 'secret' | md5`). Then type the password into the panel when
+// it asks, and pass it to each OTA upload from your shell:
 //   PLATFORMIO_UPLOAD_FLAGS=--auth=secret pio run -e car_ota -t upload
 // Never write it into platformio.ini: git tracks that file, and publishing
 // the password undoes keeping this one out of git.

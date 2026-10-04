@@ -11,6 +11,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { webcrypto } = require("node:crypto");
 
 // The panel's own directory: extras/joystick/.
 const PANEL_ROOT = process.env.PANEL_ROOT || path.join(__dirname, "..");
@@ -317,11 +318,18 @@ function makeWebSocketClass(clock, sockets) {
       this.url = url; this.readyState = 0; this.sent = []; this.listeners = {};
       this.closeCalls = 0;
       this.sentAt = [];
+      this.binary = [];
       sockets.push(this);
     }
     addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); }
     emit(t, e = {}) { (this.listeners[t] || []).forEach((f) => f({ type: t, ...e })); }
-    send(d) { if (this.readyState !== 1) throw new Error("send on non-open socket"); this.sent.push(d); this.sentAt.push(clock.now()); }
+    // Text frames in sent, as the panel's JSON; binary ones (a firmware
+    // update's pieces) apart in binary, each a copy of the bytes the view
+    // covered, so moves() reads JSON only.
+    send(d) {
+      if (this.readyState !== 1) throw new Error("send on non-open socket");
+      if (typeof d === "string") { this.sent.push(d); this.sentAt.push(clock.now()); } else this.binary.push(Uint8Array.from(d));
+    }
     // Like a browser: close() is asynchronous; 'close' arrives later.
     close() {
       this.closeCalls++;
@@ -402,6 +410,9 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
     // test that expects no errors sees one a listener raised.
     reportError: (err) => doc.__errors.push(err),
     getComputedStyle: (element) => lookStyle(lookBlocks, element),
+    // A firmware update hashes the password's UTF-8, and draws its nonce.
+    TextEncoder,
+    crypto: { getRandomValues: (array) => webcrypto.getRandomValues(array) },
   };
   if (storage !== "throws") ctx.localStorage = localStorage;
   const resizeCallbacks = [];

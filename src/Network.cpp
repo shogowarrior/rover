@@ -1,7 +1,9 @@
 #include "Network.h"
 
 #include <ArduinoOTA.h>
+#include <MD5Builder.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 
 #include "Features.h"
 #include "Timing.h"
@@ -26,19 +28,62 @@ const IPAddress SUBNET(255, 255, 255, 0);
 const IPAddress PRIMARY_DNS(8, 8, 8, 8);
 const IPAddress SECONDARY_DNS(8, 8, 4, 4);
 
+// The OTA password as both update paths check a client against it:
+// md5hex(password), which is what ArduinoOTA keeps (setPassword() hashes the
+// password, setPasswordHash() takes the hash as given), or "" for none. It
+// goes to ArduinoOTA and FirmwareUpdate and nowhere else: never log or send
+// it.
+String otaSecret() {
+#if defined(OTA_PASSWORD_HASH)
+  // FirmwareUpdate keeps 32 digits, so a longer hash would let the panel in
+  // where espota is refused.
+  static_assert(sizeof(OTA_PASSWORD_HASH) == 33, "OTA_PASSWORD_HASH must be md5(password), 32 hex digits");
+  return OTA_PASSWORD_HASH;
+#elif defined(OTA_PASSWORD)
+  MD5Builder md5;
+  md5.begin();
+  md5.add(OTA_PASSWORD);
+  md5.calculate();
+  return md5.toString();
+#else
+  return String();
+#endif
+}
+
+// Whether the running image is on trial (verifyRollbackLater() below).
+bool runningImageOnTrial() {
+  esp_ota_img_states_t state;
+  return esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+         state == ESP_OTA_IMG_PENDING_VERIFY;
+}
+
 }  // namespace
 
-Network::Network(Rover& rover, RemoteControl& remote) : rover(rover), remote(remote) {}
+// A new image, from either update path, boots once on trial: unless it is
+// kept, the bootloader goes back to the previous one at the next reset.
+// arduino-esp32 keeps it before setup() runs unless this says to wait;
+// updatesOpen() keeps it instead, once loop() has run it for
+// tuning::IMAGE_TRIAL_MS since it first got online, at a pass with the link
+// up. So an image that crashes, hangs or never gets online, one that might
+// not be replaced over the air, is undone by the next reset (EN, power, the
+// watchdog, or its own crash). Keeping it once WiFi was up, as this first
+// did, came before loop() had run at all.
+// An image flashed over USB is never on trial.
+extern "C" bool verifyRollbackLater() { return true; }
+
+Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware)
+    : rover(rover), remote(remote), firmware(firmware) {}
 
 void Network::begin() {
+  onTrial = runningImageOnTrial();
   lastReconnectMs = millis();
-  if (connect()) goOnline();
+  if (connect()) goOnline(millis());
 }
 
 void Network::update(uint32_t now) {
   if (WiFi.status() == WL_CONNECTED) {
-    if (!online) goOnline();
-    ArduinoOTA.handle();
+    if (!online) goOnline(now);
+    if (updatesOpen(now)) ArduinoOTA.handle();
     remote.update(now);
     return;
   }
@@ -94,8 +139,11 @@ bool Network::connect() {
   return false;
 }
 
-void Network::goOnline() {
+void Network::goOnline(uint32_t now) {
   if (!otaStarted) {
+    // Timed from the first time only: a link that drops more often than the
+    // trial lasts would otherwise hold a working image on trial for good.
+    firstOnlineMs = now;
     configureOta();
     otaStarted = true;
   }
@@ -104,15 +152,43 @@ void Network::goOnline() {
   Serial.println("OTA and WebSocket services up.");
 }
 
+// Both update paths overwrite the other slot, the image this one goes back
+// to while it is on trial, so neither may run until it is kept: ArduinoOTA's
+// invitations wait unanswered, and FirmwareUpdate refuses every update
+// until it has the password. ArduinoOTA itself starts with the link, for
+// mDNS: the rover answers as rover.local throughout.
+bool Network::updatesOpen(uint32_t now) {
+  if (updatesOpened) return true;
+  if (keepFailed) return false;
+  if (onTrial && timing::since(now, firstOnlineMs) < tuning::IMAGE_TRIAL_MS) return false;
+  if (onTrial) {
+    if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK) {
+      // Still on trial, so an update now could overwrite the image the next
+      // reset goes back to: none until that reset. Not retried: each try
+      // writes flash, from the loop.
+      keepFailed = true;
+      Serial.println("Could not keep the new firmware: no updates until a reset.");
+      return false;
+    }
+    Serial.println("Keeping the new firmware.");
+    // espota's invitations sent during the trial wait in ArduinoOTA's socket.
+    // Answered now, a stale one would stand the rover down and hold the loop
+    // on a connection back to a computer that gave up. Restarting it drops
+    // them (and mDNS restarts with it).
+    ArduinoOTA.end();
+    ArduinoOTA.begin();
+  }
+  firmware.setSecret(otaSecret().c_str());
+  updatesOpened = true;
+  return true;
+}
+
 void Network::configureOta() {
   // Advertise the configured name over mDNS (rover.local by default) rather
   // than esp32-<mac>. Both setters are ignored once begin() has run.
   ArduinoOTA.setHostname(WIFI_HOSTNAME);
-#if defined(OTA_PASSWORD_HASH)
-  ArduinoOTA.setPasswordHash(OTA_PASSWORD_HASH);
-#elif defined(OTA_PASSWORD)
-  ArduinoOTA.setPassword(OTA_PASSWORD);
-#endif
+  const String secret = otaSecret();
+  if (secret.length() > 0) ArduinoOTA.setPasswordHash(secret.c_str());
 
   ArduinoOTA
       .onStart([this]() {

@@ -5,7 +5,8 @@ The firmware defines the protocol once, in src/, but the Python clients and
 the browser panel each carry copies of parts of it: move codes, the port,
 thresholds, sentinels and command timing (MIRRORS below), scan angles,
 telemetry keys and command fields, the control-scheme names and message,
-and the mode names telemetry reports.
+the mode names telemetry reports, and a firmware update's names and piece
+size.
 Each Checker method says what it compares and why; main() runs them all.
 The panel's copies this script compares are in
 extras/joystick/js/protocol.js, except the bearings (BEARINGS, in
@@ -51,6 +52,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MOVE_CODES_H = "src/MoveCodes.h"
 TUNING_H = "src/Tuning.h"
 KINEMATICS_H = "src/Kinematics.h"
+PROTOCOL_H = "src/Protocol.h"
 PROTOCOL_CPP = "src/Protocol.cpp"
 ROVER_H = "src/Rover.h"
 EXPLORER_H = "src/Explorer.h"
@@ -127,6 +129,9 @@ MIRRORS = [
      "otherwise a held stick stutters"),
     (PANEL_PROTOCOL_JS, "REPEAT_MS", "==", TUNING_H, "GAMEPAD_REFRESH_MS",
      "the panel and the gamepad re-send a held move equally often"),
+    (PANEL_PROTOCOL_JS, "OTA_CHUNK_BYTES", "<=", PROTOCOL_H, "OTA_CHUNK_MAX_BYTES",
+     "the rover fails a firmware update over a bigger piece, and a bigger one can arrive split, "
+     "which drops the link"),
 ]
 
 # Two-valued enums src/Protocol.cpp names on the wire with a ternary,
@@ -158,6 +163,14 @@ STRING_CONSTANT = {
     ".js": (r'^\s*const\s+NAME\s*=\s*"([^"\n]*)"\s*;', 'const {name} = "{value}";'),
     ".py": (r'^NAME\s*=\s*"([^"\n]*)"\s*(?:#.*)?$', '{name} = "{value}"'),
 }
+
+# A firmware update's messages: the field that marks one, and the names of
+# its actions and replies, which src/Protocol.h declares as
+# `constexpr char NAME[] = "...";` and the panel copies as string constants
+# of the same names.
+OTA_FIELD = "ota"
+OTA_NAMES = ("OTA_BEGIN", "OTA_AUTH", "OTA_CANCEL", "OTA_NEXT", "OTA_DONE", "OTA_FAILED")
+OTA_NAME_H = r'\bconstexpr\s+char\s+NAME\s*\[\s*\]\s*=\s*"([^"]*)"\s*;'
 
 # Where each client reads telemetry keys and writes command fields, once its
 # comments are removed (a comment that mentions data.foo is not a read). A
@@ -409,15 +422,18 @@ class Checker:
         """What src/Protocol.cpp puts on the wire and takes off it.
 
         Returns the telemetry keys writeTelemetry() sets, the scan keys among
-        them with the Explorer bearing each one carries, and the command
-        fields readCommand() reads. keys() and bearings() both ask; problem()
-        reports anything missing once.
+        them with the Explorer bearing each one carries, and the message
+        fields the file reads. Only writeTelemetry() counts as telemetry:
+        writeOtaReply() sets keys too, for the one client updating the rover.
+        keys() and bearings() both ask; problem() reports anything missing
+        once.
         """
         text = self.text(PROTOCOL_CPP)
         if text is None:
             return set(), {}, set()
-        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', text))
-        scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', text))
+        telemetry = function_body(text, "writeTelemetry") or ""
+        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', telemetry))
+        scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', telemetry))
         read = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]', text))
         if not sent:
             self.unreadable(PROTOCOL_CPP, 'the telemetry keys writeTelemetry() sets (doc["key"] = ...)')
@@ -556,10 +572,11 @@ class Checker:
 
         readMessage() takes a scheme from one string field, and only from a
         message with no move. Anything else is a drive command, defaults and
-        all: a scheme message under the wrong field name, or with a move
-        beside it, arrives as a STOP that takes control of an exploring rover
-        -- the one thing a scheme change must never do. A scheme the panel
-        reads under the wrong key leaves its toggle disabled for good.
+        all, but a firmware update's, which ota_wire() checks: a scheme
+        message under the wrong field name, or with a move beside it, arrives
+        as a STOP that takes control of an exploring rover -- the one thing a
+        scheme change must never do. A scheme the panel reads under the wrong
+        key leaves its toggle disabled for good.
         """
         protocol = self.text(PROTOCOL_CPP)
         if protocol is None:
@@ -584,6 +601,8 @@ class Checker:
         messages = 0
         for relpath, (_, commands) in usage.items():
             for sent in commands:
+                if OTA_FIELD in sent:
+                    continue  # a firmware update's; keys() checks its fields
                 if sent & absent:
                     if field in sent:
                         self.problem(
@@ -610,6 +629,34 @@ class Checker:
             self.problem(f'{PANEL_SCRIPTS}: never reads telemetry key "{key}", which writeTelemetry() in '
                          f"{PROTOCOL_CPP} sends the scheme under; the panel's scheme toggle would stay disabled")
 
+    def ota_wire(self) -> int:
+        """The panel names a firmware update's actions and replies as
+        src/Protocol.h does.
+
+        The rover ignores an action it does not know, and the panel a reply,
+        so a misspelt copy leaves an update waiting on an answer that never
+        comes. Messages carrying OTA_FIELD are a firmware update's, never a
+        scheme's (scheme_wire() passes them by); keys() checks that every
+        field in them is one src/Protocol.cpp reads.
+        """
+        header = self.text(PROTOCOL_H)
+        panel = self.text(PANEL_PROTOCOL_JS)
+        if header is None or panel is None:
+            return 0
+        pattern, spelling = STRING_CONSTANT[".js"]
+        for name in OTA_NAMES:
+            ours = re.search(OTA_NAME_H.replace("NAME", name), header)
+            theirs = re.search(pattern.replace("NAME", name), panel, re.M)
+            if not ours:
+                self.unreadable(PROTOCOL_H, f'{name} (constexpr char {name}[] = "...";)')
+            elif not theirs:
+                self.unreadable(PANEL_PROTOCOL_JS, f"{name} ({spelling.format(name=name, value=ours.group(1))})")
+            elif theirs.group(1) != ours.group(1):
+                self.problem(f'{PANEL_PROTOCOL_JS}: {name} = "{theirs.group(1)}", but {PROTOCOL_H} names it '
+                             f'"{ours.group(1)}" -- the rover ignores an action it does not know, so an update '
+                             f"would wait on an answer that never comes")
+        return len(OTA_NAMES)
+
 
 def show(value: float) -> str:
     """25.0 -> "25", 0.5 -> "0.5": numbers as the source files write them."""
@@ -624,6 +671,7 @@ def main() -> int:
     checker.bearings()
     name_counts = [f"{checker.wire_names(*row)} {what}" for what, *row in WIRE_NAMES]
     checker.scheme_wire()
+    ota_count = checker.ota_wire()
 
     for problem in checker.problems:
         print(problem, file=sys.stderr)
@@ -633,8 +681,8 @@ def main() -> int:
 
     print(
         f"check_protocol: OK -- {code_count} move codes, {len(MIRRORS)} mirrored constants, the scan angles, "
-        f"{', '.join(name_counts)}, the scheme message, and the names of {key_count} telemetry keys and the "
-        f"command fields agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
+        f"{', '.join(name_counts)}, the scheme message, {ota_count} firmware update names, and the names of "
+        f"{key_count} telemetry keys and the command fields agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
     )
     return 0
 

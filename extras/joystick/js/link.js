@@ -1,7 +1,8 @@
 /**
  * The WebSocket link to the rover: connecting and disconnecting, knowing
  * whether telemetry still arrives, remembering the address, showing the link
- * state, and turning frames into telemetry objects.
+ * state, and turning frames into telemetry objects and the rover's word about
+ * a firmware update.
  *
  *   new Link({ body, host, connect, linkState, note, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
@@ -14,8 +15,15 @@
  *
  *   send(obj)          serialise obj and send it as one frame. Returns false,
  *                      sending nothing, when no socket is open.
+ *   sendBinary(bytes)  send bytes (a view of them, such as a Uint8Array) as
+ *                      one binary frame, as they are. Returns false, sending
+ *                      nothing, when no socket is open.
  *   onTelemetry(fn)    fn(data) once per telemetry frame: always a plain
  *                      object; a frame that is not one is dropped here.
+ *   onOta(fn)          fn(message) for each message about a firmware update
+ *                      (firmware.js): an object whose "ota" is a string. It
+ *                      never reaches onTelemetry, where one blanked the scan,
+ *                      hid the motor warning and forgot the scheme.
  *   onState(fn)        fn(state, cause) on every change of state:
  *                        "down"        no socket;
  *                        "connecting"  a socket that has not opened yet;
@@ -49,6 +57,7 @@ class Link {
   #staleTimer = null;
   #stateListeners = new Listeners();
   #telemetryListeners = new Listeners();
+  #otaListeners = new Listeners();
 
   constructor({ body, host, connect, linkState, note, storageKey }) {
     this.#ui = { body, host, connect, linkState, note };
@@ -81,10 +90,21 @@ class Link {
     return this.#telemetryListeners.add(fn);
   }
 
+  onOta(fn) {
+    return this.#otaListeners.add(fn);
+  }
+
   send(obj) {
     const ws = this.#socket;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
     ws.send(JSON.stringify(obj));
+    return true;
+  }
+
+  sendBinary(bytes) {
+    const ws = this.#socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(bytes);
     return true;
   }
 
@@ -200,15 +220,18 @@ class Link {
   }
 
   #receive(raw) {
-    let data;
+    let message;
     try {
-      data = JSON.parse(raw);
+      message = JSON.parse(raw);
     } catch {
       return;
     }
     // Telemetry is always a JSON object. An array is an object to typeof, and
     // read as one it blanked every wedge and cleared the motor warning.
-    if (!data || typeof data !== "object" || Array.isArray(data)) return;
-    this.#telemetryListeners.emit(data);
+    if (!message || typeof message !== "object" || Array.isArray(message)) return;
+    // The rover's answers to this panel's firmware update, which carry none
+    // of telemetry's keys.
+    if (typeof message.ota === "string") this.#otaListeners.emit(message);
+    else this.#telemetryListeners.emit(message);
   }
 }

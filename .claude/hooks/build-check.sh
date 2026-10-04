@@ -89,8 +89,9 @@ esac
 tests=no
 case "$file" in
   src/Kinematics.* | src/MovePatterns.* | src/Explorer.* | src/Rover.* | \
-    src/GamepadSession.* | src/Protocol.* | src/MoveCodes.h | src/Tuning.h | \
-    src/Timing.h | src/Hardware.h | test/* | platformio.ini)
+    src/GamepadSession.* | src/Protocol.* | src/FirmwareUpdate.* | \
+    src/MoveCodes.h | src/Tuning.h | src/Timing.h | src/Hardware.h | test/* | \
+    platformio.ini)
     tests=yes
     ;;
 esac

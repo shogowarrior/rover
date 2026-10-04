@@ -205,10 +205,57 @@ It then did F4, step 7, in a PR of its own (features.md has the details):
 
 Host tests 142/142, panel tests 279/279 and the protocol check pass.
 
+A third thread, beside F3h and F4, did F6 from the owner's message of
+2026-10-04 (features.md, F6):
+
+- the OTA the owner had is ArduinoOTA (`pio run -e car_ota -t upload`),
+  intact; nothing OTA-related was ever removed, and the panel never had
+  one;
+- firmware updates from the panel: a Firmware section in Options, after
+  Keys, sends a build's `firmware.bin` over the panel's own WebSocket, 1000
+  bytes a frame, each frame only once the rover asks for it. The rules are
+  `FirmwareUpdate`'s, a new pure, host-tested module; `FlashSlot` writes the
+  other app slot through `Update`. The rover stands down as one begins,
+  motion ends it, and every way but "done" keeps the old firmware; the
+  restart waits for rest and comes up in manual;
+- the OTA password, when set, guards both paths: ArduinoOTA and the panel
+  check the same secret, the panel answering ArduinoOTA's challenge;
+- telemetry's `firmware`, the running image's MD5: the panel sends nothing
+  to a rover without it, shows the build, and says after the restart
+  whether it runs the file sent;
+- a new image from either path boots on trial and is kept once it has run
+  30 s since it first got online, so one that crashes, hangs or never gets online undoes
+  itself at the next reset; neither update path runs meanwhile;
+- updates over the link need an OTA password, and a rover without one
+  refuses them (`features::LINK_UPDATE_NEEDS_PASSWORD`): the WebSocket
+  server refuses ordinary browser pages from anywhere but a file, this
+  computer or the local network, but a sandboxed frame's origin reads like
+  a file's;
+- the heartbeat also clears a slot's missed pongs on connect, which a
+  dropped split frame showed could carry over to the slot's next client.
+
+Its review round (firmware, panel, layout, simplicity, each finding checked
+by a skeptic) kept 11 findings and fixed them all: the 30 s trial above (a
+build that got online, then hung, was being kept), the web-page refusal, any
+move ending an update while it is received, Options running under the Stop
+bar, the panel's "did it take" after a lost "done" or a rover not yet
+restarted, the focus a pressed button dropped, a touch screen's hint for a
+rover too old to update, and a preview on the simulator no longer stopped by
+an update. A hardware-safety pass on those fixes then found that the origin
+check cannot stop a page posing as a file (hence the password), that a
+flapping link held a good image on trial (the 30 s now counts from first
+online), that espota invitations sent during the trial were answered after
+it (now dropped), and that a failed keep went unnoticed (updates now stay
+closed until a reset).
+
+Host tests 192/192, panel tests 301/301, the protocol check and every board
+build pass. That thread built and tested the firmware in its own container
+despite the registry block: see "Firmware builds in a cloud thread" below.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
-quotes them verbatim and maps each to an item (F1-F5) with today's code, the
+quotes them verbatim and maps each to an item (F1-F6) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
 when it is done. They were done in this order, and all seven are done; what
 F4 deferred is under "Open, not started" below:
@@ -228,6 +275,8 @@ F4 deferred is under "Open, not started" below:
 6. **Done.** F3h: both sticks shown in Drive mode, the one NORMAL cannot
    use visibly disabled.
 7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
+
+F6, firmware updates from the panel, came later and is done too.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -256,6 +305,9 @@ and the next thread's task names that branch.
   and pressing Cmd on a Mac, a non-English layout, and Space with a button
   focused.
 
+- F6's checks for the owner, which need the rover: bench-checklist.md,
+  section 10, including the trial boot. Nothing about updates from the
+  panel has run on a board yet.
 - F5's checks for the owner, which need a real screen: features.md, F5,
   lists them, and what it left as it was (Blockly's focus colours, its
   faint zoom and trash icons).
@@ -324,6 +376,21 @@ There:
   takes `127.0.0.1:8181` in its address field.
 - Anything needing a real focused window, native dialogs, touch or the pane
   goes to the owner as a manual check.
+
+## Firmware builds in a cloud thread
+
+The cloud environment blocks the PlatformIO registry
+(`api.registry.platformio.org`, `dl.registry.platformio.org`), so
+`pio run` and `pio test -e native` fail in a fresh thread. GitHub and PyPI
+are reachable, and a script in the project's shared files rebuilds every
+package PlatformIO would fetch from those upstreams:
+`PROJECT=<checkout> bash /mnt/project-files/tools/pio-offline/setup_pio_offline.sh`
+(about a minute and 1.2 GB; its README says what it guesses). It writes only
+`~/.platformio` and the gitignored `.pio/libdeps`, never a tracked file or
+the WiFi settings header. The repo's commands, the build hook included, then
+work unchanged. A git worktree needs `.pio/libdeps` copied in. Allowing the
+two registry hosts in the environment's network settings would make it
+unnecessary.
 
 ## History
 

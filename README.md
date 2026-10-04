@@ -14,7 +14,7 @@ controller, and hand control back with one button.
 - **Browser panel.** Two joysticks (one translates, one pivots), a speed
   slider and a live fan of the five distances, in a page you open straight from disk; and block programs, which
   a simulator previews before they drive the rover. Six looks (three themes,
-  each dark and light) under the gear.
+  each dark and light) under the gear, and firmware updates from there too.
 - **Keyboard client.** Drive and watch telemetry from a terminal.
 - **PS3 controller** over Bluetooth, optional.
 - **Fails safe.** Every command expires within 1.5 s, losing the driver or
@@ -53,7 +53,9 @@ default install path, `~/.platformio/penv/bin/pio`.
    its `upload_port` in `platformio.ini` (`rover.local` works). With the PS3
    pad, set `ROVER_ENABLE_GAMEPAD` to 1 in `src/Features.h` first, which turns
    it on for every environment, or the update removes the pad. With an OTA
-   password, see `src/config.example.h`.
+   password, see `src/config.example.h`. Or update from the panel: the
+   gear's Options, Firmware, takes the `firmware.bin` a build leaves in
+   `.pio/build/<env>/` (see below).
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. The header's Normal | Advanced toggle is the rover's control
@@ -102,6 +104,29 @@ After a power-on the rover explores. After any other reset (an OTA flash, a
 crash, the watchdog) it starts in manual and waits, and it drops to manual
 if it loses WiFi or an OTA flash starts.
 
+## Updating from the panel
+
+The gear's Options has a Firmware section. Connect to the rover, press
+Choose file and pick a build's `firmware.bin` from `.pio/build/<env>/` (pick
+the environment the rover should run: `car_wire_gamepad` keeps the pad),
+type the rover's OTA password, and press Update. The rover stops, takes the
+file over the panel's own link, checks it and restarts into it in manual;
+connect again and Options says whether it runs the file sent. It needs
+firmware that already supports this, and an OTA password, so the first time
+is a USB or `car_ota` flash with a password set in `src/config.h`
+(`src/config.example.h` shows how). The password is what keeps a web page
+you happen to have open from sending the rover firmware of its own: the
+rover turns away ordinary web pages, but cannot tell a determined one from
+the panel opened from disk.
+
+Driving it in any way, Autonomous included, ends the update (Stop does
+not), and so do Cancel, closing the page or losing the link. However it
+ends, the rover keeps the firmware it had. A new build is on trial until it
+has run half a minute on WiFi: a reset before then, or a build that crashes
+or never gets back on WiFi, goes back to the firmware it had, so leave the
+rover on for that long after an update. Keep the rover still or on a stand
+while you update it.
+
 The rover holds one **control scheme** for every controller. Normal drives
 the eight translations and the two rotations. Advanced adds the eight pivots,
 which nobody has checked on the bench yet ([docs/mecanum.md](docs/mecanum.md)).
@@ -146,6 +171,9 @@ flowchart LR
   RC --> R[Rover]
   GS --> R
   NW["Network: WiFi, OTA"] -- "link lost, OTA start" --> R
+  RC -- "firmware image" --> FU[FirmwareUpdate]
+  FU -- "stand down" --> R
+  FU -- FirmwareSlot --> FS["FlashSlot: the other app slot"]
   R --> EX[Explorer]
   R -- Motors --> DT["DriveTrain: Motor Shield V2"]
   EX -- RangeScanner --> SC["Scanner: servo and sonar"]
@@ -154,11 +182,12 @@ flowchart LR
 `Rover` decides who is in control, drives the wheels through the one path
 that clamps every input, and releases them when each command's deadline
 passes. `Explorer` is the autonomy, a state machine that sweeps, cruises,
-turns, backs off, sidesteps or halts. `GamepadSession` holds the pad's rules.
-All three are plain C++ that reach the hardware only through two small
-interfaces, so they are tested on your computer rather than on the robot. The
-adapters around them (`DriveTrain`, `Scanner`, `Network`, `RemoteControl`,
-`Gamepad`) only translate. The
+turns, backs off, sidesteps or halts. `GamepadSession` holds the pad's rules,
+and `FirmwareUpdate` a firmware update's over the link. They are plain C++
+that reach the hardware only through small interfaces, so they are tested on
+your computer rather than on the robot. The adapters around them
+(`DriveTrain`, `Scanner`, `Network`, `RemoteControl`, `FlashSlot`, `Gamepad`)
+only translate. The
 WebSocket format is in `src/Protocol.h`, and [AGENTS.md](AGENTS.md) explains
 the design and the rules it keeps.
 
@@ -182,8 +211,8 @@ which way the servo turns) is covered by
   the bench checklist with the wheels off the ground before the rover drives
   on the floor, and keep it on a stand whenever you flash it.
 - **It moves on power-up.** Switching it on starts exploration straight away,
-  and so does a USB flash, which resets the board the same way. An OTA flash
-  or a crash comes back in manual.
+  and so does a USB flash, which resets the board the same way. An OTA flash,
+  from PlatformIO or the panel, or a crash comes back in manual.
 - **Motor voltage.** PWM duty is a fraction of the pack voltage, and
   `MOTOR_SPEED_LIMIT` in `src/Tuning.h` is still 255, so at full speed a full
   3S pack drives the 3-6 V TT motors at about twice their rating. Cap it
@@ -199,8 +228,9 @@ which way the servo turns) is covered by
   that can stop the board booting. The fix is a wire; see the bench
   checklist.
 - **No authentication.** Anyone on your WiFi can drive the rover, and can
-  flash it unless you set an OTA password in `src/config.h`
-  (`src/config.example.h` shows how). Keep it on a network you trust.
+  flash it from PlatformIO unless you set an OTA password in `src/config.h`
+  (`src/config.example.h` shows how); the panel's updates need that
+  password. Keep it on a network you trust.
 
 ## Documentation
 

@@ -41,6 +41,16 @@ constexpr bool AUTONOMOUS_AT_POWER_ON = true;
 // until the next reset.
 constexpr kinematics::ControlScheme DEFAULT_CONTROL_SCHEME = kinematics::SCHEME_NORMAL;
 
+// Updates over the WebSocket link (the panel's Options, Firmware) need an OTA
+// password, which config.example.h shows how to set; a rover without one
+// refuses them. The link must take a page opened from a file, whose Origin
+// is "null", and a web page can send "null" too, from a sandboxed frame:
+// the Origin check (protocol::originAllowed()) keeps ordinary web pages out,
+// but only the password keeps a determined one from replacing the firmware.
+// ArduinoOTA (car_ota) is not affected: no web page can reach it. Set this
+// false only for a network, and a browser, you trust entirely.
+constexpr bool LINK_UPDATE_NEEDS_PASSWORD = true;
+
 }  // namespace features
 
 #endif

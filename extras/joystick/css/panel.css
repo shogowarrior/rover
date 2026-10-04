@@ -376,12 +376,15 @@ input[type="range"]::-moz-range-thumb {
 /* The popover wears the File menu's .menu, above: under its button, right
    edges together, over the page and under the Stop bar. As wide as a phone
    on its side leaves left of the gear, and never taller than the screen
-   below the gear, which sits within --tap-lg of the top in every layout: it
-   scrolls inside rather than scroll the page, which would move the stick. */
+   between the gear, which sits within --tap-lg of the top in every layout,
+   and the Stop bar, at most --tap-lg and its padding tall in every layout:
+   it scrolls inside rather than scroll the page, which would move the
+   stick. Down to the screen's foot, its Firmware section's last lines
+   (Update, the progress bar, how the update went) lay under the bar. */
 .options {
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100 * var(--svh) - var(--tap-lg));
+  max-height: calc(100 * var(--svh) - 2 * var(--tap-lg) - 2 * var(--s-3) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   padding: var(--s-2) var(--s-3) var(--s-3);
 }
@@ -391,7 +394,7 @@ input[type="range"]::-moz-range-thumb {
   padding: 0;
 }
 
-/* Each section after the first, the keys', set off from the one above. */
+/* Each section after the first set off from the one above. */
 .options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
 
 /* A row per theme: its name, then its Dark and Light tiles. Close-set, so
@@ -2193,3 +2196,102 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   body[data-link="connecting"] .lamp { animation: none; }
   body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before { animation: none; }
 }
+
+/* --- firmware updates (firmware.js) ------------------------------------------ */
+
+/* The Options popover's last section, after Keys, under a rule of its own:
+   what the rover runs, the file to send, the password, Update and Cancel,
+   how much of the file the rover has, and how the update went. In the
+   popover's width: a long file name wraps rather than widen it. */
+#optionsPanel #firmwareLabel {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+}
+
+#optionsPanel .firmware { gap: var(--s-2); }
+
+#optionsPanel .firmwareRunning {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+#optionsPanel #firmwareBuild {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+
+#optionsPanel .firmwareFile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+#optionsPanel #firmwareChoose { flex: none; }
+
+#optionsPanel #firmwareChosen {
+  min-width: 0;
+  font-size: var(--t-sm);
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+
+/* Typed into, so selectable, as the address is: iOS Safari can refuse
+   typing in a field that inherits the page's user-select: none. */
+#optionsPanel #firmwarePassword {
+  width: 100%;
+  height: var(--tap);
+  padding: 0 var(--s-3);
+  font: inherit;
+  color: var(--readout);
+  background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#optionsPanel .firmwareButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+/* Update is the one filled button once it can act, as Run is. */
+#optionsPanel #firmwareStart:not(:disabled) {
+  color: var(--on-live);
+  background: var(--live);
+}
+
+#optionsPanel .firmware button:disabled {
+  color: var(--dim);
+  background: var(--raised);
+  opacity: 0.5;
+}
+
+/* The bar is the slider's track and fill. A rule per engine: one unknown
+   pseudo-element drops a whole rule. */
+#optionsPanel #firmwareProgress {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--range-track);
+  border: none;
+  border-radius: var(--r-full);
+  background: var(--raised-hi);
+  overflow: hidden;
+}
+
+#optionsPanel #firmwareProgress::-webkit-progress-bar { background: var(--raised-hi); }
+#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--live); }
+#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--live); }
+
+#optionsPanel #firmwareStatus {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--dim);
+}
+
+#optionsPanel #firmwareStatus[data-tone="bad"] { color: var(--warn); }
+#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--live); }

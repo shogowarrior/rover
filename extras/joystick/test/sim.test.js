@@ -516,10 +516,13 @@ test("the start pose can be set only where the chassis fits", () => {
 
 /* --- the Target ----------------------------------------------------------- */
 
-test("telemetry carries the keys src/Protocol.cpp writes, bar the chip and exploring", async () => {
-  const written = new Set([...src("Protocol.cpp").matchAll(/\bdoc\[\s*"(\w+)"\s*\]\s*=/g)].map((m) => m[1]));
-  // No chip to measure, and no exploring to report on.
-  const notSimulated = new Set(["temperature", "phase", "halt"]);
+test("telemetry carries the keys src/Protocol.cpp writes, bar the chip, exploring and the image", async () => {
+  // writeTelemetry's body only: writeOtaReply sets keys of its own.
+  const body = src("Protocol.cpp").match(/\bwriteTelemetry\([^)]*\)\s*\{([\s\S]*?)\n\}/)[1];
+  const written = new Set([...body.matchAll(/\bdoc\[\s*"(\w+)"\s*\]\s*=/g)].map((m) => m[1]));
+  // No chip to measure, no exploring to report on, and no firmware image: the
+  // simulator takes no updates.
+  const notSimulated = new Set(["temperature", "phase", "halt", "firmware"]);
   for (const key of notSimulated) assert.ok(written.has(key), `${key} is still one the firmware writes`);
   const target = new SimTarget({ bearings: BEARINGS, room: "living" });
   await run(target, 1500);

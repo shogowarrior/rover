@@ -83,6 +83,21 @@ constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup()
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;
 constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 10000;
 
+// --- Firmware updates over the link (FirmwareUpdate.h) ---------------------
+
+// An update waiting on its client, for the password's answer or the next
+// chunk, fails this long after the rover's last reply, and the half-written
+// slot is let go. The panel answers at once, so this is a panel that has
+// gone. The clock starts before the write the reply follows, so a flash
+// erase (up to ~2 s) comes out of it.
+constexpr uint32_t OTA_SILENCE_MS = 5000;
+// "done" goes out this long before the restart, so it leaves before the reset.
+constexpr uint32_t OTA_RESTART_DELAY_MS = 500;
+// A new image, from either update path, is kept once loop() has run it this
+// long online; a reset before then boots the previous one (Network.cpp).
+// Neither update path runs meanwhile.
+constexpr uint32_t IMAGE_TRIAL_MS = 30000;
+
 }  // namespace tuning
 
 #endif

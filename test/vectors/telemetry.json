@@ -1,14 +1,14 @@
 {
-  "about": "Telemetry frames exactly as src/Protocol.cpp writes them, every key and no other: test/test_protocol builds the status each frame describes and checks that writeTelemetry() writes this frame back. The panel's tests read them through extras/joystick/test/firmware.js: panel.test.js checks what the page shows for each, and it and sim.test.js build their other frames from \"sweeping\". 999 is a bearing with no echo (DISTANCE_FAR_CM).",
+  "about": "Telemetry frames exactly as src/Protocol.cpp writes them, every key and no other: test/test_protocol builds the status each frame describes and checks that writeTelemetry() writes this frame back. The panel's tests read them through extras/joystick/test/firmware.js: panel.test.js checks what the page shows for each, and it and sim.test.js build their other frames from \"sweeping\". 999 is a bearing with no echo (DISTANCE_FAR_CM). \"firmware\" is the running image's MD5; these are made up.",
   "frames": {
-    "sweeping": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 41.5, "motorsReady": true, "scheme": "NORMAL", "phase": "SWEEP",
+    "sweeping": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 41.5, "motorsReady": true, "scheme": "NORMAL", "firmware": "0123456789abcdef0123456789abcdef", "phase": "SWEEP",
                  "distanceLeft": 120, "distanceFrontLeft": 80, "distanceFront": 200, "distanceFrontRight": 60, "distanceRight": 150},
-    "cruising": {"mode": "AUTONOMOUS", "move": "MOVE_FORWARD", "moving": true, "temperature": 41.5, "motorsReady": true, "scheme": "ADVANCED", "phase": "CRUISE",
+    "cruising": {"mode": "AUTONOMOUS", "move": "MOVE_FORWARD", "moving": true, "temperature": 41.5, "motorsReady": true, "scheme": "ADVANCED", "firmware": "0123456789abcdef0123456789abcdef", "phase": "CRUISE",
                  "distanceLeft": 100, "distanceFrontLeft": 101, "distanceFront": 102, "distanceFrontRight": 103, "distanceRight": 104},
-    "halted": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL", "phase": "HALTED", "halt": "boxed in",
+    "halted": {"mode": "AUTONOMOUS", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL", "firmware": "fedcba9876543210fedcba9876543210", "phase": "HALTED", "halt": "boxed in",
                "distanceLeft": 10, "distanceFrontLeft": 11, "distanceFront": 12, "distanceFrontRight": 13, "distanceRight": 14},
-    "manualBeforeScan": {"mode": "MANUAL", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL"},
-    "deadShield": {"mode": "MANUAL", "move": "MOVE_FORWARD", "moving": true, "temperature": -3.5, "motorsReady": false, "scheme": "NORMAL",
+    "manualBeforeScan": {"mode": "MANUAL", "move": "STOP", "moving": false, "temperature": 40, "motorsReady": true, "scheme": "NORMAL", "firmware": "fedcba9876543210fedcba9876543210"},
+    "deadShield": {"mode": "MANUAL", "move": "MOVE_FORWARD", "moving": true, "temperature": -3.5, "motorsReady": false, "scheme": "NORMAL", "firmware": "00112233445566778899aabbccddeeff",
                    "distanceLeft": 999, "distanceFrontLeft": 50, "distanceFront": 999, "distanceFrontRight": 25, "distanceRight": 0}
   }
 }

@@ -22,7 +22,7 @@ guard blocks every call, and the build check says what it skipped.
     `Timing.h`, or `platformio.ini`: also build `car_wire_gamepad`, because
     `car_wire` compiles that code out;
   - a host-tested module (`Kinematics`, `MovePatterns`, `Explorer`, `Rover`,
-    `GamepadSession`, `Protocol`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
+    `GamepadSession`, `Protocol`, `FirmwareUpdate`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
     `Hardware.h`, anything under `test/`, or `platformio.ini`: also
     `pio test -e native`;
   - anything in `src/` or `client/`, any `.js` file under
@@ -92,8 +92,9 @@ guard blocks every call, and the build check says what it skipped.
 - **`/flash`** builds, checks the transport is reachable (the USB port, or a
   ping to the rover for OTA), uploads, and can tail the serial monitor. It is
   marked `disable-model-invocation`: only the operator can start it, and it is
-  the only way the board gets flashed. Never upload any other way, and never
-  plan flashing as a step you will take.
+  the only way an agent's work reaches the board (the operator can also update
+  from the panel's Options). Never upload any other way, never send an update
+  from the panel to a rover, and never plan flashing as a step you will take.
 - **`/pin-audit`** cross-checks every constant in `src/Pins.h` against the
   D1 R32 header map, the strapping and input-only pins, the motor-terminal
   table and 5 V echo levels, and reports a table. It is read-only. Run it
