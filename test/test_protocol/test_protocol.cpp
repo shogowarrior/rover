@@ -342,6 +342,32 @@ void test_update_replies_write_nothing_rather_than_too_little(void) {
   TEST_ASSERT_EQUAL_UINT(0, protocol::writeOtaReply(replyOf(FirmwareUpdate::Reply::DONE), out, sizeof(out)));
 }
 
+// A page opened from a file, or served from this computer or the local
+// network, may connect; any other web page may not.
+void test_local_origins_are_allowed(void) {
+  const char* allowed[] = {
+      "null", "file://", "http://localhost:8766", "http://LOCALHOST", "http://[::1]:8000",
+      "http://127.0.0.1:8000", "http://10.0.0.5", "http://172.16.0.1", "http://172.31.255.255:80",
+      "http://192.168.0.20:8000", "https://192.168.1.1", "http://169.254.3.4", "http://laptop:8000",
+      "http://rover.local", "http://My-Mac.Local:8000",
+  };
+  for (size_t i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+    TEST_ASSERT_TRUE_MESSAGE(protocol::originAllowed(allowed[i]), allowed[i]);
+  }
+}
+
+void test_other_origins_are_refused(void) {
+  const char* refused[] = {
+      "https://example.com", "http://192.168.0.20.example.com", "http://172.32.0.1", "http://172.15.0.1",
+      "http://11.0.0.1", "http://8.8.8.8", "http://192.169.0.1", "http://[fe80::1]",
+      "http://example.local.com", "https://claude.ai", "", "localhost", "http://",
+      "http://256.168.0.1", "http://10.0.0", "http://10.0.0.1.2", "http://0010.0.0.1", "http://10..0.1",
+  };
+  for (size_t i = 0; i < sizeof(refused) / sizeof(refused[0]); i++) {
+    TEST_ASSERT_FALSE_MESSAGE(protocol::originAllowed(refused[i]), refused[i]);
+  }
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_command_fields_are_read);
@@ -362,5 +388,7 @@ int main(int, char**) {
   RUN_TEST(test_longest_update_messages_fit);
   RUN_TEST(test_update_replies_are_written);
   RUN_TEST(test_update_replies_write_nothing_rather_than_too_little);
+  RUN_TEST(test_local_origins_are_allowed);
+  RUN_TEST(test_other_origins_are_refused);
   return UNITY_END();
 }

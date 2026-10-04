@@ -114,6 +114,7 @@ void setUp(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   slot = new FakeFirmwareSlot();
   firmware = new FirmwareUpdate(*rover, *slot);
+  firmware->setSecret("");  // as Network does once the running image is kept
 }
 
 void tearDown(void) {
@@ -122,6 +123,17 @@ void tearDown(void) {
   delete rover;
   delete scanner;
   delete motors;
+}
+
+// Until Network has kept the running image, an update would overwrite the
+// image it goes back to: refused, and the rover left as it was.
+void test_nothing_begins_before_the_secret_is_set(void) {
+  FirmwareUpdate fresh(*rover, *slot);
+  rover->command(RESUME_AUTONOMOUS, 0, 0, 0);
+  assertFailed(sent(fresh.begin(PANEL, IMAGE_SIZE, MD5, 10)), PANEL,
+               "The rover is still trying out new firmware: try again in half a minute.");
+  TEST_ASSERT_FALSE(slot->open);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
 }
 
 // Without a password the slot opens at once, for the size and MD5 asked, and
@@ -223,7 +235,7 @@ void test_the_restart_is_due_only_after_done(void) {
 void test_done_takes_nothing_more(void) {
   const std::vector<uint8_t> image = appImage();
   sendFrom(begin(0), image, 0);
-  assertNothing(begin(10, OTHER));
+  assertFailed(begin(10, OTHER), OTHER, "The rover is about to restart into new firmware.");
   assertNothing(receive(image, 0, 1000, 10));
   assertNothing(sent(firmware->cancel(PANEL)));
   assertNothing(sent(firmware->fragmented(PANEL)));
@@ -490,6 +502,28 @@ void test_no_chunk_is_written_while_the_wheels_turn(void) {
   TEST_ASSERT_EQUAL_UINT(1000, slot->image.size());
 }
 
+// A move short enough to be released before the next pass of the loop never
+// shows as moving there, but its stop's second write is still to come, and
+// a chunk's flash write would hold it up: it ends the update all the same.
+void test_a_move_already_released_ends_the_update(void) {
+  receiving(0);
+  rover->command(MOVE_FORWARD, 100, 1, 10);
+  motors->releasesToLose = 1;
+  rover->update(12);
+  TEST_ASSERT_FALSE(rover->status().moving);
+  assertFailed(sent(firmware->update(12)), PANEL, "The rover was driven, so the update stopped.");
+  TEST_ASSERT_EQUAL_UINT(1000, slot->image.size());
+}
+
+// The same, when the chunk comes in the pass the move arrives in.
+void test_no_chunk_is_written_after_a_move_already_released(void) {
+  receiving(0);
+  rover->command(MOVE_FORWARD, 100, 1, 10);
+  rover->update(12);
+  assertFailed(receive(appImage(), 1000, 1000, 12), PANEL, "The rover was driven, so the update stopped.");
+  TEST_ASSERT_EQUAL_UINT(1000, slot->image.size());
+}
+
 // Stop is not motion: it takes control, and the update goes on.
 void test_stop_is_not_motion(void) {
   receiving(0);
@@ -580,6 +614,7 @@ void test_running_is_the_slots(void) { TEST_ASSERT_EQUAL_STRING(slot->running(),
 
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(test_nothing_begins_before_the_secret_is_set);
   RUN_TEST(test_begin_opens_the_slot);
   RUN_TEST(test_begin_lowercases_the_md5);
   RUN_TEST(test_begin_stands_the_rover_down);
@@ -607,6 +642,8 @@ int main(int, char**) {
   RUN_TEST(test_exploring_ends_the_update);
   RUN_TEST(test_driving_ends_an_update_before_its_first_chunk);
   RUN_TEST(test_no_chunk_is_written_while_the_wheels_turn);
+  RUN_TEST(test_a_move_already_released_ends_the_update);
+  RUN_TEST(test_no_chunk_is_written_after_a_move_already_released);
   RUN_TEST(test_stop_is_not_motion);
   RUN_TEST(test_silence_ends_the_update);
   RUN_TEST(test_silence_ends_an_update_waiting_for_its_password);

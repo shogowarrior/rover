@@ -230,10 +230,11 @@ released:
   starts exploring. An update over the link restarts the rover only once it
   is at rest.
 - A new image from either OTA path boots on trial (`verifyRollbackLater()`
-  in `Network.cpp`): `Network::goOnline()` confirms it once WiFi is up, and
-  until then the next reset of any kind boots the previous image. So a
-  build that crashes, hangs or never gets online undoes itself at the next
-  reset, where it could not have been replaced over the air.
+  in `Network.cpp`): `Network` keeps it once `loop()` has run it online for
+  `tuning::IMAGE_TRIAL_MS` (30 s), and until then the next reset of any
+  kind boots the previous image, and neither update path runs. So a build
+  that crashes, hangs, or never gets or stays online undoes itself at the
+  next reset, where it might not have been replaced over the air.
 
 If you add a new way to lose the link, add its failsafe in the same change.
 
@@ -308,7 +309,9 @@ reference; in short:
   (256 bytes) and invalid JSON are ignored, and `test_longest_command_fits`
   checks that the longest a client sends fits. Move codes are in
   `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, and 19
-  `RESUME_AUTONOMOUS`.
+  `RESUME_AUTONOMOUS`. A browser page may connect only from a file, this
+  computer or the local network (`protocol::originAllowed()`): the panel
+  opens from a file, and a page served on `localhost` or the LAN works too.
 - **Client to rover, configuration:** `{"scheme": "NORMAL" | "ADVANCED"}`
   (no `move`) sets the control scheme below. It is not a command: it neither
   takes control nor stops anything, so a client may send it while the rover
@@ -604,8 +607,15 @@ one OTA password `config.h` may set.
   a single-use nonce and the client answers
   md5hex(md5hex(password):nonce:cnonce). The panel never keeps the
   password, logs it or sends it.
-- **Trial boot:** a new image confirms itself only once WiFi is up
-  (`Network::goOnline()`); until then the next reset boots the old one.
+- **Trial boot:** a new image is kept only once it has run 30 s online
+  (`Network::updatesOpen()`); until then the next reset boots the old one,
+  and both update paths wait (`FirmwareUpdate` refuses every update until
+  `setSecret()`).
+- **Who may connect:** the WebSocket server refuses the handshake of a
+  browser page from anywhere but a file, this computer or the local network
+  (`protocol::originAllowed()`, checked by `HeartbeatServer`), so no web
+  page the operator has open can drive the rover or replace its firmware.
+  Clients that are not browsers send no Origin.
 - **The panel** (`js/firmware.js`, with `js/md5.js`) offers Update only on a
   live link, with telemetry naming the running firmware, and a file that is
   an ESP32 app image (its first byte 0xE9 and the app description's magic

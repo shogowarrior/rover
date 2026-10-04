@@ -80,6 +80,15 @@ Message readMessage(JsonVariantConst json);
 // "NORMAL" or "ADVANCED".
 const char* schemeName(kinematics::ControlScheme scheme);
 
+// Whether a browser page from `origin`, the Origin header of its WebSocket
+// handshake, may connect: a page opened from a file ("null", or "file://"
+// in some browsers), or one served from this computer or the local network
+// (localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x, a name ending
+// ".local", or one with no dot). Any other web page the operator has open
+// could otherwise reach ws://<rover>:81 and drive the rover, or replace its
+// firmware. Clients that are not browsers send no Origin, and are let in.
+bool originAllowed(const char* origin);
+
 // The longest client message RemoteControl reads; a longer frame is ignored
 // unread. Every real client sends well under 100 bytes, so anything bigger is
 // not a command, and parsing it would only cost heap.

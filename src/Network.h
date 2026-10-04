@@ -23,7 +23,8 @@ class Network {
 
  private:
   bool connect();
-  void goOnline();
+  void goOnline(uint32_t now);
+  bool updatesOpen(uint32_t now);
   void configureOta();
 
   Rover& rover;
@@ -32,6 +33,9 @@ class Network {
   bool online = false;
   bool otaStarted = false;
   uint32_t lastReconnectMs = 0;
+  bool onTrial = false;  // the running image is new, and not yet kept
+  uint32_t onlineSinceMs = 0;
+  bool updatesOpened = false;
 };
 
 #endif

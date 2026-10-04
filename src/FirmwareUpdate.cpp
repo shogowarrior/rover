@@ -56,10 +56,14 @@ FirmwareUpdate::Reply failure(uint8_t client, const char* reason) {
 
 FirmwareUpdate::FirmwareUpdate(Rover& rover, FirmwareSlot& slot) : rover(rover), slot(slot) {}
 
-void FirmwareUpdate::setSecret(const char* md5Hex) { copyLowercase(md5Hex, secret); }
+void FirmwareUpdate::setSecret(const char* md5Hex) {
+  copyLowercase(md5Hex, secret);
+  ready = true;
+}
 
 FirmwareUpdate::Reply FirmwareUpdate::begin(uint8_t client, uint32_t size, const char* md5, uint32_t now) {
-  if (state == DONE) return nothing();
+  if (!ready) return failure(client, "The rover is still trying out new firmware: try again in half a minute.");
+  if (state == DONE) return failure(client, "The rover is about to restart into new firmware.");
   if (state != IDLE) return failure(client, "Another update is under way.");
   if (size == 0) return failure(client, "The firmware file is empty.");
   if (!isHex32(md5)) return failure(client, "The update's MD5 is not 32 hex digits.");
@@ -144,7 +148,12 @@ bool FirmwareUpdate::ownedBy(uint8_t client) const { return state != IDLE && sta
 
 bool FirmwareUpdate::driven() const {
   const Rover::Status status = rover.status();
-  return status.moving || status.mode == Rover::MODE_AUTONOMOUS;
+  if (status.mode == Rover::MODE_AUTONOMOUS) return true;
+  // Before the first chunk the stand-down's release may still be pending,
+  // which is not motion. From then on the rover was at rest, so anything
+  // short of rest is a move, even one shorter than a pass of the loop that
+  // update() never saw moving.
+  return state == RECEIVING ? !rover.atRest() : status.moving;
 }
 
 FirmwareUpdate::Reply FirmwareUpdate::start(uint32_t now) {

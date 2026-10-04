@@ -1316,9 +1316,14 @@ it already holds:
   knows the rover takes updates (older firmware never gets an `ota`
   message, which it would read as a STOP), shows which build runs, and says
   so when it is the file just sent.
-- An image that never gets online is undone: the new firmware confirms
-  itself once WiFi is up, and until then the next reset boots the previous
-  one. This covers ArduinoOTA's uploads too.
+- An image that crashes, hangs or never gets online is undone: new
+  firmware is kept once it has run half a minute online, and until then the
+  next reset boots the previous one and neither update path runs. This
+  covers ArduinoOTA's uploads too.
+- No web page the operator has open can reach the rover: the WebSocket
+  server refuses a browser page from anywhere but a file, this computer or
+  the local network. That one could otherwise have driven the rover, and
+  now could have replaced its firmware.
 - Starting an update stops a program running on the rover.
 - No WiFi details anywhere: the change carries no SSID, WiFi password or
   OTA password, in code, tests, docs or commits.

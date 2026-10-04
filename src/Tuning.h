@@ -93,6 +93,10 @@ constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 10000;
 constexpr uint32_t OTA_SILENCE_MS = 5000;
 // "done" goes out this long before the restart, so it leaves before the reset.
 constexpr uint32_t OTA_RESTART_DELAY_MS = 500;
+// A new image, from either update path, is kept once loop() has run it this
+// long online; a reset before then boots the previous one (Network.cpp).
+// Neither update path runs meanwhile.
+constexpr uint32_t IMAGE_TRIAL_MS = 30000;
 
 }  // namespace tuning
 

@@ -321,8 +321,15 @@ connected from the panel, with the gear's Options open:
    flashed over USB: Update with no password or a wrong one stops with
    "Wrong OTA password." and the old firmware stays; the right one works.
    `car_ota` with `PLATFORMIO_UPLOAD_FLAGS=--auth=...` still works too.
-6. **Trial boot.** Build a copy whose WiFi settings name a network that is
-   not there, and send it from the panel. It restarts and never comes back
-   on the link. Press EN (on the stand: EN starts it exploring). The board
-   must come back on the previous firmware, on WiFi, and Options must show
-   the build it ran before.
+6. **Trial boot.** Right after an update, Update again: the rover refuses,
+   saying it is still trying out new firmware, until it has run half a
+   minute on WiFi. Then build a copy whose WiFi settings name a network that
+   is not there, and send it from the panel. It restarts and never comes
+   back on the link. Press EN (on the stand: EN starts it exploring). The
+   board must come back on the previous firmware, on WiFi, and Options must
+   show the build it ran before. Any reset within half a minute of an
+   update, a brownout as the motors start or the serial monitor opening
+   among them, does the same: telemetry's build says which runs.
+7. **Web pages.** From a page served on the internet (any site's console:
+   `new WebSocket("ws://<rover>:81")`), the connection must be refused. The
+   panel from a file, and `client/drive.py`, still connect.

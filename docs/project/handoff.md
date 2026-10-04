@@ -223,8 +223,12 @@ A third thread, beside F3h and F4, did F6 from the owner's message of
 - telemetry's `firmware`, the running image's MD5: the panel sends nothing
   to a rover without it, shows the build, and says after the restart
   whether it runs the file sent;
-- a new image from either path boots on trial and confirms itself once on
-  WiFi, so one that never gets online undoes itself at the next reset;
+- a new image from either path boots on trial and is kept once it has run
+  30 s online, so one that crashes, hangs or never gets online undoes
+  itself at the next reset; neither update path runs meanwhile;
+- the WebSocket server refuses browser pages from anywhere but a file, this
+  computer or the local network, which could otherwise drive the rover or
+  replace its firmware;
 - the heartbeat also clears a slot's missed pongs on connect, which a
   dropped split frame showed could carry over to the slot's next client.
 

@@ -117,8 +117,10 @@ It needs firmware that already supports this, so the first time is a USB or
 
 Driving it in any way, Autonomous included, ends the update (Stop does
 not), and so do Cancel, closing the page or losing the link. However it
-ends, the rover keeps the firmware it had. A new build that never gets back
-on WiFi undoes itself at the next reset. Keep the rover still or on a stand
+ends, the rover keeps the firmware it had. A new build is on trial until it
+has run half a minute on WiFi: a reset before then, or a build that crashes
+or never gets back on WiFi, goes back to the firmware it had, so leave the
+rover on for that long after an update. Keep the rover still or on a stand
 while you update it.
 
 The rover holds one **control scheme** for every controller. Normal drives

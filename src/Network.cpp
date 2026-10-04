@@ -50,39 +50,39 @@ String otaSecret() {
 #endif
 }
 
-// Confirm an image on trial (verifyRollbackLater() below): it got online,
-// so it could be replaced over the air.
-void keepRunningImage() {
+// Whether the running image is on trial (verifyRollbackLater() below).
+bool runningImageOnTrial() {
   esp_ota_img_states_t state;
-  if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
-      state == ESP_OTA_IMG_PENDING_VERIFY) {
-    esp_ota_mark_app_valid_cancel_rollback();
-  }
+  return esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+         state == ESP_OTA_IMG_PENDING_VERIFY;
 }
 
 }  // namespace
 
 // A new image, from either update path, boots once on trial: unless it is
-// confirmed, the bootloader goes back to the previous one at the next reset.
-// arduino-esp32 confirms it before setup() runs unless this says to wait;
-// goOnline() confirms it instead, once WiFi is up. So an image that crashes,
-// hangs or never gets online, one that could not be replaced over the air,
-// is undone by the next reset (EN, power, watchdog). An image flashed over
-// USB is never on trial.
+// kept, the bootloader goes back to the previous one at the next reset.
+// arduino-esp32 keeps it before setup() runs unless this says to wait;
+// updatesOpen() keeps it instead, once loop() has run it online for
+// tuning::IMAGE_TRIAL_MS. So an image that crashes, hangs, or never gets or
+// stays online, one that might not be replaced over the air, is undone by
+// the next reset (EN, power, the watchdog, or its own crash). Keeping it
+// once WiFi was up, as this first did, came before loop() had run at all.
+// An image flashed over USB is never on trial.
 extern "C" bool verifyRollbackLater() { return true; }
 
 Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware)
     : rover(rover), remote(remote), firmware(firmware) {}
 
 void Network::begin() {
+  onTrial = runningImageOnTrial();
   lastReconnectMs = millis();
-  if (connect()) goOnline();
+  if (connect()) goOnline(millis());
 }
 
 void Network::update(uint32_t now) {
   if (WiFi.status() == WL_CONNECTED) {
-    if (!online) goOnline();
-    ArduinoOTA.handle();
+    if (!online) goOnline(now);
+    if (updatesOpen(now)) ArduinoOTA.handle();
     remote.update(now);
     return;
   }
@@ -138,11 +138,9 @@ bool Network::connect() {
   return false;
 }
 
-void Network::goOnline() {
+void Network::goOnline(uint32_t now) {
+  onlineSinceMs = now;
   if (!otaStarted) {
-    // Before either update path starts: an update overwrites the other slot,
-    // the one this image goes back to until it is confirmed.
-    keepRunningImage();
     configureOta();
     otaStarted = true;
   }
@@ -151,15 +149,29 @@ void Network::goOnline() {
   Serial.println("OTA and WebSocket services up.");
 }
 
+// Both update paths overwrite the other slot, the image this one goes back
+// to while it is on trial, so neither may run until it is kept: ArduinoOTA's
+// invitations wait unanswered, and FirmwareUpdate refuses every update
+// until it has the password. ArduinoOTA itself starts with the link, for
+// mDNS: the rover answers as rover.local throughout.
+bool Network::updatesOpen(uint32_t now) {
+  if (updatesOpened) return true;
+  if (onTrial && timing::since(now, onlineSinceMs) < tuning::IMAGE_TRIAL_MS) return false;
+  if (onTrial) {
+    esp_ota_mark_app_valid_cancel_rollback();
+    Serial.println("Keeping the new firmware.");
+  }
+  firmware.setSecret(otaSecret().c_str());
+  updatesOpened = true;
+  return true;
+}
+
 void Network::configureOta() {
   // Advertise the configured name over mDNS (rover.local by default) rather
   // than esp32-<mac>. Both setters are ignored once begin() has run.
   ArduinoOTA.setHostname(WIFI_HOSTNAME);
-  // Before goOnline() starts the WebSocket, so no update over the link can
-  // begin without the password.
   const String secret = otaSecret();
   if (secret.length() > 0) ArduinoOTA.setPasswordHash(secret.c_str());
-  firmware.setSecret(secret.c_str());
 
   ArduinoOTA
       .onStart([this]() {

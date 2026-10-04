@@ -14,13 +14,18 @@
 // (test/test_firmware_update). Protocol.h has the messages.
 //
 // The rules it keeps:
+//   * None until setSecret(): Network calls it once the running image is
+//     kept (Network.cpp says when), since an update overwrites the image it
+//     would otherwise go back to.
 //   * One update at a time, owned by the client that began it: only that
 //     client's messages and frames move it on, and losing that client ends
 //     it. Any other client's are ignored, but for a second "begin", which is
 //     refused.
 //   * Beginning stands the rover down, and motion ends the update: a rover
 //     driven or set exploring while one waits on its client fails it, before
-//     another chunk is written. The operator's hands win, as they win over a
+//     another chunk is written. Once chunks are asked for, the rover is at
+//     rest, so a move counts even if it has already been released: its
+//     stop's second write is still to come. The operator's hands win, as they win over a
 //     program, and a flash write holds the loop, and every move deadline
 //     with it, for as long as an erase takes. Stop is not motion.
 //   * The first chunk is asked for only once the rover is at rest
@@ -58,7 +63,7 @@ class FirmwareUpdate {
   FirmwareUpdate(Rover& rover, FirmwareSlot& slot);
 
   // The OTA password as ArduinoOTA keeps it, md5hex(password), or "" for
-  // none. Call before the link starts.
+  // none. Until this is called every update is refused.
   void setSecret(const char* md5Hex);
 
   // A client asks to send an image of `size` bytes whose MD5 is `md5`.
@@ -105,6 +110,7 @@ class FirmwareUpdate {
   Rover& rover;
   FirmwareSlot& slot;
   hardware::Hex32 secret = {};
+  bool ready = false;  // setSecret() has been called
 
   State state = IDLE;
   uint8_t owner = 0;  // the client that began it; meaningful unless IDLE

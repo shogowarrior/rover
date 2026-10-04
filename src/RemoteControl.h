@@ -19,7 +19,12 @@
 // connecting, every time, whatever its link, and the count kept climbing
 // until reboot, while the operator tried to reach a rover to stop it.
 // Nothing public clears the count (enableHeartbeat() does not), so this
-// reaches the library's protected client table, and does nothing else.
+// reaches the library's protected client table.
+//
+// It also refuses the handshake of a browser page from anywhere but a file,
+// this computer or the local network (protocol::originAllowed()): the
+// library checks no Origin, so any web page the operator had open could
+// drive the rover or replace its firmware.
 class HeartbeatServer : public WebSocketsServer {
  public:
   explicit HeartbeatServer(uint16_t port) : WebSocketsServer(port) {}
@@ -29,6 +34,13 @@ class HeartbeatServer : public WebSocketsServer {
   // WStype_CONNECTED (RemoteControl.cpp says why).
   void forgetMissedPongs(uint8_t client) {
     if (client < WEBSOCKETS_SERVER_CLIENT_MAX) _clients[client].pongTimeoutCount = 0;
+  }
+
+ protected:
+  // The library asks this of every handshake header but its own; false
+  // refuses the connection.
+  bool execHttpHeaderValidation(String headerName, String headerValue) override {
+    return !headerName.equalsIgnoreCase("Origin") || protocol::originAllowed(headerValue.c_str());
   }
 };
 
