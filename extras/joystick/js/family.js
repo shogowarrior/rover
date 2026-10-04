@@ -1,41 +1,47 @@
 /**
- * The stick family: what the stick drives, and the labels that say so.
+ * The pivot stick's family, and the labels on both sticks.
  *
- * Under the NORMAL scheme the stick only translates. ADVANCED adds the two
- * pivot families, which the gamepad reaches by holding L1 or R1 and the panel
- * by this selector. In a pivot family the stick's quadrant picks the move
- * (moveForStick in mecanum.js), so the four moves are shown at the stick's
- * corners: what each quadrant sends is not something to learn by driving.
+ * The Drive tab has two sticks, as a gamepad does. The left stick always
+ * translates, under either scheme. The right stick drives the pivots, which
+ * the ADVANCED scheme adds: its quadrant picks the move (moveForStick in
+ * mecanum.js), in the family chosen here, Pivot or Pivot sideways, as the
+ * gamepad picks them by holding L1 or R1. The four moves are shown at the
+ * stick's corners: what each quadrant sends is not something to learn by
+ * driving. Under NORMAL, and while the scheme is unknown, the pivot stick
+ * and this selector are shown but off, saying the pivots are ADVANCED's.
  *
- *   new FamilySelector({ choice, group, label, hints, caveat })
- *     choice   the empty element the three segments are built in;
- *     group    the selector's container, shown only while offered;
- *     label    the stick pad's caption, which names the family;
- *     hints    the empty element over the stick that the corner labels are
- *              built in. The page's CSS lets every touch through it to the
- *              stick;
- *     caveat   the warning that the pivots are not bench-verified, shown
- *              while a pivot family is chosen.
+ *   new FamilySelector({ choice, group, pad, label, hints, note })
+ *     choice   the empty element the two segments are built in;
+ *     group    the selector's container;
+ *     pad      the pivot stick's area, which gets data-off="yes" and a
+ *              title while the pivots are off, for the page's CSS;
+ *     label    the translate stick's caption;
+ *     hints    the empty element over the pivot stick that the corner
+ *              labels are built in. The page's CSS lets every touch through
+ *              it to the stick;
+ *     note     the line under the selector: that the pivots are not
+ *              bench-verified, that they are ADVANCED's while they are off,
+ *              or a request for a fresh press.
  *
- *   offer(available)  show the selector (ADVANCED) or withdraw it. While it
- *                     is withdrawn the family is FAMILY_TRANSLATE, and a
- *                     newly offered selector starts there too.
- *   awaitPress(on)    while on, the caption asks for a fresh press of the
- *                     stick in place of the family's name, with
- *                     data-tone="warn": the stick has been let go of under
- *                     the operator's thumb (app.js), and joy.js's knob,
- *                     still following the thumb, does not show it.
- *   family            the family chosen.
- *   onChange(fn)      fn(family) when the family changes: the operator's
- *                     choice, or the return to FAMILY_TRANSLATE on withdrawal.
+ *   offer(available)    turn the pivots on (ADVANCED) or off. The family
+ *                       chosen is kept either way.
+ *   awaitPress(stick, on)
+ *                       while on, that stick's caption ("move", the left
+ *                       stick's label) or line ("pivot", the note) asks for
+ *                       a fresh press of it, with data-tone="warn": the stick
+ *                       has been let go of under the operator's thumb
+ *                       (app.js), and joy.js's knob, still following the
+ *                       thumb, does not show it.
+ *   family              the family chosen, FAMILY_PIVOT (the default) or
+ *                       FAMILY_PIVOT_SIDEWAYS.
+ *   onChange(fn)        fn(family) when the operator chooses the other.
  *
  * Choosing a family is not a drive press, and nothing here sends: the
- * listener hands the family to the Driver, which re-steers a held stick and
- * otherwise does nothing.
+ * listener hands the family to the Driver, which re-steers a held pivot
+ * stick and otherwise does nothing.
  */
 class FamilySelector {
   static OPTIONS = Object.freeze([
-    Object.freeze({ family: FAMILY_TRANSLATE, label: "Translate" }),
     Object.freeze({ family: FAMILY_PIVOT, label: "Pivot" }),
     Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways" }),
   ]);
@@ -50,19 +56,29 @@ class FamilySelector {
   // except that the backward sideways pivots are the forward ones' arcs
   // turned under: the rear swings where the front would.
   static ICONS = Object.freeze({
-    // Four ways at once.
-    [FAMILY_TRANSLATE]: "M8 2v12M2 8h12M6 4l2-2 2 2M6 12l2 2 2-2M4 6 2 8l2 2M12 6l2 2-2 2",
     // Forward about the right wheels, the nose turning right.
     [FAMILY_PIVOT]: "M4.5 14V5h8M10 2.5 12.5 5 10 7.5",
     // The front swinging right about the rear axle.
     [FAMILY_PIVOT_SIDEWAYS]: "M1.5 10.5a5.5 5.5 0 0 1 11 0M10 8.5l2.5 2.5L15 8.5",
   });
 
-  // The caption's request, while a press is awaited. Short enough to keep to
-  // one line wherever a family's name does: a longer request wrapped on a
-  // narrow phone, and the stick below it moved under the thumb as it came
+  static TRANSLATE = "Translate";
+
+  // A caption's request, while a press is awaited. Short enough to keep to
+  // one line wherever a caption's own words do: a longer request wrapped on
+  // a narrow phone, and the stick below it moved under the thumb as it came
   // and went (js/drive.js).
   static PRESS_AGAIN = "Press again";
+
+  // The pivot stick's line: the caveat while it is on, and what it waits
+  // for while it is off. One line, as is PRESS_AGAIN, so no change of
+  // words moves the stick under it, and within the stick's column at its
+  // floor (112 px, on its side under about 536 px wide) with its dot: 105
+  // px measured headless, where "Unverified: go slowly." took 129. Off, the
+  // pad's title says why; on, it has none, to hang over a stick in use.
+  static CAVEAT = "Untried: go slow.";
+  static OFF = "Advanced only.";
+  static OFF_TITLE = "Advanced only: the NORMAL scheme keeps the pivots off the sticks and the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
   // is forward. Each is labelled with the move its quadrant sends.
@@ -76,13 +92,13 @@ class FamilySelector {
   #ui;
   #buttons = new Map(); // family -> its segment
   #corners = []; // per corner: { x, yUp, hint, path, text }
-  #family = FAMILY_TRANSLATE;
+  #family = FAMILY_PIVOT;
   #offered = false;
-  #awaitingPress = false;
+  #awaiting = new Set(); // the sticks a fresh press is asked of: "move", "pivot"
   #listeners = new Listeners();
 
-  constructor({ choice, group, label, hints, caveat }) {
-    this.#ui = { group, label, hints, caveat };
+  constructor({ choice, group, pad, label, hints, note }) {
+    this.#ui = { group, pad, label, note };
 
     for (const { family, label: name } of FamilySelector.OPTIONS) {
       const button = segment(choice, () => this.#choose(family));
@@ -114,50 +130,55 @@ class FamilySelector {
 
   offer(available) {
     this.#offered = Boolean(available);
-    if (!this.#offered) this.#set(FAMILY_TRANSLATE);
     this.#render();
   }
 
-  awaitPress(on) {
-    this.#awaitingPress = Boolean(on);
+  awaitPress(stick, on) {
+    if (on) this.#awaiting.add(stick);
+    else this.#awaiting.delete(stick);
     this.#render();
   }
 
-  // A withdrawn selector cannot be clicked in a browser; this keeps it so
+  // A disabled segment cannot be clicked in a browser; this keeps it so
   // even for a click that arrives some other way.
   #choose(family) {
-    if (!this.#offered) return;
-    this.#set(family);
-  }
-
-  #set(family) {
-    if (family === this.#family) return;
+    if (!this.#offered || family === this.#family) return;
     this.#family = family;
     this.#render();
     this.#listeners.emit(family);
   }
 
   #render() {
-    const { group, label, hints, caveat } = this.#ui;
-    group.hidden = !this.#offered;
+    const { group, pad, label, note } = this.#ui;
+    const offered = this.#offered;
     pressSegment(this.#buttons, this.#family);
-    label.textContent = this.#awaitingPress
-      ? FamilySelector.PRESS_AGAIN
-      : FamilySelector.OPTIONS.find((option) => option.family === this.#family).label;
-    if (this.#awaitingPress) label.dataset.tone = "warn";
-    else delete label.dataset.tone;
+    for (const button of this.#buttons.values()) button.disabled = !offered;
+    group.dataset.off = offered ? "no" : "yes";
+    pad.dataset.off = offered ? "no" : "yes";
+    pad.title = offered ? "" : FamilySelector.OFF_TITLE;
+
+    FamilySelector.#say(label, this.#awaiting.has("move") ? FamilySelector.PRESS_AGAIN : FamilySelector.TRANSLATE, this.#awaiting.has("move") ? "warn" : null);
+    // A request for a press is for a stick that can take one.
+    const pressPivot = offered && this.#awaiting.has("pivot");
+    FamilySelector.#say(note, pressPivot ? FamilySelector.PRESS_AGAIN : offered ? FamilySelector.CAVEAT : FamilySelector.OFF,
+      pressPivot ? "warn" : offered ? "caveat" : "off");
 
     // The corner labels come from moveForStick() itself, so they cannot
-    // disagree with what the stick sends.
-    const pivoting = this.#family !== FAMILY_TRANSLATE;
-    hints.hidden = !pivoting;
-    caveat.hidden = !pivoting;
+    // disagree with what the stick sends. They stay while the stick is off,
+    // dimmed with it: what it would send is worth knowing before choosing
+    // ADVANCED.
     for (const { x, yUp, hint, path, text } of this.#corners) {
-      const motion = pivoting ? motionFor(moveForStick(x, yUp, this.#family)) : null;
-      path.setAttribute("d", pivoting ? FamilySelector.ICONS[this.#family] : "");
-      text.textContent = motion ? motion.short : "";
-      hint.dataset.move = motion ? motion.name : "";
+      const motion = motionFor(moveForStick(x, yUp, this.#family));
+      path.setAttribute("d", FamilySelector.ICONS[this.#family]);
+      text.textContent = motion.short;
+      hint.dataset.move = motion.name;
     }
+  }
+
+  static #say(element, text, tone) {
+    element.textContent = text;
+    if (tone) element.dataset.tone = tone;
+    else delete element.dataset.tone;
   }
 
   // An icon for the quadrant (x, yUp) points into, the family's drawing

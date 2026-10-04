@@ -473,8 +473,7 @@
    the trail and the key). Shorter still, the wheels and the motion alone
    (the log's two lines ran over the motion's), then the move alone.
    The Drive tab's view in a wide rail's scan cell (panel.css, 960 to 1179
-   px wide and under 761 px tall) is sized by its cell too, so these apply
-   there. The Program tab's view is never this short, and a wide view's
+   px wide) is sized by its cell too, so these apply there. The Program tab's view is never this short, and a wide view's
    size elsewhere is its own (inline-size containment), so these never
    apply to either. */
 @container sim (max-height: 299.98px) {

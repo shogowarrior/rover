@@ -127,32 +127,36 @@
       <p id="note" aria-live="polite"></p>
     </header>
 
-    <!-- The dock: the stick under the left thumb; the rotate buttons and the
-         speed under the right, with Stop below them on a phone. .controls
-         is the grid they sit on, its own box so that on a wide screen it
-         can take its content's height and sit centred in the dock. -->
+    <!-- The dock: two sticks, as on a gamepad, the translate stick under
+         the left thumb and the pivot stick under the right; the rotate
+         buttons and the speed under them, with Stop below on a phone.
+         .controls is the grid they sit on, its own box so that on a wide
+         screen it can take its content's height and sit centred in the
+         dock. Each stick and what lies over it share one grid cell rather
+         than being positioned: joy.js places a touch by its canvas's
+         offsetParent, which a positioned ancestor would change. -->
     <section class="dock" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
       <div class="controls">
-        <!-- The stick family, offered under the ADVANCED scheme only. -->
-        <div id="familySlot">
-          <div class="family" id="family" role="group" aria-label="Stick family" hidden>
-            <div class="segmented" id="familyChoice"></div>
-            <p class="caveat" id="pivotCaveat" hidden>Pivots are not bench-verified yet: go slowly.</p>
-          </div>
+        <!-- Names the translate stick, or asks for a fresh press of it;
+             family.js keeps it in step. Above the stick, where the thumb on
+             it does not hide it. -->
+        <span class="label" id="stickLabel">Translate</span>
+
+        <!-- The pivot stick's family, and a line under it: the caveat, or
+             what the stick waits for. Off under NORMAL, never hidden. -->
+        <div class="family" id="family" role="group" aria-label="Pivot stick">
+          <div class="segmented" id="familyChoice"></div>
+          <p class="caveat" id="pivotNote"></p>
         </div>
 
-        <div class="stickPad">
-          <!-- Names the stick family; family.js keeps it in step. Above the
-               stick, where the thumb on it does not hide it. -->
-          <span class="label" id="stickLabel">Translate</span>
-          <!-- The stick, and over it the move each quadrant sends under a pivot
-               family. The two share one grid cell rather than being positioned:
-               joy.js places a touch by its canvas's offsetParent, which a
-               positioned ancestor would change. -->
-          <div class="stickArea">
-            <div id="stick"></div>
-            <div class="hints" id="stickHints" hidden></div>
-          </div>
+        <div class="stickArea" id="movePad">
+          <div id="stick"></div>
+        </div>
+
+        <!-- The pivot stick, and over it the move each quadrant sends. -->
+        <div class="stickArea" id="pivotPad">
+          <div id="pivotStick"></div>
+          <div class="hints" id="stickHints"></div>
         </div>
 
         <div class="spin" role="group" aria-label="Rotate">

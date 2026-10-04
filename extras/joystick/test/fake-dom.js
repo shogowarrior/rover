@@ -377,8 +377,10 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const scripts = parseHtml(html, doc);
 
+  // The two sticks' boxes, laid out at one size.
   const stick = doc.getElementById("stick");
-  if (stick) { stick.clientWidth = stickSize; stick.clientHeight = stickSize; }
+  const pivotStick = doc.getElementById("pivotStick");
+  for (const box of [stick, pivotStick]) if (box) { box.clientWidth = stickSize; box.clientHeight = stickSize; }
 
   const win = new Node_("#window", doc);
   win.tagName = "#WINDOW";
@@ -428,18 +430,23 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
     // The browser's bar as the scripts in <head> leave it: the first paint's.
     if (src === "js/look.js") headThemeColor = doc.querySelector('meta[name="theme-color"]').getAttribute("content");
     if (src === "joy.js") {
-      // Keep a handle on the instance the panel creates, to read its knob,
-      // and on the parameters it was built with, its colours among them.
-      vm.runInContext("var __RealJoy = JoyStick; JoyStick = function (...a) { globalThis.__joyParameters = a[1]; return (globalThis.__joy = new __RealJoy(...a)); };", ctx);
+      // Keep a handle on the instance the panel creates in each box, by the
+      // box's id, to read its knob, and on the parameters it was built
+      // with, its colours among them.
+      vm.runInContext("var __RealJoy = JoyStick; globalThis.__joys = {}; globalThis.__joyParameters = {}; JoyStick = function (...a) { __joyParameters[a[0]] = a[1]; return (__joys[a[0]] = new __RealJoy(...a)); };", ctx);
     }
   }
 
   const $ = (id) => doc.getElementById(id);
   const page = {
     doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $, headThemeColor,
+    // The translate stick's, and the pivot stick's.
     get canvas() { return stick.children.find((c) => c.tagName === "CANVAS"); },
-    get joy() { return ctx.__joy; },
-    get joyParameters() { return ctx.__joyParameters; },
+    get joy() { return ctx.__joys.stick; },
+    get joyParameters() { return ctx.__joyParameters.stick; },
+    get pivotCanvas() { return pivotStick.children.find((c) => c.tagName === "CANVAS"); },
+    get pivotJoy() { return ctx.__joys.pivotStick; },
+    get pivotJoyParameters() { return ctx.__joyParameters.pivotStick; },
     evalIn: (code) => vm.runInContext(code, ctx),
     fire(target, type, props = {}) {
       const e = { type, bubbles: true, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...props };

@@ -94,7 +94,8 @@ rollers slip and grip decides how far a pivot really swings, which only the
 bench can show.
 
 Autonomous exploration and the keyboard client never send codes 9 to 16, and
-neither do the panel's stick and the gamepad under the NORMAL control scheme.
+neither do the panel's sticks and the gamepad under the NORMAL control
+scheme.
 A program on the panel's Program tab can drive any of them (the Mecanum tour
 example drives all eight), so Run on the rover asks first whenever a program
 drives a pivot and the rover is not on ADVANCED; a preview never asks. Run
@@ -112,26 +113,28 @@ sets only the simulator's own.
 
 | | NORMAL | ADVANCED |
 |---|---|---|
-| Stick | Eight-way translation (codes 1 to 8) | The same, unless a family is picked |
+| Stick | Eight-way translation (codes 1 to 8): the pad's left stick, the panel's left stick | The same; on the pad, unless L1 or R1 is held |
 | Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
-| Pivot (9 to 12) | -- | Hold L1, or pick Pivot on the panel |
-| Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways on the panel |
+| Pivot (9 to 12) | -- (the panel's right stick is shown, off) | Hold L1, or pick Pivot over the panel's right stick |
+| Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways over the panel's right stick |
 | Program tab | Any motion; a pivot block carries a warning, and Run on the rover asks before a pivot | Any motion |
 | Gamepad LEDs | Player 1 | Player 2 |
 
-A scheme change never redirects a held stick: the stick stops what it was
-driving, and drives again only from a fresh push. The scheme is shared, so
-otherwise a toggle on one controller would turn the diagonal under another
-operator's thumb into a pivot. On the panel a held rotate button carries on,
-as it sends the same move under either scheme, and so does a running
-program, which the operator started.
+A scheme change never redirects a held stick: the pad's stick stops what it
+was driving, and drives again only from a fresh push. The scheme is shared,
+so otherwise a toggle on one controller would turn the diagonal under another
+operator's thumb into a pivot. The panel keeps the pivots on a stick of
+their own, so its translate stick, which sends the same moves under either
+scheme, carries on, as do a held rotate button and a running program, which
+the operator started; a change to NORMAL lets go of a held pivot stick, which
+drives again only from a fresh push under ADVANCED.
 
 In a pivot family the stick's quadrant picks the move by its name: up and
 right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
 left `PIVOT_LEFT_BACKWARD` (`PIVOT_SIDEWAYS_BACKWARD_LEFT`), and a push
 exactly along an axis counts as right and forward. So in the pivot family
-(L1, or Pivot on the panel) up drives forward and down backward, about the
-side pushed; in the sideways family (R1, or Pivot sideways) up swings the
+(L1, or Pivot over the panel's right stick) up drives forward and down
+backward, about the side pushed; in the sideways family (R1, or Pivot sideways) up swings the
 front and down the rear, toward the side pushed. If the bench shows a row's
 wheels do not match its name, fix the row in `MovePatterns.cpp`, with its
 test, and the stick follows. Fix the same row in `RoverSim.WHEELS` in
