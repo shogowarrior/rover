@@ -301,9 +301,11 @@ runner.onState((state, { kind }) => {
 // exploring rover is left alone.
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
-// size: fit it again whenever the tab is shown.
+// size: fit it again whenever the tab is shown. So with the stick, whose
+// look or size may have changed while it was hidden (Driver.shown).
 tabs.onChange((tab) => {
-  if (tab.id !== "tabDrive") driver.releaseStick();
+  if (tab.id === "tabDrive") driver.shown();
+  else driver.releaseStick();
   if (tab.id === "tabProgram") programTab.shown();
 });
 
@@ -363,21 +365,22 @@ if (targets.simulator) {
 /* --- the look ------------------------------------------------------------ */
 
 // The page's colours, picked under the gear (look.js has already put the
-// remembered look on <html>). Picking one sends nothing. The Options popover
-// is not modal: Stop stays one press while it is open, and the press that
-// reaches Stop closes it.
+// remembered look on <html>), in a popover that is not modal (see
+// joystick.html).
 const lookPicker = new LookPicker(byId("lookChoice"));
 new Popover(byId("options"), byId("optionsPanel"));
 
 // Whatever took the look's colours as plain values when it was built takes
 // the new look's: the browser's own bar (theme-color), the stick's knob,
 // which joy.js paints into its canvas, and the block editor's Blockly theme.
-// Anything styled with var() follows by itself.
+// Anything styled with var() follows by itself. Rebuilt, the stick lets go
+// of a held stick as a scheme change does (one STOP, only if it was
+// driving), and its caption asks for a fresh press; nothing else is sent.
 const themeColor = document.querySelector('meta[name="theme-color"]');
 const paintBrowserBar = () => themeColor.setAttribute("content", lookToken("--case"));
 paintBrowserBar();
 lookPicker.onChange(() => {
   paintBrowserBar();
-  driver.restyle();
+  if (driver.restyle()) familySelector.awaitPress(true);
   programTab.restyle();
 });

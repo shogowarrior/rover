@@ -371,14 +371,16 @@ column.
 needed", and, since the panel "will mostly be landscope mode in either laptop
 or ipad like device", "use more width". Both are taken up with the rest of
 F3 in step 4: a pane that is not always needed folds away, and the wide
-layout is designed for a laptop or a tablet on its side first.
+layout is designed for a laptop or a tablet on its side first, and checked
+at 1024 x 768 too ([F3f](#f3f-consistency-rules), *Layouts*).
 
 **Ask the owner.** Is a slightly narrower Program editor at 1280 px fine in
 exchange for one column width on both tabs? *(default: yes)*
 
-**Done when** at 375, 1280 and about 1600 px every pane edge lines up with the
-one above or below it, on both tabs, and the stick never moves on a tab
-switch, a link change or a target switch.
+**Done when** at 375, 1024, 1280 and about 1600 px every pane edge lines up
+with the one above or below it, on both tabs, the stick never moves on a tab
+switch, a link change or a target switch, and each pane that is not always
+needed folds away and back.
 
 ### F3a. Stop and Autonomous
 
@@ -556,13 +558,14 @@ has applied yet describes the target, not today's page.
 *Layouts.* Three, chosen by the viewport as today: **wide** (960 px wide and
 521 px tall and up), **a phone on its side** (landscape, 520 px tall or
 less), and **a phone upright** (the rest). Every check is made at 375 x 812,
-480 x 320 and 812 x 375 for the phones, and 1280 x 800 and about 1600 x 900
-(the owner's screen) for wide, on both tabs.
+480 x 320 and 812 x 375 for the phones, and 1024 x 768 (a tablet on its
+side), 1280 x 800 and about 1600 x 900 (the owner's screen) for wide, on
+both tabs.
 
 *Regions.* Four, in this order on screen and in the focus order, on every
 layout and both tabs:
-1. The header: the wordmark and the status pills; the address, Connect and
-   the note; and the switch row.
+1. The header: the wordmark, the status pills and the Options gear; the
+   address, Connect and the note; and the switch row.
 2. The open tab: its own action row first (the Program toolbar), then its
    content.
 3. The right column: the rover's data, at all times (F3c): the motor fault,
@@ -597,7 +600,9 @@ phone the bar stays as today: Autonomous | Stop, Stop under the right thumb.
 selects, the address field, menu buttons, the Program toolbar and the
 simulator's bar (32 px on wide today). The exceptions are larger, never
 smaller: the foot bar's Stop and Autonomous, the Drive tab's rotate buttons
-(held controls, as today) and Blockly's own controls.
+(held controls, as today) and Blockly's own controls. The one smaller is
+drawn so, not touched so: the Options gear is a status pill's size, with a
+full `--tap` target round it.
 
 *Disabled, never hidden.* A control that belongs to a layout is always shown
 there. When it cannot act now (the scheme, the link or a running program
@@ -624,7 +629,7 @@ expect, or replacing or removing the program in the editor. Never before
 Stop.
 
 *Menus.* One shared helper for every popup (`Popover`): the Program tab's
-File menu and the simulator's settings. A menu holds only infrequent actions that move
+File menu, the simulator's settings and Options. A menu holds only infrequent actions that move
 nothing; every safety control, page-wide switch, primary action and held
 control stays a visible, one-press control
 ([Menu or explicit](#menu-or-explicit-every-control)). A menu button says it
@@ -634,8 +639,8 @@ move through its items and wrap, Home and End go to the ends; an item does
 its action and closes the menu with the focus back on its button; Escape
 closes it the same way, Tab closes it and moves on, and a press outside
 closes it. An item that cannot act now stays in the menu, disabled. A
-popover that is not a menu, the simulator's settings, shares the opening,
-Escape and press-outside behaviour.
+popover that is not a menu (the simulator's settings, Options) shares the
+opening, Escape and press-outside behaviour.
 
 *Labels.* No label overflows its control (`scrollWidth <= clientWidth`) at
 any of the sizes above. An icon-only button (the simulator's pause, reset
@@ -855,16 +860,18 @@ word-finder project to see how it does that"
 
 **Where it came from.** Word Finder's code (`BeeBeRBaB/word-finder` at
 `71d24bf`) and its project's own account of it. There, seven fixed palettes,
-each Light and Dark, are one radio set of 14 tiles in Settings, under a gear
-in the header; its owner chose no palette option and no follow-the-system
+each Light and Dark, are one radio set of 14 tiles on the Theme page of
+Settings, under a gear in the header; its owner chose no palette option and no follow-the-system
 mode. A pick sets attributes on `<html>` that select a block of custom
 properties, a classic script in `<head>` puts the remembered look on before
 the first paint, `theme-color` is read from the tokens again on each change,
 and a script holds every look to WCAG AA.
 
 **Done.** All of that, in the panel's shape:
-- Three themes, each Dark and Light: Console, the panel's own colours,
-  unchanged and the default; Field, the most contrast, for glare or a
+- Three themes, each Dark and Light: Console, the default, the panel's own
+  colours (its tokens byte for byte; the stick's ring and knob rim now take
+  `--faint` and `--case`, a shade off joy.js's old literals, and an echo's
+  wedge is drawn whole, below); Field, the most contrast, for glare or a
   bright room; and Blueprint, tinted navy or pale blue. Six tiles in one
   radio set, each a miniature of the panel in its look's colours, drawn by
   CSS alone (no `:has()`, which Firefox lacked before 121).
@@ -874,16 +881,22 @@ and a script holds every look to WCAG AA.
   gives every `file://` page one storage origin). A storage that throws, or
   an id no look has, gives the default.
 - The gear (`#options`) in the header opens Options (`#optionsPanel`), the
-  tiles under Theme. On an upright phone narrower than 440 px the mode pill
-  gives way to it, as on a phone on its side: Autonomous at the foot lights
-  while the rover explores.
+  tiles under Theme. On an upright phone narrower than 440 px, and on a
+  phone on its side, the mode pill gives way to it: Autonomous lights while
+  the rover explores.
 - What takes a colour as a plain value is given it again on a change:
-  joy.js's stick (built again, letting go of a held stick first, one STOP
-  only if it was driving), Blockly's theme and the browser's `theme-color`.
-- `test/looks.test.js` holds every look to the same tokens and each pairing
-  of ink and surface the page draws to its contrast: text 4.5:1, marks 3:1,
-  Field's ink 7:1. It found the scan's red echo wedge under 3:1 on the card
-  at 85% opacity, so an echo's wedge is drawn whole now.
+  joy.js's stick (built again, letting go of a held stick first as a scheme
+  change does: one STOP only if it was driving, and its caption asks for a
+  fresh press), Blockly's theme and the browser's `theme-color`. A look
+  picked on the Program tab is drawn on the stick as the Drive tab is shown.
+  Where no look can be read (`css/looks.css` missing), the stick takes
+  joy.js's own colours, and Stop still works.
+- `test/looks.test.js` holds every look to the same tokens, fails a colour
+  written into any other stylesheet, and holds each pairing of ink and
+  surface in its audit (a hand-kept list: a new pairing adds its row) to its
+  contrast: text 4.5:1, marks 3:1, quiet marks 1.1:1, and Field's ink 7:1
+  and its rules 3:1. It found the scan's red echo wedge under 3:1 on the
+  card at 85% opacity, so an echo's wedge is drawn whole now.
 
 **Not carried over, and why.**
 - Word Finder's Settings is a modal pane, the page behind it inert. Options
@@ -894,13 +907,20 @@ and a script holds every look to WCAG AA.
   setting that matters, the scheme, already shows in the header, and a menu
   would hide it ([Menu or explicit](#menu-or-explicit-every-control)).
   Options holds the look for now, and is where a later setting goes.
+- Its other look settings: Letters (a larger size) and Reduce motion. The
+  panel has one type scale for now, a later Options setting if wanted, and
+  already follows the system's reduced-motion setting
+  (`prefers-reduced-motion`, `css/panel.css`). Its Background art and
+  Vibrate have no counterpart.
 - Its service worker and module scripts, and the lessons that came with
   them: the panel is classic scripts opened from `file://`.
 
 **Tests.** `test/looks.test.js` as above; `panel.test.js` for the tiles,
 the remembered look and its fallbacks, the popover staying non-modal with
-Stop one press, and a look change under a held stick;
-`program.test.js` for Blockly's theme in every look.
+Stop one press, a look change under a held stick, on a hidden tab and
+mid-program, the block editor built in the look and repainted, and the
+panel with no look to read; `program.test.js` for Blockly's theme, built
+from the look in force (two stand-in looks) under one name.
 
 **Checks for the owner,** which need a real screen: the six looks on a
 laptop and a tablet (Field Light in sunlight; the light looks' dark amber),

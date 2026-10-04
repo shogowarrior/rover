@@ -49,11 +49,12 @@ class RoverBlocks {
   // The blocks with a BEARING menu: sanitize() needs each to name one.
   static #READS_BEARING = Object.freeze(["rover_distance", "rover_clear"]);
 
-  // The block colours, one per toolbox category. Mid-tones that hold the
-  // blocks' white 12 px text at 4.5:1 or better and still read on the
-  // panel's near-black. Red is the panel's stop red (--stop in
-  // css/panel.css; panel.test.js checks the copy), and only the stop block
-  // wears it: anywhere else it would stop meaning anything.
+  // The block colours, one per toolbox category, the same in every look.
+  // Mid-tones that hold the blocks' white 12 px text at 4.5:1 or better and
+  // still read on a dark or a light look's workspace. Red is the panel's
+  // stop red (--stop in css/looks.css, the same in every look;
+  // looks.test.js checks the copy), and only the stop block wears it:
+  // anywhere else it would stop meaning anything.
   static PALETTE = Object.freeze({
     motion: "#237d70",
     sensors: "#3674b5",
@@ -578,8 +579,8 @@ class RoverBlocks {
   // tooltips, the running block's glow, the grid). Every theme has the one
   // name: Blockly lets a theme be defined again over an earlier one.
   static theme(Blockly) {
-    // Every name read here is declared on :root, which panel.test.js checks:
-    // no fallback, and so no second copy of a colour to drift.
+    // Every name read here is declared in every look, which looks.test.js
+    // checks: no fallback, and so no second copy of a colour to drift.
     const ink = lookToken("--readout");
     const style = (colour) => ({
       colourPrimary: colour,
@@ -659,7 +660,8 @@ class RoverBlocks {
  *   setReadOnly(on)    lock editing while a program runs.
  *   resize()           fit the container again, after it is shown.
  *   restyle()          take the page's look, after it changes (look.js): the
- *                      workspace, toolbox, flyout and blocks repaint in it.
+ *                      workspace, toolbox and flyout repaint in it; the
+ *                      blocks keep PALETTE.
  *   onChange(fn)       fn() after the program changes.
  *
  * Under 600 px of screen the toolbox runs across the top, as a row of pills,

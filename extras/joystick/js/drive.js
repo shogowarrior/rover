@@ -62,12 +62,18 @@
  *   restyle()
  *       The page's look has changed (look.js). joy.js paints the stick into
  *       its canvas once, in the colours it was built with (the look's
- *       --live, --case and --faint where the stick is), so the stick is
- *       built again in the new look's, as for a new size: a stick held now
- *       is let go of first -- one STOP, and only if the stick was what this
- *       panel was sending -- and drives again only from a fresh press. A
- *       stick in a hidden tab has no size to be built at: it is built again
- *       once it is shown.
+ *       --live, --case and --faint), so the stick is built again in the new
+ *       look's, as for a new size: a stick held now is let go of first --
+ *       one STOP, and only if the stick was what this panel was sending --
+ *       and drives again only from a fresh press. Returns true when the
+ *       stick was deflected, as releaseStick() does. A stick in a hidden tab
+ *       has no size to be built at: it is built again by shown().
+ *
+ *   shown()
+ *       The Drive tab is shown again. A stick whose look changed, or whose
+ *       box was resized, while it was hidden is built again now, before a
+ *       press can land on it: built a moment later, it would let go of the
+ *       press.
  *
  *   program(move, speed)
  *   endProgram()
@@ -138,7 +144,7 @@ class Driver {
   #speed;
   #stick;
   #joy = null; // the JoyStick drawn in the stick now
-  #restyled = false; // the look has changed since it was drawn
+  #lookStale = false; // drawn in a look no longer worn
   #pressedOn = null; // the stick's box on screen at its last primary press (#stickBox)
   #family = FAMILY_TRANSLATE;
 
@@ -207,7 +213,11 @@ class Driver {
   }
 
   restyle() {
-    this.#restyled = true;
+    this.#lookStale = true;
+    return this.#refit();
+  }
+
+  shown() {
     this.#refit();
   }
 
@@ -384,13 +394,18 @@ class Driver {
   // a refit replaced still listens on the document, and would go on
   // reporting the thumb or mouse that pressed it.
   #buildJoy() {
-    const token = (name) => lookToken(name, this.#stick);
+    // The knob in the page's teal, rimmed in its case colour, inside a ring
+    // drawn as the well's notches are (css/panel.css). A colour the page
+    // cannot read (css/looks.css missing, or styles turned off) is left to
+    // joy.js's own: handed an empty one, its canvas throws, and app.js stops
+    // before Stop is wired.
+    const colours = {};
+    for (const [parameter, name] of [["internalFillColor", "--live"], ["internalStrokeColor", "--case"], ["externalStrokeColor", "--faint"]]) {
+      const colour = lookToken(name);
+      if (colour) colours[parameter] = colour;
+    }
     const joy = new JoyStick(this.#stick.id, {
-      // The knob in the page's teal, rimmed in its case colour, inside a ring
-      // drawn as the well's notches are (css/panel.css).
-      internalFillColor: token("--live"),
-      internalStrokeColor: token("--case"),
-      externalStrokeColor: token("--faint"),
+      ...colours,
       internalLineWidth: 2,
       externalLineWidth: 2,
       autoReturnToCenter: true,
@@ -398,7 +413,7 @@ class Driver {
       if (joy === this.#joy) this.#onStick(status);
     });
     this.#joy = joy;
-    this.#restyled = false;
+    this.#lookStale = false;
   }
 
   // A window resized or a phone turned can move the stick's box, resize it
@@ -437,16 +452,17 @@ class Driver {
   }
 
   // A new canvas, for a new size or a new look. A hidden tab's box has no
-  // size, and joy.js cannot draw at none; shown again, it has the size it
-  // had, and needs a new canvas only if the look changed meanwhile. A new
+  // size, and joy.js cannot draw at none; shown again (shown()), it needs a
+  // new canvas only if its size or the look changed meanwhile. A new
   // JoyStick starts unpressed, so a stick held now is let go first, as a
   // scheme change lets go of it: one STOP if it was driving, and nothing
-  // more until a fresh press.
+  // more until a fresh press. Returns true when that let go of a deflected
+  // stick.
   #refit() {
     const { clientWidth: width, clientHeight: height } = this.#stick;
-    if (width === 0 || height === 0) return;
-    if (!this.#restyled && width === this.#joy.GetWidth() && height === this.#joy.GetHeight()) return;
-    if (this.#held.stick || this.#held.stickArmed) this.releaseStick();
+    if (width === 0 || height === 0) return false;
+    if (!this.#lookStale && width === this.#joy.GetWidth() && height === this.#joy.GetHeight()) return false;
+    const deflected = (this.#held.stick || this.#held.stickArmed) && this.releaseStick();
     // A mouse still pressing the old JoyStick would have it measure its
     // removed canvas, and throw, on every move: hand it the ending it listens
     // for, as touchcancel does. (A touch on a removed canvas reaches the
@@ -454,6 +470,7 @@ class Driver {
     document.dispatchEvent(new Event("mouseup"));
     for (const old of [...this.#stick.children]) if (old.tagName === "CANVAS") old.remove();
     this.#buildJoy();
+    return deflected;
   }
 
   // joy.js reports x and y as strings in -100..100, with y already inverted so

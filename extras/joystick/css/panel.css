@@ -1,6 +1,7 @@
-/* The control panel's styles. joystick.html links this file first, and
-   program.css and sim.css build on its tokens; the scripts in js/ set the
-   classes, attributes and data-* values it keys on.
+/* The control panel's styles. joystick.html links this after
+   css/looks.css, whose colours it paints in, and program.css and sim.css
+   build on both; the scripts in js/ set the classes, attributes and data-*
+   values it keys on.
 
    Thumb-first. On a phone the Drive tab is a dock at the foot of the screen,
    the stick under the left thumb, the rotate buttons and Stop under the
@@ -139,9 +140,11 @@ body {
   color: var(--dim);
 }
 
-/* Read aloud, not shown: the scheme's name and the mode pill's. */
+/* Read aloud, not shown: the scheme's name, the mode pill's, and a look
+   tile's radio, whose state its preview shows (below). */
 .srOnly,
-.scheme > .label {
+.scheme > .label,
+.lookTile input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -415,14 +418,7 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-.lookTile input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  opacity: 0;
-  pointer-events: none;
-}
+.lookTile input { pointer-events: none; }
 
 /* The page's frame round the look's own colours. */
 .lookPreview {
@@ -748,9 +744,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* A pill gives way before it overflows: what it says is cut short, never
    drawn over its neighbour or the gear. The layouts size them so it
-   seldom is: the longest set, "Link", "Autonomous" and "No motor shield",
-   fits beside the mark and the gear from about 380 to 410 px wide, as the
-   system font runs, and is cut short below that. */
+   seldom is: below 440 px, and on a phone on its side, the mode pill gives
+   way altogether (below), so the longest set there is "Link" and "No motor
+   shield" beside the mark and the gear. */
 .pill {
   --pill-x: calc(var(--s-1) + var(--s-0));
   display: inline-flex;
@@ -802,7 +798,8 @@ body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 
 /* An upright phone's row also holds the gear, and three pills beside it
    ran out of room: the mode pill gives way to the Autonomous button at the
-   foot, lit while the rover explores, as it does on a phone on its side. */
+   foot, lit while the rover explores, as it does on a phone on its side
+   (see that layout). */
 @media (max-width: 439.98px) {
   .modePill { display: none; }
 }
@@ -1801,6 +1798,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     padding: var(--s-2) var(--s-3);
   }
 
+  /* The header's column also holds the gear, and the mode pill beside the
+     other two wrapped the status to a second row: it gives way to the
+     Autonomous button at the side, lit while the rover explores. */
+  .modePill { display: none; }
+
   .status { flex-wrap: wrap; }
 
   .stickPad { align-self: center; }
@@ -1834,17 +1836,15 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    their labels ran into each other's segments, and a tap on "Normal" could
    land on Advanced. They take a row each, and the columns close up (the
    shell's and the dock's together, as they must). The status keeps to one
-   row: it takes the mark's place, and the mode pill gives way to the
-   Autonomous button beside it, lit while the rover explores. The readouts
-   take the type size a portrait phone of this width would. */
+   row: it takes the mark's place. The readouts take the type size a
+   portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   .shell,
   .controls { column-gap: var(--s-3); }
 
   .switches { grid-template-columns: minmax(0, 1fr); }
 
-  .wordmark,
-  .modePill { display: none; }
+  .wordmark { display: none; }
 
   .cell output { font-size: var(--t-sm); }
 }

@@ -11,7 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("./harness.js");
 const { PANEL_ROOT } = require("./fake-dom.js");
-const { stylesheet, cssRules } = require("./css.js");
+const { stylesheet, cssRules, lookBlocks } = require("./css.js");
 
 // The looks the options offer, in their order (js/look.js). The first is
 // the default, and its block is also :root's, so the page paints in it
@@ -82,16 +82,7 @@ const AUDIT = [
 
 /* --- reading the looks --------------------------------------------------- */
 
-// css/looks.css, block by block: its selector, the look it is for, and what
-// it declares, name to value.
-function readLooks() {
-  return cssRules(stylesheet("looks.css")).map(({ selector, body }) => ({
-    selector,
-    id: (selector.match(/\[data-look="([\w-]+)"\]$/) || [])[1],
-    declared: new Map([...body.matchAll(/([\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])),
-  }));
-}
-
+const readLooks = () => lookBlocks();
 const tokensOf = (look) => [...look.declared.keys()].filter((name) => name.startsWith("--"));
 
 // [r, g, b, alpha], from the forms looks.css writes: #rgb, #rrggbb and
@@ -167,7 +158,8 @@ test("every look declares exactly the default look's tokens", () => {
 });
 
 // A token read but declared nowhere reads as nothing: a var() drops its
-// whole declaration, blocks.js's token() hands Blockly an empty colour.
+// whole declaration, and lookToken() hands Blockly or joy.js an empty
+// colour.
 // The look's tokens and panel.css's :root are everywhere; a stylesheet's own
 // (sim.css's .sim aliases, program.css's --dot) only in that stylesheet; and
 // blocks.js gives the editor --block-<category> from its PALETTE.
@@ -205,14 +197,66 @@ test("every token the stylesheets and scripts read is declared", () => {
   assert.deepEqual([...new Set(undeclared)], []);
 });
 
+// A colour written into any other stylesheet is the same in every look: on
+// a light look's case, a dark look's white text vanishes. The one set of
+// colours that is the same in every look on purpose is the blocks' PALETTE
+// (blocks.js), which Blockly takes as plain values.
+test("no stylesheet but looks.css writes a colour of its own", () => {
+  const literal = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|(?<![\w-])(?:white|black|red|green|blue|gr[ae]y)(?![\w-])/gi;
+  const found = [];
+  for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
+    for (const { selector, body } of cssRules(stylesheet(file))) {
+      for (const [colour] of body.matchAll(literal)) found.push(`${colour} in css/${file}'s ${selector}`);
+    }
+  }
+  assert.deepEqual(found, []);
+});
+
+// A look's token declared again in another stylesheet wins over every look,
+// or loses to it, by selector and load order, and the audit below never sees
+// the value painted.
+test("no other stylesheet declares a look's token", () => {
+  const tokens = new Set(tokensOf(readLooks()[0]));
+  const again = [];
+  for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
+    for (const { selector, body } of cssRules(stylesheet(file))) {
+      for (const [, name] of body.matchAll(/(--[\w-]+)\s*:/g)) if (tokens.has(name)) again.push(`${name} in css/${file}'s ${selector}`);
+    }
+  }
+  assert.deepEqual(again, []);
+});
+
+// Blockly's zoom and trash icons are drawn for a light ground.
+test("a dark look turns light art light, a light look leaves it, and Blockly's icons take it", () => {
+  for (const look of readLooks()) {
+    const art = look.declared.get("--light-art");
+    assert.ok(look.id.endsWith("-light") ? art === "none" : /^invert\(1\)/.test(art), `${look.id}'s --light-art is ${art}`);
+  }
+  const icons = cssRules(stylesheet("program.css")).filter((rule) => /\.blockly(Zoom|Trash) > image$/m.test(rule.selector));
+  assert.ok(icons.length > 0 && icons.every((rule) => /filter:\s*var\(--light-art\)/.test(rule.body)), "program.css filters the icons by --light-art");
+});
+
 // The red that means Stop is the same in every look, and so is the white on
-// it: blocks.js copies --stop for the stop block, and a look whose Stop were
-// another red would teach the eye two.
-test("every look's Stop is #d23c37, and its text on a fill #ffffff", () => {
+// it: a look whose Stop were another red would teach the eye two. Blockly
+// takes the stop block's red as a plain value (blocks.js's PALETTE), so that
+// copy is the same red too.
+test("every look's Stop is #d23c37 with its word in #ffffff, and so is the stop block", () => {
   for (const look of readLooks()) {
     assert.equal(look.declared.get("--stop"), "#d23c37", `${look.id}'s --stop`);
-    assert.equal(look.declared.get("--on-fill"), "#ffffff", `${look.id}'s --on-fill`);
+    assert.equal(look.declared.get("--on-stop"), "#ffffff", `${look.id}'s --on-stop`);
   }
+  const { RoverBlocks } = require("../js/blocks.js");
+  assert.equal(RoverBlocks.PALETTE.stop.toLowerCase(), "#d23c37", "blocks.js's stop block");
+});
+
+// The browser's bar is painted from the look once app.js runs; until then,
+// joystick.html's theme-color is the default look's case, so the first
+// paint and the bar agree.
+test("joystick.html's theme-color is the default look's --case", () => {
+  const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
+  const meta = html.match(/<meta name="theme-color" content="([^"]+)">/);
+  assert.ok(meta, "joystick.html has a theme-color");
+  assert.equal(meta[1].toLowerCase(), readLooks()[0].declared.get("--case").toLowerCase());
 });
 
 // The browser draws its own parts (a select's list, scrollbars, the

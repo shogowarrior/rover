@@ -29,4 +29,15 @@ function blockRules(css, opening) {
   return cssRules(text.slice(start + opening.length, end - 1));
 }
 
-module.exports = { stylesheet, cssRules, blockRules };
+// css/looks.css, and then extra (CSS in its shape), block by block: its
+// selector, the look it is for (the default block's is its second
+// selector, after :root), and what it declares, name to value.
+function lookBlocks(extra = "") {
+  return cssRules(stylesheet("looks.css") + extra).map(({ selector, body }) => ({
+    selector,
+    id: (selector.match(/\[data-look="([\w-]+)"\]$/) || [])[1],
+    declared: new Map([...body.matchAll(/([\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])),
+  }));
+}
+
+module.exports = { stylesheet, cssRules, blockRules, lookBlocks };

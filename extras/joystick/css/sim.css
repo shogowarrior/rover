@@ -8,8 +8,8 @@
    grid, the rover's plate and deck) included: teal for live, amber for
    closing distance, red only for stop and danger -- here, a ray inside
    STOP_CM and a bump. A backward wheel takes the one colour the panel uses
-   nowhere else, so it never reads as a warning. .sim names the token each
-   part of the room is painted with. */
+   nowhere else, so it never reads as a warning. .sim names the rest after
+   the look's tokens. */
 
 .sim {
   --sim-floor: var(--raised);

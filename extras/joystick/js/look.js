@@ -26,18 +26,17 @@
  *     fn(id) after the operator picks a look, once it is on <html> and
  *     remembered. Picking one sends nothing anywhere.
  *
- *   lookToken(name, element)
- *     A token of the look in force at element (<html> when not given). For
- *     whatever takes a colour as a plain value -- joy.js's canvas, Blockly's
- *     theme, the browser's theme-color -- and so must be given it again when
- *     the look changes; anything styled with var() follows by itself.
+ *   lookToken(name)
+ *     A token of the look in force, or "" when the page cannot read it
+ *     (css/looks.css missing). For whatever takes a colour as a plain value
+ *     -- joy.js's canvas, Blockly's theme, the browser's theme-color -- and
+ *     so must be given it again when the look changes; anything styled with
+ *     var() follows by itself.
  */
 class LookPicker {
   static STORAGE_KEY = "rover.look";
 
-  // Console is the slate instrument console the panel has always worn. Field
-  // is the most contrast, for glare or a bright room. Blueprint is tinted:
-  // deep navy, or pale blue drafting paper.
+  // What each theme is for: css/looks.css's header.
   static LOOKS = Object.freeze([
     { id: "console-dark", theme: "Console", flavour: "Dark" },
     { id: "console-light", theme: "Console", flavour: "Light" },
@@ -107,8 +106,8 @@ class LookPicker {
   }
 }
 
-function lookToken(name, element = document.documentElement) {
-  return getComputedStyle(element).getPropertyValue(name).trim();
+function lookToken(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 // The reason this file loads in <head>: the remembered look is on <html>
@@ -116,4 +115,4 @@ function lookToken(name, element = document.documentElement) {
 // is no page.
 if (typeof document !== "undefined") LookPicker.restore();
 
-if (typeof module !== "undefined") module.exports = { LookPicker, lookToken };
+if (typeof module !== "undefined") module.exports = { LookPicker };

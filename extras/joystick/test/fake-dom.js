@@ -185,7 +185,12 @@ function fakeContext() {
   const noop = () => {};
   return {
     beginPath: noop, arc: noop, stroke: noop, fill: noop, clearRect: noop,
-    createRadialGradient: () => ({ addColorStop: noop }),
+    // A colour Chromium cannot parse, "" among them, throws, as there.
+    createRadialGradient: () => ({
+      addColorStop(offset, colour) {
+        if (typeof colour !== "string" || colour.trim() === "") throw new SyntaxError(`addColorStop: '${colour}' could not be parsed as a color`);
+      },
+    }),
   };
 }
 
@@ -261,14 +266,12 @@ function all(node, out = []) { out.push(node); node.children.forEach((c) => all(
 // look's id to the tokens its block declares; the default block's are under
 // ":root" too. Custom properties only: all a script reads of a look.
 function readLooks(extra) {
-  const css = (fs.readFileSync(path.join(PANEL_ROOT, "css", "looks.css"), "utf8") + extra).replace(/\/\*[\s\S]*?\*\//g, "");
+  const { lookBlocks } = require("./css.js"); // here, not at the top: css.js requires this file
   const looks = new Map();
-  for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const tokens = Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()]));
-    for (const selector of selectors.split(",").map((s) => s.trim())) {
-      const key = selector === ":root" ? selector : (selector.match(/^\[data-look="([^"]+)"\]$/) || [])[1];
-      if (key) looks.set(key, { ...looks.get(key), ...tokens });
-    }
+  for (const { selector, id, declared } of lookBlocks(extra)) {
+    const tokens = Object.fromEntries([...declared].filter(([name]) => name.startsWith("--")));
+    const keys = selector.split(",").some((each) => each.trim() === ":root") ? [":root", id] : [id];
+    for (const key of keys) if (key) looks.set(key, { ...looks.get(key), ...tokens });
   }
   return looks;
 }

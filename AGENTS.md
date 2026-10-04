@@ -365,20 +365,26 @@ line, which keeps a family chosen under a held stick a re-steer. joy.js
 sizes its canvas once, as it is built, so when the box settles at a new size
 the Driver builds the stick again; it paints it once too, so it builds it
 again when the look changes, in the new look's `--live`, `--case` and
-`--faint` (`js/drive.js`).
+`--faint` (`js/drive.js`), letting go of a held stick first as a scheme
+change does. A look picked while the Drive tab is hidden is drawn as the
+tab is shown, before a press can land.
 
 **The look.** The page's colours are `css/looks.css`'s: six looks, three
 themes in Dark and Light, worn as `<html data-look>`. The gear in the
 header opens Options, where `js/look.js` offers them and remembers the
 choice; it loads in `<head>`, so the page is drawn in that look from the
 first paint. The popover is not modal: Stop stays one press while it is
-open. On an upright phone under 440 px the mode pill gives way to the gear;
-Autonomous at the foot lights while the rover explores. What takes a colour
-as a plain value (joy.js's canvas, Blockly's theme, the browser's
-`theme-color`) is given it again on a change, through `lookToken()`;
-everything else follows through `var()`. `test/looks.test.js` holds every
-look to the same tokens and to the contrast each pairing of ink and surface
-needs, so a new colour is a token in every look, never a literal.
+open. On an upright phone under 440 px, and on a phone on its side, the
+mode pill gives way to the gear; Autonomous lights while the rover
+explores. What takes a colour as a plain value (joy.js's canvas, Blockly's
+theme, the browser's `theme-color`) is given it again on a change, through
+`lookToken()`; everything else follows through `var()`. A new colour is a
+token in every look, never a literal: `test/looks.test.js` fails a
+stylesheet that writes one, a token missing from a look, and a pairing in
+its contrast audit that falls short. The audit is a hand-kept list, so a
+rule that paints a token on a new surface adds its pairing. The blocks'
+`PALETTE` (`js/blocks.js`) is the one set of colours the same in every
+look.
 
 **The scheme toggle** in the header shows only what telemetry reports, and
 stays disabled until a frame names a scheme. Its `{"scheme": ...}` message is
@@ -414,10 +420,10 @@ desktop app's browser pane dismisses native dialogs unseen. Blockly's own
 questions (deleting every block, or a variable in use) go through it too
 (`app.js`), with Cancel focused; only its prompts for a variable's name (new
 or renamed), which need a text field, and its note that a name is taken stay
-Blockly's own in-page dialogs. The File menu
-and the simulator's settings share `Popover` (`js/popover.js`), and the
-Rover | Simulator switch is a `TargetSwitch` (`js/targetswitch.js`), whose
-change stops a run.
+Blockly's own in-page dialogs. The File menu, the simulator's settings
+and Options share `Popover` (`js/popover.js`), and the Rover | Simulator
+switch is a `TargetSwitch` (`js/targetswitch.js`), whose change stops a
+run.
 
 **The simulator** holds no Link and no Driver: a preview sends nothing, and
 its telemetry never reaches the scan fan or the readouts. It follows the

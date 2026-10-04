@@ -19,7 +19,8 @@
    else it would stop meaning anything -- and one red in every look. A light
    look darkens its teal and amber until they hold as text on its surfaces.
    test/looks.test.js holds every look to the contrast each pairing of ink
-   and surface needs. */
+   and surface in its audit needs: a rule that paints a token on a new
+   surface adds its pairing there. */
 
 :root,
 [data-look="console-dark"] {
@@ -51,8 +52,7 @@
   --warn-soft: rgb(255 181 71 / 0.12);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff; /* text on a saturated fill: Stop, a block's menu */
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff; /* Stop's word, on its red */
   --stop-ink: #ff7a6e; /* red text on a surface */
   --stop-soft: rgb(210 60 55 / 0.16);
   --stop-glow: rgb(210 60 55 / 0.32);
@@ -95,8 +95,7 @@
   --warn-soft: rgb(255 181 71 / 0.24);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff;
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff;
   --stop-ink: #b02a23;
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);
@@ -135,8 +134,7 @@
   --warn-soft: rgb(255 194 71 / 0.16);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff;
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff;
   --stop-ink: #ff8a7f;
   --stop-soft: rgb(210 60 55 / 0.22);
   --stop-glow: rgb(210 60 55 / 0.4);
@@ -175,8 +173,7 @@
   --warn-soft: rgb(255 176 32 / 0.28);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff;
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff;
   --stop-ink: #9d241e;
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.3);
@@ -215,8 +212,7 @@
   --warn-soft: rgb(255 191 94 / 0.13);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff;
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff;
   --stop-ink: #ff8578;
   --stop-soft: rgb(210 60 55 / 0.18);
   --stop-glow: rgb(210 60 55 / 0.34);
@@ -255,8 +251,7 @@
   --warn-soft: rgb(255 181 71 / 0.26);
   --stop: #d23c37;
   --stop-hi: #bb302b;
-  --on-fill: #ffffff;
-  --on-stop: var(--on-fill);
+  --on-stop: #ffffff;
   --stop-ink: #ae2822;
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);

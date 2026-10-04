@@ -13,7 +13,7 @@ const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
-const { stylesheet, cssRules, blockRules } = require("./css.js");
+const { stylesheet, cssRules, blockRules, lookBlocks } = require("./css.js");
 const { degrees } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
@@ -598,6 +598,9 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(by.distanceRight.wedge.getAttribute("fill") === "var(--stop)", "25 cm (= STOP) red");
   check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--warn)", "30 cm amber");
   check(by.distanceFront.wedge.getAttribute("fill") === "var(--live)", "150 cm teal");
+  // Drawn whole: looks.test.js audits the wedges at full strength, and the
+  // red one falls under 3:1 on the dark looks at 0.85.
+  check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo drawn whole");
   const fr = by.distanceFrontRight;
   check(fr.wedge.getAttribute("fill") === "var(--dim)" && fr.wedge.getAttribute("opacity") === "0.4", "no echo faded");
   check(fr.wedge.getAttribute("d").includes("A140.0 140.0"), "no echo at full reach");
@@ -2061,39 +2064,17 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
-// The scripts read the stylesheet's tokens by name: the stick's knob, the
-// browser's theme-color and blocks.js's Blockly theme through lookToken(),
-// which reads nothing at all for a name that is gone, and the scan's and the
-// simulator's SVG fills through var(), which leave a wedge or a ray
-// unfilled. One colour is copied: Blockly takes the stop block's red as a
-// plain value, and the copy must be its token's value. The grid's colour is
-// not given to Blockly at all, which would draw it once: program.css paints
-// it from the look.
-test("every CSS token a script reads is declared on :root, in css/looks.css or css/panel.css, and the copy agrees", () => {
-  const root = new Map([stylesheet("looks.css"), panelCss()].flatMap((css) => cssRules(css))
-    .filter((rule) => rule.selector.split(",").some((selector) => selector.trim() === ":root"))
-    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
-  const declared = new Set(root.keys());
-  const script = (file) => fs.readFileSync(path.join(PANEL_ROOT, "js", file), "utf8");
-  const { RoverBlocks } = require("../js/blocks.js");
-  check(RoverBlocks.PALETTE.stop.toLowerCase() === (root.get("--stop") || "").toLowerCase(),
-    `blocks.js's stop block is ${RoverBlocks.PALETTE.stop}, but --stop is ${root.get("--stop")}`);
-  const grid = script("blocks.js").match(/\bgrid:\s*\{[^}]*\}/);
+// Blockly draws its grid in the colour it was given once, as the workspace
+// is built, and a look change would leave it in the old one. So it is
+// given none, and program.css paints the lines from the look. (That every
+// token a script reads is declared, and the stop block's copy of --stop,
+// are looks.test.js's.)
+test("Blockly is given no grid colour; program.css paints the grid from the look", () => {
+  const blocks = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
+  const grid = blocks.match(/\bgrid:\s*\{[^}]*\}/);
   check(grid && !/\bcolour\b/.test(grid[0]), `Blockly is given no grid colour to draw once: ${grid}`);
   check(cssRules(stylesheet("program.css")).some((r) => /\bpattern\b.*\bline$/.test(r.selector) && /\bstroke:\s*var\(--raised-hi\)/.test(r.body)),
     "program.css paints the grid's lines from the look");
-  const readers = new Map(); // token -> the scripts that read it
-  const js = path.join(PANEL_ROOT, "js");
-  for (const file of fs.readdirSync(js).filter((name) => name.endsWith(".js"))) {
-    const text = fs.readFileSync(path.join(js, file), "utf8");
-    for (const [, token] of [...text.matchAll(/\b(?:lookToken|token)\("(--[\w-]+)"/g), ...text.matchAll(/var\((--[\w-]+)\)/g)]) {
-      readers.set(token, new Set(readers.get(token)).add(file));
-    }
-  }
-  for (const [token, file] of [["--case", "app.js"], ["--panel", "blocks.js"], ["--faint", "drive.js"], ["--stop", "scan.js"]]) {
-    check(readers.has(token) && readers.get(token).has(file), `found ${file} reading ${token}`);
-  }
-  for (const [token, files] of readers) check(declared.has(token), `${token}, read by ${[...files]}, is not declared on :root`);
 });
 
 test("schemes: each quadrant of each family sends the move test/vectors/stick_moves.json gives it", () => {
@@ -3308,7 +3289,7 @@ test("program: the two Stops are named apart", () => {
 const TEST_LOOKS = `
 [data-look="field-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; }
 [data-look="blueprint-dark"] { --case: #0b1a33; --live: #3fc9b8; --faint: #34507c; }`;
-const LOOK_IDS = ["console-dark", "console-light", "field-dark", "field-light", "blueprint-dark", "blueprint-light"];
+const LOOK_IDS = require("../js/look.js").LookPicker.LOOKS.map((look) => look.id);
 const lookRadios = (page) => page.$("lookChoice").querySelectorAll('input[name="look"]');
 // As the operator picks one: the radio checked, the others not, and its
 // change event.
@@ -3319,11 +3300,14 @@ function pickLook(page, id) {
 const worn = (page) => page.doc.documentElement.getAttribute("data-look");
 const themeColor = (page) => page.doc.querySelector('meta[name="theme-color"]').getAttribute("content");
 
-test("look: six looks, the default first, each theme a Dark and a Light", () => {
+// Which looks, and in what order, is looks.test.js's (against css/looks.css).
+test("look: each theme a Dark and a Light, each look's id its theme and flavour", () => {
   const { LookPicker } = require("../js/look.js");
-  check(LookPicker.LOOKS.map((look) => look.id).join() === LOOK_IDS.join(), `ids ${LookPicker.LOOKS.map((look) => look.id)}`);
   check(LookPicker.LOOKS.every((look) => look.id === `${look.theme}-${look.flavour}`.toLowerCase()), "each id is its theme and flavour");
-  check(LookPicker.STORAGE_KEY === "rover.look", `remembered under ${LookPicker.STORAGE_KEY}`);
+  for (const theme of new Set(LookPicker.LOOKS.map((look) => look.theme))) {
+    const flavours = LookPicker.LOOKS.filter((look) => look.theme === theme).map((look) => look.flavour);
+    check(flavours.join() === "Dark,Light", `${theme}: ${flavours}`);
+  }
 });
 
 test("look: one tile per look in the gear's popover, a row per theme, the look in force checked", () => {
@@ -3368,6 +3352,8 @@ test("look: a remembered look is on <html> from the start; an unknown one, or st
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const head = html.slice(0, html.indexOf("</head>"));
   check(/<script src="js\/support\.js"><\/script>\s*<script src="js\/look\.js"><\/script>/.test(head), "support.js, then look.js, in <head>");
+  // The fake reads css/looks.css whether or not the page links it.
+  check(/<link rel="stylesheet" href="css\/looks\.css">/.test(head), "css/looks.css linked in <head>");
 
   const page = loadPage({ stored: { "rover.look": "blueprint-dark" }, looks: TEST_LOOKS });
   check(worn(page) === "blueprint-dark", `wears ${worn(page)}`);
@@ -3409,6 +3395,8 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   check(!gear.hasAttribute("aria-haspopup") && panel.getAttribute("role") === "group" && panel.tagName === "DIV" && !panel.hasAttribute("aria-modal"),
     `a group, not a menu or a dialog: ${panel.tagName} role=${panel.getAttribute("role")}`);
   check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, under the Stop bar");
+  const layered = cssRules(panelCss()).filter((rule) => /\.options\b|#optionsPanel\b/.test(rule.selector) && /z-index/.test(rule.body));
+  check(layered.length === 0, `.menu's layer, never one of its own over Stop: ${layered.map((rule) => rule.selector)}`);
   check(gear.parentNode.parentNode.getAttribute("class") === "masthead" && gear.parentNode.parentNode.children.at(-1) === gear.parentNode,
     "at the end of the masthead's row");
   const key = (target, k) => page.fire(target, "keydown", { key: k });
@@ -3448,19 +3436,25 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
 
 test("look: the stick's knob is painted from the look's tokens", () => {
   const page = loadPage();
-  const root = new Map(cssRules(stylesheet("looks.css")).filter((rule) => rule.selector.split(",").some((s) => s.trim() === ":root"))
-    .flatMap((rule) => [...rule.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()])));
+  const root = lookBlocks()[0].declared;
   const knob = page.joyParameters;
   check(knob.internalFillColor === root.get("--live"), `fill ${knob.internalFillColor}, --live ${root.get("--live")}`);
   check(knob.internalStrokeColor === root.get("--case"), `rim ${knob.internalStrokeColor}, --case ${root.get("--case")}`);
   check(knob.externalStrokeColor === root.get("--faint"), `ring ${knob.externalStrokeColor}, --faint ${root.get("--faint")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
 
-  // In the look in force where the stick is, which is not always <html>'s.
-  const local = loadPage({ looks: TEST_LOOKS });
-  local.$("stick").parentNode.setAttribute("data-look", "field-light");
-  local.evalIn("driver.restyle()");
-  check(local.joyParameters.internalFillColor === "#0a6f63", `the knob in the look around it: ${local.joyParameters.internalFillColor}`);
-  check(local.errors.length === 0, `errors ${local.errors}`);
+// css/looks.css missing (a partial copy of the panel), or the page's styles
+// turned off: the tokens read as nothing. joy.js's canvas throws on an empty
+// colour, and the panel stopped loading before Stop was wired. The stick
+// takes joy.js's own colours instead, and the rest of the panel loads.
+test("look: with no look to read, the panel still loads, and Stop still stops", () => {
+  const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { --live: ; --case: ; --faint: ; }` }); // exploring
+  check(page.errors.length === 0, `errors ${page.errors}`);
+  const knob = page.joyParameters;
+  check(!("internalFillColor" in knob) && !("internalStrokeColor" in knob) && !("externalStrokeColor" in knob), `joy.js's own colours: ${JSON.stringify(knob)}`);
+  page.fire(page.$("stop"), "click");
+  check(names(ws).join() === "STOP", `Stop sent ${names(ws)}`);
 });
 
 test("look: a change under a held stick lets go of it: one STOP, nothing until a fresh press, and the knob in the new look", () => {
@@ -3473,6 +3467,7 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   let mark = count(ws);
   pickLook(page, "field-light");
   check(names(ws, mark).join() === "STOP" && ws.sentAt.at(-1) === page.clock.now(), `the change sent ${names(ws, mark)}`);
+  check(page.$("stickLabel").textContent === page.evalIn("FamilySelector.PRESS_AGAIN"), `the caption asks for a fresh press: '${page.$("stickLabel").textContent}'`);
   check(page.canvas !== first && first.parentNode === null && stickCanvases(page).length === 1, "one new canvas in place of the old");
   const knob = page.joyParameters;
   check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#f4f6f8" && knob.externalStrokeColor === "#a3adb8",
@@ -3508,7 +3503,7 @@ test("look: a change with nothing held sends nothing, and builds the knob in the
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("look: a change while the Drive tab is hidden builds the stick once it is shown, at its size, in the new look", () => {
+test("look: a change while the Drive tab is hidden builds the stick as it is shown, at its size, in the new look", () => {
   // joy.js cannot draw a stick at no size: a hidden one waits.
   const page = loadPage({ frames: true, looks: TEST_LOOKS });
   const ws = connectOpen(page);
@@ -3518,18 +3513,28 @@ test("look: a change while the Drive tab is hidden builds the stick once it is s
   pickLook(page, "field-light");
   check(page.canvas === first && page.joyParameters.internalFillColor !== "#0a6f63", "nothing built while hidden");
   page.fire(page.$("tabDrive"), "click");
-  resizeStick(page, 230);
-  check(page.canvas !== first && page.canvas.width === 230, `built once shown, at ${page.canvas.width}`);
+  check(page.canvas !== first && page.canvas.width === 230, `built as it is shown, at ${page.canvas.width}`);
   check(page.joyParameters.internalFillColor === "#0a6f63", `in the new look: ${page.joyParameters.internalFillColor}`);
+
+  // Built then, not when the box's size settles: a press that lands as the
+  // tab shows is not let go of a moment later.
+  const thumb = stickTouch(page, 0);
+  thumb.start(); thumb.move(0, -50);
+  resizeStick(page, 230);
+  page.clock.advance(400);
+  check(names(ws).length >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `the press as the tab shows drove on: ${names(ws)}`);
+  thumb.end();
+  check(names(ws).at(-1) === "STOP", `its release stopped: ${names(ws).at(-1)}`);
+  const mark = count(ws);
   // Built in it once: a settle at the same size, later, builds nothing.
   const built = page.canvas;
   resizeStick(page, 230);
   check(page.canvas === built, "the same size and the same look: no rebuild");
-  check(count(ws) === 0, `sent ${names(ws)}`);
+  check(count(ws) === mark, `sent ${names(ws, mark)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("look: a change repaints the block editor, and an editor not yet built is built in the look", () => {
+test("look: a change repaints the block editor, and is harmless before there is one", () => {
   const page = loadPage({ looks: TEST_LOOKS });
   pickLook(page, "field-light");
   check(page.errors.length === 0, `with no editor yet: errors ${page.errors}`);
@@ -3539,12 +3544,52 @@ test("look: a change repaints the block editor, and an editor not yet built is b
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+test("look: each tile's radio stays in the focus order, and its preview shows the focus and the check", () => {
+  const rules = cssRules(panelCss());
+  const radio = rules.filter((rule) => rule.selector.split(",").some((s) => /\.lookTile input$/.test(s.trim())));
+  check(radio.length > 0 && radio.every((rule) => !/\bdisplay:\s*none|\bvisibility:\s*hidden/.test(rule.body)), `hidden from the keyboard: ${radio.map((rule) => rule.body)}`);
+  const shows = (state, property) => rules.some((rule) => rule.selector === `.lookTile input:${state} ~ .lookPreview` && new RegExp(`\\b${property}:[^;]*var\\(--live\\)`).test(rule.body));
+  check(shows("focus-visible", "outline") && shows("checked", "border-color"), "the preview shows the focus and the check");
+});
+
+test("look: the block editor is built in the look in force, and takes a new one", () => {
+  const page = loadPage({ looks: TEST_LOOKS, stored: { "rover.look": "blueprint-dark" } });
+  page.evalIn(`
+    globalThis.__themes = [];
+    // Blockly, as far as BlockEditor reaches it: anything it asks of it works,
+    // and the themes it is given are kept, by their workspace colour.
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    const workspace = new Proxy({}, { get: (_, key) => (key === "setTheme" ? (theme) => __themes.push(theme.componentStyles.workspaceBackgroundColour) : any) });
+    const stub = { inject: (_, { theme }) => (__themes.push(theme && theme.componentStyles.workspaceBackgroundColour), workspace), Theme: { defineTheme: (_, theme) => theme } };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__blockEditor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  check(page.evalIn("__themes.join()") === "#0b1a33", `built in ${page.evalIn("__themes.join()")}`);
+  page.evalIn('document.documentElement.setAttribute("data-look", "field-light"); __blockEditor.restyle();');
+  check(page.evalIn("__themes.join()") === "#0b1a33,#f4f6f8", `restyled in ${page.evalIn("__themes.join()")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: a change leaves a running program driving", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { looks: TEST_LOOKS });
+  page.evalIn("driver.program(MOVE_FORWARD, 60)");
+  const mark = count(ws);
+  pickLook(page, "field-light");
+  page.clock.advance(1000);
+  const after = names(ws, mark);
+  check(after.length >= 4 && after.every((n) => n === "MOVE_FORWARD"), `the program through a change: ${after}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("every part's on...(fn) returns a function that unsubscribes fn", () => {
   const page = loadPage();
   const kinds = page.evalIn(`[
     link.onState(() => {}), link.onTelemetry(() => {}), driver.onManualInput(() => {}), driver.onStandDown(() => {}),
     schemeToggle.onChange(() => {}), familySelector.onChange(() => {}), tabs.onChange(() => {}),
     runner.onState(() => {}), runner.onLog(() => {}), runner.onHighlight(() => {}), targetSwitch.onChange(() => {}),
+    lookPicker.onChange(() => {}),
     targets.rover.onTelemetry(() => {}), targets.rover.onLost(() => {}),
   ].map((unsubscribe) => typeof unsubscribe)`);
   check(kinds.every((kind) => kind === "function"), `returned ${kinds}`);

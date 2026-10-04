@@ -1,7 +1,8 @@
 /* The Program tab: its toolbar, the block editor and the simulator's place
    beside it, the console under them, and the look's dress for Blockly's own
-   parts. joystick.html links this after panel.css, whose tokens it uses;
-   programtab.js and blocks.js set the attributes it keys on.
+   parts. joystick.html links this after looks.css and panel.css, whose
+   tokens it uses; programtab.js and blocks.js set the attributes it keys
+   on.
 
    The tab sits where the Drive tab does (panel.css): above the Stop bar on
    a phone, scrolling with the page; in the left pane on a wide screen,

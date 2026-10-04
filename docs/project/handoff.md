@@ -77,9 +77,10 @@ Finder's (features.md, F5, says what carried over and what did not):
   the remembered look): the gear in the header opens Options, a non-modal
   `Popover` with a tile per look, so Stop stays one press;
 - the stick, Blockly's theme and the browser bar repaint on a change;
-- `test/looks.test.js`: every look has every token, and every pairing of ink
-  and surface the page draws meets its contrast. It found the red echo
-  wedge under 3:1, now drawn whole.
+- `test/looks.test.js`: every look has every token, no other stylesheet
+  writes a colour, and every pairing of ink and surface in its audit (a
+  hand-kept list) meets its contrast. It found the red echo wedge under
+  3:1, now drawn whole.
 
 Panel tests and the protocol check pass. Its container could not build the
 firmware either (same registry block); it changed no firmware.
@@ -87,7 +88,7 @@ firmware either (same registry block); it changed no firmware.
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
-quotes them verbatim and maps each to an item (F1-F4) with today's code, the
+quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
 when it is done. Do them in this order; 1 to 3 are done, so the next thread
 starts at 4:
@@ -101,7 +102,9 @@ starts at 4:
    settings popover), one Rover | Simulator target switch.
 3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
    simulator's 1x / 2x / 4x as a list only in a narrow view.
-4. F3 with F3a to F3e: one layout for both tabs.
+4. F3 with F3a to F3e: one layout for both tabs, with the second
+   message's collapsible panes and landscape-first width (features.md, F3,
+   "Also asked").
 5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
    both tabs, with or without a rover.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
@@ -128,14 +131,14 @@ and the next thread's task names that branch.
 
 ## Open, not started
 
-- F5's checks for the owner, which need a real screen (features.md, F5):
-  the six looks on a laptop and a tablet, the gear and tiles by touch and by
-  keyboard, the browser bar's colour on a phone, and a look picked while
-  holding the stick.
+- F5's checks for the owner, which need a real screen: features.md, F5,
+  lists them.
 - The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. F3's header rework (step 4) should give it the
-  header's right end; nothing depends on where it sits.
-
+  screen is mid-header. A later header change (F1 moves the Rover |
+  Simulator switch into the header) can give it the header's right end.
+  Moving it means updating the panel test that pins it to the masthead's
+  end, and keeping it within `--tap-lg` of the top, which the popover's
+  height cap assumes.
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
   traceback, and no committed stand-in rover.
