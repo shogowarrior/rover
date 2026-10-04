@@ -113,6 +113,10 @@
 
 .sim-speed { flex: none; border-radius: var(--r-sm); }
 
+/* Held at 1x while the Drive tab drives the view (simview.js): the faster
+   speeds plainly out of reach, their title saying why. */
+.sim-speed button:disabled { opacity: 0.4; }
+
 .sim-speed button {
   flex: none;
   min-width: var(--sim-tool);
@@ -457,6 +461,47 @@
 /* On a phone the clock is just above it: the message's own time can go. */
 @container sim (max-width: 350px) {
   .sim-log-at { display: none; }
+}
+
+/* --- a view too short for the room ------------------------------------- */
+
+/* The Drive tab's view on a phone has only the scan's row, under 300 px
+   high on most phones and well under 100 on some (panel.css). There the
+   room would be a strip: the view shows the wheels and the motion
+   instead, larger, with the bar's playback, pause and reset, and drops
+   what only the room needs (the room's name and the settings: the rays,
+   the trail and the key). Shorter still, the wheels and the motion alone
+   (the log's two lines ran over the motion's), then the move alone.
+   The Drive tab's view in a wide rail's scan cell (panel.css, 960 to 1179
+   px wide and under 761 px tall) is sized by its cell too, so these apply
+   there. The Program tab's view is never this short, and a wide view's
+   size elsewhere is its own (inline-size containment), so these never
+   apply to either. */
+@container sim (max-height: 299.98px) {
+  .sim-stage,
+  .sim-room,
+  .sim-settings,
+  .sim-key.inline { display: none; }
+
+  .sim-foot { flex: 1 1 auto; min-height: 0; }
+
+  .sim-inset { width: 40px; height: 48px; }
+}
+
+@container sim (max-height: 119.98px) {
+  .sim-bar,
+  .sim-log { display: none; }
+}
+
+@container sim (max-height: 47.98px) {
+  .sim-inset { width: 26px; height: 32px; }
+}
+
+/* One line: what the rover is doing, and nothing else. */
+@container sim (max-height: 31.98px) {
+  .sim-inset,
+  .sim-twist,
+  .sim-said { display: none; }
 }
 
 /* --- the key, and the folded panel ------------------------------------ */

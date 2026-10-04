@@ -90,6 +90,12 @@
             <div class="segmented" id="schemeChoice"></div>
           </div>
         </div>
+
+        <!-- Rover | Simulator: what the Drive tab's controls drive and what
+             a program runs on, for the whole page. targetswitch.js builds
+             its segments; without the simulator's scripts it offers the
+             rover alone, and hides. -->
+        <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
       </div>
 
       <div class="link">
@@ -150,6 +156,25 @@
       </div>
     </section>
 
+    <!-- The Drive tab's view of the simulator, where its controls drive the
+         simulated rover while the target is Simulator: app.js moves the
+         simulator's one view (simview.js) into #driveSimSlot then, and back
+         to the Program tab's #simSlot otherwise. On a wide screen it keeps
+         its place beside the dock on either target, saying what it is for
+         while the target is the rover, so a switch never moves the stick;
+         on a phone it takes the scan's place, and only on the simulator
+         (panel.css). Beside the dock, never around it: the simulator's
+         boxes are positioned and contained, and no ancestor of the stick may
+         be. -->
+    <section class="driveView" id="driveView" aria-label="Simulator">
+      <p class="driveViewOff">
+        <strong>Simulator</strong>
+        <span>Choose Simulator at the top to try these controls on a simulated rover. They drive only it then, and
+          Stop stops the rover too.</span>
+      </p>
+      <div id="driveSimSlot"></div>
+    </section>
+
     <!-- Block programs: built here, previewed on the simulator if the
          operator likes, run on the rover. programtab.js runs the tab. The
          block editor needs Blockly, which loads from cdn.jsdelivr.net; when
@@ -157,7 +182,6 @@
          works on. -->
     <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" hidden>
       <div class="programBar" role="toolbar" aria-label="Program">
-        <div class="segmented" id="programTarget" role="group" aria-label="Run the program on"></div>
         <button type="button" class="run" id="programRun" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.1v9.8L12.8 8z"/></svg>
           <span id="programRunLabel">Run on rover</span>
@@ -172,8 +196,9 @@
         </button>
         <!-- The File menu, at the end of its row: what is used now and then
              and moves nothing. popover.js opens and closes it, programtab.js
-             adds the examples and keeps each item's disabled and title. Run,
-             Stop program and the switch stay out of it, one press each. -->
+             adds the examples and keeps each item's disabled and title. Run
+             and Stop program stay out of it, one press each, as does the
+             target switch, in the header. -->
         <div class="menuHolder">
           <button type="button" class="menuButton" id="programMenu" disabled>
             <span>File</span>
@@ -337,7 +362,8 @@
   <script src="js/targetswitch.js"></script>
   <script src="js/programtab.js"></script>
 
-  <!-- The simulator: a program's preview, drawn on the Program tab and sent
+  <!-- The simulator: a program's preview, and what the Drive tab's controls
+       drive on the Simulator target, drawn on whichever tab shows and sent
        nowhere. Without these two, the target switch offers only the rover,
        and hides. -->
   <script src="js/sim.js"></script>

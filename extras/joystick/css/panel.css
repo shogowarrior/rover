@@ -659,6 +659,11 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-2);
 }
 
+/* Rover | Simulator: on a phone, a row of its own under the tabs and the
+   scheme, which leave no room for a third switch. A wide screen's row is a
+   flex row (below), with room for all three. */
+.switches > .target { grid-column: 1 / -1; }
+
 /* Segmented controls: the tabs, the scheme, the stick family. One track;
    the chosen segment raised inside it. Each segment is a full 44 px
    target; the chosen one's inset frame only draws it smaller. */
@@ -1360,6 +1365,70 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   stroke: none;
 }
 
+/* --- the Drive tab's view of the simulator ---------------------------------- */
+
+/* Beside the dock, never around it (joystick.html says why). On a phone it
+   shows only on the simulator, in the scan's place (below); on a wide
+   screen beside the dock, on either target. #driveSimSlot is the
+   simulator's view's while the Drive tab drives it (app.js), and
+   .driveViewOff says what the place is for while the target is the rover. */
+.driveView {
+  grid-area: scan;
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.driveViewOff {
+  display: grid;
+  place-content: center;
+  gap: var(--s-1);
+  flex: 1 1 auto;
+  margin: 0;
+  padding: var(--s-5);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-xl);
+}
+
+.driveViewOff strong {
+  font-size: var(--t-md);
+  color: var(--readout);
+}
+
+.driveViewOff span { max-width: 36ch; }
+
+/* clip, as #simSlot's (program.css): the settings' scroll margin. */
+#driveSimSlot {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+
+/* The slot sets the height here, whatever the view's floor elsewhere. */
+#driveSimSlot .sim { min-height: 0; }
+
+/* A row shorter than the view's bar (a short phone): half the padding, so
+   the motion keeps a line (sim.css drops the rest). */
+@container driveview (max-height: 63.98px) {
+  #driveSimSlot .sim { padding-block: var(--s-1); }
+}
+
+body[data-target="simulator"] .driveViewOff,
+body:not([data-target="simulator"]) #driveSimSlot { display: none; }
+
 /* --- the other layouts ------------------------------------------------------- */
 
 /* Every layout but the side-by-side one (the media query below, negated). */
@@ -1402,6 +1471,18 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
      explains. */
   .shell:has(#motorsFault:not([hidden])) .scan { display: none; }
 
+  /* On the simulator the Drive tab's view takes the scan's place, and the
+     readouts stay, the rover's as ever. Its size is the row's, never its
+     content's (a size container), so as the scan does it gives way rather
+     than move the dock. A motor fault still wins the place: it is about
+     the rover, which Stop still reaches. */
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) .scan { display: none; }
+
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) > .driveView:not([hidden]) {
+    display: flex;
+    container: driveview / size;
+  }
+
   .shell:has(#motorsFault:not([hidden])) .fault {
     grid-area: scan;
     display: grid;
@@ -1409,6 +1490,22 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     padding: var(--s-4);
     font-size: var(--t-sm);
     border-radius: var(--r-xl) var(--r-xl) 0 0;
+  }
+
+  /* On the Drive tab the card asks for no height of its own (size
+     containment): it fills the row the dock leaves, as the scan does, and
+     scrolls the rest. At its own height its text ran the page past a short
+     phone (79 px of row at 375 x 667) and the stick under the Stop bar, and
+     beside a landscape stick (see its block) slid the stick half off the
+     screen. The Program tab has no stick and scrolls as a page, so there
+     the card keeps its own height. The status's motors pill says it too.
+     Centred when it fits, from the top when it scrolls, where centring
+     would put its first lines out of reach; start where safe is unknown. */
+  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
+    contain: size;
+    overflow-y: auto;
+    align-content: start;
+    align-content: safe center;
   }
 }
 
@@ -1454,6 +1551,26 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .shell { padding-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
 
   .shell > [role="tabpanel"] { margin-top: var(--s-2); }
+
+  /* The target's own row left the scan 11 px at 375 x 548, and choosing
+     Pivot moved the stick; on its side under 780 px wide the row ran the
+     head past the screen, and the stick moved as a link came or went. On
+     the Drive tab the target is chosen from the Program tab here, and the
+     view in the scan's place says which it is. */
+  .shell:has(> #driveTab:not([hidden])) .switches > .target { display: none; }
+
+  /* The scan gives way to the dock down to nothing: with its padding it
+     could not, and the family's slot opening moved the stick (360 x 560). */
+  .scan { padding-block: var(--s-1) 0; }
+
+  /* So does the motor fault in its place on the Drive tab, its text centred
+     while the row has room: with its padding and margin it held 31 px more
+     than the scan, and under ADVANCED a fault ran the page past the screen
+     and the stick under the Stop bar (360 x 560). */
+  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
+    margin-bottom: 0;
+    padding-block: 0;
+  }
 
   .dock { padding-bottom: var(--s-3); }
 
@@ -1507,6 +1624,13 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
       "act  act";
     column-gap: var(--s-5);
     padding-top: var(--s-5);
+  }
+
+  /* As tall as its room needs at its width (sim.css), up to its place's
+     height, as on the Program tab. */
+  #driveSimSlot {
+    flex: 0 1 auto;
+    border-radius: var(--r-xl);
   }
 
   /* Two rows on the shell's two columns: the mark and the status, then the
@@ -1670,6 +1794,65 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   }
 }
 
+/* The Drive tab's view of the simulator (F1) sits beside the dock wherever
+   the left pane has room for both: from 1180 px wide, or 761 px tall, where
+   the dock's controls go into one column (below). There the pane is split,
+   the dock as wide as its controls and the view the rest, at its room's
+   shape. The place is kept on the rover target too, with a card saying
+   what it is for, so a switch of target never moves the stick, and the
+   rail's column is the same as beside the Program tab. */
+@media (min-width: 1180px) and (min-height: 521px), (min-width: 960px) and (min-height: 761px) {
+  .shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden])) {
+    grid-template-columns: auto minmax(0, 1fr) var(--rail);
+    grid-template-areas:
+      "head head head"
+      "main view fault"
+      "main view scan"
+      "main view read"
+      "act  act  act";
+  }
+
+  /* The settings hang from the view's bar over whatever is under the room
+     (sim.css), as on the Program tab: this is their containing block. */
+  .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
+    grid-area: view;
+    display: flex;
+    position: relative;
+  }
+}
+
+/* Narrower and under 761 px tall the pane has no room for it beside the
+   dock's two columns (it was a strip, 112 px wide at 960 x 540): on the
+   simulator the view takes the fan's place in the rail instead, as on a
+   phone, and the readouts stay. The dock is the same on both targets, so a
+   switch never moves the stick. */
+@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) and (max-height: 760.98px) {
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
+
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
+    grid-area: scan;
+    display: flex;
+    position: relative;
+  }
+
+  /* The row's height, as on a phone, so that sim.css's steps for a view
+     too short for its room apply: at 960 x 540 the room was 20 px wide. */
+  #driveSimSlot { flex: 1 1 0; }
+
+  #driveSimSlot .sim {
+    container-type: size;
+    height: 100%;
+  }
+}
+
+/* The three switches on one row from 960 px wide, where Advanced ran under
+   Rover and a press on Rover's edge set the scheme: the tabs and the scheme
+   a little narrower. */
+@media (min-width: 960px) and (max-width: 999.98px) and (min-height: 521px) {
+  .tabs [role="tab"],
+  .scheme .segmented button { padding-inline: var(--s-3); }
+}
+
 /* Side by side on a short screen, 640 px or less (a laptop's browser):
    the dock's right column -- the rotate buttons, the speed, the stick
    family's held-open slot -- was taller than the dock and spilled over the
@@ -1699,6 +1882,59 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .actions {
     margin-top: var(--s-3);
     padding-block: var(--s-2) var(--s-3);
+  }
+}
+
+/* Beside the view under 761 px tall, the dock keeps two columns, its right
+   one 220 px, and the stick takes at most two fifths of the pane's width.
+   388 px and 364 px are the side-by-side layout's 368 px and 344 px, and
+   the view's gap. */
+@media (min-width: 1180px) and (min-height: 521px) and (max-height: 760.98px) {
+  :root {
+    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 324px, (100vw - var(--rail) - 388px) * 0.4), 400px);
+  }
+
+  .controls { grid-template-columns: var(--stick) 220px; }
+}
+
+/* There the caveat takes two lines in the short layout's smaller type, so
+   the family's held-open slot holds two: with one, choosing Pivot moved the
+   stick 8 px. */
+@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {
+  :root {
+    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 264px, (100vw - var(--rail) - 364px) * 0.4), 400px);
+  }
+
+  #familySlot { min-height: calc(var(--tap) + 3 * var(--s-2) + 2px + 2 * var(--lh-body) * var(--t-xs)); }
+}
+
+/* Side by side on a screen 761 px tall or more, as most laptops and an iPad
+   on its side are: the dock's controls in one column, the stick at its
+   head, so the simulator's view beside the dock takes most of the left
+   pane. With two columns the view had a strip (about 260 px at 1280 x 800,
+   160 at 1024 x 768). The rotate buttons put their word beside their icon,
+   and the family's held-open slot comes last, so the scheme changing moves
+   nothing. 573 px of height is the header, the bar, the dock's padding and
+   the stick's caption, and the rotate buttons, the speed and the family's
+   slot under the stick; 420 px of width leaves the view 300 px at least. */
+@media (min-width: 960px) and (min-height: 761px) {
+  :root {
+    --stick: clamp(160px, min(100 * var(--svh) - 573px, 100vw - var(--rail) - 420px), 360px);
+  }
+
+  .dock { padding: var(--s-4); }
+
+  .controls {
+    grid-template-columns: max(var(--stick), 248px);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: "stick" "spin" "speed" "family";
+    gap: var(--s-3);
+  }
+
+  .spin button {
+    flex-direction: row;
+    gap: var(--s-2);
+    min-height: var(--tap-lg);
   }
 }
 
@@ -1786,26 +2022,18 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
      above), and beside the stick that place is only what the head and the
      readouts leave: 88 px at 568 x 320. At the card's own height the page
      grew by 120 px, and the stick, centred in the dock that spans every
-     row, slid half below the screen. So on the Drive tab the card asks for
-     no height of its own (size containment): it fills what the dock leaves
-     and scrolls the rest, and keeps at least its headline's line and one
-     more, with its padding and borders on top (content-box). All of it
-     shows at 667 x 375 and up, and while the dock leaves that much the
-     stick does not move. A two-line clamp, before, cut the text
-     mid-sentence wherever the row held more, with the lines after its
-     ellipsis still showing. The Program tab has no stick and scrolls as a
-     page, so there the card keeps its own height. A halt reason wrapping in
-     the readouts as well still moves the stick (up to 19 px at 568 x 320),
-     and the Driver lets go of a stick held through that (js/drive.js). */
+     row, slid half below the screen. So on the Drive tab the card fills
+     what the dock leaves and scrolls the rest (above), and here keeps at
+     least its headline's line and one more, with its padding and borders
+     on top (content-box). All of it shows at 667 x 375 and up, and while
+     the dock leaves that much the stick does not move. A two-line clamp,
+     before, cut the text mid-sentence wherever the row held more, with the
+     lines after its ellipsis still showing. A halt reason wrapping in the
+     readouts as well still moves the stick (up to 19 px at 568 x 320), and
+     the Driver lets go of a stick held through that (js/drive.js). */
   .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
-    contain: size;
     box-sizing: content-box;
     min-height: calc(var(--t-sm) * var(--lh-tight) + var(--s-0) + var(--lh-body) * 1em);
-    overflow-y: auto;
-    /* Centred when it fits, from the top when it scrolls, where centring
-       would put its first lines out of reach; start where safe is unknown. */
-    align-content: start;
-    align-content: safe center;
     padding: var(--s-2) var(--s-3);
   }
 

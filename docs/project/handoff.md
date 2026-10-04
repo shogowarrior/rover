@@ -43,8 +43,8 @@ The first thread on the owner's requests (branch
   `window.confirm()` is left;
 - `Popover` (`js/popover.js`): the Program tab's File menu and the
   simulator's settings share it;
-- `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, still
-  on the Program toolbar until F1 moves it;
+- `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, on
+  the Program toolbar until F1 moved it to the header;
 - F2: the examples, Import, Export and Clear in the File menu, and a
   playback list in place of the 1x / 2x / 4x buttons in a narrow simulator
   bar, which also keeps every room's name in full.
@@ -124,13 +124,43 @@ Finder's (features.md, F5, says what carried over and what did not):
 Panel tests 232/232 and the protocol check pass. Its container could not
 build the firmware either (same registry block); it changed no firmware.
 
+The first thread then did F1, the first half of step 5, in a PR of its own
+(features.md has the measurements):
+
+- one Rover | Simulator switch in the header for the whole page: on the
+  simulator the Drive tab's Driver sends to `SimTarget.command()` in the
+  Link's place, so no move reaches the rover and only Stop stops it too,
+  and Autonomous takes only the simulated rover's mode; the scheme toggle
+  is still the rover's until F3g;
+- a switch lets go of everything on the target left behind (a running
+  program, held controls, one STOP if driving), a lost or stale link lets
+  go of nothing driving the simulator but a held stick (the rover's scheme
+  goes with the link), and a drive press ends a preview;
+- one view of the simulator, moved beside the Drive tab's controls while
+  they drive it and held at 1x there; from 1180 px wide or 761 px tall its
+  place beside the dock is kept on the rover target too, with the dock's
+  controls in one column on a screen 761 px tall or more;
+- narrower and shorter, and on a phone, the view takes the scan's place on
+  the simulator, showing the wheels and the motion where it is too short
+  for the room.
+
+Its review round (logic, then layout) fixed: Stop reaching the rover only
+after the simulator, a paused view left frozen on the Drive tab, a held
+rotate button carrying on off the tab, the view a strip at 960 x 540, the
+switches overlapping at 960 px, a pivot or a motor fault moving the stick
+on short screens, and the head running past a phone on its side. The
+switch's own row costs an upright phone over 600 px tall 54 px of scan on
+either target; F1 in features.md says what winning it back would take. On
+a phone 600 px tall or less the Drive tab leaves the switch to the Program
+tab. Panel tests 245/245 and the protocol check pass.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 4 are done, so the next thread
-starts at 5:
+when it is done. Do them in this order; 1 to 4 are done, and F1 of 5, so the
+next thread starts at F3g:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -142,8 +172,8 @@ starts at 5:
 3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
    simulator's 1x / 2x / 4x as a list only in a narrow view.
 4. **Done.** F3 with F3a to F3e: one layout for both tabs.
-5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
-   both tabs, with or without a rover.
+5. **F1 done.** F1: a simulator for the Drive tab; then F3g: Normal |
+   Advanced usable on both tabs, with or without a rover.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
    disabled.
 7. F4: other buttons (PS3 Cross as STOP, keyboard keys).

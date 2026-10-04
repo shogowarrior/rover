@@ -58,10 +58,12 @@ default install path, `~/.platformio/penv/bin/pio`.
    from disk (the rover cannot serve it), enter the rover's address and press
    Connect. The header's Normal | Advanced toggle is the rover's control
    scheme (below). The Drive tab has the joystick; the Program tab has block
-   programs and the simulator. The gear picks the page's look. The Program
-   tab loads its block editor from cdn.jsdelivr.net, so it needs the internet
-   the first time (the browser may keep a copy); driving never does. Or, from
-   a terminal:
+   programs. The header's Rover | Simulator switch puts both tabs on a
+   simulated rover instead, to try the controls or preview a program with no
+   rover connected: then they drive only the simulated rover, and Stop stops
+   both. The gear picks the page's look. The Program tab loads its block
+   editor from cdn.jsdelivr.net, so it needs the internet the first time (the
+   browser may keep a copy); driving never does. Or, from a terminal:
    ```
    pip install websockets
    python3 client/drive.py                   # or --host rover.local
@@ -85,6 +87,7 @@ stops within half a second.
 | Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
 | Control scheme | Normal \| Advanced, in the header | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
 | Programs | The Program tab | -- | -- |
+| Simulator | Rover \| Simulator, in the header: the Drive tab and programs drive a simulated rover | -- | -- |
 | Stop | Stop | space | Let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
 

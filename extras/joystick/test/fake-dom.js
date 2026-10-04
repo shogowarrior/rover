@@ -91,7 +91,8 @@ class Node_ {
   getAttribute(n) { return n in this.attributes ? this.attributes[n] : null; }
   hasAttribute(n) { return n in this.attributes; }
   removeAttribute(n) { delete this.attributes[n]; }
-  appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  // A node already in the page moves, as in a browser: it leaves its old parent.
+  appendChild(c) { if (c.parentNode) c.remove(); c.parentNode = this; this.children.push(c); return c; }
   remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter((c) => c !== this); this.parentNode = null; } }
   // A listener for the capture phase (a third argument of true, or
   // {capture: true}) runs on the way down to the target, before any on the
@@ -344,7 +345,9 @@ function makeWebSocketClass(clock, sockets) {
 // throttled display: a pane out of view, where timers still run on time.
 // looks: CSS in css/looks.css's shape, read after it, for a test that needs
 // looks of its own: colours it can tell apart whatever the file holds.
-function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16, looks = "" } = {}) {
+// leaveOut: scripts the page lists but does not get, as a file that failed
+// to load.
+function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16, looks = "", leaveOut = [] } = {}) {
   const clock = makeClock();
   const sockets = [];
 
@@ -407,7 +410,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
       get() { const e = new Error("The operation is insecure."); e.name = "SecurityError"; throw e; } });`, ctx);
   }
 
-  const loaded = scripts.filter((src) => !isRemote(src));
+  const loaded = scripts.filter((src) => !isRemote(src) && !leaveOut.includes(src));
   let headThemeColor = null;
   for (const src of loaded) {
     vm.runInContext(fs.readFileSync(path.join(PANEL_ROOT, src), "utf8"), ctx, { filename: src });

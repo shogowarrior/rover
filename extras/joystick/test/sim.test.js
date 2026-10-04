@@ -96,6 +96,18 @@ test("speed is clamped to tuning::MOTOR_SPEED_LIMIT, as Rover::drive() clamps it
   }
 });
 
+test("a command lasts at most tuning::COMMAND_DURATION_MAX_MS, the firmware's deadman", async () => {
+  const cap = src("Tuning.h").match(/constexpr\s+int\s+COMMAND_DURATION_MAX_MS\s*=\s*(\d+)\s*;/);
+  assert.ok(cap, "Tuning.h names the cap");
+  assert.equal(SimTarget.COMMAND_DURATION_MAX_MS, Number(cap[1]));
+  const target = new SimTarget({ bearings: BEARINGS, room: "living" });
+  target.command(protocol.ROTATE_CLOCKWISE, 100, 60000);
+  await run(target, SimTarget.COMMAND_DURATION_MAX_MS - 50);
+  assert.equal(target.state.moving, true, "still turning just inside the cap");
+  await run(target, 100);
+  assert.equal(target.state.moving, false, "stopped at the cap, not after the minute it asked for");
+});
+
 /* --- kinematics ----------------------------------------------------------- */
 
 test("forward drives along the rover's +x, with no turn", () => {
@@ -691,6 +703,55 @@ test("release() stops only what the program drives; stop() always stops", async 
   assert.throws(() => target.hold(protocol.MOVE_FORWARD, NaN), RangeError);
 });
 
+test("command() takes a command as Rover::command() does", async () => {
+  const target = new SimTarget({ bearings: BEARINGS, room: "living" });
+  let woke = 0;
+  target.onWake(() => woke++);
+  target.command(protocol.MOVE_FORWARD, 128, protocol.MOVE_DURATION_MS);
+  assert.equal(target.state.move, protocol.MOVE_FORWARD);
+  assert.ok(target.state.moving && woke > 0, "it moves, and wakes the view to draw it");
+  assert.equal(target.state.held, null, "the Driver re-sends it: nothing is held here");
+  await run(target, protocol.MOVE_DURATION_MS + 50);
+  assert.equal(target.state.moving, false, "un-renewed, it runs out as the rover's would");
+  // STOP, a code that is not a motion, a speed of 0 and a duration of 0
+  // each release the wheels.
+  for (const [move, speed, ms] of [[protocol.STOP, 128, 400], [42, 128, 400], [-1, 128, 400], [protocol.MOVE_LEFT, 0, 400], [protocol.MOVE_LEFT, 128, 0]]) {
+    target.command(protocol.MOVE_RIGHT, 128, 400);
+    target.command(move, speed, ms);
+    assert.equal(target.state.moving, false, `${move} at ${speed} for ${ms} ms releases`);
+  }
+  // The speed is clamped as the firmware clamps it.
+  target.command(protocol.MOVE_FORWARD, 9999, 400);
+  assert.equal(target.state.speed, Math.min(protocol.MOTOR_SPEED_LIMIT, protocol.SPEED_MAX));
+  // RESUME_AUTONOMOUS hands the rover to its exploring, which says it is
+  // not simulated; any other command, STOP included, takes it back.
+  const said = [];
+  target.onLog((entry) => said.push(entry.text));
+  target.command(protocol.RESUME_AUTONOMOUS, 0, 400);
+  assert.equal(target.state.mode, "AUTONOMOUS");
+  assert.equal(target.state.moving, false, "a change of mode releases the wheels");
+  assert.deepEqual(said, ["exploring is not simulated: the real rover would start exploring here"]);
+  target.command(protocol.STOP, 0, 400);
+  assert.equal(target.state.mode, "MANUAL", "STOP takes it out of exploring, as on the rover");
+  target.command(protocol.RESUME_AUTONOMOUS, 0, 400);
+  target.command(42, 128, 400);
+  assert.equal(target.state.mode, "MANUAL", "so does a code it cannot read");
+});
+
+test("command() takes over from a program's held motion: its release stops nothing", async () => {
+  const target = new SimTarget({ bearings: BEARINGS, room: "living" });
+  target.hold(protocol.MOVE_BACKWARD, 100);
+  target.command(protocol.ROTATE_COUNTERCLOCKWISE, 100, protocol.MOVE_DURATION_MS);
+  assert.equal(target.state.held, null, "the program's hold is let go");
+  target.release();
+  assert.equal(target.state.move, protocol.ROTATE_COUNTERCLOCKWISE, "a release after it leaves the command running");
+  assert.ok(target.state.moving);
+  // The program's motion is no longer re-commanded under it.
+  await run(target, protocol.REPEAT_MS * 3);
+  assert.equal(target.state.moving, false, "un-renewed, the command ran out; the program's backward never came back");
+  assert.equal(target.state.move, protocol.STOP);
+});
+
 test("explore() says it is not simulated, reports AUTONOMOUS and stands still", async () => {
   const target = new SimTarget({ bearings: BEARINGS, room: "living" });
   const said = [];
@@ -934,6 +995,11 @@ test("a preview never sends: a spy link, socket and driver see nothing", async (
     await slept;
     target.stop();
     target.explore();
+    // Driven from the Drive tab, as the Driver drives it.
+    for (const move of [protocol.STOP, ...MOTIONS.map((m) => m.move), protocol.RESUME_AUTONOMOUS, 42]) {
+      target.command(move, 200, protocol.MOVE_DURATION_MS);
+      await run(target, 50);
+    }
     target.reset();
     target.setRoom("corridor");
     await run(target, 2000);
@@ -959,6 +1025,10 @@ test("in the page, a preview sends nothing over the real, open Link", async () =
     __simulator.release();
     __simulator.stop();
     __simulator.explore();
+    __simulator.command(MOVE_FORWARD, 200, MOVE_DURATION_MS);
+    __simulator.pump(100);
+    __simulator.command(STOP, 0, MOVE_DURATION_MS);
+    __simulator.command(RESUME_AUTONOMOUS, 0, MOVE_DURATION_MS);
     __simulator.reset();
   `);
   let frames = 0;
@@ -1365,6 +1435,23 @@ test("the view's frames: none while hidden or idle out of sight, and no jump aft
   });
   await pageFrames(page, 600);
   assert.equal(slept, true, "a sleep wakes it");
+  assert.deepEqual(page.errors, []);
+});
+
+// A view too short for the room (the Drive tab's on a phone) hides the
+// stage and shows the wheels and the motion: shown is the view's, not the
+// stage's, or a drive there drew nothing.
+test("the view's frames: with the room hidden, the view still draws the motion", async () => {
+  const { page, sim, byClass } = pageWithView({ frames: true });
+  assert.ok(byClass("sim")[0].resizeObserved, "the view's own box is watched, as well as the room's");
+  page.fire(page.$("tabProgram"), "click");
+  byClass("sim-stage")[0].hidden = true;
+  page.resized();
+  await pageFrames(page, 100);
+  assert.equal(byClass("sim-move")[0].textContent, "STOP");
+  sim.command(protocol.ROTATE_CLOCKWISE, 128, 400);
+  await pageFrames(page, 160);
+  assert.equal(byClass("sim-move")[0].textContent, "ROTATE_CLOCKWISE", "drawn");
   assert.deepEqual(page.errors, []);
 });
 

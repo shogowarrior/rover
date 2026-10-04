@@ -10,8 +10,9 @@
  * exploring on its own.
  *
  *   new Driver({ link, stick, cw, ccw, speed, speedOut })
- *     link      anything with send(obj) returning false when nothing went
- *               out: a Link;
+ *     link      anything with send(obj): a Link, or app.js's way to the
+ *               target the page's switch picks, which on the simulator
+ *               sends it there in the Link's place;
  *     stick     the joystick's container. joy.js sizes its canvas from it
  *               as it is built, so it must be laid out (not in a hidden
  *               tab) when the Driver is built. Any move of it on the screen
@@ -125,9 +126,9 @@
  *
  *   onStandDown(fn)
  *       fn(reason) after the driver stands down or halts, whether or not
- *       anything was held: "blur", "hidden" and "pagehide" (from app.js),
- *       "disconnect" and "linkLost" (the link went down), "stale"
- *       (linkStale), "stop" (stopRover) and "autonomous"
+ *       anything was held: "blur", "hidden", "pagehide", "target" and
+ *       "tab" (from app.js), "disconnect" and "linkLost" (the link went down),
+ *       "stale" (linkStale), "stop" (stopRover) and "autonomous"
  *       (resumeAutonomous). Not on an ordinary release of a control, nor on
  *       a program's own stop or start exploring.
  *

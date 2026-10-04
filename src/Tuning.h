@@ -26,7 +26,9 @@ constexpr int MOTOR_SPEED_LIMIT = 255;
 // Longest one external command may drive before the motors are released.
 // Clients re-send well inside this (the panel every 200 ms), so this is the
 // deadman: a client that crashes or loses its link stops the rover within
-// this window, whatever duration it asked for.
+// this window, whatever duration it asked for. SimTarget.COMMAND_DURATION_MAX_MS
+// in extras/joystick/js/sim.js is the panel's simulator's copy, which
+// extras/joystick/test/sim.test.js checks.
 constexpr int COMMAND_DURATION_MAX_MS = 1500;
 
 // A held move is rewritten to the motors at least this often, even though the

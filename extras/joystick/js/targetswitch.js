@@ -1,14 +1,18 @@
 /**
- * The Rover | Simulator switch: what a program runs on. A segmented control
- * with one segment per target the registry holds; with only the rover there
- * is nothing to switch, and it is hidden. The choice is remembered.
+ * The Rover | Simulator switch: what the page drives, the Drive tab's
+ * controls and a program alike. A segmented control with one segment per
+ * target the registry holds; with only the rover there is nothing to
+ * switch, and it is hidden. The choice is remembered.
  *
- *   new TargetSwitch({ group, targets, storageKey })
+ *   new TargetSwitch({ group, targets, storageKey, formerKey })
  *     group       the empty .segmented element it fills.
  *     targets     the registry, {kind: Target} (program.js): "rover" always,
  *                 "simulator" when the simulator's scripts loaded. Read once:
  *                 app.js fills it before building the switch.
  *     storageKey  where the choice is remembered.
+ *     formerKey   where it was remembered before, read only while
+ *                 storageKey holds nothing: the switch was the Program
+ *                 tab's once, under a key of its own.
  *
  *   kind          the chosen kind.
  *   target        the chosen Target.
@@ -16,7 +20,7 @@
  *   onChange(fn)  fn(kind, previous) once the operator has switched.
  *
  * Choosing is all it does. What a switch must stop (a program running on the
- * target left behind) is app.js's to wire.
+ * target left behind, and every held control) is app.js's to wire.
  */
 class TargetSwitch {
   static LABELS = Object.freeze({ rover: "Rover", simulator: "Simulator" });
@@ -27,11 +31,12 @@ class TargetSwitch {
   #segments = new Map(); // kind -> its button
   #listeners = new Listeners();
 
-  constructor({ group, targets, storageKey }) {
+  constructor({ group, targets, storageKey, formerKey = null }) {
     this.#targets = targets;
     this.#storageKey = storageKey;
     const kinds = Object.keys(targets);
-    const remembered = memory.recall(storageKey);
+    let remembered = memory.recall(storageKey);
+    if (remembered === null && formerKey !== null) remembered = memory.recall(formerKey);
     this.#kind = kinds.includes(remembered) ? remembered : kinds[0];
     for (const kind of kinds) {
       const button = segment(group, () => this.#choose(kind));
