@@ -161,9 +161,11 @@ It then did F3g, the second half of step 5, in a PR of its own:
   nothing sent over the Link, so Normal | Advanced and the Drive tab's
   pivots work with no rover; while the rover is the target the simulator
   takes the rover's scheme, so a switch starts from it;
-- under NORMAL, the target's, each enabled pivot drive block carries
-  Blockly's warning before Run is pressed; the motion menu keeps all 18,
-  and Run on the rover still asks.
+- under NORMAL, the target's, each pivot drive block that would run
+  carries Blockly's warning before Run is pressed; the motion menu keeps
+  all 18, and Run on the rover still asks.
+
+Panel tests 251/251 and the protocol check pass.
 
 ## Current work
 
@@ -213,7 +215,7 @@ and the next thread's task names that branch.
   lists them, and what it left as it was (Blockly's focus colours, its
   faint zoom and trash icons).
 - The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. A later header change (F1 moves the Rover |
+  screen is mid-header. A later header change (F1 moved the Rover |
   Simulator switch into the header) can give it the header's right end.
   Moving it means updating the panel test that pins it to the masthead's
   end, and keeping it within `--tap-lg` of the top, which the popover's

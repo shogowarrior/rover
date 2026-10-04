@@ -1779,7 +1779,7 @@ const SCHEMES = ["NORMAL", "ADVANCED"];
 const schemeButton = (page, scheme) => all(page.$("schemeChoice")).find((n) => n.dataset.scheme === scheme);
 const familyButton = (page, family) => all(page.$("familyChoice")).find((n) => n.dataset.family === family);
 const isPressed = (button) => button.getAttribute("aria-pressed") === "true";
-// The scheme the toggle shows as the rover's, or "unknown".
+// The scheme the toggle shows (the target's), or "unknown".
 const shownScheme = (page) => SCHEMES.filter((s) => isPressed(schemeButton(page, s))).join() || "unknown";
 const pendingScheme = (page) => SCHEMES.filter((s) => schemeButton(page, s).dataset.pending === "yes").join() || null;
 const hintMoves = (page) => all(page.$("stickHints")).filter((n) => n.dataset.corner).map((n) => `${n.dataset.corner}:${n.dataset.move}`).join();
@@ -3727,6 +3727,8 @@ test("target: a lost or stale link lets go of nothing driving the simulator", ()
 // it reaches the Link.
 test("target: on the simulator the scheme toggle sets the simulator's scheme, with no rover, and sends nothing", () => {
   const page = loadPage();
+  // With no socket a send goes nowhere, so the Link is watched instead.
+  page.evalIn("globalThis.__linkSent = []; const send = link.send.bind(link); link.send = (frame) => (__linkSent.push(frame), send(frame));");
   const scheme = () => page.evalIn("targets.simulator.scheme");
   check(shownScheme(page) === "unknown" && SCHEMES.every((x) => schemeButton(page, x).disabled), "the rover's, unknown, at first");
   toSimulator(page);
@@ -3747,6 +3749,7 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(scheme() === "NORMAL" && page.$("family").hidden === true && page.evalIn("driver.family") === "TRANSLATE", "NORMAL: translating");
   check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
+  check(page.evalIn("__linkSent.length") === 0, `the Link was handed ${page.evalIn("JSON.stringify(__linkSent)")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3816,6 +3819,79 @@ test("program: the editor is told the scheme the toggle shows, the target's, so 
   standInEditor(onSim);
   check(onSim.evalIn("__editor.schemes.join()") === "NORMAL", `opened on the simulator: ${onSim.evalIn("__editor.schemes.join()")}`);
   check(onSim.errors.length === 0, `errors ${onSim.errors}`);
+});
+
+// Blockly never loads here, so the editor gets a stand-in workspace of a few
+// blocks, as far as BlockEditor reaches them, and the warnings they carry.
+test("program: the editor warns each pivot that runs, under NORMAL only, and clears what Blockly echoes on a folded block", () => {
+  const page = loadPage();
+  page.evalIn(`
+    // A block as Blockly gives it: its warnings by id, and what it holds.
+    const block = (type, move, { enabled = true, inherited = false, collapsed = false, holds = [] } = {}) => ({
+      type, move, enabled, inherited, collapsed, holds, next: null, warnings: new Map(),
+      getFieldValue() { return this.move; },
+      isEnabled() { return this.enabled; },
+      getInheritedDisabled() { return this.inherited; },
+      isCollapsed() { return this.collapsed; },
+      getNextBlock() { return this.next; },
+      // Blockly's own counts the blocks after it too.
+      getDescendants() { return [this, ...[...this.holds, this.next].filter(Boolean).flatMap((b) => b.getDescendants())]; },
+      getIcon(type) { return type === "warning" && this.warnings.size > 0 ? {} : null; },
+      setWarningText(text, id) { if (text) this.warnings.set(id, text); else this.warnings.delete(id); },
+    });
+    const pivot = block("rover_drive_for", "PIVOT_RIGHT_FORWARD");
+    const forward = block("rover_drive_until", "MOVE_FORWARD");
+    const off = block("rover_drive_for", "PIVOT_LEFT_FORWARD", { enabled: false });
+    const inside = block("rover_drive_for", "PIVOT_LEFT_BACKWARD", { inherited: true });
+    const folded = block("rover_drive_for", "PIVOT_SIDEWAYS_FORWARD_RIGHT");
+    const fold = block("controls_repeat_ext", null, { collapsed: true, holds: [folded] });
+    // A warned pivot after the folded block is not in it.
+    fold.next = block("rover_drive_for", "PIVOT_RIGHT_BACKWARD");
+    // Blockly's echo, as it puts it on a folded block holding a warning.
+    fold.warnings.set("TEMP_COLLAPSED_WARNING_", "Collapsed blocks contain warnings.");
+    globalThis.__blocks = { pivot, forward, off, inside, folded, fold, after: fold.next };
+    const all = Object.values(__blocks);
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    const workspace = new Proxy({
+      getAllBlocks: () => all,
+      getTopBlocks: () => [pivot, forward, off, fold],
+      addChangeListener: (fn) => { globalThis.__changed = fn; },
+    }, { get: (t, key) => t[key] || any });
+    const stub = {
+      inject: () => workspace,
+      Theme: { defineTheme: (_, theme) => theme },
+      icons: { IconType: { WARNING: "warning" } },
+      BlockSvg: { COLLAPSED_WARNING_ID: "TEMP_COLLAPSED_WARNING_" },
+    };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const warned = () => JSON.parse(page.evalIn(`JSON.stringify(Object.fromEntries(Object.entries(__blocks).map(([k, b]) => [k, [...b.warnings.keys()].join()])))`));
+  const pivots = () => page.evalIn("__editor.pivots.join('; ')");
+  check(Object.entries(warned()).every(([k, ids]) => k === "fold" ? ids === "TEMP_COLLAPSED_WARNING_" : ids === ""), `no scheme yet, nothing marked: ${JSON.stringify(warned())}`);
+  page.evalIn('__editor.setScheme("NORMAL")');
+  let w = warned();
+  check(w.pivot === "scheme" && w.folded === "scheme" && w.after === "scheme", `the pivots that run are marked: ${JSON.stringify(w)}`);
+  check(w.forward === "" && w.off === "" && w.inside === "", `a translation, a disabled pivot and one in a disabled block are not: ${JSON.stringify(w)}`);
+  check(page.evalIn("__blocks.pivot.warnings.get('scheme')") === page.evalIn("RoverBlocks.PIVOT_WARNING"), "in the pivot warning's words");
+  check(w.fold === "TEMP_COLLAPSED_WARNING_", `the folded block keeps Blockly's echo while it holds a warning: ${JSON.stringify(w)}`);
+  check(!/Pivot left, backward|Pivot left, forward/.test(pivots()), `Run asks about no pivot that never runs: ${pivots()}`);
+  page.evalIn('__editor.setScheme("ADVANCED")');
+  w = warned();
+  check(Object.values(w).every((ids) => ids === ""), `under ADVANCED nothing, Blockly's echo on the folded block included: ${JSON.stringify(w)}`);
+  // A change re-marks: the disabled pivot enabled under NORMAL.
+  page.evalIn('__editor.setScheme("NORMAL"); __blocks.off.enabled = true; __changed({ isUiEvent: false })');
+  check(warned().off === "scheme", `an enabled pivot is marked at the next change: ${JSON.stringify(warned())}`);
+  page.evalIn('__blocks.off.move = "MOVE_LEFT"; __changed({ isUiEvent: false })');
+  check(warned().off === "", `and cleared once it drives otherwise: ${JSON.stringify(warned())}`);
+  // The folded pivot driving otherwise leaves the folded block holding no
+  // warning, though the pivot after it still has one.
+  page.evalIn('__blocks.fold.warnings.set("TEMP_COLLAPSED_WARNING_", "echo"); __blocks.folded.move = "MOVE_FORWARD"; __changed({ isUiEvent: false })');
+  w = warned();
+  check(w.folded === "" && w.after === "scheme" && w.fold === "", `the echo goes with what it folds: ${JSON.stringify(w)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 test("target: leaving the Drive tab on the simulator lets go of a held rotate button too", () => {

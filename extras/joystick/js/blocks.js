@@ -750,7 +750,7 @@ class BlockEditor {
   get pivots() {
     const labels = new Set();
     for (const block of this.#workspace.getAllBlocks(false)) {
-      if (!block.isEnabled() || !RoverBlocks.DRIVES.includes(block.type)) continue;
+      if (!BlockEditor.#runs(block) || !RoverBlocks.DRIVES.includes(block.type)) continue;
       const motion = motionNamed(block.getFieldValue("MOVE"));
       if (motion && motion.advanced) labels.add(motion.label);
     }
@@ -862,17 +862,40 @@ class BlockEditor {
     });
   }
 
+  // A block inside a disabled one is drawn disabled and writes no code, but
+  // still reports itself enabled.
+  static #runs(block) {
+    return block.isEnabled() && !block.getInheritedDisabled();
+  }
+
   // As pivots counts them: a disabled block never runs, so it is not marked.
   // A warning of the scheme's own id leaves any other a block carries, and
   // one already right is left alone, so that the blocks are not redrawn on
   // every change.
+  //
+  // Blockly echoes a warning inside a collapsed block on the block that
+  // folds it, and takes the echo away only when that block is expanded: so
+  // once the marks change, a collapsed block left holding no warning loses
+  // its echo here.
   #markPivots() {
+    let changed = false;
     for (const block of this.#workspace.getAllBlocks(false)) {
       if (!RoverBlocks.DRIVES.includes(block.type)) continue;
-      const text = block.isEnabled() ? RoverBlocks.schemeWarning(block.getFieldValue("MOVE"), this.#scheme) : null;
+      const text = BlockEditor.#runs(block) ? RoverBlocks.schemeWarning(block.getFieldValue("MOVE"), this.#scheme) : null;
       if ((this.#warned.get(block) || null) === text) continue;
       block.setWarningText(text, "scheme");
       this.#warned.set(block, text);
+      changed = true;
+    }
+    if (!changed) return;
+    const warning = this.#Blockly.icons.IconType.WARNING;
+    for (const block of this.#workspace.getAllBlocks(false)) {
+      if (!block.isCollapsed()) continue;
+      // What it folds: its descendants, but not the blocks after it.
+      const next = block.getNextBlock();
+      const after = new Set(next ? next.getDescendants(false) : []);
+      const folded = block.getDescendants(false).filter((held) => held !== block && !after.has(held));
+      if (!folded.some((held) => held.getIcon(warning))) block.setWarningText(null, this.#Blockly.BlockSvg.COLLAPSED_WARNING_ID);
     }
   }
 

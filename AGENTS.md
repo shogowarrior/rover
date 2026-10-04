@@ -460,8 +460,8 @@ page's globals in reach, so a program loaded from anywhere goes through
 `RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
 keeps comments out of the code. On the rover, Run asks first when the editor
 holds several stacks, and when the program drives a pivot while the rover is
-not on ADVANCED. Under NORMAL, the target's, each enabled drive block that
-pivots carries Blockly's warning before Run is pressed
+not on ADVANCED. Under NORMAL, the target's, each drive block that pivots
+and would run (none in a disabled block) carries Blockly's warning before Run is pressed
 (`RoverBlocks.schemeWarning()`). The motion menu keeps all 18 motions
 whatever the scheme: Blockly puts the menu's first choice in place of a
 saved value it does not offer, so a saved pivot would drive forward. A program's own stop and start exploring are not presses:
@@ -508,8 +508,8 @@ go. START sends `RESUME_AUTONOMOUS`.
 so the pad and the panel always drive the same way. NORMAL is the above.
 ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
 quadrant pick a pivot, holding R1 a pivot sideways; the panel has the same
-choice as a selector. SELECT toggles the scheme, the panel's toggle sends the
-`scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
+choice as a selector. SELECT toggles the scheme, the panel's toggle on the rover target
+sends the `scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
 rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
 a Bluetooth send from the loop task, and any client can flip the scheme as
 fast as it sends.

@@ -158,8 +158,9 @@ on.
   one visible press too.
 - The simulator holds no Link and no Driver; nothing a preview does reaches
   the rover, the scan fan or the readouts.
-- The scheme toggle shows only what telemetry reports, and its message is
-  configuration, never a command.
+- On the rover target the scheme toggle shows only what telemetry reports,
+  and its message is configuration, never a command; on the simulator
+  target it shows and sets the simulator's own scheme and sends nothing.
 - Every new way to lose control comes with its failsafe in the same change.
 - Classic scripts from `file://`, no modules or packages; each new class is
   named in `js/app.js`'s header.
@@ -259,8 +260,8 @@ simulator the Driver sends to
 `SimTarget.command()` in the Link's place; `command()` clamps a duration to
 the firmware's 1.5 s cap (`COMMAND_DURATION_MAX_MS`, checked against
 `Tuning.h`) and takes over from a preview's held motion. A link lost or gone
-stale lets go of nothing driving the simulator but a held stick, whose
-scheme goes with the link. The tests listed above are
+stale lets go of nothing driving the simulator (until F3g, a held stick,
+whose scheme went with the link). The tests listed above are
 in, with layout tests for the view's place, and each was checked by
 breaking what it holds.
 
@@ -839,8 +840,8 @@ family, never a WebSocket command. On the rover the one gate for programs is
 Run's in-page question when a program drives a pivot and the rover does not
 report ADVANCED. A preview never asks.
 
-**Binding rules.** The toggle shows only what telemetry reports, and its
-message is configuration. Never filter the motion menu by scheme: Blockly
+**Binding rules.** On the rover target the toggle shows only what telemetry
+reports, and its message is configuration. Never filter the motion menu by scheme: Blockly
 quietly puts the menu's first choice, MOVE_FORWARD, in place of a saved value
 the menu does not offer (`blocks.js`), so a saved pivot would become a drive
 forward.
@@ -892,7 +893,11 @@ nothing driving the simulator, a held stick included.
 In the blocks, under NORMAL (the target's), each enabled drive block that
 pivots carries Blockly's warning, on two lines: a pivot, kept off the stick
 and the pad by NORMAL, and Run on the rover asks first. It comes and goes
-with the scheme and as blocks change; a disabled block carries none. The
+with the scheme and as blocks change; a disabled block, or one inside a
+disabled block, carries none, and Run does not ask about it. Blockly echoes
+a warning inside a collapsed block on the block that folds it and clears
+the echo only when it is expanded, so the editor clears an echo left
+holding no warning. The
 menu's pivot entries are not relabelled: a dropdown's label is also what
 the block shows, so "Advanced" would stay on a block after a switch to
 Advanced, and the warning already says it. Checked in a headless browser
@@ -902,8 +907,10 @@ either target and under no other scheme, and nothing reaches the Link.
 The tests named above pass, `sim.test.js`'s now named for the rover target.
 New ones hold the toggle on the simulator with no rover, the start from the
 rover's scheme, a pending request across a switch, the editor told the
-target's scheme, and the warning's words for each of the 18 motions, each
-checked by breaking what it holds.
+target's scheme, the editor's marks on a stand-in workspace (a pivot in a
+disabled block, a collapsed block's echo), and the warning's words for
+each of the 18 motions, each checked by breaking what it holds. Panel
+tests 251/251.
 
 ### F3h. Both sticks shown, disabled by scheme
 

@@ -839,7 +839,8 @@ class SimSonar {
  *   place(pose)        start from pose instead, and reset; false where the
  *                      chassis would not fit
  *   releasedDrag       see SIM_RELEASED_DRAG
- *   setScheme(name)    as the rover takes {"scheme": name}
+ *   setScheme(name)    as the rover takes {"scheme": name}; app.js and
+ *                      SchemeToggle call it, not SimView
  *   clearTrail()       forget the path and the bump marks
  *   onLog(fn)          fn({text, tone}), as ProgramRunner's, when the preview
  *                      has something to say: a bump (tone "bump"), or that
@@ -1315,7 +1316,9 @@ class SimTarget {
   // The keys src/Protocol.cpp writes, with these exceptions: no
   // "temperature", since there is no chip to measure, and no "phase" or
   // "halt", since exploring is not simulated. "scheme" is whatever
-  // setScheme() last took: app.js passes on the real rover's, once known.
+  // setScheme() last took: the rover's, passed on by app.js while the rover
+  // is the target, or the header toggle's choice while the simulator is
+  // (SchemeToggle.bind).
   // The distances are the sonar's last reading at each bearing, never a
   // fresh measurement: a program sees them as old as the rover's would be.
   #publish() {
