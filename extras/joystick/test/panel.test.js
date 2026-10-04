@@ -2427,6 +2427,23 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(body(side, ".actions")), `Stop and Autonomous: ${body(side, ".actions")}`);
 });
 
+// The rotate buttons share their stick's column and never outgrow it: at
+// the stick's floor the icons beside the words did (Right across the gap
+// into the speed at 960 x 521, under the Stop bar at 480 x 320 on its
+// side). Narrower than icon and word need, the word alone.
+test("layout: the rotate buttons keep to their stick's column, the icons going where it is narrow", () => {
+  const base = cssRules(outside(panelCss(), "@media"));
+  const spin = base.filter((r) => r.selector === ".spin").map((r) => r.body).join("");
+  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(spin), `two columns that cannot grow past the column: ${spin}`);
+  check(/container:\s*spin \/ inline-size;/.test(spin), `a container to ask: ${spin}`);
+  const hides = (css, width) => (blockRules(css, `@container spin (max-width: ${width}) {`) || [])
+    .some((r) => r.selector === ".spin .icon" && /display:\s*none;/.test(r.body));
+  check(hides(outside(panelCss(), "@media"), "151.98px"), "the icons go under 152 px");
+  const wide = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
+  const at = wide.indexOf("@media (min-width: 960px) and (min-height: 521px) {");
+  check(at >= 0 && hides(wide.slice(at), "183.98px"), "and under 184 px on a wide screen, whose icons and words are larger");
+});
+
 // Blockly draws the grid's lines once, with its colour as their stroke
 // attribute: a literal would stay in the look the page loaded in. (That
 // every token a script reads is declared, and the stop block's copy of
@@ -2724,16 +2741,21 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   check(request.length <= longest, `the press-again request '${request}' is no longer than a family's name (${longest}): it wrapped`);
 
   // The pivot stick's line says one of three things, each on one line: none
-  // longer than the caveat, which fits the stick's narrowest column (128 px
-  // on its side at 568 x 320, measured headless: 18 characters, where 22
-  // ran 5 px past it). It never hides, which would take its height too.
+  // longer than the caveat, which fits the stick's narrowest column (112 px
+  // on its side under 536 px wide, measured headless: 17 characters took
+  // 105 px with the dot, where 22 took 129). It never hides, which would
+  // take its height too.
   const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
-  check(said[0].length <= 18 && said.every((text) => text.length > 0 && text.length <= said[0].length), `the line's words: ${said}`);
+  check(said[0].length <= 17 && said.every((text) => text.length > 0 && text.length <= said[0].length), `the line's words: ${said}`);
   const rules = cssRules(outside(panelCss(), "@media"));
   for (const selector of [".caveat", "#stickLabel"]) {
     const rule = rules.find((r) => r.selector === selector);
     check(rule && /white-space:\s*nowrap/.test(rule.body), `${selector} never wraps: ${rule && rule.body.trim()}`);
   }
+  // Its dot close to its words: with the wider gap the caveat ran past the
+  // stick at its floor.
+  const caveat = rules.find((r) => r.selector === ".caveat");
+  check(caveat && /gap:\s*var\(--s-1\);/.test(caveat.body), `the caveat's dot close to its words: ${caveat && caveat.body.trim()}`);
   const note = page.$("pivotNote");
   const lines = [];
   const look = () => lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}`);

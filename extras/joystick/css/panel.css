@@ -1277,11 +1277,12 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* The stick's line: the caveat while it is on, amber as the motor warning
    is (a caution, not a stop), what it waits for while it is off, or a
    request for a fresh press. One line whatever it says (family.js keeps
-   each short enough), so no change of words moves the stick under it. */
+   each short enough), so no change of words moves the stick under it; its
+   dot close to the words, so the longest fits the stick at its floor. */
 .caveat {
   display: flex;
   align-items: baseline;
-  gap: var(--s-2);
+  gap: var(--s-1);
   margin: 0;
   white-space: nowrap;
   font-size: var(--t-xs);
@@ -1302,8 +1303,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   grid-area: spin;
   align-self: start;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
+  container: spin / inline-size;
 }
 
 /* The word beside the icon: one row's height under the stick. */
@@ -1316,6 +1318,17 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 .spin .icon { width: var(--icon); height: var(--icon); }
+
+/* The rotate buttons take their stick's column, never more: at the
+   stick's floor the icons and the words side by side outgrew it (Right
+   ran 25 px across the gap into the speed at 960 x 521, and under the
+   Stop bar at 480 x 320 on its side). Narrower than both need, the
+   buttons keep the word alone. The widths are DejaVu Sans's, the widest
+   fallback, measured headless. Not an ancestor of a stick, so it may be
+   a container. */
+@container spin (max-width: 151.98px) {
+  .spin .icon { display: none; }
+}
 
 /* No transition on press: a control that moves a robot must feel
    instantaneous, not eased. */
@@ -1794,6 +1807,11 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .spin .icon { width: var(--icon-lg); height: var(--icon-lg); }
 
+  /* The larger icon and word need 182 px side by side. */
+  @container spin (max-width: 183.98px) {
+    .spin .icon { display: none; }
+  }
+
   #speedOut { font-size: var(--t-xl); }
 
   /* A strip across the foot of the page, its cells under the columns
@@ -1862,7 +1880,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 /* Narrower, the pane has no room for the view beside two sticks (at 1024 x
-   768 it would have left each stick 130 px): on the simulator the view
+   768 it would have left each stick 154 px): on the simulator the view
    takes the fan's place in the rail instead, as on a phone, and the
    readouts stay. The dock is the same on both targets, so a switch never
    moves a stick. */

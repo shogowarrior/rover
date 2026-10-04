@@ -990,7 +990,7 @@ sticks. The left stick always translates; the right one drives the pivots
 by quadrant, with Pivot | Pivot sideways over it. Under NORMAL the right
 stick and its switch stay on screen, dimmed, take no press, and the line
 over the stick says "Advanced only." (its title says why); under ADVANCED
-the line is the caveat, "Untested: go slow.". The Driver tracks the two
+the line is the caveat, "Untried: go slow.". The Driver tracks the two
 sticks apart: the rotate button pressed last wins, then the stick pressed
 last, then a program, and letting go of one hands the rover back to the
 other if it is still held. Two thumbs at once work, a touch the system
@@ -1017,16 +1017,22 @@ the Stop bar never covers either stick. Sticks: 162 px at 375 x 812, 112
 at 375 x 548, 210 at 740 x 360 on its side, 282 at 1024 x 768, 202 at
 1280 x 800 beside the view. Still as on main: with no rover connected the
 address row runs a 548 to 667 px tall phone, and a 568 x 320 phone on its
-side, a little past the screen, when nothing can drive. The README's
-control table and `docs/mecanum.md` list the panel's and the pad's
-controls side by side; the pad reaches the pivots with L1 or R1, and its
-right stick is still not read.
+side, a little past the screen, when nothing can drive. At 480 x 320 on
+its side, the label overflow listed under open items, "Pivot sideways",
+Autonomous and Stop run 2 to 4 px past their buttons.
+
+The review round found no logic bug. It found the rotate buttons
+outgrowing the stick's column at its floor, so they drop their icons
+where it is narrow, and the off pivot pad taking a drag as a page pan,
+which it no longer does. The README's control table and `docs/mecanum.md`
+list the panel's and the pad's controls side by side; the pad reaches the
+pivots with L1 or R1, and its right stick is still not read.
 
 Tests: both sticks' arbitration, two thumbs, a cancelled touch, the mouse,
 the scheme and family rules, the press requests, the refits and box moves
 for each stick, both canvases' ancestors, the look rebuilding both, and the
 layout's rules on a phone on its side, each checked by breaking what it
-holds. Panel tests 258/258.
+holds. Panel tests 259/259.
 
 ## F4. Other buttons
 

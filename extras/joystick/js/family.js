@@ -71,12 +71,12 @@ class FamilySelector {
   static PRESS_AGAIN = "Press again";
 
   // The pivot stick's line: the caveat while it is on, and what it waits
-  // for while it is off. One line in the stick's column wherever it is
-  // narrowest (128 px, on its side at 568 x 320), as is PRESS_AGAIN, so no
-  // change of words moves the stick under it: "Unverified: go slowly." ran
-  // 5 px past it. Off, the pad's title says why; on, it has none, to hang
-  // over a stick in use.
-  static CAVEAT = "Untested: go slow.";
+  // for while it is off. One line, as is PRESS_AGAIN, so no change of
+  // words moves the stick under it, and within the stick's column at its
+  // floor (112 px, on its side under about 536 px wide) with its dot: 105
+  // px measured headless, where "Unverified: go slowly." took 129. Off, the
+  // pad's title says why; on, it has none, to hang over a stick in use.
+  static CAVEAT = "Untried: go slow.";
   static OFF = "Advanced only.";
   static OFF_TITLE = "Advanced only: the NORMAL scheme keeps the pivots off the sticks and the pad.";
 

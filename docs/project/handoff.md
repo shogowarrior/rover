@@ -188,7 +188,7 @@ measurements):
 
 The PS3 pad is unchanged: its right stick is still not read, and the README
 and `docs/mecanum.md` list the panel's and the pad's controls side by side.
-Panel tests 258/258 and the protocol check pass.
+Panel tests 259/259 and the protocol check pass.
 
 ## Current work
 
