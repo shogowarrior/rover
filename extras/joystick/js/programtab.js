@@ -24,6 +24,8 @@
  *   shown()                 the tab has just been shown: fit the editor to it.
  *                           Within the tab the editor refits itself as its
  *                           box changes size.
+ *   restyle()               the page's look has changed: the editor takes it.
+ *                           An editor not yet built is built in it.
  *   setScheme(scheme)       the rover's control scheme, as telemetry reports
  *                           it (SchemeToggle), or null while unknown.
  *   note(text, tone)        add a line to the console, for what the runner
@@ -141,6 +143,10 @@ class ProgramTab {
 
   shown() {
     if (this.#editor) this.#editor.resize();
+  }
+
+  restyle() {
+    if (this.#editor) this.#editor.restyle();
   }
 
   setScheme(scheme) {

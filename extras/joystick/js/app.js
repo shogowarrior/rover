@@ -8,11 +8,14 @@
  * one file declares at top level is visible to every file after it, and a
  * second top-level declaration of the same name stops that whole second
  * file from loading. So each file declares at top level only what it offers
- * the others, and keeps the rest inside its class:
+ * the others, and keeps the rest inside its class. The first two load in
+ * <head>, the rest at the foot of <body>, after the vendored joy.js:
  *
  *   support.js       what the parts share: Listeners, memory, dom, segment,
  *                    pressSegment, clamp, radians, degrees, abortableWait,
  *                    isPrimaryPress, reportFault
+ *   look.js          LookPicker, lookToken: the page's looks, the one in
+ *                    force, and the tiles that pick one
  *   protocol.js      the firmware's constants: move codes, scheme and mode names,
  *                    speed limits, the port, distances and timing
  *   mecanum.js       the motions, moveForStick() for the stick families, and
@@ -375,13 +378,13 @@ runner.onState((state, { kind }) => {
 // and at 4x each re-sent move ran out before the next (placeSimView).
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
-// size: fit it again whenever the tab is shown. The simulator's view goes
-// with the tab that shows it.
+// size: fit it again whenever the tab is shown. So with the stick, whose
+// look or size may have changed while it was hidden (Driver.shown). The
+// simulator's view goes with the tab that shows it.
 tabs.onChange((tab) => {
-  if (tab.id !== "tabDrive") {
-    if (driven.simulator) driver.standDown("tab");
-    else driver.releaseStick();
-  }
+  if (tab.id === "tabDrive") driver.shown();
+  else if (driven.simulator) driver.standDown("tab");
+  else driver.releaseStick();
   placeSimView();
   if (tab.id === "tabProgram") programTab.shown();
 });
@@ -440,3 +443,22 @@ if (targets.simulator) {
     }
   });
 }
+
+/* --- the look ------------------------------------------------------------ */
+
+// The page's colours, picked under the gear (look.js has already put the
+// remembered look on <html>), in a popover that is not modal (see
+// joystick.html).
+const lookPicker = new LookPicker(byId("lookChoice"));
+new Popover(byId("options"), byId("optionsPanel"));
+
+// Whatever took the look's colours as plain values when it was built takes
+// the new look's: the stick's knob, which joy.js paints into its canvas,
+// and the block editor's Blockly theme (look.js paints the browser's own
+// bar). Anything styled with var() follows by itself. Rebuilt, the stick
+// lets go of a held stick as a scheme change does (one STOP, only if it was
+// driving), and its caption asks for a fresh press; nothing else is sent.
+lookPicker.onChange(() => {
+  if (driver.restyle()) familySelector.awaitPress(true);
+  programTab.restyle();
+});

@@ -1001,3 +1001,37 @@ test("sanitize: a comment's line breaks become plain \\n, and the rest of it is 
   assert.deepEqual(clean.blocks.blocks[0].next.block.icons.comment, { text: "plain" });
   assert.ok(state.blocks.blocks[0].icons.comment.text.includes(LS), "the state passed in is left alone");
 });
+
+/* --- the theme (blocks.js) ------------------------------------------------- */
+
+// Blockly paints the workspace, the toolbox and the flyout from the theme's
+// plain values, so each look needs a theme built from its own tokens.
+// RoverBlocks.theme() reads them through look.js's lookToken(), given here
+// as the look's tokens; a stand-in Blockly keeps what defineTheme is given.
+test("theme: built from the look's tokens as they are at the call, under one name every time", () => {
+  const Blockly = { Themes: { Classic: {} }, Theme: { defineTheme: (name, theme) => ({ name, ...theme }) } };
+  const dark = { "--case": "#0b0d11", "--panel": "#14181d", "--raised": "#1c2128", "--readout": "#e8ecf1", "--dim": "#8a94a1", "--live": "#4db8a8", "--sans": "system-ui" };
+  const light = { ...dark, "--case": "#f4f6f8", "--panel": "#ffffff", "--raised": "#e3e8ee", "--readout": "#0d1218", "--dim": "#4a5562", "--live": "#0a6f63" };
+  const was = Object.getOwnPropertyDescriptor(globalThis, "lookToken");
+  let look = dark;
+  globalThis.lookToken = (name) => look[name];
+  try {
+    const first = RoverBlocks.theme(Blockly);
+    look = light;
+    const second = RoverBlocks.theme(Blockly);
+    assert.equal(first.name, second.name, "one name: each look's theme takes the last one's place");
+    for (const [theme, tokens] of [[first, dark], [second, light]]) {
+      const c = theme.componentStyles;
+      assert.deepEqual(
+        [c.workspaceBackgroundColour, c.toolboxBackgroundColour, c.flyoutBackgroundColour, c.toolboxForegroundColour, c.flyoutForegroundColour,
+          c.scrollbarColour, c.markerColour, c.cursorColour, c.insertionMarkerColour, theme.fontStyle.family],
+        [tokens["--case"], tokens["--panel"], tokens["--raised"], tokens["--readout"], tokens["--readout"],
+          tokens["--dim"], tokens["--live"], tokens["--live"], tokens["--readout"], tokens["--sans"]],
+        `in ${tokens["--case"]}'s look`);
+    }
+    assert.equal(second.blockStyles.stop_blocks.colourPrimary, RoverBlocks.PALETTE.stop, "the blocks keep their palette in every look");
+  } finally {
+    if (was) Object.defineProperty(globalThis, "lookToken", was);
+    else delete globalThis.lookToken;
+  }
+});

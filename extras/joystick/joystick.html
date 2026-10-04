@@ -7,9 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
   <meta name="theme-color" content="#0b0d11">
+  <link rel="stylesheet" href="css/looks.css">
   <link rel="stylesheet" href="css/panel.css">
   <link rel="stylesheet" href="css/program.css">
   <link rel="stylesheet" href="css/sim.css">
+  <!-- Here rather than with the other scripts: look.js puts the remembered
+       look on <html> as it runs, so the page is drawn in it from the first
+       paint, and it needs support.js's memory. -->
+  <script src="js/support.js"></script>
+  <script src="js/look.js"></script>
 </head>
 
 <body data-link="down">
@@ -46,6 +52,21 @@
             <span data-say="yes">Motors OK</span>
             <span data-say="no">No motor shield</span>
           </span>
+        </div>
+
+        <!-- Options, under the gear: the page's look, which look.js fills in
+             and remembers. popover.js opens and closes it. It is not modal,
+             and not a dialog: nothing behind it is made inert and nothing
+             holds the focus, so Stop stays one press while it is open, and
+             that press closes it. -->
+        <div class="menuHolder">
+          <button type="button" class="optionsButton" id="options" aria-label="Options" title="Options">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.33 9.63 21.88 10.45V13.55L19.33 14.37 18.86 15.51 20.08 17.89 17.89 20.08 15.51 18.86 14.37 19.33 13.55 21.88H10.45L9.63 19.33 8.49 18.86 6.11 20.08 3.92 17.89 5.14 15.51 4.67 14.37 2.12 13.55V10.45L4.67 9.63 5.14 8.49 3.92 6.11 6.11 3.92 8.49 5.14 9.63 4.67 10.45 2.12H13.55L14.37 4.67 15.51 5.14 17.89 3.92 20.08 6.11 18.86 8.49Z"/><circle cx="12" cy="12" r="3.4"/></svg>
+          </button>
+          <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" hidden>
+            <h2 class="menuLabel" id="lookLabel">Theme</h2>
+            <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
+          </div>
         </div>
       </div>
 
@@ -318,7 +339,6 @@
        Chrome refuses module scripts from file://, where this page is opened.
        See js/app.js. -->
   <script src="joy.js"></script>
-  <script src="js/support.js"></script>
   <script src="js/protocol.js"></script>
   <script src="js/mecanum.js"></script>
 

@@ -5,24 +5,20 @@
    show); a column beside the editor on a wide screen, where the room sets
    the height (below). The rest folds into a panel.
 
-   The palette is the panel's (css/panel.css): green for live, amber for
+   The palette is the look's (css/looks.css), the room's own colours (its
+   grid, the rover's plate and deck) included: teal for live, amber for
    closing distance, red only for stop and danger -- here, a ray inside
    STOP_CM and a bump. A backward wheel takes the one colour the panel uses
-   nowhere else, so it never reads as a warning. */
+   nowhere else, so it never reads as a warning. .sim names the rest after
+   the look's tokens. */
 
 .sim {
   --sim-floor: var(--raised);
-  --sim-grid: rgb(241 243 246 / 0.045);
-  --sim-grid-major: rgb(241 243 246 / 0.09);
-  --sim-halo: rgb(241 243 246 / 0.05);
-  --sim-deck: rgb(241 243 246 / 0.2);
   --sim-wall: var(--dim);
   --sim-box: var(--raised-hi);
   --sim-box-edge: var(--faint);
-  --sim-plate: #3a424e;
   --sim-plate-edge: var(--readout);
   --sim-fwd: var(--live);
-  --sim-back: #a594f9;
   --sim-free: var(--faint);
   /* The bar's buttons: a full touch target, the panel's one control
      height, on every layout. */

@@ -1,7 +1,8 @@
 /* The Program tab: its toolbar, the block editor and the simulator's place
-   beside it, the console under them, and the dark dress for Blockly's own
-   parts. joystick.html links this after panel.css, whose tokens it uses;
-   programtab.js and blocks.js set the attributes it keys on.
+   beside it, the console under them, and the look's dress for Blockly's own
+   parts. joystick.html links this after looks.css and panel.css, whose
+   tokens it uses; programtab.js and blocks.js set the attributes it keys
+   on.
 
    The tab sits where the Drive tab does (panel.css): above the Stop bar on
    a phone, scrolling with the page; in the left pane on a wide screen,
@@ -517,6 +518,9 @@
 .blocklyMenuItem { color: var(--readout); border-radius: var(--r-sm); }
 .blocklyMenuItemDisabled { color: var(--dim) !important; }
 .blocklyWidgetDiv .blocklyMenuItemHighlight { background: var(--raised-hi); }
+/* An item's key ("Delete", "Control + Z"): Blockly's own light grey is lost
+   on a light look's menu. */
+.blocklyMenuItemContent .blocklyShortcutContainer .blocklyShortcut { color: var(--dim); }
 
 .blocklyMenuSeparator { border-top-color: var(--rule); }
 
@@ -536,9 +540,10 @@
   opacity: 1 !important;
 }
 
-/* Blockly's zoom and trashcan icons are drawn for a light workspace. */
+/* Blockly's zoom and trashcan icons are drawn for a light workspace: a dark
+   look turns them light (--light-art, css/looks.css). */
 .blocklyZoom > image,
-.blocklyTrash > image { filter: invert(1) brightness(0.85); opacity: 0.4; }
+.blocklyTrash > image { filter: var(--light-art); opacity: 0.4; }
 
 @media (hover: hover) {
   .blocklyZoom > image:hover,

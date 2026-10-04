@@ -2,7 +2,8 @@
 
 The owner's requests for the browser panel and the controls, from
 2026-10-03. Steps 1 to 4 of the [order of work](#order-of-work) are done, and
-F1 of step 5; the rest is not started. [project/handoff.md](project/handoff.md) says where the
+F1 of step 5, and so is [F5](#f5-themes-and-options), from a second message
+that evening; the rest is not started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
 Every bullet and clause the owner wrote is quoted below and mapped to an
@@ -42,6 +43,12 @@ please work on the stuff needed for project 1st and then we can do the features 
 The screenshot that came with it shows the Program tab on a wide screen
 (about 1626 CSS px) with no rover connected.
 
+A second message followed at 22:28 UTC, while steps 1 to 3 were in review:
+
+```text
+also remind the thread to make inwdows collapsible wherever needed. keeping mind that it will mostly be landscope mode in either laptop or ipad like device seo mifght as well use more width. check with word-finder and add the support for themes and options like the gear stuff it uses. see if it helps. talk to the word-finder project to see how it does that
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -69,6 +76,11 @@ The screenshot that came with it shows the Program tab on a wide screen
 | please work on the stuff needed for project 1st and then we can do the features requested/ | Done in that order: these docs came first, then the work below in its [order](#order-of-work) |
 | you can creat a separate doc for it which handoff cna refer to. | This file |
 | goal and project instructions are different | Two files: [project/goal.md](project/goal.md) and [project/instructions.md](project/instructions.md) |
+| also remind the thread to make inwdows collapsible wherever needed. | [F3](#f3-one-layout-for-both-tabs), "Also asked" |
+| keeping mind that it will mostly be landscope mode in either laptop or ipad like device seo mifght as well use more width. | [F3](#f3-one-layout-for-both-tabs), "Also asked" |
+| check with word-finder and add the support for themes and options like the gear stuff it uses. | Done: [F5](#f5-themes-and-options) |
+| see if it helps. | [F5](#f5-themes-and-options): what carried over, and what did not and why |
+| talk to the word-finder project to see how it does that | Done: [F5](#f5-themes-and-options), "Where it came from" |
 
 ## Order of work
 
@@ -92,6 +104,9 @@ The screenshot that came with it shows the Program tab on a wide screen
 6. [F3h](#f3h-both-sticks-shown-disabled-by-scheme): the biggest change to the
    Drive tab's arbitration.
 7. [F4](#f4-other-buttons).
+
+[F5](#f5-themes-and-options), themes and the Options gear, came later and
+was done beside steps 1 to 4, by its own thread.
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1024 x 768, 1180 x 820, 1280 and about 1600 px (see the handoff for
@@ -399,6 +414,11 @@ bar's two cells aligned to the two columns above, and a written spec
 shortening the Program toolbar. Recompute `--stick` against the single
 column.
 
+**Also asked** (the second message): "make inwdows collapsible wherever
+needed", and, since the panel "will mostly be landscope mode in either laptop
+or ipad like device", "use more width". Both were taken up in step 4: see
+**Done** below.
+
 **Ask the owner.** Is a slightly narrower Program editor at 1280 px fine in
 exchange for one column width on both tabs? *(default: yes)*
 
@@ -672,8 +692,8 @@ about 1600 x 900 (the owner's screen) for wide, on both tabs.
 
 *Regions.* Four, in this order on screen and in the focus order, on every
 layout and both tabs:
-1. The header: the wordmark and the status pills; the address, Connect and
-   the note; and the switch row.
+1. The header: the wordmark, the status pills and the Options gear; the
+   address, Connect and the note; and the switch row.
 2. The open tab: its own action row first (the Program toolbar), then its
    content.
 3. The right column: the rover's data, at all times (F3c): the motor fault,
@@ -709,7 +729,9 @@ phone the bar stays as today: Autonomous | Stop, Stop under the right thumb.
 selects, the address field, menu buttons, the Program toolbar and the
 simulator's bar (44 px on wide too since F3). The exceptions are larger, never
 smaller: the foot bar's Stop and Autonomous, the Drive tab's rotate buttons
-(held controls, as today) and Blockly's own controls.
+(held controls, as today) and Blockly's own controls. The one smaller is
+drawn so, not touched so: the Options gear is a status pill's size, with a
+full `--tap` target round it.
 
 *Disabled, never hidden.* A control that belongs to a layout is always shown
 there. When it cannot act now (the scheme, the link or a running program
@@ -736,7 +758,7 @@ expect, or replacing or removing the program in the editor. Never before
 Stop.
 
 *Menus.* One shared helper for every popup (`Popover`): the Program tab's
-File menu and the simulator's settings. A menu holds only infrequent actions that move
+File menu, the simulator's settings and Options. A menu holds only infrequent actions that move
 nothing; every safety control, page-wide switch, primary action and held
 control stays a visible, one-press control
 ([Menu or explicit](#menu-or-explicit-every-control)). A menu button says it
@@ -746,8 +768,8 @@ move through its items and wrap, Home and End go to the ends; an item does
 its action and closes the menu with the focus back on its button; Escape
 closes it the same way, Tab closes it and moves on, and a press outside
 closes it. An item that cannot act now stays in the menu, disabled. A
-popover that is not a menu, the simulator's settings, shares the opening,
-Escape and press-outside behaviour.
+popover that is not a menu (the simulator's settings, Options) shares the
+opening, Escape and press-outside behaviour.
 
 *Labels.* No label overflows its control (`scrollWidth <= clientWidth`) at
 any of the sizes above. An icon-only button (the simulator's pause, reset
@@ -959,6 +981,102 @@ nothing else), alongside the existing blur and Stop tests.
 tab as `client/drive.py` does, both are tested as above, and the README's
 control table lists them.
 
+## F5. Themes and Options
+
+**Asked:** "check with word-finder and add the support for themes and
+options like the gear stuff it uses. see if it helps. talk to the
+word-finder project to see how it does that"
+
+**Where it came from.** Word Finder's code (`BeeBeRBaB/word-finder` at
+`71d24bf`) and its project's own account of it. There, seven fixed palettes,
+each Light and Dark, are one radio set of 14 tiles on the Theme page of
+Settings, under a gear in the header; its owner chose no custom palette and
+no follow-the-system mode. A pick sets attributes on `<html>` that select a
+block of custom properties, a classic script in `<head>` puts the remembered
+look on before the first paint, `theme-color` is read from the tokens again
+on each change, and a script holds every look to WCAG AA.
+
+**Done.** All of that, in the panel's shape:
+- Three themes, each Dark and Light: Console, the default, the panel's own
+  colours, the stick's among them (but for an echo's wedge, drawn whole
+  now, below; a dragged block's marker in the page's ink rather than pure
+  white; and the keys in a block's menu in `--dim` rather than Blockly's
+  grey); Field, the most contrast, for glare or a bright room; and
+  Blueprint, tinted navy or pale blue. Six tiles in one
+  radio set, each a miniature of the panel in its look's colours, drawn by
+  CSS alone (no `:has()`, which Firefox lacked before 121).
+- Every colour is a token in `css/looks.css`, one block per look, keyed by
+  `data-look` on `<html>`. `js/look.js` loads in `<head>` and puts on the
+  remembered look (`rover.look` in localStorage, prefixed because Chrome
+  gives every `file://` page one storage origin). A storage that throws, or
+  an id no look has, gives the default.
+- The gear (`#options`) in the header opens Options (`#optionsPanel`), the
+  tiles under Theme. On an upright phone narrower than 440 px, and on a
+  phone on its side, the mode pill gives way to it: Autonomous lights while
+  the rover explores. Under 500 px upright the wordmark keeps its mark and
+  drops its word, and on a phone on its side under 780 px the pills drop
+  their lamps, so the status keeps its row. At 480 x 320 "Motors OK" is cut
+  short beside the gear, as main cuts "No motor shield" there, and "No motor
+  shield" is cut on a phone on its side about 530 to 600 px wide and 375 to
+  430 tall, a band main cuts it in too, a little narrower (the fault's card
+  under it says it in full).
+- What takes a colour as a plain value is given it again on a change:
+  joy.js's stick (built again, letting go of a held stick first as a scheme
+  change does: one STOP only if it was driving, and its caption asks for a
+  fresh press), Blockly's theme and the browser's `theme-color`, which
+  `look.js` paints in `<head>`, with the first paint. The stick's knob
+  shades toward a rim of its look's own (`--stick-rim`): Console Dark's is
+  the one `drive.js` gave joy.js before (`#1c1e21`), and a light look's is
+  its dark teal, where the case colour had faded the knob into its well. A
+  look picked on the Program tab is drawn on the stick as the Drive tab is
+  shown.
+  Where no look can be read (`css/looks.css` missing), the stick takes
+  joy.js's own colours, and Stop still works.
+- `test/looks.test.js` holds every look to the same tokens, fails a colour
+  written into any other stylesheet, and holds each pairing of ink and
+  surface in its audit (a hand-kept list: a new pairing adds its row) to its
+  contrast: text 4.5:1, marks 3:1, quiet marks 1.1:1, and Field's ink 7:1
+  and its rules 3:1. It found the scan's red echo wedge under 3:1 on the
+  card at 85% opacity, so an echo's wedge is drawn whole now. Its audit
+  takes in the stick's knob as joy.js shades it, at the smallest and the
+  largest stick.
+
+**Not carried over, and why.**
+- Word Finder's Settings is a modal pane, the page behind it inert. Options
+  is a `Popover`, not modal, like the File menu: Stop stays one press while
+  it is open, where behind a modal pane's backdrop the press would only
+  close the pane.
+- Its game options (board, difficulty, sound) have no counterpart here. The
+  setting that matters, the scheme, already shows in the header, and a menu
+  would hide it ([Menu or explicit](#menu-or-explicit-every-control)).
+  Options holds the look for now, and is where a later setting goes.
+- Its other look settings: Letters (a larger size) and Reduce motion. The
+  panel has one type scale for now, a later Options setting if wanted, and
+  already follows the system's reduced-motion setting
+  (`prefers-reduced-motion`, `css/panel.css`). Its Background art and
+  Vibrate have no counterpart.
+- Its service worker and module scripts, and the lessons that came with
+  them: the panel is classic scripts opened from `file://`.
+
+**Tests.** `test/looks.test.js` as above; `panel.test.js` for the tiles,
+the remembered look and its fallbacks, the popover staying non-modal with
+Stop one press, a look change under a held stick, on a hidden tab and
+mid-program, the block editor built in the look and repainted, and the
+panel with no look to read; `program.test.js` for Blockly's theme, built
+from the look in force (two stand-in looks) under one name.
+
+**Checks for the owner,** which need a real screen: the six looks on a
+laptop and a tablet (Field Light in sunlight; the light looks' dark amber),
+the gear and tiles by touch, the tiles' focus ring by keyboard, the browser
+bar's colour on a phone, a `<select>`'s list in a light look, a look picked
+while holding the stick, and the header on a 440 px phone and a 568 x 320
+one on its side, in the phone's own font.
+
+**Left as they were,** in every look: Blockly's keyboard-focus colours
+(its own yellow and blue, which a light workspace shows faintly), and its
+zoom and trash icons, drawn at 40% (under 3:1 in Console and Blueprint, as
+on main).
+
 ## Menu or explicit: every control
 
 | Control | Where | Menu? | Why |
@@ -983,6 +1101,7 @@ control table lists them.
 | Simulator settings | simulator bar | already one | a `Popover`, like the File menu |
 | Simulator fold | Program tab, every layout (a strip down the view's side on wide) | no | a disclosure |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
+| Options (gear) | header | yes | the look: set once, moves nothing ([F5](#f5-themes-and-options)) |
 
 ## Open from earlier work
 

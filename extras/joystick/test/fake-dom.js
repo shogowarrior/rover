@@ -155,6 +155,7 @@ class Node_ {
   contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
   closest(selector) { const test = parseSelector(selector); for (let n = this; n && n.tagName !== "#DOCUMENT"; n = n.parentNode) if (test(n)) return n; return null; }
   querySelectorAll(selector) { const test = parseSelector(selector); return all(this).slice(1).filter(test); }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   getContext() { return fakeContext(); }
   // As in a browser, an element with no layout box has no rects, and an
   // empty bounding rect. Laid out, it sits at the sum of its own and its
@@ -193,7 +194,12 @@ function fakeContext() {
   const noop = () => {};
   return {
     beginPath: noop, arc: noop, stroke: noop, fill: noop, clearRect: noop,
-    createRadialGradient: () => ({ addColorStop: noop }),
+    // A colour Chromium cannot parse, "" among them, throws, as there.
+    createRadialGradient: () => ({
+      addColorStop(offset, colour) {
+        if (typeof colour !== "string" || colour.trim() === "") throw new SyntaxError(`addColorStop: '${colour}' could not be parsed as a color`);
+      },
+    }),
   };
 }
 
@@ -263,6 +269,40 @@ function parseHtml(html, doc) {
 
 function all(node, out = []) { out.push(node); node.children.forEach((c) => all(c, out)); return out; }
 
+/* --- the look's tokens -------------------------------------------------------- */
+
+// css/looks.css, and then `extra` (CSS in the same shape), as a map from a
+// look's id to the tokens its block declares; the default block's are under
+// ":root" too. Custom properties only: all a script reads of a look.
+function readLooks(extra) {
+  const { lookBlocks } = require("./css.js"); // here, not at the top: css.js requires this file
+  const looks = new Map();
+  for (const { selector, id, declared } of lookBlocks(extra)) {
+    const tokens = Object.fromEntries([...declared].filter(([name]) => name.startsWith("--")));
+    const keys = selector.split(",").some((each) => each.trim() === ":root") ? [":root", id] : [id];
+    for (const key of keys) if (key) looks.set(key, { ...looks.get(key), ...tokens });
+  }
+  return looks;
+}
+
+// getComputedStyle(element), as far as the look's tokens go. A custom
+// property inherits, so a token's value is the one declared by the nearest
+// data-look at or above element that has a block, else :root's (<html> is
+// :root), with each var() in it taken where it was declared. An unknown
+// token, or an element out of the page, gives "", as in a browser.
+function lookStyle(looks, element) {
+  const value = (name, from) => {
+    for (let n = from; n && n.tagName !== "#DOCUMENT"; n = n.parentNode) {
+      const look = looks.get(n.getAttribute("data-look"));
+      let declared = look && look[name];
+      if (declared === undefined && n.tagName === "HTML") declared = looks.get(":root")[name];
+      if (declared !== undefined) return declared.replace(/var\((--[\w-]+)\)/g, (_, ref) => value(ref, n));
+    }
+    return "";
+  };
+  return { getPropertyValue: (name) => value(name, element) };
+}
+
 /* --- WebSocket -------------------------------------------------------------- */
 
 function makeWebSocketClass(clock, sockets) {
@@ -303,9 +343,11 @@ function makeWebSocketClass(clock, sockets) {
 // marked resizeObserved. Off by default, so
 // that no other test's clock runs the simulator's view. A large frameMs is a
 // throttled display: a pane out of view, where timers still run on time.
+// looks: CSS in css/looks.css's shape, read after it, for a test that needs
+// looks of its own: colours it can tell apart whatever the file holds.
 // leaveOut: scripts the page lists but does not get, as a file that failed
 // to load.
-function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16, leaveOut = [] } = {}) {
+function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16, looks = "", leaveOut = [] } = {}) {
   const clock = makeClock();
   const sockets = [];
 
@@ -322,6 +364,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   doc.getElementById = (id) => all(doc.documentElement).find((n) => n.id === id) || null;
   doc.createElement = (tag) => new Node_(tag, doc);
   doc.createElementNS = (_ns, tag) => new Node_(tag, doc);
+  doc.querySelector = (selector) => doc.documentElement.querySelector(selector);
 
   const html = fs.readFileSync(path.join(PANEL_ROOT, "joystick.html"), "utf8");
   const scripts = parseHtml(html, doc);
@@ -339,6 +382,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   else if (storage === "null") localStorage = null;
 
   const WebSocket = makeWebSocketClass(clock, sockets);
+  const lookBlocks = readLooks(looks);
   const ctx = {
     document: doc, window: win, WebSocket, console, Event,
     // A program run's waits are aborted through one (js/program.js).
@@ -350,6 +394,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
     // As in a browser: report an error without throwing it. Collected, so a
     // test that expects no errors sees one a listener raised.
     reportError: (err) => doc.__errors.push(err),
+    getComputedStyle: (element) => lookStyle(lookBlocks, element),
   };
   if (storage !== "throws") ctx.localStorage = localStorage;
   const resizeCallbacks = [];
@@ -366,19 +411,24 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   }
 
   const loaded = scripts.filter((src) => !isRemote(src) && !leaveOut.includes(src));
+  let headThemeColor = null;
   for (const src of loaded) {
     vm.runInContext(fs.readFileSync(path.join(PANEL_ROOT, src), "utf8"), ctx, { filename: src });
+    // The browser's bar as the scripts in <head> leave it: the first paint's.
+    if (src === "js/look.js") headThemeColor = doc.querySelector('meta[name="theme-color"]').getAttribute("content");
     if (src === "joy.js") {
-      // Keep a handle on the instance the panel creates, to read its knob.
-      vm.runInContext("var __RealJoy = JoyStick; JoyStick = function (...a) { return (globalThis.__joy = new __RealJoy(...a)); };", ctx);
+      // Keep a handle on the instance the panel creates, to read its knob,
+      // and on the parameters it was built with, its colours among them.
+      vm.runInContext("var __RealJoy = JoyStick; JoyStick = function (...a) { globalThis.__joyParameters = a[1]; return (globalThis.__joy = new __RealJoy(...a)); };", ctx);
     }
   }
 
   const $ = (id) => doc.getElementById(id);
   const page = {
-    doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $,
+    doc, win, clock, sockets, store, scripts: loaded, allScripts: scripts, $, headThemeColor,
     get canvas() { return stick.children.find((c) => c.tagName === "CANVAS"); },
     get joy() { return ctx.__joy; },
+    get joyParameters() { return ctx.__joyParameters; },
     evalIn: (code) => vm.runInContext(code, ctx),
     fire(target, type, props = {}) {
       const e = { type, bubbles: true, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...props };
