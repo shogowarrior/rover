@@ -90,7 +90,7 @@ stops within half a second.
 | Control scheme | Normal \| Advanced, in the header | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
 | Programs | The Program tab | -- | -- |
 | Simulator | Rover \| Simulator, in the header: the Drive tab and programs drive a simulated rover | -- | -- |
-| Stop | Stop | space | Let go of the stick |
+| Stop | Stop | space | Cross (a held stick then drives again only from centre), or let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
 
 The panel takes `drive.py`'s keys too: the drive and speed keys while its

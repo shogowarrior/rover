@@ -6,7 +6,7 @@
 #include "Tuning.h"
 
 // The gamepad's rules, on the host: what a held stick, a released stick, a
-// silent pad, START and SELECT do to the rover, what a scheme change does to
+// silent pad, START, SELECT and Cross do to the rover, what a scheme change does to
 // a held stick, how a report is taken out of the Bluetooth mailbox, and when
 // the player LEDs are rewritten. The PS3 library itself stays in Gamepad.cpp;
 // GamepadSession gets the controls the way it would from the mailbox.
@@ -33,6 +33,12 @@ GamepadReport pressSelect(uint32_t now) {
   return report;
 }
 
+// `report` with Cross gone down in it.
+GamepadReport withCross(GamepadReport report) {
+  report.crossPressed = true;
+  return report;
+}
+
 // Feeds a fresh report every 10 ms, as a connected pad would, from `from`
 // for `ms`, running the rover alongside. Returns the new time.
 uint32_t hold(const GamepadReport& controls, uint32_t from, uint32_t ms) {
@@ -43,6 +49,22 @@ uint32_t hold(const GamepadReport& controls, uint32_t from, uint32_t ms) {
     session->update(report, t);
     rover->update(t);
   });
+  return now;
+}
+
+// Runs an exploring rover, the pad resting, from `from` until exploration
+// first drives (an open world needs one sweep, about a second). Returns the
+// time it did.
+uint32_t exploreUntilDriving(uint32_t from) {
+  uint32_t now = from;
+  const bool drove = advanceUntil(
+      now, 5000, 10,
+      [](uint32_t t) {
+        session->update(pad(0, 0, 0, 0, t), t);
+        rover->update(t);
+      },
+      [] { return motors->driving; });
+  TEST_ASSERT_TRUE_MESSAGE(drove, "exploration never drove");
   return now;
 }
 
@@ -237,6 +259,108 @@ void test_scheme_change_at_rest_sends_nothing(void) {
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
 
+// --- Cross -----------------------------------------------------------------
+
+// Cross is the pad's Stop. Before it, the pad's only stop was letting go of a
+// stick, so stopping an exploring rover meant driving it first. Like any
+// command it takes control, and the rover stays put afterwards.
+void test_cross_stops_an_exploring_rover(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = exploreUntilDriving(0) + 10;
+  session->update(withCross(pad(0, 0, 0, 0, now)), now);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+
+  const int drivesBefore = motors->driveCalls;
+  hold(pad(0, 0, 0, 0, 0), now + 10, 3000);  // resting afterwards changes nothing
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+  TEST_ASSERT_EQUAL_INT(drivesBefore, motors->driveCalls);
+}
+
+// A thumb still on the stick as Cross goes down must not drive the rover on at
+// the next pass, or Cross would do nothing: the stick waits for centre, as
+// after a scheme change, and drives again only from a fresh push.
+void test_cross_stops_a_held_stick_until_centred(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  const GamepadReport held = pad(0, -127, 0, 0, 0);  // forward
+  uint32_t now = hold(held, 0, 300);
+  TEST_ASSERT_TRUE(motors->driving);
+
+  GamepadReport cross = withCross(held);
+  cross.lastReportMs = now;
+  session->update(cross, now);
+  TEST_ASSERT_FALSE(motors->driving);
+
+  const int drivesBefore = motors->driveCalls;
+  now = hold(held, now + 10, 1000);  // still held, well past the refresh
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(drivesBefore, motors->driveCalls);
+
+  now = hold(pad(0, 0, 0, 0, 0), now, 20);  // centred...
+  hold(held, now, 20);                       // ...and pushed again
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, motors->lastPattern->move);
+}
+
+// Unlike letting go, Cross is sent when the pad is driving nothing, as the
+// panel's Stop is: something else may be moving the rover. With nothing held
+// it leaves the stick free, so the next push drives at once.
+void test_cross_at_rest_still_sends_stop(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  const int releasesBefore = motors->releaseCalls;
+  session->update(withCross(pad(0, 0, 0, 0, 0)), 0);
+  TEST_ASSERT_EQUAL_INT(releasesBefore + 1, motors->releaseCalls);  // a STOP reached the wheels
+
+  rover->command(MOVE_LEFT, 100, 1000, 10);  // the panel, say, drives
+  session->update(withCross(pad(0, 0, 0, 0, 20)), 20);
+  TEST_ASSERT_FALSE(motors->driving);
+
+  session->update(pad(0, -127, 0, 0, 30), 30);  // a push straight after
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, motors->lastPattern->move);
+}
+
+// Cross is an edge, like START and SELECT: the mailbox hands a press over
+// once, however many passes the pad's latest report stays there. Taken twice,
+// it would send a second STOP and take back control handed on since.
+void test_cross_is_acted_on_once(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  GamepadReport mailbox = withCross(pad(0, 0, 0, 0, 0));
+  const GamepadReport first = takeGamepadReport(mailbox, 0);
+  TEST_ASSERT_TRUE(first.crossPressed);
+  session->update(first, 0);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+
+  rover->command(RESUME_AUTONOMOUS, 0, 0, 10);  // handed back, from the panel say
+  uint32_t now = 10;
+  advance(now, 1000, 10, [&mailbox](uint32_t t) {
+    mailbox.lastReportMs = t;  // the pad keeps reporting, Cross up
+    const GamepadReport report = takeGamepadReport(mailbox, t);
+    TEST_ASSERT_FALSE(report.crossPressed);
+    session->update(report, t);
+    rover->update(t);
+  });
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
+}
+
+// Cross and START in one report: two buttons at once fail toward stopped.
+// Cross wins, and the rover is left stopped in manual, not exploring.
+void test_cross_wins_over_start_in_one_report(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = exploreUntilDriving(0) + 10;
+  GamepadReport both = withCross(pad(0, 0, 0, 0, now));
+  both.startPressed = true;
+  session->update(both, now);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+
+  const int drivesBefore = motors->driveCalls;
+  hold(pad(0, 0, 0, 0, 0), now + 10, 3000);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+  TEST_ASSERT_EQUAL_INT(drivesBefore, motors->driveCalls);
+}
+
 // --- the Bluetooth mailbox -------------------------------------------------
 
 // START and SELECT are edges: each press is acted on once, however many
@@ -365,6 +489,11 @@ int main(int, char**) {
   RUN_TEST(test_scheme_change_stops_a_held_stick_until_released);
   RUN_TEST(test_select_mid_hold_stops_until_released);
   RUN_TEST(test_scheme_change_at_rest_sends_nothing);
+  RUN_TEST(test_cross_stops_an_exploring_rover);
+  RUN_TEST(test_cross_stops_a_held_stick_until_centred);
+  RUN_TEST(test_cross_at_rest_still_sends_stop);
+  RUN_TEST(test_cross_is_acted_on_once);
+  RUN_TEST(test_cross_wins_over_start_in_one_report);
   RUN_TEST(test_mailbox_hands_over_each_press_once);
   RUN_TEST(test_mailbox_forgets_a_silent_pad);
   RUN_TEST(test_report_landing_mid_ping_keeps_the_stick_held);

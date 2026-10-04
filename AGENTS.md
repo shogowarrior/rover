@@ -67,7 +67,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
 | `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
-| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, when to rewrite the player LEDs. Pure |
+| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, Cross, when to rewrite the player LEDs. Pure |
 | `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
@@ -535,7 +535,9 @@ pull, up to half the stick's top speed. A held stick is re-sent every
 the same direction at most every `GAMEPAD_SPEED_CHANGE_MS` (100 ms). Letting
 go sends one STOP, never a stream, so a resting pad cannot keep forcing manual
 while the rover explores; a pad silent for `GAMEPAD_SILENCE_MS` counts as let
-go. START sends `RESUME_AUTONOMOUS`.
+go. START sends `RESUME_AUTONOMOUS`. Cross sends STOP, driving or not, as
+the panel's Stop does, and a stick held through it waits for centre before
+it drives again; pressed with START, Cross wins.
 
 **Control schemes.** The rover holds one scheme for every controller
 (`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),

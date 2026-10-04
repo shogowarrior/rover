@@ -32,6 +32,7 @@ void onReport() {
   mailbox.controls.r1 = Ps3.data.button.r1;
   if (Ps3.event.button_down.start) mailbox.startPressed = true;
   if (Ps3.event.button_down.select) mailbox.selectPressed = true;
+  if (Ps3.event.button_down.cross) mailbox.crossPressed = true;
   mailbox.lastReportMs = now;
   mailbox.hasReport = true;
   portEXIT_CRITICAL(&mailboxLock);
