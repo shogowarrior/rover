@@ -119,7 +119,7 @@ Finder's (features.md, F5, says what carried over and what did not):
   3:1, now drawn whole. A headless check of every look against `main`
   found the light looks' knob faded into its well and Blockly's key hints
   faint, both fixed, and the header's pills cut on narrow phones, fixed
-  but for "Motors OK" at 480 x 320.
+  but on a few phones on their side (features.md, F5).
 
 Panel tests 232/232 and the protocol check pass. Its container could not
 build the firmware either (same registry block); it changed no firmware.

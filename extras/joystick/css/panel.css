@@ -646,10 +646,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* A phone keeps the row for the status and the gear: the mark alone says
-   whose panel this is. Up to 480 px, because beside the word a 440 px
-   phone's three pills were cut short in a wide font. So does a phone on its
-   side, whose header has a column only. */
-@media (max-width: 479.98px), (orientation: landscape) and (max-height: 520px) {
+   whose panel this is. Up to 500 px, because beside the word three pills
+   were cut short in a wide font up to 480. So does a phone on its side,
+   whose header has a column only. */
+@media (max-width: 499.98px), (orientation: landscape) and (max-height: 520px) {
   .wordmark .word { display: none; }
 }
 
