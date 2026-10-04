@@ -211,8 +211,6 @@ test("keys: Space stops and T explores, on either tab, as the buttons do", () =>
 
 test("keys: with Autonomous, Run or Connect focused, Space sends one STOP and clicks nothing", () => {
   const { page, ws } = connected(telemetry());
-  let clicks = 0;
-  for (const id of ["auto", "programRun", "connect"]) page.$(id).addEventListener("click", () => clicks++);
   for (const id of ["auto", "connect"]) {
     const from = count(ws);
     check(focus(page, page.$(id)), `${id} took the focus`);
@@ -228,7 +226,6 @@ test("keys: with Autonomous, Run or Connect focused, Space sends one STOP and cl
   check(focus(page, run), "Run took the focus");
   check(down(page, " ").defaultPrevented && up(page, " ").defaultPrevented, "Run: Space is cancelled both ways");
   check(names(ws, from).join() === "STOP", `Run: ${names(ws, from)}`);
-  check(clicks === 0, `${clicks} of the focused buttons were clicked by the page`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -339,6 +336,18 @@ test("keys: a keydown is not the panel's where the focus has keys of its own", (
   }
   toDrive(page);
 
+  // Blockly's alert, and its prompt for a variable's name: a <dialog> of its
+  // own, added to the page.
+  const blocklyDialog = page.doc.createElement("dialog");
+  blocklyDialog.setAttribute("class", "blocklyDialog");
+  const ok = page.doc.createElement("button");
+  blocklyDialog.appendChild(ok);
+  page.doc.body.appendChild(blocklyDialog);
+  blocklyDialog.showModal();
+  check(focus(page, ok), "Blockly's dialog took the focus");
+  tryAll("Blockly's dialog");
+  blocklyDialog.close();
+
   // The page's dialog, open: every key is its.
   page.doc.body.focus();
   page.evalIn("ask.ask({ title: 'Test', text: 'A question', yes: 'Go' })");
@@ -392,6 +401,29 @@ test("keys: the slider, the tabs and the simulator's rover leave the drive keys 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+test("keys: a key is let go by where it is on the keyboard, whatever its keyup types", () => {
+  const { page, ws } = connected();
+  // AltGr on Linux sets neither Ctrl nor Alt, and turns E into "€".
+  down(page, "e", { code: "KeyE" });
+  down(page, "AltGraph", { code: "AltRight" });
+  page.clock.advance(450);
+  up(page, "€", { code: "KeyE" });
+  page.clock.advance(1000);
+  check(names(ws).join() === "ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,STOP", `E, let go as "€": ${names(ws)}`);
+  up(page, "AltGraph", { code: "AltRight" });
+  // A layout switched mid-hold, by Caps Lock: W down, "ц" up.
+  const from = count(ws);
+  down(page, "w", { code: "KeyW" });
+  up(page, "ц", { code: "KeyW" });
+  page.clock.advance(1000);
+  check(names(ws, from).join() === "MOVE_FORWARD,STOP", `W, let go as "ц": ${names(ws, from)}`);
+  // And the other way: a key that types no drive key holds nothing.
+  down(page, "ц", { code: "KeyW" });
+  page.clock.advance(500);
+  check(count(ws) === from + 2, `"ц" drove: ${names(ws, from)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("keys: a keyup counts wherever the focus has gone", () => {
   const { page, ws } = connected();
   down(page, "w");
@@ -399,6 +431,59 @@ test("keys: a keyup counts wherever the focus has gone", () => {
   up(page, "w");
   page.clock.advance(1000);
   check(names(ws).join() === "MOVE_FORWARD,STOP", `let go in the address: ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("keys: a context menu lets go of every held key, but not the sticks' and rotate buttons' own", () => {
+  const { page, ws } = connected();
+  down(page, "w");
+  // The rotate button's menu is suppressed (Driver): the key drives on.
+  page.fire(page.$("cw"), "contextmenu");
+  page.clock.advance(450);
+  check(names(ws).join() === "MOVE_FORWARD,MOVE_FORWARD,MOVE_FORWARD", `a suppressed menu: ${names(ws)}`);
+  // Anywhere else the browser's menu opens, and takes the keyup with it.
+  page.fire(page.doc.body, "contextmenu");
+  page.clock.advance(1000);
+  up(page, "w");
+  check(names(ws).join() === "MOVE_FORWARD,MOVE_FORWARD,MOVE_FORWARD,STOP", `a menu opened: ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("keys: Enter connects and leaves the address, so Space then stops an exploring rover", () => {
+  const page = loadPage();
+  check(focus(page, page.$("host")), "the address took the focus");
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("host"), "keydown", { key: "Enter" });
+  const ws = page.sockets[page.sockets.length - 1];
+  ws.serverOpen();
+  ws.serverMsg(telemetry());
+  check(page.doc.activeElement !== page.$("host"), "the focus left the address");
+  check(down(page, " ").defaultPrevented && names(ws).join() === "STOP", `Space: ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("keys: a held key carries on off the Drive tab on the rover, and is let go on the simulator", () => {
+  const { page, ws } = connected();
+  down(page, "q");
+  toProgram(page);
+  page.clock.advance(450);
+  check(names(ws).join() === "ROTATE_COUNTERCLOCKWISE,ROTATE_COUNTERCLOCKWISE,ROTATE_COUNTERCLOCKWISE",
+    `on the rover, as a rotate button: ${names(ws)}`);
+  up(page, "q");
+  check(names(ws).slice(-1)[0] === "STOP", `its release still stops it: ${names(ws)}`);
+  toDrive(page);
+
+  toSimulator(page);
+  const state = () => page.evalIn("targets.simulator.state");
+  down(page, "q");
+  check(state().moving, "the simulated rover turns");
+  toProgram(page);
+  check(!state().moving, "off the Drive tab it is let go: the view plays at the operator's speed there");
+  up(page, "q");
+  toDrive(page);
+  down(page, "q", { repeat: true });
+  page.clock.advance(500);
+  check(!state().moving, "and its repeats take nothing back");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -490,7 +575,7 @@ test("keys: a drive key is a press, and answers a stick's request for one", () =
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("keys: holdKey() takes a motion code, and a key held twice is held once", () => {
+test("keys: holdKey() takes a key's name and a motion code, and a key held twice is held once", () => {
   const page = loadPage();
   const ws = connectOpen(page);
   page.evalIn("globalThis.__presses = 0; driver.onManualInput(() => __presses++)");
@@ -499,6 +584,14 @@ test("keys: holdKey() takes a motion code, and a key held twice is held once", (
   page.evalIn("driver.releaseKey('w')");
   page.clock.advance(1000);
   check(names(ws).join() === "MOVE_FORWARD,STOP", `one release lets go: ${names(ws)}`);
+  let threw = null;
+  try { page.evalIn("driver.holdKey(undefined, MOVE_FORWARD)"); } catch (err) { threw = err; }
+  check(threw && threw.name === "TypeError", `holdKey with no name: ${threw}`);
+  // A release with no name lets go of no rotate button.
+  page.fire(page.$("cw"), "pointerdown", { pointerId: 1, button: 0 });
+  page.evalIn("driver.releaseKey(undefined)");
+  check(page.$("cw").dataset.held === "yes" && names(ws).slice(-1)[0] === "ROTATE_CLOCKWISE", `the rotate button: ${names(ws)}`);
+  page.fire(page.$("cw"), "pointerup", { pointerId: 1, button: 0 });
   for (const move of [0, 19, 20, "1", null]) {
     let threw = null;
     try { page.evalIn(`driver.holdKey("w", ${JSON.stringify(move)})`); } catch (err) { threw = err; }

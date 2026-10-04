@@ -94,8 +94,9 @@
  *   holdKey(key, move)
  *   releaseKey(key)
  *   releaseKeys()
- *       A drive key on the keyboard (js/keys.js), named by key, is an input
- *       like a rotate button: held from holdKey() to releaseKey(), driving
+ *       A drive key on the keyboard (js/keys.js), named by key (a string:
+ *       anything else throws a TypeError, or does nothing for a release),
+ *       is an input like a rotate button: held from holdKey() to releaseKey(), driving
  *       at the slider's speed and re-sent meanwhile, and the rotate button
  *       or key pressed last wins. move is a motion code (1 to 18; anything
  *       else throws a RangeError). holdKey() of a key already held changes
@@ -267,6 +268,7 @@ class Driver {
   }
 
   holdKey(key, move) {
+    if (typeof key !== "string") throw new TypeError(`holdKey() takes a key's name, not ${key}`);
     if (!motionFor(move)) throw new RangeError(`holdKey() takes a motion code, 1 to 18, not ${move}`);
     const held = this.#held;
     if (held.buttons.some((h) => h.key === key)) return;
@@ -276,6 +278,7 @@ class Driver {
   }
 
   releaseKey(key) {
+    if (typeof key !== "string") return; // a rotate button's entry has no key
     const held = this.#held;
     const i = held.buttons.findIndex((h) => h.key === key);
     if (i < 0) return;

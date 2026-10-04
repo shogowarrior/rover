@@ -353,18 +353,23 @@ tab room as a strip above it.
 **The keyboard** (`js/keys.js`) takes `client/drive.py`'s keys: W S forward
 and back, A D strafe, Q E rotate, - and + the speed by 16, Space Stop, T
 Autonomous. A drive key is held as a rotate button is, through the Driver
-(`holdKey()`): it drives from its keydown to its keyup, the keyboard's own
-repeats are not presses, and the rotate button or key pressed last wins,
-one move at a time. The drive and speed keys act on the Drive tab alone;
+(`holdKey()`): it drives from its keydown to its keyup, held by where it is
+on the keyboard (`event.code`) because its keyup may type something else
+(AltGr on Linux, a layout switched mid-hold), the keyboard's own repeats are
+not presses, and the rotate button or key pressed last wins, one move at a
+time. The drive and speed keys act on the Drive tab alone;
 Space and T press the Stop and Autonomous buttons, on either tab, and
 Space's keydown and keyup are both cancelled, so a focused button (Run,
-Connect) is never clicked as well. A keydown is not the panel's in a text
-field or a select, while the dialog is open, in anything marked
+Connect) is never clicked as well; Enter in the address connects and leaves
+the field, so Space stops from there. A keydown is not the panel's in a
+text field, a select or any `<dialog>` (Blockly's alert and name prompt
+among them), while the page's dialog is open, in anything marked
 `data-keys="own"` (the File menu, Options, the simulator's settings, the
 block editor) or Blockly's pop-ups, with Ctrl, Alt or Cmd held, or once
 something on the page has acted on it (the simulator's rover turns on Q and
 E); a keyup always counts. Ctrl, Alt or Cmd going down lets go of every
-held key: macOS sends no keyup for a key let go while Cmd is held. Options
+held key: macOS sends no keyup for a key let go while Cmd is held. So does
+a context menu opening, which takes the keyup without blurring the page. Options
 lists the keys, and `test/keys.test.js` checks them against `drive.py`'s.
 
 The layout is `css/panel.css`'s, on its tokens (type, space, radii) and the

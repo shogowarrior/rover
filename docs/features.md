@@ -1116,14 +1116,16 @@ bench checklist's pad section list it. Host tests 142/142 (five new in
 rotate, - and + the speed by 16 (and _ and =), Space Stop, T Autonomous. A
 drive key is a Driver input like a rotate button (`holdKey()`,
 `releaseKey()`, `releaseKeys()`): it drives from its keydown to its keyup,
-the keyboard's own repeats are not presses, and the rotate button or key
+held by where it is on the keyboard (`event.code`), the keyboard's own
+repeats are not presses, and the rotate button or key
 pressed last wins, one move at a time as in `drive.py` (the left stick has
 the diagonals). So every stand-down lets go of a held key as it does of the
 rest, and the key then drives again only from a fresh press. Space and T
 click the Stop and Autonomous buttons, so they do all that those do, on
 either tab, the simulator target included; Space's keydown and keyup are
 both cancelled, so a focused Run, Connect or Autonomous is never clicked as
-well, and a held Space stops once. The drive and speed keys act on the
+well, and a held Space stops once; Enter in the address connects and leaves
+the field, so Space stops from there. The drive and speed keys act on the
 Drive tab alone. Options, under the gear, lists the keys from the same
 table the keyboard reads, and the buttons carry `aria-keyshortcuts`.
 
@@ -1133,19 +1135,33 @@ pressed, so excluding them left the keys dead after every change of speed
 or tab), and so does the simulator's rover, which turns on Q and E and moves
 on the arrows itself (the keyboard leaves any key the page has acted on),
 so dragging it into place leaves W, A, S and D working. Keys are left alone
-in text fields and selects, while the dialog is open, in the File menu,
+in text fields, selects and any `<dialog>`, while the page's dialog is open, in the File menu,
 Options, the simulator's settings and the block editor (marked
 `data-keys="own"`), in Blockly's pop-ups, with Ctrl, Alt or Cmd held, and
 mid-composition; a keyup always counts, wherever the focus is. Ctrl, Alt or
 Cmd going down lets go of every held key: macOS sends no keyup for a key let
-go while Cmd is held, and the key would have driven on.
+go while Cmd is held, and the key would have driven on. So does a context
+menu opening, except the sticks' and rotate buttons', which are suppressed.
 
-Tests: `test/keys.test.js`, 16 tests, among them the table checked against
+The review round found two bugs and two gaps, all fixed. A key was let go
+only if its keyup typed what its keydown had, and AltGr on Linux (which
+sets no Ctrl or Alt) or a layout switched mid-hold left it driving: keys
+are held by `event.code` now. Space and T acted on Blockly's own alert and
+name prompt, `<dialog>`s it adds to the page, and T could start a rover
+exploring from there. A context menu took a held key's release with it.
+Enter in the address left the focus there, so Space typed rather than
+stopped. The hardware-safety review of Cross found nothing; it noted that
+a pad silent for 500 ms forgets a hold through Cross, as it does a scheme
+change's.
+
+Tests: `test/keys.test.js`, 20 tests, among them the table checked against
 `drive.py`'s `KEYS`, each key held, re-sent and let go, repeats, the last
 press winning over a rotate button and a stick, Space and T on both tabs and
 with a button focused, every place a key is left alone, the modifiers, blur,
-a hidden page, the simulator target and the press requests; 31 mutations of
-the keyboard and the Driver, none survived. Panel tests 275/275.
+a hidden page, a context menu, a keyup that types something else, Enter in
+the address, a tab switch on either target, the simulator target and the
+press requests; 40 mutations of the keyboard, the Driver and the Link, none
+survived. Panel tests 279/279.
 
 ## F5. Themes and Options
 

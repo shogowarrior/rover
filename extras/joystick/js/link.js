@@ -5,7 +5,9 @@
  *
  *   new Link({ body, host, connect, linkState, note, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
- *     host        the address field (host or host:port); Enter connects;
+ *     host        the address field (host or host:port); Enter connects,
+ *                 and leaves the field, so the keyboard's Space and T (keys.js)
+ *                 stop and explore rather than type into it;
  *     connect     the Connect / Cancel / Disconnect button;
  *     linkState   the state's label; note: the status line;
  *     storageKey  where the address is remembered.
@@ -57,7 +59,9 @@ class Link {
       else this.connect();
     });
     host.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") this.connect();
+      if (event.key !== "Enter") return;
+      this.connect();
+      host.blur();
     });
 
     host.value = memory.recall(storageKey) || host.value;

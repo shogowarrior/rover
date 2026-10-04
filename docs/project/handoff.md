@@ -200,10 +200,10 @@ It then did F4, step 7, in a PR of its own (features.md has the details):
   Stop and T for Autonomous (`js/keys.js`). A drive key is held through the
   Driver like a rotate button, so every stand-down lets go of it; the drive
   and speed keys act on the Drive tab, Space and T on both; keys are left to
-  text fields, menus, Options, the dialog and the block editor, and Ctrl,
-  Alt or Cmd lets go of every held key. Options lists them.
+  text fields, menus, Options, dialogs and the block editor, and Ctrl, Alt
+  or Cmd, or a context menu, lets go of every held key. Options lists them.
 
-Host tests 142/142, panel tests 275/275 and the protocol check pass.
+Host tests 142/142, panel tests 279/279 and the protocol check pass.
 
 ## Current work
 

@@ -7,7 +7,11 @@
  *
  * A drive key is held as a rotate button is (Driver.holdKey): it drives from
  * its keydown to its keyup, at the slider's speed, re-sent meanwhile, and the
- * rotate button or key pressed last wins. One move at a time, as in
+ * rotate button or key pressed last wins. It is held by where it is on the
+ * keyboard (event.code), not by what it types, which its keyup may not: on
+ * Linux AltGr, which sets no Ctrl or Alt there, turned a held E's keyup into
+ * "€", and a layout switched mid-hold turned a held W's into "ц", and the key
+ * drove on. One move at a time, as in
  * drive.py: W and D together strafe right, the key pressed last; the stick
  * has the diagonals. The keyboard's own repeats are not presses, so a key the
  * panel let go of (blur, Stop, a modifier) drives again only from a fresh
@@ -27,6 +31,8 @@
  *
  * Where a keydown is not the panel's:
  *   - in a text field, a select, or anything editable: typing is typing;
+ *   - in a <dialog>: the page's own, and Blockly's alert and prompt for a
+ *     variable's name, which it adds to the page;
  *   - in anything marked data-keys="own": the File menu, Options and the
  *     simulator's settings, which take the arrows and Space, and the block
  *     editor;
@@ -48,7 +54,9 @@
  *
  * Ctrl, Alt or Cmd going down lets go of every held key: macOS sends no
  * keyup for a key released while Cmd is held, and the key would have driven
- * on until the tab lost the focus.
+ * on until the tab lost the focus. So does a context menu opening, which
+ * takes the keyboard, and with it the keyup, without blurring the page; the
+ * sticks and rotate buttons suppress theirs (Driver), and leave the keys be.
  */
 class Keyboard {
   // The drive keys, as drive.py's KEYS has them (test/keys.test.js reads
@@ -84,6 +92,9 @@ class Keyboard {
     // what the page's controls do with a key comes first.
     document.addEventListener("keydown", (event) => this.#down(event));
     document.addEventListener("keyup", (event) => this.#up(event));
+    document.addEventListener("contextmenu", (event) => {
+      if (!event.defaultPrevented) driver.releaseKeys();
+    });
   }
 
   #down(event) {
@@ -102,7 +113,7 @@ class Keyboard {
     } else if (driveTab.hidden) {
       // Nothing more off the Drive tab.
     } else if (key in Keyboard.DRIVE) {
-      if (!event.repeat) driver.holdKey(key, Keyboard.DRIVE[key]);
+      if (!event.repeat) driver.holdKey(Keyboard.#where(event), Keyboard.DRIVE[key]);
     } else if (Keyboard.SLOWER.includes(key) || Keyboard.FASTER.includes(key)) {
       const step = Keyboard.FASTER.includes(key) ? Keyboard.SPEED_STEP : -Keyboard.SPEED_STEP;
       const before = speed.value;
@@ -114,9 +125,14 @@ class Keyboard {
   }
 
   #up(event) {
-    const key = String(event.key).toLowerCase();
-    if (key in Keyboard.DRIVE) this.#ui.driver.releaseKey(key);
-    else if (key === " " && this.#ours(event)) event.preventDefault();
+    this.#ui.driver.releaseKey(Keyboard.#where(event));
+    if (event.key === " " && this.#ours(event)) event.preventDefault();
+  }
+
+  // Which key it is on the keyboard; what it types where the browser does not
+  // say (some on-screen keyboards).
+  static #where(event) {
+    return event.code || String(event.key).toLowerCase();
   }
 
   // Whether the key belongs to the panel, rather than to where the focus is.
@@ -124,7 +140,7 @@ class Keyboard {
     if (this.#ui.dialog.open) return false;
     for (let n = event.target; n && n.getAttribute; n = n.parentNode) {
       const tag = n.tagName;
-      if (tag === "SELECT" || tag === "TEXTAREA") return false;
+      if (tag === "SELECT" || tag === "TEXTAREA" || tag === "DIALOG") return false;
       if (tag === "INPUT" && n.getAttribute("type") !== "range") return false;
       if (n.isContentEditable || n.getAttribute("data-keys") === "own") return false;
       if (/\bblockly(?:WidgetDiv|DropDownDiv)\b/.test(n.getAttribute("class") || "")) return false;
