@@ -84,6 +84,7 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
     ["js/support.js", "js/link.js"], ["js/support.js", "js/drive.js"], ["js/support.js", "js/tabs.js"],
     ["js/protocol.js", "js/mecanum.js"], ["js/protocol.js", "js/link.js"], ["js/protocol.js", "js/scan.js"],
     ["js/mecanum.js", "js/drive.js"], ["js/look.js", "js/drive.js"], ["js/look.js", "js/blocks.js"],
+    ["js/support.js", "js/firmware.js"], ["js/protocol.js", "js/firmware.js"], ["js/md5.js", "js/firmware.js"],
   ]) check(loadsBefore(order, a, b), `${a} loads before ${b}: ${order}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.doc.body.dataset.link === "down", "link down");
@@ -4309,7 +4310,7 @@ test("every part's on...(fn) returns a function that unsubscribes fn", () => {
     link.onState(() => {}), link.onTelemetry(() => {}), driver.onManualInput(() => {}), driver.onStandDown(() => {}),
     schemeToggle.onChange(() => {}), familySelector.onChange(() => {}), tabs.onChange(() => {}),
     runner.onState(() => {}), runner.onLog(() => {}), runner.onHighlight(() => {}), targetSwitch.onChange(() => {}),
-    lookPicker.onChange(() => {}),
+    lookPicker.onChange(() => {}), link.onOta(() => {}), firmwareUpdate.onStart(() => {}),
     targets.rover.onTelemetry(() => {}), targets.rover.onLost(() => {}),
   ].map((unsubscribe) => typeof unsubscribe)`);
   check(kinds.every((kind) => kind === "function"), `returned ${kinds}`);

@@ -2102,3 +2102,103 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   body[data-link="connecting"] .lamp { animation: none; }
   body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before { animation: none; }
 }
+
+/* --- firmware updates (firmware.js) ------------------------------------------ */
+
+/* The Options popover's second section, under a rule of its own: what the
+   rover runs, the file to send, the password, Update and Cancel, how much
+   of the file the rover has, and how the update went. In the popover's
+   width: a long file name wraps rather than widen it. */
+#optionsPanel #firmwareLabel {
+  margin-top: var(--s-2);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+}
+
+#optionsPanel .firmware { gap: var(--s-2); }
+
+#optionsPanel .firmwareRunning {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+#optionsPanel #firmwareBuild {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+
+#optionsPanel .firmwareFile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+#optionsPanel #firmwareChoose { flex: none; }
+
+#optionsPanel #firmwareChosen {
+  min-width: 0;
+  font-size: var(--t-sm);
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+
+/* Typed into, so selectable, as the address is: iOS Safari can refuse
+   typing in a field that inherits the page's user-select: none. */
+#optionsPanel #firmwarePassword {
+  width: 100%;
+  height: var(--tap);
+  padding: 0 var(--s-3);
+  font: inherit;
+  color: var(--readout);
+  background: var(--case);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#optionsPanel .firmwareButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+/* Update is the one filled button once it can act, as Run is. */
+#optionsPanel #firmwareStart:not(:disabled) {
+  color: var(--on-live);
+  background: var(--live);
+}
+
+#optionsPanel .firmware button:disabled {
+  color: var(--dim);
+  background: var(--raised);
+  opacity: 0.5;
+}
+
+/* The bar is the slider's track and fill. A rule per engine: one unknown
+   pseudo-element drops a whole rule. */
+#optionsPanel #firmwareProgress {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: var(--range-track);
+  border: none;
+  border-radius: var(--r-full);
+  background: var(--raised-hi);
+  overflow: hidden;
+}
+
+#optionsPanel #firmwareProgress::-webkit-progress-bar { background: var(--raised-hi); }
+#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--live); }
+#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--live); }
+
+#optionsPanel #firmwareStatus {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--dim);
+}
+
+#optionsPanel #firmwareStatus[data-tone="bad"] { color: var(--warn); }
+#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--live); }
