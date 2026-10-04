@@ -11,7 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("./harness.js");
 const { PANEL_ROOT } = require("./fake-dom.js");
-const { stylesheet, cssRules, lookBlocks } = require("./css.js");
+const { stylesheet, cssRules, lookBlocks, tokensOf } = require("./css.js");
 
 // The looks the options offer, in their order (js/look.js). The first is
 // the default, and its block is also :root's, so the page paints in it
@@ -69,11 +69,11 @@ const AUDIT = [
   ["--case", ["--live", "--sim-back"], MARK, "the arrow on a turning wheel"],
   // joy.js shades the stick's knob from --live at the canvas's centre
   // toward --stick-rim 200 px out (js/drive.js), and the well under it
-  // shades from --raised toward --case (css/panel.css). Either side of the
-  // knob's 2 px edge at rest, the well is about 0.34 along, and the knob
-  // 0.08 along on the smallest stick (112 px) and 0.46 on the largest
-  // (400 px).
-  ["--live toward --stick-rim by 0.08", ["--raised toward --case by 0.34"], MARK, "the smallest stick's knob, at its edge"],
+  // shades from --raised toward --case (css/panel.css) out to the box's
+  // corner. Either side of the knob's 2 px edge at rest, on the smallest
+  // stick (112 px) the knob is about 0.09 along and the well 0.30, and on
+  // the largest (400 px) the knob 0.46 and the well 0.34.
+  ["--live toward --stick-rim by 0.09", ["--raised toward --case by 0.30"], MARK, "the smallest stick's knob, at its edge"],
   ["--live toward --stick-rim by 0.46", ["--raised toward --case by 0.34"], MARK, "the largest stick's knob, at its edge"],
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
@@ -92,7 +92,6 @@ const AUDIT = [
 
 /* --- reading the looks --------------------------------------------------- */
 
-const tokensOf = (look) => [...look.declared.keys()].filter((name) => name.startsWith("--"));
 
 // [r, g, b, alpha], from the forms looks.css writes: #rgb, #rrggbb and
 // rgb(r g b / alpha). Anything else fails by name rather than be guessed at.

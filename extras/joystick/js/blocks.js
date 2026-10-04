@@ -254,7 +254,6 @@ class RoverBlocks {
     // it knows.
     Blockly.libraryBlocks.loops.loopTypes.add("rover_forever");
 
-    // Only now: an install that threw part way is tried again.
     RoverBlocks.#installed = true;
   }
 
@@ -810,7 +809,8 @@ class BlockEditor {
       horizontalLayout: narrow,
       toolboxPosition: "start",
       // Blockly draws the grid's lines once, with this as their stroke
-      // attribute: var() follows the look, as the scan's fills do.
+      // attribute, as given (13.3.0's grid.ts): var() follows the look, as
+      // the scan's fills do.
       grid: { spacing: 24, length: 2, colour: "var(--raised-hi)", snap: true },
       zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },

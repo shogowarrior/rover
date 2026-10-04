@@ -13,7 +13,7 @@ const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
-const { stylesheet, cssRules, blockRules, outside, lookBlocks } = require("./css.js");
+const { stylesheet, cssRules, blockRules, outside, lookBlocks, tokensOf } = require("./css.js");
 const { degrees } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
@@ -2107,13 +2107,10 @@ test("motorsReady: the fault beside a landscape stick takes no height of its own
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
-// Blockly draws its grid in the colour it was given once, as the workspace
-// is built, and a look change would leave it in the old one. So it is
-// given none, and program.css paints the lines from the look. (That every
-// token a script reads is declared, and the stop block's copy of --stop,
-// are looks.test.js's.)
 // Blockly draws the grid's lines once, with its colour as their stroke
-// attribute: a literal would stay in the look the page loaded in.
+// attribute: a literal would stay in the look the page loaded in. (That
+// every token a script reads is declared, and the stop block's copy of
+// --stop, are looks.test.js's.)
 test("Blockly draws the grid in the look's --raised-hi, through var()", () => {
   const blocks = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
   const grid = blocks.match(/\bgrid:\s*\{[^}]*\}/);
@@ -3586,7 +3583,7 @@ test("look: the stick's knob is painted from the look's tokens", () => {
 // colour, and the panel stopped loading before Stop was wired. The stick
 // takes joy.js's own colours instead, and the rest of the panel loads.
 test("look: with no look to read, the panel still loads, and Stop still stops", () => {
-  const blank = [...lookBlocks()[0].declared.keys()].filter((name) => name.startsWith("--")).map((name) => `${name}: ;`).join(" ");
+  const blank = tokensOf(lookBlocks()[0]).map((name) => `${name}: ;`).join(" ");
   const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { ${blank} }` }); // exploring
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.headThemeColor === "#0b0d11" && themeColor(page) === "#0b0d11", `the browser's bar as joystick.html gives it: ${page.headThemeColor}, ${themeColor(page)}`);

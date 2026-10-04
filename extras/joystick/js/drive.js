@@ -62,12 +62,13 @@
  *   restyle()
  *       The page's look has changed (look.js). joy.js paints the stick into
  *       its canvas once, in the colours it was built with (the look's
- *       --live, --stick-rim and --stick-ring), so the stick is built again
- *       in the new look's, as for a new size: a stick held now is let go of
- *       first -- one STOP, and only if the stick was what this panel was
- *       sending -- and drives again only from a fresh press. Returns true
- *       when the stick was deflected, as releaseStick() does. A stick in a
- *       hidden tab has no size to be built at: it is built again by shown().
+ *       --live, --stick-rim and --stick-ring), so where the new look's
+ *       differ the stick is built again in them, as for a new size: a
+ *       stick held now is let go of first -- one STOP, and only if the
+ *       stick was what this panel was sending -- and drives again only from
+ *       a fresh press. Returns true when the stick was deflected, as
+ *       releaseStick() does. A stick in a hidden tab has no size to be
+ *       built at: it is built again by shown().
  *
  *   shown()
  *       The Drive tab is shown again. A stick whose look changed, or whose

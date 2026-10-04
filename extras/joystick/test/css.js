@@ -53,4 +53,7 @@ function lookBlocks(extra = "") {
   }));
 }
 
-module.exports = { stylesheet, cssRules, blockRules, outside, lookBlocks };
+// A look's tokens: what it declares but color-scheme.
+const tokensOf = (look) => [...look.declared.keys()].filter((name) => name.startsWith("--"));
+
+module.exports = { stylesheet, cssRules, blockRules, outside, lookBlocks, tokensOf };

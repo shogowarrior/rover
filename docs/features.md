@@ -966,10 +966,11 @@ on each change, and a script holds every look to WCAG AA.
   phone on its side, the mode pill gives way to it: Autonomous lights while
   the rover explores. Under 500 px upright the wordmark keeps its mark and
   drops its word, and on a phone on its side under 780 px the pills drop
-  their lamps, so the status keeps its row. At 480 x 320, "Motors OK" is
-  cut short beside the gear, and "No motor shield" is cut on a phone on its
-  side about 530 to 600 px wide and 375 to 430 tall, a band main cuts it in
-  too, a little narrower (the fault's card under it says it in full).
+  their lamps, so the status keeps its row. At 480 x 320 "Motors OK" is cut
+  short beside the gear, as main cuts "No motor shield" there, and "No motor
+  shield" is cut on a phone on its side about 530 to 600 px wide and 375 to
+  430 tall, a band main cuts it in too, a little narrower (the fault's card
+  under it says it in full).
 - What takes a colour as a plain value is given it again on a change:
   joy.js's stick (built again, letting go of a held stick first as a scheme
   change does: one STOP only if it was driving, and its caption asks for a
