@@ -3676,10 +3676,17 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   // it could not, and the family's slot opening moved the stick.
   const scan = short600.find((r) => r.selector === ".scan");
   check(scan && /padding-block:\s*var\(--s-1\) 0;/.test(scan.body), `short phone: the scan's padding cut: ${scan && scan.body}`);
-  // And the fault in its place on the Drive tab: its padding and margin
-  // held more than the scan's, and a fault moved the stick (360 x 560).
-  const fault = short600.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
+  // And the fault in its place on the Drive tab, on every phone 760 px tall
+  // or less: its padding and margin held more than the row, and a fault
+  // moved the sticks (360 x 560, and 360 x 640 by 2 px).
+  const short760 = mediaRules("@media (max-width: 959.98px) and (max-height: 760px) {") || [];
+  const fault = short760.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
   check(fault && /margin-bottom:\s*0;/.test(fault.body) && /padding-block:\s*0;/.test(fault.body), `short phone: the fault card gives way as the scan does: ${fault && fault.body}`);
+  // There too the address waits on the Program tab while the simulator is
+  // driven, whatever the link: its row coming as the rover's link went
+  // moved both sticks, which a lost link must not do to the simulator's.
+  const address = short760.find((r) => r.selector === 'body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .link');
+  check(address && /display:\s*none;/.test(address.body), `short phone: no address on the Drive tab on the simulator: ${address && address.body}`);
 
   // The view too short for its room: height queries on the view itself,
   // outside every @media so a phone's and the rail's apply, while a wide
