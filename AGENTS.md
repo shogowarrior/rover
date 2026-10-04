@@ -17,7 +17,8 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 
 - **Never flash the board or open its serial monitor.** Uploading moves a
   physical robot, and opening the monitor can reset the board into
-  exploring; only the operator does either. Build and test freely.
+  exploring; only the operator does either. An update from the panel's
+  Options is a flash too. Build and test freely.
 - **Never read `src/config.h`** by any means. See [config.h](#srcconfigh).
 - **Never change a pin assignment unprompted.** See [Pins](#pins).
 - There is no runtime feedback loop: a mistake is invisible until the board
@@ -48,9 +49,13 @@ need it.
 Flashing, for the operator only: `pio run -e car_wire -t upload` over USB
 (always works, and is required after any change that could break WiFi or the
 loop), `pio run -e car_ota -t upload` over WiFi to a rover already running good
-firmware. `car_ota` builds without the gamepad, so on a gamepad rover an OTA
-update removes the pad unless `ROVER_ENABLE_GAMEPAD` defaults to 1 in
-`src/Features.h`, which turns it on for every environment.
+firmware, or the panel's Options, Firmware, which sends a build's
+`firmware.bin` over the panel's own link (see
+[Firmware updates](#firmware-updates-over-the-link)). `car_ota` builds without
+the gamepad, so on a gamepad rover an OTA update removes the pad unless
+`ROVER_ENABLE_GAMEPAD` defaults to 1 in `src/Features.h`, which turns it on
+for every environment; from the panel, send the `firmware.bin` of the
+environment the rover should run.
 
 The serial console, `pio device monitor -e car_wire` (with the exception
 decoder), is operator-only too. Opening it can reset the board through EN,
@@ -65,24 +70,26 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `src/Rover.{h,cpp}` | Mode arbitration, move deadlines, and the one clamped path to the motors. Pure |
 | `src/Explorer.{h,cpp}` | Autonomous exploration state machine; `ExploreParams` holds its thresholds. Pure |
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
-| `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions. Pure (ArduinoJson builds on the host) |
+| `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions, firmware updates' messages included. Pure (ArduinoJson builds on the host) |
+| `src/FirmwareUpdate.{h,cpp}` | The rules of a firmware update over the link: one client, the password, stand down, motion ends it, silence, the restart. Pure |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
 | `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, when to rewrite the player LEDs. Pure |
 | `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age: every wrap-safe time comparison |
-| `src/Hardware.h` | The `Motors` and `RangeScanner` interfaces between the pure core and the hardware |
+| `src/Hardware.h` | The `Motors`, `RangeScanner` and `FirmwareSlot` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
 | `src/Pins.h` | Every GPIO and motor terminal. A value here is a wire |
 | `src/Features.h` | Compile-time switches: gamepad, explore at power-on, the pad's host MAC, the default control scheme |
 | `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
-| `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, and the WiFi-loss failsafe |
-| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands and scheme changes in, telemetry out, driver tracking, heartbeat |
+| `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, the OTA password both update paths check, confirming a new image once online, and the WiFi-loss failsafe |
+| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands, scheme changes and firmware updates in, telemetry out, driver tracking, heartbeat |
+| `src/FlashSlot.{h,cpp}` | `FirmwareSlot` on arduino-esp32's `Update`: writes the other app slot, checks the image, and the running image's MD5 |
 | `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED write. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
-| `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol |
-| `test/fakes/` | Fake `Motors` and `RangeScanner` for the host tests |
+| `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol, firmware update |
+| `test/fakes/` | Fake `Motors`, `RangeScanner` and `FirmwareSlot` for the host tests |
 | `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does, `Vectors.h` reads `test/vectors/` |
 | `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
@@ -108,19 +115,25 @@ OTA and the WebSocket.
                                               link lost,    |
                                               OTA start  Explorer --RangeScanner--> Scanner
                                                                                    (servo, HC-SR04s)
+
+  RemoteControl --image--> FirmwareUpdate --FirmwareSlot--> FlashSlot
+                           (standDown as it begins;          (Update: the other app slot)
+                            Rover's motion ends it)
 ```
 
-`Network` also starts `RemoteControl` once WiFi is up and serves it each loop.
+`Network` also starts `RemoteControl` once WiFi is up and serves it each loop,
+and gives `FirmwareUpdate` and ArduinoOTA the one OTA password.
 
 **The pure core** is `Rover`, `Explorer`, `GamepadSession`, `MovePatterns`,
-`Protocol` and `Kinematics`, with `Timing.h`. None of it calls Arduino: time
-arrives as a `now` argument, and the hardware is reached only through the
-interfaces in `Hardware.h`. That is what lets `pio test -e native` test mode
-arbitration, move deadlines, clamping, the whole of autonomy, the gamepad's
-rules and the wire format on the host, compiled as gnu++11 like the board.
+`Protocol`, `Kinematics` and `FirmwareUpdate`, with `Timing.h`. None of it
+calls Arduino: time arrives as a `now` argument, and the hardware is reached
+only through the interfaces in `Hardware.h`. That is what lets
+`pio test -e native` test mode arbitration, move deadlines, clamping, the
+whole of autonomy, the gamepad's rules, the wire format and a firmware
+update's rules on the host, compiled as gnu++11 like the board.
 
-**The adapters** are `DriveTrain`, `Scanner`, `Network`, `RemoteControl` and
-`Gamepad`. They only translate between the core and a library, and they are not
+**The adapters** are `DriveTrain`, `Scanner`, `Network`, `RemoteControl`,
+`FlashSlot` and `Gamepad`. They only translate between the core and a library, and they are not
 host-tested, so keep them thin. Logic that could be wrong belongs in the core,
 with a test. If a core module seems to need `millis()`, a motor or `Serial`,
 pass the value in or add an interface instead.
@@ -147,7 +160,10 @@ last PWM, so the wheels run on through the reboot (about half a second) until
 `DriveTrain::begin()` releases them (it tries even when the shield's probe
 fails), and indefinitely if the board never boots that far. The only
 `delay()` calls are in `setup()`: the bounded WiFi connect and the shield
-probe's retries.
+probe's retries. A firmware update over the link holds the loop for each
+chunk it writes, and for up to about 2 s where `Update` erases a 64 KB block
+of flash: that is why a chunk is asked for only with the rover at rest, and
+why any motion ends an update (see below).
 
 **Motors are released by deadline, not by waiting.** `Rover::drive()` sets the
 wheels and records `moveDeadline`; `Rover::update()`, every loop, releases them
@@ -190,8 +206,8 @@ released:
   disconnect. This also keeps a vanished client's full send buffer from
   blocking the loop. A new client's first ping goes out about 600 ms after
   it connects, and its pong must come back within 600 ms of that ping.
-  `HeartbeatServer` clears a slot's missed pongs on every disconnect
-  (`RemoteControl.h` says why).
+  `HeartbeatServer` clears a slot's missed pongs on every connect and
+  disconnect (`RemoteControl.h` and `RemoteControl.cpp` say why).
 - WiFi drops: `Rover::standDown()` stops and switches to manual, because no
   STOP could reach an exploring rover.
 - An OTA flash starts: `standDown()` too, so an upload that fails also leaves
@@ -199,12 +215,25 @@ released:
   blocks the loop until it ends, so the stop's second write comes from its
   progress callback, which runs only while data arrives: flash over WiFi
   with the rover still or on the stand.
+- An update over the link begins: `standDown()` too. Its client
+  disconnecting, or silent for `OTA_SILENCE_MS` (5 s) after a reply, ends
+  it, and so do Cancel and any motion (a drive command from anyone, the
+  pad, Autonomous; Stop is not motion), before another chunk is written.
+  Every way an update ends but "done" leaves the old firmware booting and
+  the rover as the stand-down left it.
 - The gamepad goes silent for `GAMEPAD_SILENCE_MS` (500 ms). A report that old
   never reads as fresh again, however long the silence.
-- Any reset other than a power-on (OTA, crash, watchdog, brownout) starts in
-  manual (`startupMode()` in `main.cpp`), so a recovering rover stays put once
-  `DriveTrain::begin()` has released the wheels (see above). The EN button,
-  and so a USB flash, resets like a power-on and starts exploring.
+- Any reset other than a power-on (OTA from either path, crash, watchdog,
+  brownout) starts in manual (`startupMode()` in `main.cpp`), so a recovering
+  rover stays put once `DriveTrain::begin()` has released the wheels (see
+  above). The EN button, and so a USB flash, resets like a power-on and
+  starts exploring. An update over the link restarts the rover only once it
+  is at rest.
+- A new image from either OTA path boots on trial (`verifyRollbackLater()`
+  in `Network.cpp`): `Network::goOnline()` confirms it once WiFi is up, and
+  until then the next reset of any kind boots the previous image. So a
+  build that crashes, hangs or never gets online undoes itself at the next
+  reset, where it could not have been replaced over the air.
 
 If you add a new way to lose the link, add its failsafe in the same change.
 
@@ -284,6 +313,16 @@ reference; in short:
   (no `move`) sets the control scheme below. It is not a command: it neither
   takes control nor stops anything, so a client may send it while the rover
   explores. An unknown scheme name is ignored.
+- **Firmware updates,** between the rover and the one client updating it
+  (see [Firmware updates](#firmware-updates-over-the-link)): text messages
+  carrying `"ota"` (no `move`), which are not commands either, and binary
+  frames of at most `protocol::OTA_CHUNK_MAX_BYTES` (1000) holding the image.
+  The client sends `{"ota": "begin", "size", "md5"}`, answers
+  `{"ota": "auth", "nonce"}` with `{"ota": "auth", "cnonce", "response"}`
+  when the rover has an OTA password, then sends the bytes from wherever
+  each `{"ota": "next", "offset"}` says, one frame per reply. The rover ends
+  with `{"ota": "done"}` and restarts, or `{"ota": "failed", "reason"}`;
+  `{"ota": "cancel"}` ends it from the client's side.
 - **Rover to clients,** every 500 ms: `mode` (`AUTONOMOUS` or `MANUAL`),
   `move` (`STOP` whenever the wheels are idle), `moving`, `temperature` (the
   ESP32's own, in C), `motorsReady` (always sent; `false` when the motor
@@ -292,7 +331,11 @@ reference; in short:
   `distanceLeft`, `distanceFrontLeft`, `distanceFront`, `distanceFrontRight`,
   `distanceRight` in cm once every bearing has been measured (999 means no
   echo). Distances stay live in manual mode too. `scheme` (`NORMAL` or
-  `ADVANCED`) is always sent. A frame must fit `protocol::TELEMETRY_MAX_BYTES`
+  `ADVANCED`) is always sent, and so is `firmware`, the running image's MD5
+  (32 hex digits, the MD5 of the `firmware.bin` it came from): a rover that
+  sends it takes updates over the link, and one from before reads an `ota`
+  message as a STOP that takes control, so a client sends none to a rover
+  without it. A frame must fit `protocol::TELEMETRY_MAX_BYTES`
   (384 bytes; `Protocol.h` says why), and `test_longest_telemetry_fits` fails
   the host tests when a new key would not. `test/vectors/telemetry.json`
   holds example frames, key for key, that `test_protocol` checks.
@@ -323,8 +366,8 @@ the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
 fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
 (`program.test.js`), the simulator (`sim.test.js`), the stick mapping
-(`mecanum.test.js`) and the looks' tokens and contrast (`looks.test.js`) on
-their own. `test/firmware.js` reads what they check against in `src/` and
+(`mecanum.test.js`), the looks' tokens and contrast (`looks.test.js`) and a
+firmware update with its MD5 (`ota.test.js`) on their own. `test/firmware.js` reads what they check against in `src/` and
 `test/vectors/`, `test/css.js` reads the stylesheets as they check them, and
 `test/harness.js` sets the time limit an asynchronous test runs under, so
 one that never ends fails by name.
@@ -506,6 +549,46 @@ wheel slip, inertia, motor lag, the sonar's beam width, or temperature, phase
 and halt. The numbers that describe this rover are estimates, in the
 calibration block of `js/sim.js` with how to measure each.
 
+## Firmware updates over the link
+
+The panel's Options (the gear) has a Firmware section under Theme: the
+build the rover runs, Choose for a `firmware.bin`, an OTA password field,
+Update and Cancel, a progress bar and a status line. It is the panel's own
+way to do what `pio run -e car_ota -t upload` does, which a browser cannot:
+espota starts with a UDP invitation and the board then connects back to the
+computer over TCP. ArduinoOTA keeps working beside it, and both check the
+one OTA password `config.h` may set.
+
+- **The image goes over the link the panel already holds**, one binary
+  frame of at most 1000 bytes at a time, each sent only once the rover has
+  asked for it (`next`). The WebSocket library drops a frame whose TCP
+  segments arrive more than 2 ms apart (`WEBSOCKETS_TCP_TIMEOUT`), and
+  Firefox splits a payload over 1000 bytes into two writes; 1000 bytes and
+  the header fit one segment (`Protocol.h`). A frame that comes in pieces
+  ends the update.
+- **The rules are `FirmwareUpdate`'s**, host-tested in
+  `test/test_firmware_update`, and listed in its header. `FlashSlot` writes
+  the other app slot through arduino-esp32's `Update`; the image's MD5 is
+  checked once it is whole, and the image itself as it is made the one to
+  boot.
+- **Safety:** see the update's lines under
+  [Loss of control stops the rover](#invariants). Beginning stands the rover
+  down; the first chunk waits for it to be at rest; motion from anyone ends
+  the update; the restart waits for rest too, and comes up in manual.
+- **The password** is checked as ArduinoOTA checks espota's: the rover sends
+  a single-use nonce and the client answers
+  md5hex(md5hex(password):nonce:cnonce). The panel never keeps the
+  password, logs it or sends it.
+- **Trial boot:** a new image confirms itself only once WiFi is up
+  (`Network::goOnline()`); until then the next reset boots the old one.
+- **The panel** (`js/firmware.js`, with `js/md5.js`) offers Update only on a
+  live link, with telemetry naming the running firmware, and a file that is
+  an ESP32 app image (its first byte 0xE9 and the app description's magic
+  at byte 32). It stops a program running on the rover first, gives up on
+  a rover silent for 10 s, carries on with the popover closed, and after the
+  restart and a new connection says whether the rover runs the file sent.
+  It does not reconnect by itself.
+
 ## The gamepad
 
 `GamepadSession` turns the pad's reports into commands; `test/test_gamepad`
@@ -567,7 +650,7 @@ alternatives for GPIO12 and how to recover a board that will not boot.
 ## src/config.h
 
 `src/config.h` holds the live WiFi SSID and password, and optionally an OTA
-password. It is gitignored. Never read it by any means (an editor, `cat`,
+password, which both update paths check. It is gitignored. Never read it by any means (an editor, `cat`,
 `grep`, a glob that matches it, printing its macros), never commit it, and
 never paste from it. To search `src/`, use `git grep --untracked`, which
 searches new files too but skips gitignored ones; a plain recursive `grep`
