@@ -16,8 +16,8 @@ namespace {
 // ~2 s keeps its queue short of that. The pong timeout must stay below the
 // ping interval, or a fresh ping resets the timer before it can expire.
 //
-// HeartbeatServer clears a slot's misses on every disconnect (RemoteControl.h
-// says why). The library charges a new client one miss
+// HeartbeatServer clears a slot's misses on every connect and disconnect
+// (RemoteControl.h says why). The library charges a new client one miss
 // HEARTBEAT_PONG_TIMEOUT_MS after accept, before any ping, and pings it then;
 // its first pong must arrive within HEARTBEAT_PONG_TIMEOUT_MS of that ping,
 // or the second miss drops it.
@@ -56,6 +56,12 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
       break;
 
     case WStype_CONNECTED: {
+      // As well as on the disconnect: in the pass of server.loop() that
+      // disconnects a client (a 1002 for a frame whose rest never came, say),
+      // the library still runs that slot's heartbeat timeout afterwards,
+      // which can count a miss after the disconnect cleared them, for the
+      // slot's next client.
+      server.forgetMissedPongs(client);
       const IPAddress remote = server.remoteIP(client);
       Serial.printf("[%u] Connected from %d.%d.%d.%d\n", client, remote[0], remote[1],
                     remote[2], remote[3]);
