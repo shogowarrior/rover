@@ -579,7 +579,7 @@ calibration block of `js/sim.js` with how to measure each.
 
 ## Firmware updates over the link
 
-The panel's Options (the gear) has a Firmware section under Theme: the
+The panel's Options (the gear) has a Firmware section after Keys: the
 build the rover runs, Choose for a `firmware.bin`, an OTA password field,
 Update and Cancel, a progress bar and a status line. It is the panel's own
 way to do what `pio run -e car_ota -t upload` does, which a browser cannot:

@@ -29,9 +29,11 @@ class HeartbeatServer : public WebSocketsServer {
  public:
   explicit HeartbeatServer(uint16_t port) : WebSocketsServer(port) {}
 
-  // Call on WStype_DISCONNECTED: clientDisconnect() raises it after the last
-  // miss is counted and before the slot can be reused. And on
-  // WStype_CONNECTED (RemoteControl.cpp says why).
+  // Call on WStype_DISCONNECTED and on WStype_CONNECTED. The disconnect
+  // clears the count before the slot can be reused, but when frame handling
+  // drops a client, the library still runs that slot's heartbeat check in
+  // the same pass, which can count a miss after the clear; the connect
+  // clears that too (RemoteControl.cpp).
   void forgetMissedPongs(uint8_t client) {
     if (client < WEBSOCKETS_SERVER_CLIENT_MAX) _clients[client].pongTimeoutCount = 0;
   }

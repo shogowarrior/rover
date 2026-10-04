@@ -534,4 +534,6 @@ const firmwareUpdate = new FirmwareUpdate({
 link.onTelemetry((data) => firmwareUpdate.show(data));
 link.onState((state) => firmwareUpdate.linkState(state));
 link.onOta((message) => firmwareUpdate.reply(message));
-firmwareUpdate.onStart(() => runner.abort("the rover's firmware is being updated."));
+firmwareUpdate.onStart(() => {
+  if (runner.target === targets.rover) runner.abort("the rover's firmware is being updated.");
+});

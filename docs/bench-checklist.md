@@ -318,8 +318,10 @@ connected from the panel, with the gear's Options open:
    After each, the rover runs the firmware it had: Options shows the same
    build as before, and after EN too (EN starts it exploring: on the stand).
 5. **The password.** With an OTA password set in the WiFi settings header,
-   flashed over USB: Update with no password or a wrong one stops with
-   "Wrong OTA password." and the old firmware stays; the right one works.
+   flashed over USB: Update with no password typed stops with "This rover
+   has an OTA password: type it in, then press Update again.", and with a
+   wrong one with "Wrong OTA password."; either way the old firmware stays.
+   The right one works.
    `car_ota` with `PLATFORMIO_UPLOAD_FLAGS=--auth=...` still works too.
 6. **Trial boot.** Right after an update, Update again: the rover refuses,
    saying it is still trying out new firmware, until it has run half a

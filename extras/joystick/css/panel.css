@@ -376,12 +376,15 @@ input[type="range"]::-moz-range-thumb {
 /* The popover wears the File menu's .menu, above: under its button, right
    edges together, over the page and under the Stop bar. As wide as a phone
    on its side leaves left of the gear, and never taller than the screen
-   below the gear, which sits within --tap-lg of the top in every layout: it
-   scrolls inside rather than scroll the page, which would move the stick. */
+   between the gear, which sits within --tap-lg of the top in every layout,
+   and the Stop bar, at most --tap-lg and its padding tall in every layout:
+   it scrolls inside rather than scroll the page, which would move the
+   stick. Down to the screen's foot, its Firmware section's last lines
+   (Update, the progress bar, how the update went) lay under the bar. */
 .options {
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100 * var(--svh) - var(--tap-lg));
+  max-height: calc(100 * var(--svh) - 2 * var(--tap-lg) - 2 * var(--s-3) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   padding: var(--s-2) var(--s-3) var(--s-3);
 }
@@ -391,7 +394,7 @@ input[type="range"]::-moz-range-thumb {
   padding: 0;
 }
 
-/* Each section after the first, the keys', set off from the one above. */
+/* Each section after the first set off from the one above. */
 .options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
 
 /* A row per theme: its name, then its Dark and Light tiles. Close-set, so
@@ -2196,12 +2199,11 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
 /* --- firmware updates (firmware.js) ------------------------------------------ */
 
-/* The Options popover's second section, under a rule of its own: what the
-   rover runs, the file to send, the password, Update and Cancel, how much
-   of the file the rover has, and how the update went. In the popover's
-   width: a long file name wraps rather than widen it. */
+/* The Options popover's last section, after Keys, under a rule of its own:
+   what the rover runs, the file to send, the password, Update and Cancel,
+   how much of the file the rover has, and how the update went. In the
+   popover's width: a long file name wraps rather than widen it. */
 #optionsPanel #firmwareLabel {
-  margin-top: var(--s-2);
   padding-top: var(--s-3);
   border-top: 1px solid var(--rule);
 }

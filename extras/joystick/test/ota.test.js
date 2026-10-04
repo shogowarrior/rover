@@ -76,6 +76,7 @@ class FakeRover {
   #message(message) {
     this.heard.push(message);
     if (message.ota === "begin") {
+      if (this.state === "done") return this.#fail("The rover is about to restart into new firmware.");
       if (this.state !== "idle") return this.#fail("Another update is under way.");
       this.size = message.size;
       this.md5 = message.md5;
@@ -88,7 +89,7 @@ class FakeRover {
       if (message.response === hex(`${this.secret}:${this.nonce}:${message.cnonce}`)) return this.#receive();
       return this.#fail("Wrong OTA password.");
     }
-    if (message.ota === "cancel" && this.state !== "idle") return this.#fail("Cancelled.");
+    if (message.ota === "cancel" && this.state !== "idle" && this.state !== "done") return this.#fail("Cancelled.");
   }
 
   #receive() {
@@ -235,11 +236,14 @@ test("Update stays off, saying why, until the link is up, the rover reports its 
   // Firmware from before updates over the link reads {"ota": ...} as a STOP
   // that takes control: nothing goes to it.
   ws.serverMsg(telemetry({ firmware: undefined }));
-  assert.ok(off(page.evalIn("FirmwareUpdate.WHY_NOT.tooOld")), start(page).title);
+  const tooOld = page.evalIn("FirmwareUpdate.WHY_NOT.tooOld");
+  assert.ok(off(tooOld), start(page).title);
+  assert.equal(status(page).textContent, tooOld, "said where a touch screen shows it, which has no titles");
   assert.equal(page.$("firmwareBuild").textContent, "an older firmware");
   assert.equal(pressSends(ws), 0);
 
   ws.serverMsg(telemetry({ firmware: RUNNING }));
+  assert.equal(status(page).textContent, "", "and gone with the old firmware");
   assert.equal(page.$("firmwareBuild").textContent, RUNNING.slice(0, 8));
   assert.ok(!start(page).disabled && start(page).title === "", start(page).title);
   assert.ok(cancel(page).disabled && cancel(page).title === "No update to cancel.");
@@ -357,16 +361,77 @@ test("an update: begin with the file's size and MD5, then one piece per answer f
   assert.deepEqual(page.errors, []);
 });
 
-test("an update the rover does not come back from on the file sent says so", async () => {
+test("a rover back on the build it had is looked at again on the next link; one on another build says so", async () => {
   const { page, ws } = linked();
-  await choose(page, appImage());
+  const image = appImage();
+  await choose(page, image);
   const rover = new FakeRover(ws);
   page.fire(start(page), "click");
   rover.answer();
-  ws.serverDrop();
+  // Not restarted yet (driven since done), or gone back to its old build.
+  page.fire(page.$("connect"), "click"); // Disconnect
+  connectOpen(page).serverMsg(telemetry({ firmware: RUNNING }));
+  assert.equal(status(page).textContent, "The rover still runs the firmware it had: it has not restarted yet, or went back to it. Connect again to look again.");
+  assert.equal(status(page).dataset.tone, "");
+  assert.ok(!start(page).disabled && progress(page).hidden, start(page).title);
+  // A press now reaches a rover still about to restart, which says so.
+  const ws2 = page.sockets.at(-1);
+  const again = new FakeRover(ws2);
+  again.state = "done";
+  page.fire(start(page), "click");
+  again.answer();
+  assert.equal(status(page).textContent, "Not updated. The rover is about to restart into new firmware.");
+  // It restarts: the next link finds the file sent.
+  ws2.serverDrop();
+  connectOpen(page).serverMsg(telemetry({ firmware: hex(image) }));
+  assert.equal(status(page).textContent, "The rover is running the firmware you sent.");
+
+  // Another update, and a rover back on neither build.
+  const ws3 = page.sockets.at(-1);
+  const third = new FakeRover(ws3);
+  page.fire(start(page), "click");
+  third.answer();
+  ws3.serverDrop();
   connectOpen(page).serverMsg(telemetry({ firmware: RUNNING }));
   assert.equal(status(page).textContent, "The rover is back, but runs other firmware than the file you sent.");
   assert.equal(status(page).dataset.tone, "bad");
+  assert.deepEqual(page.errors, []);
+});
+
+test("every piece sent but no done (lost as the rover restarted): the next link says whether it took", async () => {
+  for (const ending of ["timeout", "drop"]) {
+    const { page, ws } = linked();
+    const image = appImage(2500);
+    await choose(page, image);
+    page.fire(start(page), "click");
+    for (const offset of [0, 1000, 2000]) ws.serverMsg({ ota: "next", offset });
+    assert.equal(ws.binary.length, 3, ending);
+    if (ending === "timeout") {
+      page.clock.advance(ANSWER_MS);
+      assert.equal(status(page).textContent, "The rover stopped answering as the update ended: connect again to see whether it took.");
+      assert.deepEqual(ota(ws).at(-1), { ota: "cancel" });
+      page.clock.advance(ANSWER_MS);
+    }
+    ws.serverDrop();
+    if (ending === "drop") assert.equal(status(page).textContent, "The link to the rover was lost as the update ended: connect again to see whether it took.");
+    connectOpen(page).serverMsg(telemetry({ firmware: hex(image) }));
+    assert.equal(status(page).textContent, "The rover is running the firmware you sent.", ending);
+    assert.deepEqual(page.errors, []);
+  }
+});
+
+test("a press that disables its own button hands the focus on, never to the page, where the drive keys would end the update", async () => {
+  const { page, ws } = linked();
+  await choose(page, appImage());
+  page.fire(page.$("options"), "click");
+  const focused = () => page.doc.activeElement.id || page.doc.activeElement.tagName;
+  start(page).focus();
+  assert.equal(focused(), "firmwareStart");
+  page.fire(start(page), "click");
+  assert.equal(focused(), "firmwareCancel", "Update, then Cancel");
+  page.fire(cancel(page), "click");
+  assert.equal(focused(), "firmwarePassword", "every button off while the rover's last word is awaited");
+  ws.serverMsg({ ota: "failed", reason: "Cancelled." });
   assert.ok(!start(page).disabled);
   assert.deepEqual(page.errors, []);
 });
@@ -550,6 +615,23 @@ test("starting an update ends a program running on the rover first", async () =>
   const begin = sent.findIndex((m) => m.ota === "begin");
   assert.ok(begin > 0 && sent.slice(0, begin).at(-1).move === 0, "the program's STOP, then begin");
   assert.ok(sent.slice(begin + 1).every((m) => m.move === undefined), "and no drive after it");
+  assert.deepEqual(page.errors, []);
+});
+
+test("a preview on the simulator carries on through an update: it sends the rover nothing", async () => {
+  const { page, ws } = linked({ mode: "MANUAL" });
+  await choose(page, appImage());
+  page.evalIn("runner.run(async (api) => { await api.drive(MOVE_FORWARD, 50, 10); }, targets.simulator);");
+  await flush();
+  page.clock.advance(300);
+  assert.equal(page.evalIn("runner.state"), "running");
+  page.fire(start(page), "click");
+  await flush();
+  assert.equal(page.evalIn("runner.state"), "running");
+  assert.deepEqual(ota(ws).at(-1).ota, "begin");
+  assert.ok(ws.moves().every((m) => m.move === undefined), "no drive, nor a STOP, reached the rover");
+  page.evalIn("runner.abort('done looking')");
+  await flush();
   assert.deepEqual(page.errors, []);
 });
 

@@ -31,7 +31,11 @@
  * nothing for ANSWER_MS, on Cancel, or when the link goes. A stale link alone
  * does not end it: the rover's loop, telemetry and all, stalls while it
  * erases flash. Once done, the rover restarts and the link goes with it;
- * on a link made since, telemetry says whether it runs the file sent.
+ * on a link made since, telemetry says whether it runs the file sent. So it
+ * does after an update that ended with every piece sent but no "done" (one
+ * lost as the rover restarted, say), and again on each new link while the
+ * rover still runs the build it had: one driven since "done" restarts only
+ * once at rest, and a new build reset within its trial goes back to the old.
  *
  * The update carries on with the popover closed, which shows how it went
  * when it opens again. The password is never remembered or logged, and
@@ -66,12 +70,16 @@ class FirmwareUpdate {
   #running = undefined;
   #file = null; // the chosen file, once it passed: { bytes, md5 }
   #picks = 0; // so that a slow read cannot outlast a later pick
-  // The update under way: the image and its MD5, how much of it the rover
-  // has (acked) and the panel has sent (sent), and its phase: "sending",
-  // "ending" (the panel ended it, and waits for the rover's last word) or
-  // "restarting" (done; relinked once the link has gone since).
+  // The update under way: the image and its MD5, the build the rover ran
+  // before (from), how much of the image the rover has (acked) and the panel
+  // has sent (sent), and its phase: "sending", or "ending" (the panel ended
+  // it, and waits for the rover's last word).
   #job = null;
   #timer = null;
+  // A file the rover may run now, its update over: { md5, from, size,
+  // restarting (after "done", until the link goes), relinked (the link has
+  // gone since, so the next frame is a new link's) }.
+  #check = null;
 
   constructor({ link, ui }) {
     this.#link = link;
@@ -93,11 +101,19 @@ class FirmwareUpdate {
 
   show(data) {
     this.#running = typeof data.firmware === "string" ? data.firmware : null;
-    const job = this.#job;
-    if (job && job.relinked) {
-      if (this.#running === job.md5) this.#say("The rover is running the firmware you sent.", "good");
-      else this.#say("The rover is back, but runs other firmware than the file you sent.", "bad");
-      this.#finish();
+    const check = this.#check;
+    if (check && check.relinked) {
+      if (this.#running === check.md5) {
+        this.#say("The rover is running the firmware you sent.", "good");
+        this.#check = null;
+      } else if (this.#running === check.from) {
+        this.#say("The rover still runs the firmware it had: it has not restarted yet, or went back to it. Connect again to look again.");
+        check.restarting = false;
+        check.relinked = false;
+      } else {
+        this.#say("The rover is back, but runs other firmware than the file you sent.", "bad");
+        this.#check = null;
+      }
     }
     this.#update();
   }
@@ -106,20 +122,26 @@ class FirmwareUpdate {
     const job = this.#job;
     if (state === "down") {
       this.#running = undefined;
-      if (job && job.phase === "restarting") {
-        job.relinked = true;
-      } else if (job) {
-        // Ending, the panel has already said why.
-        if (job.phase === "sending") this.#say("Not updated. The link to the rover was lost.", "bad");
-        this.#finish();
+      if (this.#check) this.#check.relinked = true;
+      // Ending, the panel has already said why.
+      if (job && job.phase === "sending") {
+        const check = FirmwareUpdate.#allSent(job);
+        if (check) {
+          this.#check = check;
+          check.relinked = true;
+          this.#say("The link to the rover was lost as the update ended: connect again to see whether it took.");
+        } else {
+          this.#say("Not updated. The link to the rover was lost.", "bad");
+        }
       }
+      if (job) this.#finish();
     }
     this.#update();
   }
 
   reply(message) {
     const job = this.#job;
-    if (!job || job.phase === "restarting") return;
+    if (!job) return;
     if (message.ota === OTA_DONE) {
       this.#done();
     } else if (message.ota === OTA_FAILED) {
@@ -134,7 +156,7 @@ class FirmwareUpdate {
   }
 
   get #busy() {
-    return Boolean(this.#job) && this.#job.phase !== "restarting";
+    return Boolean(this.#job);
   }
 
   /* --- the steps of an update --------------------------------------------- */
@@ -176,7 +198,7 @@ class FirmwareUpdate {
     const { bytes, md5: digest } = this.#file;
     this.#startListeners.emit();
     if (!this.#link.send({ ota: OTA_BEGIN, size: bytes.length, md5: digest })) return;
-    this.#job = { bytes, md5: digest, acked: 0, sent: 0, phase: "sending", relinked: false };
+    this.#job = { bytes, md5: digest, from: this.#running, acked: 0, sent: 0, phase: "sending" };
     this.#say("Starting the update…");
     this.#await();
     this.#update();
@@ -213,10 +235,19 @@ class FirmwareUpdate {
   }
 
   #done() {
-    clearTimeout(this.#timer);
-    this.#job.phase = "restarting";
-    this.#job.acked = this.#job.bytes.length;
+    this.#check = FirmwareUpdate.#checkFor(this.#job, true);
+    this.#finish();
     this.#say("Updated. The rover is restarting: connect again in a few seconds.", "good");
+  }
+
+  // What to look for on a later link, if the rover could have the whole
+  // file: every piece sent, though its "done" may be lost. Else null.
+  static #allSent(job) {
+    return job.sent < job.bytes.length ? null : FirmwareUpdate.#checkFor(job, false);
+  }
+
+  static #checkFor(job, restarting) {
+    return { md5: job.md5, from: job.from, size: job.bytes.length, restarting, relinked: false };
   }
 
   // The panel ends the update. The rover is told, and its last word is waited
@@ -237,8 +268,15 @@ class FirmwareUpdate {
   #await() {
     clearTimeout(this.#timer);
     this.#timer = setTimeout(() => {
-      if (this.#job.phase === "sending") this.#end("Not updated. The rover stopped answering.");
-      else this.#finish();
+      const job = this.#job;
+      if (job.phase === "sending") {
+        const check = FirmwareUpdate.#allSent(job);
+        if (check) this.#check = check;
+        if (check) this.#end("The rover stopped answering as the update ended: connect again to see whether it took.", "");
+        else this.#end("Not updated. The rover stopped answering.");
+      } else {
+        this.#finish();
+      }
       this.#update();
     }, FirmwareUpdate.ANSWER_MS);
   }
@@ -247,8 +285,8 @@ class FirmwareUpdate {
 
   #whyNot() {
     const why = FirmwareUpdate.WHY_NOT;
-    const job = this.#job;
-    if (job) return job.phase === "restarting" ? why.restarting : why.busy;
+    if (this.#job) return why.busy;
+    if (this.#check && this.#check.restarting && !this.#check.relinked) return why.restarting;
     const state = this.#link.state;
     if (state !== "up") return why[state];
     if (this.#running === undefined) return why.unreported;
@@ -259,7 +297,9 @@ class FirmwareUpdate {
   #update() {
     const ui = this.#ui;
     const job = this.#job;
+    const check = this.#check;
     const running = this.#running;
+    const focused = [ui.choose, ui.start, ui.cancel].find((button) => button === document.activeElement);
     ui.build.textContent = running === undefined ? "—" : running === null ? "an older firmware" : running.slice(0, 8);
     ui.choose.disabled = this.#busy;
     ui.choose.title = this.#busy ? FirmwareUpdate.WHY_NOT.busy : "";
@@ -268,10 +308,21 @@ class FirmwareUpdate {
     ui.start.title = why;
     ui.cancel.disabled = !job || job.phase !== "sending";
     ui.cancel.title = ui.cancel.disabled ? "No update to cancel." : "Stop the update. The rover keeps the firmware it had.";
-    ui.progress.hidden = !job;
-    if (job) {
-      ui.progress.max = job.bytes.length;
-      ui.progress.value = job.acked;
+    // A disabled button drops the focus to the page, where the drive keys
+    // are live again, and a key typed next would drive the rover and end
+    // the update: the focus moves to the section's next live control, the
+    // password's field at the last, which keeps the keys to itself.
+    if (focused && focused.disabled) [ui.cancel, ui.start, ui.choose, ui.password].find((control) => !control.disabled).focus();
+    // Touch shows no title, and the only way past an old firmware is one
+    // the operator has to be told: a USB flash.
+    const tooOld = FirmwareUpdate.WHY_NOT.tooOld;
+    if (!job && !check && running === null && !ui.status.textContent) this.#say(tooOld);
+    else if (running !== null && running !== undefined && ui.status.textContent === tooOld) this.#say("");
+    const shown = job ? job.acked : check && check.restarting && !check.relinked ? check.size : null;
+    ui.progress.hidden = shown === null;
+    if (shown !== null) {
+      ui.progress.max = job ? job.bytes.length : check.size;
+      ui.progress.value = shown;
     }
   }
 
