@@ -89,7 +89,7 @@ like flashing, with the rover on a stand. It also never exits on its own.
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Telemetry listener only |
 | `client/rover.ipynb` | Notebook experiments over the same link |
-| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). A Drive tab, and a Program tab of block programs with a simulator to preview them on. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
+| `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). A Drive tab, and a Program tab of block programs, either of which can drive a simulator in the rover's place. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
 | `partition.csv` | Two OTA app slots and no filesystem |
 | `docs/`, `images/` | Wiring, BOM, pinouts, the mecanum table, bench checklist, roadmap; `features.md` (the owner's requested features); `docs/project/`: `handoff.md` (where the work stands, what to work on now) and the Claude Project's goal, instructions and environment script (`setup.md` says where each goes) |
@@ -343,7 +343,8 @@ Autonomous buttons stay on screen on both tabs, connected or not: until the
 rover's first frame the scan's card says no rover is connected, at its full
 size, and after a link goes it keeps the last scan, dimmed. Stop and
 Autonomous stay in the same place; on a phone the scan gives the Program tab
-room as a strip above it.
+room as a strip above it, and on the simulator target gives the Drive tab's
+view of the simulator its row.
 
 The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
@@ -352,8 +353,16 @@ what height is left; on a wide screen (960 px by 521 px and up) the open tab
 fills the left, and the rail, one width (`--rail`) beside both tabs, holds
 the address, the note, the scan and the readouts on the right, so the tab
 switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
-under the left pane (at most 480 px) and Autonomous under the rail. The
-Program tab puts the simulator's view beside the editor, as tall as its
+under the left pane (at most 480 px) and Autonomous under the rail. The Drive
+tab splits the left pane: the dock as wide as its controls, and beside it the
+simulator's view, or on the rover target a card holding its place, so a
+switch of target moves nothing. On a screen 761 px tall or more the dock's
+controls stack in one column under the stick, which leaves the view most of
+the pane; on a shorter one the dock keeps two columns and the stick takes at
+most two fifths of the pane's width. On a phone the view gets the scan's row,
+under 300 px on most phones, so there it shows the wheels and the motion
+rather than a room too small to read (`css/sim.css`), and on a short phone
+the move alone. The Program tab puts the simulator's view beside the editor, as tall as its
 room needs at its width (`SimView` sets `--room-aspect` on `#simSlot`), with
 the console under it on a screen 861 px tall or more and under the editor on
 a shorter one; the view folds away to a strip on every layout, and starts
@@ -382,6 +391,21 @@ only if the stick was driving), which drives again only from a fresh press; a
 held rotate button and a running program carry on. The family selector
 (Translate, Pivot, Pivot sideways) appears only under ADVANCED.
 
+**The target switch**, Rover | Simulator in the header, is a `TargetSwitch`
+(`js/targetswitch.js`) for the whole page: what the Drive tab's controls
+drive, and what a program runs on. On the simulator the Driver sends to it
+in the Link's place (`driven` in `js/app.js`), through the same arbitration,
+re-sends and deadlines, and nothing the Drive tab does reaches the rover
+except Stop, which stops a connected rover too. Autonomous there takes the
+simulated rover's mode and leaves the rover alone. A switch is a new way to
+lose control, so it stops a running program and lets go of every held
+control, with one STOP to the target left behind if this panel was driving
+it; a lost or stale link lets go of nothing driving the simulator. A drive
+press takes the simulated rover over from a preview, as it does the rover
+from a program. There is one view of the simulator: beside the Drive tab's
+controls while they drive it, held at 1x there because the Driver re-sends
+in real time, and on the Program tab otherwise.
+
 **The Program tab** runs a block program on the rover, or previews it on the
 simulator. On the rover it needs a live link, and drives only through
 `Driver.program()`: each move is re-sent every `REPEAT_MS`, asking 400 ms,
@@ -409,12 +433,13 @@ questions (deleting every block, or a variable in use) go through it too
 (`app.js`), with Cancel focused; only its prompts for a variable's name (new
 or renamed), which need a text field, and its note that a name is taken stay
 Blockly's own in-page dialogs. The File menu
-and the simulator's settings share `Popover` (`js/popover.js`), and the
-Rover | Simulator switch is a `TargetSwitch` (`js/targetswitch.js`), whose
-change stops a run.
+and the simulator's settings share `Popover` (`js/popover.js`).
 
-**The simulator** holds no Link and no Driver: a preview sends nothing, and
-its telemetry never reaches the scan fan or the readouts. It follows the
+**The simulator** holds no Link and no Driver: it sends nothing, and its
+telemetry never reaches the scan fan or the readouts. It takes the Drive
+tab's commands as `Rover::command()` does, each ending within
+`COMMAND_DURATION_MAX_MS`, and `RESUME_AUTONOMOUS` takes the mode and stands
+still. It follows the
 firmware's wheel table with ideal mecanum kinematics, `MOTOR_SPEED_LIMIT`, the
 400 ms deadline and the 200 ms re-send, the sweep's timing (so readings are as
 old as the rover's) and telemetry every 500 ms. It does not model exploring,

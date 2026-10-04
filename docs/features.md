@@ -1,8 +1,8 @@
 # Requested features: the next work
 
 The owner's requests for the browser panel and the controls, from
-2026-10-03. Steps 1 to 4 of the [order of work](#order-of-work) are done; the
-rest is not started. [project/handoff.md](project/handoff.md) says where the
+2026-10-03. Steps 1 to 4 of the [order of work](#order-of-work) are done, and
+F1 of step 5; the rest is not started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
 Every bullet and clause the owner wrote is quoted below and mapped to an
@@ -86,7 +86,7 @@ The screenshot that came with it shows the Program tab on a wide screen
    right-column width, the foot bar aligned to the columns, the simulator
    view fixed, and the owner's later ask: landscape first, more of the
    width, panes that fold.
-5. [F1](#f1-a-simulator-for-the-drive-tab), then
+5. **F1 done.** [F1](#f1-a-simulator-for-the-drive-tab), then
    [F3g](#f3g-normal-and-advanced-on-both-tabs), which builds on F1's target
    switch.
 6. [F3h](#f3h-both-sticks-shown-disabled-by-scheme): the biggest change to the
@@ -237,6 +237,47 @@ Link except Stop, and both tabs show the same switch in the same place. F3b's
 and F3e's checks, first made on the Program tab, now pass on the Drive tab
 too.
 
+**Done** (step 5), with the four defaults above. The switch is in the
+header and remembers its choice as `rover.target`; a panel that remembered
+the Program tab's choice (`rover.programTarget`) starts from that. On the
+simulator the Driver sends to
+`SimTarget.command()` in the Link's place; `command()` clamps a duration to
+the firmware's 1.5 s cap (`COMMAND_DURATION_MAX_MS`, checked against
+`Tuning.h`) and takes over from a preview's held motion. A link lost or gone
+stale lets go of nothing driving the simulator. The tests listed above are
+in, with layout tests for the view's place, and each was checked by
+breaking what it holds.
+
+On a wide screen the dock is as wide as its controls and the view takes the
+rest of the left pane, on the rover target too (a card says what the place
+is for), so the stick is the same size on both targets. On a screen 761 px
+tall or more the dock's controls go into one column under the stick: with
+two, the view had a strip (160 px at 1024 x 768). Measured, the stick and
+the living room's floor:
+
+| Screen | Stick | Floor | The dock's columns |
+|---|---|---|---|
+| 1024 x 768 | 219 | 300 x 225 | one |
+| 1180 x 820 | 271 | 399 x 299 | one |
+| 1280 x 800 | 251 | 489 x 367 | one |
+| 1366 x 657 | 228 | 280 x 210 | two, the stick at most 2/5 of the pane |
+| 1600 x 900 | 351 | 633 x 475 | one |
+
+The stick was 352 px at 1280 x 800 before: the view's room comes from it.
+The Program tab's view is unchanged, within 2 px.
+
+On a phone the view takes the scan's row on the simulator target, which is
+143 px at 375 x 812, 79 at 375 x 667 and 26 at 360 x 560: too short for a
+room anyone could read. Under 300 px the view shows the wheels and the
+motion, larger, with the bar's playback, pause and reset; under 120 px
+without the bar; under 32 px the move alone (`css/sim.css`). A tablet
+upright gets the whole view (321 px at 768 x 1024). The switch's own row
+costs the phone 54 px, and the scan pays for it on the rover target too: at
+375 x 667 the fan loses its readings, and at 360 x 560 the fan gives way and
+the readouts stay. Putting the switch in a row that already exists would
+win it back; the mark-and-status row is full once a rover is connected, and
+the tabs-and-scheme row has no room for a third switch at 375 px.
+
 ## F2. File actions in one menu
 
 **Asked:** "export/import/clear in a single dropdown. check if other things
@@ -271,9 +312,9 @@ see F3e.)
 
 At 1280 and 1600 px the toolbar is one row at today's right-column width (it
 took two at 1280); F3 re-checked it at the new one: one row from 1024 to
-1600 px. On an upright phone it
-still takes three rows (the switch, Run and Stop program, the menu), until
-F1 moves the switch to the header.
+1600 px. On an upright phone it took three rows (the switch, Run and Stop
+program, the menu) until F1 moved the switch to the header: two now, 96 px
+instead of 150 at 375 x 812.
 
 **Before**, for the record: the toolbar held Examples (a `<select>` used as
 an action menu), then Export, Import and Clear as buttons, needing 900 px
@@ -446,6 +487,12 @@ same height on every layout, and no label overflows at 375 x 812,
 and "Program" needs more even with its padding cut to 4 px. Fixing it
 takes a narrower stick or right column at that size, a layout change of its
 own, so it stays open below.
+
+F1 added Rover | Simulator after Normal | Advanced: the same row on a wide
+screen, and a row of its own under the other two on a phone, where the row
+has no room for a third switch. Both tabs' content still starts at the same
+height, and no label overflows at 375 x 812, 812 x 375 or any wide size; at
+480 x 320 "Simulator" overflows as the others there do.
 
 ### F3c. The right column at all times
 
@@ -633,8 +680,9 @@ layout and both tabs:
 4. The foot bar: Autonomous, then Stop, the last control in the focus order.
 
 *The switch row.* One header row holds every page-wide switch and nothing
-else: Drive | Program, Normal | Advanced, and Rover | Simulator once F1 moves
-it there, in that order, each a segmented control of the one control height.
+else: Drive | Program, Normal | Advanced, and Rover | Simulator, in that
+order, each a segmented control of the one control height. On a phone the
+row wraps, Rover | Simulator under the other two.
 A tab's own actions never go in it, and a page-wide switch never goes in a
 tab.
 
@@ -921,7 +969,7 @@ control table lists them.
 | Autonomous | foot bar | no | starts the robot moving on its own: a deliberate press |
 | Stick family | Drive tab | no | re-steers a held stick: one tap mid-drive |
 | Stick, rotate, speed | Drive tab | no | held or continuous controls |
-| Rover \| Simulator | Program toolbar (header under F1) | no | decides whether Run moves the real rover |
+| Rover \| Simulator | header | no | decides whether the Drive tab and Run move the real rover |
 | Run / Preview | Program toolbar | no | the primary action |
 | Stop program | Program toolbar | no | safety: ends a run at once |
 | Examples | File menu | yes | was a dropdown already; replaces the program like Import |
@@ -943,8 +991,8 @@ waits for the owner.
 - **Done** (step 2): `js/programtab.js` asked with native `confirm()` to
   load an example, import over a program, and Clear, which the desktop
   app's browser pane dismisses unseen. They ask in the page now.
-- At 480 x 320 on its side, the middle column is 101 px wide and the tab and
-  scheme labels overflow their buttons. Found while verifying the last
+- At 480 x 320 on its side, the middle column is 101 px wide and the tab,
+  scheme and target labels overflow their buttons. Found while verifying the last
   branch's landscape layout. F3b took it up and left it: cutting the
   segments' padding is not enough, and the fix is a narrower stick or right
   column at that size.

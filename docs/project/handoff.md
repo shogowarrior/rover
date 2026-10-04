@@ -43,8 +43,8 @@ The first thread on the owner's requests (branch
   `window.confirm()` is left;
 - `Popover` (`js/popover.js`): the Program tab's File menu and the
   simulator's settings share it;
-- `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, still
-  on the Program toolbar until F1 moves it;
+- `TargetSwitch` (`js/targetswitch.js`): the Rover | Simulator switch, on
+  the Program toolbar until F1 moved it to the header;
 - F2: the examples, Import, Export and Clear in the File menu, and a
   playback list in place of the 1x / 2x / 4x buttons in a narrow simulator
   bar, which also keeps every room's name in full.
@@ -100,13 +100,34 @@ kinds of regression through. Panel tests 201/201 and the protocol check
 pass. Still open from F3b: the tab and scheme labels overflow at 480 x
 320.
 
+The same thread then did F1, the first half of step 5, in a PR of its own
+(features.md has the measurements):
+
+- one Rover | Simulator switch in the header for the whole page: on the
+  simulator the Drive tab's Driver sends to `SimTarget.command()` in the
+  Link's place, so nothing but Stop reaches the rover, and Autonomous takes
+  only the simulated rover's mode;
+- a switch lets go of everything on the target left behind (a running
+  program, held controls, one STOP if driving), a lost or stale link lets
+  go of nothing driving the simulator, and a drive press ends a preview;
+- one view of the simulator, moved beside the Drive tab's controls while
+  they drive it and held at 1x there; on a wide screen its place beside the
+  dock is kept on the rover target too, with the dock's controls in one
+  column on a screen 761 px tall or more;
+- on a phone the view takes the scan's row on the simulator, showing the
+  wheels and the motion where the row is too short for the room.
+
+The switch's own row costs a phone's scan 54 px on either target; F1 in
+features.md says what winning it back would take. The target label joins
+the overflow at 480 x 320.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F4) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 4 are done, so the next thread
-starts at 5:
+when it is done. Do them in this order; 1 to 4 are done, and F1 of 5, so the
+next thread starts at F3g:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -118,8 +139,8 @@ starts at 5:
 3. **Done.** F2: Export, Import, Clear and the examples in one menu, and the
    simulator's 1x / 2x / 4x as a list only in a narrow view.
 4. **Done.** F3 with F3a to F3e: one layout for both tabs.
-5. F1: a simulator for the Drive tab; then F3g: Normal | Advanced usable on
-   both tabs, with or without a rover.
+5. **F1 done.** F1: a simulator for the Drive tab; then F3g: Normal |
+   Advanced usable on both tabs, with or without a rover.
 6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
    disabled.
 7. F4: other buttons (PS3 Cross as STOP, keyboard keys).

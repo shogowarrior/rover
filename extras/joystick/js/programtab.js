@@ -37,8 +37,9 @@
  * the AskDialog's, never window.confirm() (ask.js says why).
  *
  * The File menu holds what is used now and then and moves nothing: the
- * examples, Import, Export and Clear. Run, Stop program and the switch stay
- * on the toolbar, one press each.
+ * examples, Import, Export and Clear. Run and Stop program stay on the
+ * toolbar, one press each, and the switch is in the page's header, for both
+ * tabs (app.js).
  *
  * The tab's Stop only asks the runner to abort; app.js wires it, with every
  * other way a program is stopped. Nothing here sends to the rover: a program
