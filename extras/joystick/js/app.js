@@ -134,7 +134,7 @@ link.onState((state, cause) => {
   if (state === "down") {
     if (!driven.simulator) driver.standDown(cause);
     readouts.linkDown();
-  } else if (state === "stale" && !driven.simulator) {
+  } else if (state === "stale") {
     driver.linkStale();
   }
 });

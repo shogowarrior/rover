@@ -3225,6 +3225,61 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
 });
 
+// The Drive tab's view of the simulator (F1) sits beside the dock, never
+// around it: joy.js places a touch by its canvas's offsetParent, and the
+// view's box is positioned (wide) or a size container (phone). Its place
+// is kept on either target, so a switch moves nothing; on a phone it takes
+// the scan's row on the simulator, and shows the motion there when the row
+// is too short for the room. Layout itself is measured in a browser.
+test("drive view: beside the dock on a wide screen, in the scan's place on a phone, never around the stick", () => {
+  const page = loadPage();
+  const view = page.$("driveView");
+  const siblings = view.parentNode.children.filter((n) => n.tagName);
+  check(view.parentNode === page.$("driveTab").parentNode && siblings[siblings.indexOf(page.$("driveTab")) + 1] === view, "the dock's next sibling, as the wide grid's selector reads it");
+  check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
+  for (let n = page.canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of the stick");
+
+  // Wide: the left pane split, and the view in its column on either target
+  // (the rail test holds the grid). Tall enough, the dock's controls in one
+  // column, the family's held-open slot last, so a scheme change moves
+  // nothing; the stick budgets the rail there too.
+  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
+  const wideView = wide.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
+  check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
+  check(!wide.some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
+  const tall = mediaRules("@media (min-width: 960px) and (min-height: 761px) {") || [];
+  const controls = (tall.find((r) => r.selector === ".controls") || {}).body || "";
+  const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).join(" ");
+  check(areas === '"stick" "spin" "speed" "family"', `tall wide: one column, the family last: ${areas}`);
+  const stick = (((tall.find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
+  check(/var\(--rail\)/.test(stick) && /var\(--svh\)/.test(stick), `tall wide: the stick from the viewport and the rail: ${stick}`);
+
+  // A phone: on the simulator, the Drive tab's view in place of the scan,
+  // sized by its row (a size container), a motor fault still winning the
+  // place. On the rover, the scan as ever.
+  const phone = mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
+  const onSim = phone.filter((r) => /^body\[data-target="simulator"\] \.shell:has\(> #driveTab:not\(\[hidden\]\)\):not\(:has\(#motorsFault:not\(\[hidden\]\)\)\)/.test(r.selector));
+  const hidesScan = onSim.find((r) => / \.scan$/.test(r.selector));
+  const showsView = onSim.find((r) => / > \.driveView:not\(\[hidden\]\)$/.test(r.selector));
+  check(hidesScan && /display:\s*none;/.test(hidesScan.body), `phone: the scan gives way on the simulator: ${onSim.map((r) => r.selector)}`);
+  check(showsView && /display:\s*flex;/.test(showsView.body) && /container:\s*driveview \/ size;/.test(showsView.body), `phone: the view in its place, sized by the row: ${showsView && showsView.body}`);
+  const base = cssRules(outside(panelCss(), "@media"));
+  const which = base.find((r) => /body\[data-target="simulator"\] \.driveViewOff/.test(r.selector));
+  check(which && /body:not\(\[data-target="simulator"\]\) #driveSimSlot/.test(which.selector) && /display:\s*none;/.test(which.body), "the card on the rover, the view on the simulator");
+
+  // The view too short for its room: height queries on the view itself,
+  // outside every @media so a phone's apply, while a wide view's container
+  // measures width only, so they never apply there.
+  const sim = stylesheet("sim.css");
+  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 299.98px) {") || [];
+  const hidden = short.find((r) => /display:\s*none;/.test(r.body));
+  check(hidden && [".sim-stage", ".sim-room", ".sim-settings"].every((c) => hidden.selector.includes(c)), `short: the room and what only it needs go: ${hidden && hidden.selector}`);
+  check(!short.some((r) => /\.sim-(foot|inset|move|bar)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
+  const wideSim = (blockRules(sim, "@media (min-width: 960px) and (min-height: 521px) {") || []).find((r) => r.selector === ".sim");
+  check(wideSim && /container-type:\s*inline-size;/.test(wideSim.body), `wide: the view's container measures width only: ${wideSim && wideSim.body}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {
   // Nothing may cover Stop. The menu hangs over the editor and the
   // simulator, and opened near the foot of a phone it scrolls up clear of
@@ -3569,7 +3624,7 @@ test("target: a switch under a held control sends one STOP to the target left be
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: a lost or stale link lets go of nothing driving the simulator, and stops what drives the rover", () => {
+test("target: a lost or stale link lets go of nothing driving the simulator", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const sim = simCommands(page);
   toSimulator(page);
