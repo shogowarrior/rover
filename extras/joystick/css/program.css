@@ -100,12 +100,11 @@
   .programBar .run { flex: 1; }
 }
 
-/* --- the stage: the editor, and the simulator's view ---------------------- */
+/* --- the stage: the editor, the simulator's view, the console -------------- */
 
-/* Stacked on a phone and in the one-column layout; side by side, the editor
-   the wider, in the wide layout's left pane. #simSlot is the simulator's
-   (sim.js): a definite box it fills with one element of width and height
-   100%.
+/* Stacked on a phone and in the one-column layout; side by side in the wide
+   layout's left pane (below). #simSlot is the simulator's (sim.js): a box
+   it fills with one element.
 
    Stacked, the editor is most of a phone's height and the view 360 px under
    it: below about 300 px the view no longer fits its own controls. */
@@ -145,7 +144,8 @@
   border-radius: var(--r-lg);
 }
 
-/* Stacked, the view can fold away under its own heading. */
+/* The view folds away under its own heading: across the top of it where
+   the stage is stacked, down its side beside the editor. */
 .programSim .simToggle {
   justify-content: space-between;
   width: 100%;
@@ -167,39 +167,109 @@
 
 .simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
 
-/* Folded, in the layouts that stack it; beside the editor the view always
-   shows, and there is no heading to unfold it with. */
-@media (max-width: 959.98px), (max-height: 520.98px) {
-  .programSim[data-collapsed="yes"] #simSlot { display: none; }
-}
+.programSim[data-collapsed="yes"] #simSlot { display: none; }
 
 /* The wide layout's left pane: the page no longer scrolls, the pane does.
-   The stage takes what the toolbar and the console leave of it, down to a
-   floor under which the pane scrolls; the editor and the view stretch to
-   the stage's height, which gives #simSlot its definite size. The console
-   keeps its own: with overflow: hidden it would otherwise shrink away. The
-   toolbar's buttons are a step narrower, so it keeps to one row beside the
-   rail. */
+   The stage takes what the toolbar leaves of it, down to a floor under
+   which the pane scrolls. The editor fills its height on the left. On the
+   right, the view's heading as a strip down its side, and the view as tall
+   as its room needs at its width (sim.css), up to the stage's height; the
+   console goes under the editor. Folded, only the strip stays, at the
+   stage's right edge, and the editor takes the width; with no simulator at
+   all, the same without the strip. The view takes 44% of the pane, about
+   half with its strip. The toolbar's buttons are a step narrower, so it
+   keeps to one row beside the rail. */
 @media (min-width: 960px) and (min-height: 521px) {
   .programStage {
+    /* The settings popover hangs from the view's bar over whatever is
+       under the room, not only over the room (sim.css): this is its
+       containing block. */
+    position: relative;
     flex: 1 1 0;
-    min-height: 300px;
-    grid-template-columns: minmax(0, 1fr) clamp(280px, 36%, 400px);
+    min-height: 380px;
+    grid-template-columns: minmax(0, 1fr) var(--tap) clamp(260px, 44cqw, 560px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "editor  toggle sim"
+      "console toggle sim";
   }
 
-  .programStage[data-sim="no"] { grid-template-columns: minmax(0, 1fr); }
+  .programStage:not([data-sim="no"]):has(> .programSim[data-collapsed="yes"]) {
+    grid-template-columns: minmax(0, 1fr) var(--tap);
+    grid-template-areas:
+      "editor  toggle"
+      "console toggle";
+  }
 
-  .programEditor { height: auto; }
+  .programStage[data-sim="no"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "editor" "console";
+  }
 
-  #simSlot { height: 100%; }
+  .programEditor { grid-area: editor; height: auto; }
 
-  .simToggle { display: none; }
+  .programSim { display: contents; }
 
-  .programConsole { flex: none; }
+  .programSim .simToggle {
+    grid-area: toggle;
+    justify-content: flex-start;
+    width: auto;
+    margin: 0;
+    padding: var(--s-4) 0;
+    writing-mode: vertical-rl;
+  }
+
+  /* Right to fold the view away toward the edge, left to bring it back. */
+  .simToggle::after { transform: translateX(-1px) rotate(-45deg); }
+  .simToggle[aria-expanded="false"]::after { transform: translateX(2px) rotate(135deg); }
+
+  #simSlot {
+    grid-area: sim;
+    align-self: start;
+    position: static;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-height: 100%;
+  }
+
+  .programConsole {
+    grid-area: console;
+    display: flex;
+    flex-direction: column;
+  }
 
   .programBar > button,
   .programBar .menuButton,
   .programBar .segmented button { padding-inline: var(--s-3); }
+
+  /* A pane under 600 px (the narrowest windows) takes them a step further. */
+  @container program (max-width: 599.98px) {
+    .programBar > button,
+    .programBar .menuButton,
+    .programBar .segmented button { padding-inline: var(--s-2); }
+  }
+}
+
+/* Tall enough for the view at its width and a console under it: the console
+   moves under the view and takes the rest of that column, its log as tall
+   as that leaves, and the editor the stage's whole height. Shorter, the
+   console under the view squeezed the room to a strip across a wide
+   column, at the laptop and iPad heights the panel is mostly used at. */
+@media (min-width: 960px) and (min-height: 861px) {
+  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) {
+    grid-template-rows: minmax(0, auto) minmax(min-content, 1fr);
+    grid-template-areas:
+      "editor toggle sim"
+      "editor toggle console";
+  }
+
+  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programConsole { min-height: 120px; }
+
+  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programLog {
+    flex: 1 1 auto;
+    max-height: none;
+  }
 }
 
 /* Over the workspace while it is empty. */

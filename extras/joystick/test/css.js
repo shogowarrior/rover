@@ -29,4 +29,17 @@ function blockRules(css, opening) {
   return cssRules(text.slice(start + opening.length, end - 1));
 }
 
-module.exports = { stylesheet, cssRules, blockRules };
+// The stylesheet, comments gone, without every block an at-rule of that
+// name opens ("@media"), however deep: what applies outside them all.
+// cssRules() and blockRules() take what it returns.
+function outside(css, atRule) {
+  let text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (let at = text.indexOf(atRule); at >= 0; at = text.indexOf(atRule, at)) {
+    let end = text.indexOf("{", at) + 1;
+    for (let depth = 1; depth > 0 && end < text.length; end++) depth += text[end] === "{" ? 1 : text[end] === "}" ? -1 : 0;
+    text = text.slice(0, at) + text.slice(end);
+  }
+  return text;
+}
+
+module.exports = { stylesheet, cssRules, blockRules, outside };

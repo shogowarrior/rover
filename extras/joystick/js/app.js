@@ -101,7 +101,7 @@ link.onTelemetry((data) => {
 // drawn as live again until one came: an all-clear that nothing vouched for.
 link.onState((state) => {
   if (state === "connecting") {
-    scanView.show({});
+    scanView.clear();
     readouts.clear();
   }
 });
@@ -254,6 +254,7 @@ const programTab = new ProgramTab({
     importFile: byId("programFile"),
     clear: byId("programClear"),
     stage: byId("programStage"),
+    workspace: byId("programWorkspace"),
     hint: byId("programHint"),
     offline: byId("programOffline"),
     simPane: byId("programSim"),

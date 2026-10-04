@@ -1,8 +1,9 @@
 /* The simulator's view (js/simview.js). It fills #simSlot, a box the Program
-   tab sizes (css/program.css): a column beside the editor on a wide screen,
-   a box under it otherwise. So the room takes whatever height is left after
-   the controls and two lines of status (three, in a narrow view with a
-   message to show), and the rest folds into a panel.
+   tab sizes (css/program.css): a box under the editor in the one-column
+   layout, where the room takes whatever height is left after the controls
+   and two lines of status (three, in a narrow view with a message to
+   show); a column beside the editor on a wide screen, where the room sets
+   the height (below). The rest folds into a panel.
 
    The palette is the panel's (css/panel.css): green for live, amber for
    closing distance, red only for stop and danger -- here, a ray inside
@@ -23,8 +24,8 @@
   --sim-fwd: var(--live);
   --sim-back: #a594f9;
   --sim-free: var(--faint);
-  /* The bar's buttons: a full touch target in the one-column layout, where
-     the view is on a phone; smaller beside the editor, under a mouse. */
+  /* The bar's buttons: a full touch target, the panel's one control
+     height, on every layout. */
   --sim-tool: var(--tap);
   --sim-bar-h: var(--sim-tool);
 
@@ -41,8 +42,28 @@
   min-width: 0;
 }
 
+/* On a wide screen the view is as tall as its room needs at its width, and
+   no taller: SimView puts the room's aspect and its margins (SimView.PAD)
+   on #simSlot, the stage takes that height, and the room fills the stage
+   edge to edge, with the console under the view taking what is left
+   (program.css). Where the column is too short for that, the stage gives
+   way first, and the room is fitted to its height. The view's own size
+   comes from its content here, so the container measures width only. */
 @media (min-width: 960px) and (min-height: 521px) {
-  .sim { --sim-tool: var(--tap-sm); }
+  /* Not the settings' containing block here (program.css): a view only as
+     tall as a corridor would leave them no room. */
+  .sim {
+    position: static;
+    container-type: inline-size;
+    flex: 0 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .sim-stage {
+    flex: 0 1 auto;
+    height: calc(2px + var(--room-pad-y) + (100cqw - 2px - var(--room-pad-x)) / var(--room-aspect));
+  }
 }
 
 /* --- controls --------------------------------------------------------- */
@@ -76,37 +97,22 @@
 /* The playback speed as a list where its buttons would leave the room's
    name too little of the bar, and the room on a row of its own where even
    the list would. The widths are the bar's: the longest name ("Obstacle
-   course", 135 px) beside the buttons (134 px, or 98 beside the editor) or
-   the list (53 px), the three tools and the gaps, as measured in Chromium,
-   with 4 px to spare. They follow the tools' size, and so the layout. */
+   course", 135 px) beside the buttons (134 px) or the list (53 px), the
+   three tools and the gaps, as measured in Chromium, with 4 px to spare. */
 .sim-speed-pick {
   display: none;
   flex: none;
   font-family: var(--mono);
 }
 
-@media (max-width: 959.98px), (max-height: 520.98px) {
-  @container sim (max-width: 420.98px) {
-    .sim-speed { display: none; }
-    .sim-speed-pick { display: block; }
-  }
-
-  @container sim (max-width: 339.98px) {
-    .sim-room { flex-basis: 100%; }
-    .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
-  }
+@container sim (max-width: 420.98px) {
+  .sim-speed { display: none; }
+  .sim-speed-pick { display: block; }
 }
 
-@media (min-width: 960px) and (min-height: 521px) {
-  @container sim (max-width: 348.98px) {
-    .sim-speed { display: none; }
-    .sim-speed-pick { display: block; }
-  }
-
-  @container sim (max-width: 303.98px) {
-    .sim-room { flex-basis: 100%; }
-    .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
-  }
+@container sim (max-width: 339.98px) {
+  .sim-room { flex-basis: 100%; }
+  .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
 }
 
 .sim-speed { flex: none; border-radius: var(--r-sm); }
@@ -538,6 +544,12 @@
 
 @container sim (min-width: 420px) {
   .sim-more { left: auto; width: 340px; }
+}
+
+/* Beside the editor they hang from the stage (program.css), whose right
+   edge is the view's: as wide as the view, and over the console too. */
+@media (min-width: 960px) and (min-height: 521px) {
+  .sim-more { left: auto; width: min(340px, 100cqw); }
 }
 
 .sim-toggles { display: flex; gap: var(--s-2); }
