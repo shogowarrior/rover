@@ -321,8 +321,8 @@ bearings and telemetry keys (`BEARINGS` in `js/scan.js`), the stick mapping,
 its family names and the move names telemetry reports (`js/mecanum.js`), and
 the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
-fake DOM, WebSocket and clock (`panel.test.js`), and the runner and blocks
-(`program.test.js`), the simulator (`sim.test.js`), the stick mapping
+fake DOM, WebSocket and clock (`panel.test.js`, and the keyboard in
+`keys.test.js`), and the runner and blocks (`program.test.js`), the simulator (`sim.test.js`), the stick mapping
 (`mecanum.test.js`) and the looks' tokens and contrast (`looks.test.js`) on
 their own. `test/firmware.js` reads what they check against in `src/` and
 `test/vectors/`, `test/css.js` reads the stylesheets as they check them, and
@@ -339,7 +339,8 @@ window or hiding the tab stops what the panel is driving and leaves an
 exploring rover alone. Its Drive and Program tabs switch only what is shown,
 with one exception: leaving the Drive tab lets go of both sticks (one STOP,
 only if one was driving), which hidden could be neither steered nor centred.
-A held rotate button carries on, except on the simulator target (below).
+A held rotate button or key carries on, except on the simulator target
+(below).
 The scan, the readouts and the Stop and Autonomous buttons stay on screen on
 both tabs, connected or not, but for one exception: on the simulator target
 the Drive tab's view of the simulator takes the scan's place on a phone, and
@@ -348,6 +349,23 @@ Until the rover's first frame the scan's card says no rover is connected, at
 its full size, and after a link goes it keeps the last scan, dimmed. Stop
 and Autonomous stay in the same place; on a phone the scan gives the Program
 tab room as a strip above it.
+
+**The keyboard** (`js/keys.js`) takes `client/drive.py`'s keys: W S forward
+and back, A D strafe, Q E rotate, - and + the speed by 16, Space Stop, T
+Autonomous. A drive key is held as a rotate button is, through the Driver
+(`holdKey()`): it drives from its keydown to its keyup, the keyboard's own
+repeats are not presses, and the rotate button or key pressed last wins,
+one move at a time. The drive and speed keys act on the Drive tab alone;
+Space and T press the Stop and Autonomous buttons, on either tab, and
+Space's keydown and keyup are both cancelled, so a focused button (Run,
+Connect) is never clicked as well. A keydown is not the panel's in a text
+field or a select, while the dialog is open, in anything marked
+`data-keys="own"` (the File menu, Options, the simulator's settings, the
+block editor) or Blockly's pop-ups, with Ctrl, Alt or Cmd held, or once
+something on the page has acted on it (the simulator's rover turns on Q and
+E); a keyup always counts. Ctrl, Alt or Cmd going down lets go of every
+held key: macOS sends no keyup for a key let go while Cmd is held. Options
+lists the keys, and `test/keys.test.js` checks them against `drive.py`'s.
 
 The layout is `css/panel.css`'s, on its tokens (type, space, radii) and the
 look's colours.

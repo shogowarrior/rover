@@ -81,7 +81,7 @@ button, `t` or START hands it back, and also restarts exploration that has
 halted. While you hold a control the client re-sends it; let go and the rover
 stops within half a second.
 
-| | Browser panel | Keyboard (`drive.py`) | PS3 pad |
+| | Browser panel | Keyboard (`drive.py`, and the panel) | PS3 pad |
 |---|---|---|---|
 | Move | Left joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
 | Pivot (Advanced only) | Right joystick: pick Pivot or Pivot sideways over it, and its quadrant picks the pivot; under Normal it is shown, off | -- | Hold L1 (pivot) or R1 (pivot sideways) and push the left stick |
@@ -92,6 +92,11 @@ stops within half a second.
 | Simulator | Rover \| Simulator, in the header: the Drive tab and programs drive a simulated rover | -- | -- |
 | Stop | Stop | space | Let go of the stick |
 | Back to autonomous | Autonomous | `t` | START |
+
+The panel takes `drive.py`'s keys too: the drive and speed keys while its
+Drive tab shows, Space and `t` on either tab. The gear's Options list them.
+Holding two drive keys drives the one pressed last; the left joystick has
+the diagonals.
 
 After a power-on the rover explores. After any other reset (an OTA flash, a
 crash, the watchdog) it starts in manual and waits, and it drops to manual

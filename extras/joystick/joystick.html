@@ -55,17 +55,22 @@
         </div>
 
         <!-- Options, under the gear: the page's look, which look.js fills in
-             and remembers. popover.js opens and closes it. It is not modal,
-             and not a dialog: nothing behind it is made inert and nothing
-             holds the focus, so Stop stays one press while it is open, and
-             that press closes it. -->
+             and remembers, and the keys, which keys.js lists. popover.js
+             opens and closes it. It is not modal, and not a dialog: nothing
+             behind it is made inert and nothing holds the focus, so Stop
+             stays one press while it is open, and that press closes it.
+             data-keys="own": the arrows and Space are its while the focus is
+             in it, not the keyboard's drive keys (keys.js). -->
         <div class="menuHolder">
           <button type="button" class="optionsButton" id="options" aria-label="Options" title="Options">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.33 9.63 21.88 10.45V13.55L19.33 14.37 18.86 15.51 20.08 17.89 17.89 20.08 15.51 18.86 14.37 19.33 13.55 21.88H10.45L9.63 19.33 8.49 18.86 6.11 20.08 3.92 17.89 5.14 15.51 4.67 14.37 2.12 13.55V10.45L4.67 9.63 5.14 8.49 3.92 6.11 6.11 3.92 8.49 5.14 9.63 4.67 10.45 2.12H13.55L14.37 4.67 15.51 5.14 17.89 3.92 20.08 6.11 18.86 8.49Z"/><circle cx="12" cy="12" r="3.4"/></svg>
           </button>
-          <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" hidden>
+          <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" data-keys="own" hidden>
             <h2 class="menuLabel" id="lookLabel">Theme</h2>
             <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
+            <h2 class="menuLabel" id="keysLabel">Keys</h2>
+            <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>
+            <p class="keysNote">Driving and speed on the Drive tab; Stop and Autonomous on both.</p>
           </div>
         </div>
       </div>
@@ -141,11 +146,11 @@
         </div>
 
         <div class="spin" role="group" aria-label="Rotate">
-          <button id="ccw" aria-label="Rotate counter-clockwise">
+          <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
             <span>Left</span>
           </button>
-          <button id="cw" aria-label="Rotate clockwise">
+          <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
             <span>Right</span>
           </button>
@@ -202,13 +207,14 @@
              and moves nothing. popover.js opens and closes it, programtab.js
              adds the examples and keeps each item's disabled and title. Run
              and Stop program stay out of it, one press each, as does the
-             target switch, in the header. -->
+             target switch, in the header. Its keys are its own while it has
+             the focus (data-keys, keys.js). -->
         <div class="menuHolder">
           <button type="button" class="menuButton" id="programMenu" disabled>
             <span>File</span>
             <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
           </button>
-          <div class="menu" id="programMenuList" role="menu" aria-labelledby="programMenu" hidden>
+          <div class="menu" id="programMenuList" role="menu" aria-labelledby="programMenu" data-keys="own" hidden>
             <div role="group" id="programExamples" aria-label="Examples">
               <span class="menuLabel" aria-hidden="true">Examples</span>
             </div>
@@ -235,10 +241,11 @@
            view, then the console: under the view on a wide screen, under
            the editor otherwise. #simSlot is the simulator's to fill:
            program.css gives it a definite size, and nothing else is ever
-           put in it. -->
+           put in it. The editor keeps its keys to itself (data-keys,
+           keys.js): Space and T there are Blockly's. -->
       <div class="programStage" id="programStage" data-sim="yes">
         <div class="programEditor">
-          <div id="programWorkspace"></div>
+          <div id="programWorkspace" data-keys="own"></div>
           <p class="programHint" id="programHint" hidden>Drag blocks in from the toolbox, or start from an example in the File menu.</p>
           <div class="programOffline" id="programOffline" hidden>
             <strong>The block editor could not load.</strong>
@@ -313,12 +320,13 @@
            whatever tab is showing and wherever the page is scrolled, and
            switching tabs does not move it. -->
       <div class="actions">
-        <button id="auto" aria-pressed="false"
+        <button id="auto" aria-pressed="false" aria-keyshortcuts="T"
                 title="Let the rover explore. If exploration has halted, it looks again.">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
           Autonomous
         </button>
-        <button id="stop" title="Stop the rover now, whatever is driving it, even its own exploring.">
+        <button id="stop" aria-keyshortcuts="Space"
+                title="Stop the rover now, whatever is driving it, even its own exploring.">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           Stop
         </button>
@@ -350,6 +358,7 @@
   <script src="js/scan.js"></script>
   <script src="js/readouts.js"></script>
   <script src="js/drive.js"></script>
+  <script src="js/keys.js"></script>
   <script src="js/scheme.js"></script>
   <script src="js/family.js"></script>
   <script src="js/tabs.js"></script>
