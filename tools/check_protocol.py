@@ -422,15 +422,18 @@ class Checker:
         """What src/Protocol.cpp puts on the wire and takes off it.
 
         Returns the telemetry keys writeTelemetry() sets, the scan keys among
-        them with the Explorer bearing each one carries, and the command
-        fields readCommand() reads. keys() and bearings() both ask; problem()
-        reports anything missing once.
+        them with the Explorer bearing each one carries, and the message
+        fields the file reads. Only writeTelemetry() counts as telemetry:
+        writeOtaReply() sets keys too, for the one client updating the rover.
+        keys() and bearings() both ask; problem() reports anything missing
+        once.
         """
         text = self.text(PROTOCOL_CPP)
         if text is None:
             return set(), {}, set()
-        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', text))
-        scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', text))
+        telemetry = function_body(text, "writeTelemetry") or ""
+        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', telemetry))
+        scan = dict(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=\s*status\.scanCm\[\s*Explorer::(\w+)\s*\]', telemetry))
         read = set(re.findall(r'\bjson\[\s*"(\w+)"\s*\]', text))
         if not sent:
             self.unreadable(PROTOCOL_CPP, 'the telemetry keys writeTelemetry() sets (doc["key"] = ...)')
