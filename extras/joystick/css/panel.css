@@ -7,8 +7,9 @@
    the stick under the left thumb, the rotate buttons and Stop under the
    right, and the scan sits at the top where a glance finds it. On a wide
    screen the same parts sit side by side: the open tab on the left, the
-   rail of what the rover reports on the right, and Stop and Autonomous in a
-   bar across the foot, Stop under the controls.
+   rail of what the rover reports on the right, one width beside both tabs,
+   and Stop and Autonomous in a bar across the foot, Stop under the left
+   pane and Autonomous under the rail.
 
    One rule shapes the layout: nothing that contains the stick may be
    positioned, transformed, filtered or contained. joy.js places a touch by
@@ -103,11 +104,11 @@
   --gutter: var(--s-4);
   --cell-y: var(--s-2); /* a readout line's padding above and below */
   --scan-strip: 132px;
-  /* The rail beside each tab on a wide screen: wide beside the Drive tab,
-     for a large fan; narrow beside the Program tab, whose editor and
-     simulator want the room. Its floor keeps the fan's labels legible. */
-  --rail-drive: clamp(340px, 52vw - 160px, 620px);
-  --rail-program: clamp(300px, 24vw, 380px);
+  /* The rail, the right-hand column on a wide screen: one width beside
+     both tabs, used by every part of it, so the tab switch moves nothing.
+     Its floor keeps the fan's labels legible; a function of the viewport
+     only, because --stick is computed from it. */
+  --rail: clamp(320px, 30vw, 460px);
   --shell-max: 720px;
 }
 
@@ -951,6 +952,34 @@ body:is([data-link="up"], [data-link="stale"]) #note {
   min-height: 0;
 }
 
+/* The fan and, until there is something to draw, the empty state, in one
+   cell: the state over the fan's empty rings, the card at its full size.
+   The cell is the card's own size: hidden in a small card, the state still
+   sized an auto row, and the fan spilled out of the card. */
+.scan { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.scan > * { grid-area: 1 / 1; }
+
+/* Before the rover's first frame, whatever the tab, the width or the
+   target: what will be here, so an empty column does not read as a fault.
+   Not while a link is up (or stale) and its first frame is still to come:
+   the link pill says so. A link that goes keeps its last scan, dimmed. */
+.scanEmpty {
+  display: none;
+  place-self: center;
+  max-width: 24ch;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--dim);
+  background: var(--panel);
+  border-radius: var(--r-md);
+}
+
+body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + .scanEmpty { display: block; }
+
 /* The fan draws at min(width / 420, height / 200) of its own size in the
    card's room. Below about 7 px a label is a smudge, so the ring and
    bearing names go first (under 0.68 of full size), then the readings
@@ -962,6 +991,9 @@ body:is([data-link="up"], [data-link="stale"]) #note {
 
 @container scan (max-width: 188.98px) or (max-height: 89.98px) {
   .reading { display: none; }
+  /* No room to say it in (a phone on its side, a short screen): the card
+     is only a glance at the wedges. */
+  .scanEmpty { visibility: hidden; }
 }
 
 @container scan (max-height: 31.98px) {
@@ -1445,22 +1477,22 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 /* Side by side: the open tab on the left, the rail on the right, Stop and
    Autonomous in a bar across the foot, the page exactly as tall as the
-   screen. The Program tab scrolls inside its own pane, and the bar keeps
-   the Drive tab's columns on both tabs, so Stop never moves: it stays
-   under the controls, a short trip from the stick. */
+   screen. Two columns, the same beside both tabs: the address and the
+   note, every part of the rail and Autonomous share the rail's width and
+   left edge, and Stop sits under the left pane, so the tab switch moves
+   nothing. The Program tab scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
     /* As much stick as the screen's height and the dock's width allow. 324
        px of height is the header, the bar and the dock's own padding and
        caption; 368 px of width the gutters, the rail's gap and the dock's
        other column. */
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 324px, 100vw - var(--rail-drive) - 368px), 400px);
+    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 324px, 100vw - var(--rail) - 368px), 400px);
     --shell-max: 1600px;
     --pill-h: 34px;
   }
 
   .shell {
-    --rail: var(--rail-drive);
     height: 100vh;
     height: 100dvh;
     grid-template-columns: minmax(0, 1fr) var(--rail);
@@ -1473,27 +1505,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
       "act  act";
     column-gap: var(--s-5);
     padding-top: var(--s-5);
-  }
-
-  /* Beside the Program tab the rail is narrower, and the scan's card only
-     as tall as its drawing, with the readouts right under it: the room
-     left over goes below them rather than into a card mostly empty. */
-  .shell:has(> #programTab:not([hidden])) {
-    --rail: var(--rail-program);
-    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      "head head"
-      "main fault"
-      "main scan"
-      "main read"
-      "main ."
-      "act  act";
-  }
-
-  .shell:has(> #programTab:not([hidden])) .scan {
-    box-sizing: content-box;
-    aspect-ratio: 420 / 200;
-    padding-inline: var(--s-1);
   }
 
   /* Two rows on the shell's two columns: the mark and the status, then the
@@ -1538,20 +1549,10 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .tabs [role="tab"],
   .scheme .segmented button { flex: none; padding-inline: var(--s-5); }
 
-  /* As wide as the narrower rail, so the tab switch neither moves the
-     address nor changes its width. */
-  .link {
-    grid-area: link;
-    justify-self: end;
-    width: var(--rail-program);
-  }
+  /* The address and the note: the top of the rail's column. */
+  .link { grid-area: link; }
 
-  /* Under the address, as wide. */
-  #note {
-    grid-area: note;
-    justify-self: end;
-    width: var(--rail-program);
-  }
+  #note { grid-area: note; }
 
   .fault {
     margin-bottom: var(--s-4);
@@ -1636,11 +1637,14 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
   .caveat { font-size: var(--t-sm); line-height: var(--lh-body); }
 
-  /* A strip across the foot of the page, its columns the Drive tab's:
-     beside the Program tab's narrower rail, Autonomous keeps its place. */
+  /* A strip across the foot of the page, its cells under the columns
+     above: Stop under the left pane, from its left edge and no wider than
+     480 px, and Autonomous under the rail, as wide. The gap between them
+     keeps a hand reaching for Stop off Autonomous. Still the page's two
+     largest controls, a step lower than a phone's. */
   .actions {
     position: static;
-    grid-template-columns: minmax(0, 1fr) var(--rail-drive);
+    grid-template-columns: minmax(0, 1fr) var(--rail);
     column-gap: var(--s-5);
     margin-top: var(--s-4);
     padding-block: var(--s-3) var(--s-4);
@@ -1648,7 +1652,14 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     border-top: 1px solid var(--rule);
   }
 
-  #stop { grid-area: 1 / 1; }
+  .actions button { min-height: calc(var(--tap) + var(--s-3)); }
+
+  #stop {
+    grid-area: 1 / 1;
+    justify-self: start;
+    width: min(100%, 480px);
+  }
+
   #auto { grid-area: 1 / 2; }
 
   #programTab {
@@ -1666,7 +1677,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    are the side-by-side layout's 324 px and 368 px, for these sizes. */
 @media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 264px, 100vw - var(--rail-drive) - 344px), 400px);
+    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 264px, 100vw - var(--rail) - 344px), 400px);
   }
 
   .shell { padding-top: var(--s-4); }
@@ -1687,8 +1698,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
     margin-top: var(--s-3);
     padding-block: var(--s-2) var(--s-3);
   }
-
-  .actions button { min-height: calc(var(--tap) + var(--s-3)); }
 }
 
 /* A phone on its side, held like a gamepad: the stick down the left edge,

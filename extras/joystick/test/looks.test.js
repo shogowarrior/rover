@@ -161,8 +161,9 @@ test("every look declares exactly the default look's tokens", () => {
 // whole declaration, and lookToken() hands Blockly or joy.js an empty
 // colour.
 // The look's tokens and panel.css's :root are everywhere; a stylesheet's own
-// (sim.css's .sim aliases, program.css's --dot) only in that stylesheet; and
-// blocks.js gives the editor --block-<category> from its PALETTE.
+// (sim.css's .sim aliases, program.css's --dot) only in that stylesheet; a
+// script sets some on the element it styles (simview.js's --room-aspect);
+// and blocks.js gives the editor --block-<category> from its PALETTE.
 test("every token the stylesheets and scripts read is declared", () => {
   const everywhere = new Set(readLooks().flatMap(tokensOf));
   const sheets = fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css"));
@@ -179,18 +180,21 @@ test("every token the stylesheets and scripts read is declared", () => {
   assert.match(blocks, /setProperty\(`--block-\$\{key\}`/, "blocks.js sets --block-<category> on the editor");
   const { RoverBlocks } = require("../js/blocks.js");
   const editor = new Set(Object.keys(RoverBlocks.PALETTE).map((key) => `--block-${key}`));
+  const scripts = path.join(PANEL_ROOT, "js");
+  const scriptFiles = fs.readdirSync(scripts).filter((name) => name.endsWith(".js"));
+  const scripted = new Set(scriptFiles.flatMap((file) =>
+    [...fs.readFileSync(path.join(scripts, file), "utf8").matchAll(/setProperty\(\s*["'`](--[\w-]+)["'`]/g)].map(([, name]) => name)));
 
   const undeclared = [];
   for (const file of sheets) {
     for (const [, name] of stylesheet(file).matchAll(/var\((--[\w-]+)/g)) {
-      if (!everywhere.has(name) && !own.get(file).has(name) && !editor.has(name)) undeclared.push(`${name} in css/${file}`);
+      if (!everywhere.has(name) && !own.get(file).has(name) && !editor.has(name) && !scripted.has(name)) undeclared.push(`${name} in css/${file}`);
     }
   }
-  const scripts = path.join(PANEL_ROOT, "js");
-  for (const file of fs.readdirSync(scripts).filter((name) => name.endsWith(".js"))) {
+  for (const file of scriptFiles) {
     const text = fs.readFileSync(path.join(scripts, file), "utf8");
     for (const [, name] of [...text.matchAll(/var\((--[\w-]+)/g), ...text.matchAll(/["'](--[\w-]+)["']/g)]) {
-      if (!everywhere.has(name)) undeclared.push(`${name} in js/${file}`);
+      if (!everywhere.has(name) && !scripted.has(name)) undeclared.push(`${name} in js/${file}`);
     }
   }
   assert.ok(everywhere.has("--case") && everywhere.has("--sans"), "read the looks and panel.css's :root");

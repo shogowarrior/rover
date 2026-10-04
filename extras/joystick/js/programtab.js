@@ -12,8 +12,9 @@
  *     ui            the tab's elements, by name: run, runLabel, stop, the
  *                   File menu's button and list (menu, menuList), examples
  *                   (the group its examples go in), exportButton,
- *                   importButton, importFile, clear, stage, hint, offline,
- *                   simPane, simToggle, state, log.
+ *                   importButton, importFile, clear, stage, workspace (the
+ *                   block editor's box), hint, offline, simPane, simToggle,
+ *                   state, log.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
  *   editorUnavailable(why)  there will be no editor: say why in its place and
@@ -21,6 +22,8 @@
  *   refresh()               re-check whether the chosen target is ready (the
  *                           link changed).
  *   shown()                 the tab has just been shown: fit the editor to it.
+ *                           Within the tab the editor refits itself as its
+ *                           box changes size.
  *   restyle()               the page's look has changed: the editor takes it.
  *                           An editor not yet built is built in it.
  *   setScheme(scheme)       the rover's control scheme, as telemetry reports
@@ -72,16 +75,16 @@ class ProgramTab {
     this.#ask = ask;
     this.#ui = ui;
 
-    // The simulator's view has a place only if there is a simulator. On a
-    // phone, where the view sits under the editor, it starts folded away
-    // unless a preview is what the operator last chose.
+    // The simulator's view has a place only if there is a simulator. It
+    // starts folded away, leaving the editor the room, unless a preview is
+    // what the operator last chose.
     const simulator = targetSwitch.kinds.includes("simulator");
     ui.simPane.hidden = !simulator;
     ui.stage.dataset.sim = simulator ? "yes" : "no";
     this.#expandSim(targetSwitch.kind === "simulator");
     targetSwitch.onChange((kind) => {
       this.#outcome = null;
-      // On a phone the view is folded away; previewing is when it is wanted.
+      // Previewing is when the view is wanted: unfold it.
       if (kind === "simulator") this.#expandSim(true);
       this.#update();
     });
@@ -101,6 +104,13 @@ class ProgramTab {
     ui.importFile.addEventListener("change", () => this.#import().catch(reportFault));
     ui.clear.addEventListener("click", () => this.#clear().catch(reportFault));
     ui.simToggle.addEventListener("click", () => this.#expandSim(ui.simToggle.getAttribute("aria-expanded") !== "true"));
+    // Blockly refits itself only to a window's resize. On a wide screen its
+    // box also changes as the view folds, or as the console under it grows.
+    if (typeof ResizeObserver === "function") {
+      new ResizeObserver(() => {
+        if (this.#editor) this.#editor.resize();
+      }).observe(ui.workspace);
+    }
 
     runner.onState((state, detail) => this.#onRunnerState(state, detail));
     runner.onLog((entry) => this.#appendLog(entry));

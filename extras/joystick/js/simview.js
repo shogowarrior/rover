@@ -8,7 +8,11 @@
  *
  *   new SimView(slot, target)
  *     slot     the empty element the view fills (#simSlot, which the Program
- *              tab sizes);
+ *              tab sizes). The view puts the room's shape on it, for a
+ *              layout that sizes the slot to the room (css/sim.css):
+ *              --room-aspect, the room's width over its depth, and
+ *              --room-pad-x and --room-pad-y, the margins kept clear
+ *              around it (PAD).
  *     target   the SimTarget it shows, and whose clock it runs.
  *
  * A timer advances the simulation by the real time elapsed times the
@@ -16,7 +20,7 @@
  * draws at the display's rate with requestAnimationFrame. While the page is
  * hidden it does nothing at all, and the preview simply waits; while only
  * the view is out of sight (the Drive tab showing, or the view folded away
- * on a phone to watch the blocks) a preview in progress runs on, undrawn,
+ * to watch the blocks) a preview in progress runs on, undrawn,
  * and an idle one asks for no frames at all until it is shown or a program
  * starts on it.
  *
@@ -67,6 +71,9 @@ class SimView {
   constructor(slot, target) {
     this.#slot = slot;
     this.#target = target;
+    const { PAD } = SimView;
+    slot.style.setProperty("--room-pad-x", `${PAD.left + PAD.right}px`);
+    slot.style.setProperty("--room-pad-y", `${PAD.top + PAD.bottom}px`);
     this.#build();
     this.#drawRoom();
     this.#render();
@@ -399,6 +406,7 @@ class SimView {
     this.#drawn = { room };
     for (const mark of this.#bumpMarks) mark.remove();
     this.#bumpMarks = [];
+    this.#slot.style.setProperty("--room-aspect", (room.width / room.height).toFixed(4));
     this.#fit();
   }
 

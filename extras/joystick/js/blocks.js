@@ -409,7 +409,7 @@ class RoverBlocks {
         inputsInline: true,
         ...statement,
         style: "text_blocks",
-        tooltip: "Print this in the console under the editor.",
+        tooltip: "Print this in the program's console.",
       },
     ]));
 

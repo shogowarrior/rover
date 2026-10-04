@@ -13,7 +13,7 @@ const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
-const { stylesheet, cssRules, blockRules, lookBlocks } = require("./css.js");
+const { stylesheet, cssRules, blockRules, outside, lookBlocks } = require("./css.js");
 const { degrees } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
@@ -874,6 +874,49 @@ test("a new link starts the scan and readouts from nothing; a link that went kee
   // Replaced by Enter, the same.
   page.fire(page.$("host"), "keydown", { key: "Enter" });
   check(page.doc.body.dataset.link === "connecting" && shown() === clear, `replaced: ${shown()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The right column is the rover's at all times (F3c): with nothing to show
+// yet it says so, in its own place and at its full size, rather than look
+// broken. Only before a frame: a link that goes leaves its scan, dimmed.
+test("the scan says no rover is connected until the first frame, and not after a link goes", () => {
+  const page = loadPage();
+  const empty = () => page.$("scan").dataset.empty;
+  check(empty() === "yes", `at load: ${empty()}`);
+  let ws = connectOpen(page);
+  check(empty() === "yes", "up, before a frame: still nothing to draw");
+  ws.serverMsg(FRAMES.manualBeforeScan);
+  check(empty() === "no", "a frame without distances is a frame: the rover is there");
+  ws.serverDrop();
+  check(page.doc.body.dataset.link === "down" && empty() === "no", "gone: its last scan stays, as history");
+  ws = connectOpen(page);
+  check(empty() === "yes", "a new link starts from nothing");
+  ws.serverMsg(telemetry({ distanceFront: 80 }));
+  check(empty() === "no", "until its first frame");
+  page.fire(page.$("host"), "keydown", { key: "Enter" });
+  check(page.doc.body.dataset.link === "connecting" && empty() === "yes", "replaced: nothing again");
+
+  // panel.css shows the words while the scan is empty and no link is up:
+  // with a link up and its first frame still to come, the pill says so.
+  const shown = cssRules(panelCss()).filter((r) => /\.scanEmpty\b/.test(r.selector) && /display:\s*block/.test(r.body));
+  check(shown.length === 1, `one rule shows it: ${shown.map((r) => r.selector)}`);
+  const selector = shown.length ? shown[0].selector : "";
+  check(/#scan\[data-empty="yes"\]/.test(selector), `only while empty: ${selector}`);
+  const states = (selector.match(/data-link="(\w+)"/g) || []).map((m) => m.slice(11, -1)).sort().join();
+  check(states === "connecting,down", `only with no link up: ${states}`);
+  // One cell the card's own size: an auto row, sized by the hidden words
+  // in a small card, let the fan spill out of it.
+  const card = cssRules(panelCss()).find((r) => r.selector === ".scan" && /grid-template:/.test(r.body));
+  check(card && /grid-template:\s*minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
+  const own = cssRules(panelCss()).find((r) => r.selector === ".scanEmpty");
+  check(own && /display:\s*none/.test(own.body), "otherwise not shown");
+  check(page.$("scan").parentNode.querySelectorAll(".scanEmpty").length === 1, "in the scan's own card");
+  // The rule reaches the words only as the scan's next sibling.
+  check(/#scan\[data-empty="yes"\]\s*\+\s*\.scanEmpty$/.test(selector), `the words right after the scan: ${selector}`);
+  const cardKids = page.$("scan").parentNode.children;
+  const next = cardKids[cardKids.indexOf(page.$("scan")) + 1];
+  check(next && /\bscanEmpty\b/.test(next.getAttribute("class") || ""), "and so they are, in the page");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2498,6 +2541,20 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(page.$("simSlot") !== null && all(page.$("programTab")).includes(page.$("simSlot")), "#simSlot is in the Program tab");
 });
 
+test("program: the editor refits as its box changes size, not only as the tab is shown", () => {
+  // Blockly refits itself only to a window's resize. On a wide screen the
+  // editor's box also changes as the view folds, or as the console under it
+  // grows, and Blockly drew past its edges until the next tab switch.
+  const page = loadPage({ frames: true, stored: { "rover.tab": "tabProgram" } });
+  check(page.$("programWorkspace").resizeObserved === true, "the editor's box is watched");
+  page.resized();
+  standInEditor(page);
+  const before = page.evalIn("__editor.resized");
+  page.resized();
+  check(page.evalIn("__editor.resized") === before + 1, "a change of its size refits it");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("program: with an editor, Run follows the link, and a run highlights, locks the editor and ends with STOP", async () => {
   const page = loadPage();
   standInEditor(page);
@@ -2681,12 +2738,53 @@ test("program: switching the target mid-run stops the program, and the choice is
   page.fire(segments(page)[0], "click");
   check(page.$("programState").textContent === "Ready to run on the rover.", `after a switch: ${page.$("programState").textContent}`);
 
-  // On a phone the view starts folded away under the rover; switching to
-  // the simulator unfolds it, since previewing is when it is wanted.
+  // The view starts folded away under the rover, on every layout, giving
+  // the editor the room; switching to the simulator unfolds it, since
+  // previewing is when it is wanted. Its heading folds it either way.
   const folded = loadPage();
   check(folded.$("programSim").dataset.collapsed === "yes", "folded under the rover");
   folded.fire(segments(folded)[1], "click");
   check(folded.$("programSim").dataset.collapsed === "no", "unfolded on the simulator");
+  folded.fire(folded.$("simToggle"), "click");
+  check(folded.$("programSim").dataset.collapsed === "yes" && folded.$("simToggle").getAttribute("aria-expanded") === "false", "its heading folds it");
+  // The fold is no layout's alone (beside the editor it once always
+  // showed): its rule is outside every @media.
+  const programCss = stylesheet("program.css");
+  const foldRule = '.programSim[data-collapsed="yes"] #simSlot';
+  check(cssRules(outside(programCss, "@media")).some((r) => r.selector === foldRule && /display:\s*none/.test(r.body)), "folded on every layout");
+  // Wide, the view takes its column's height, the console under the
+  // editor; tall enough, the console goes under the view. Folded, or with
+  // no simulator, the editor takes the width, the console under it.
+  const stageRules = (opening) => (blockRules(programCss, opening) || []).filter((r) => /^\.programStage\b/.test(r.selector));
+  const wideStage = stageRules("@media (min-width: 960px) and (min-height: 521px) {");
+  const areas = (rules, find) => ((rules.find(find) || {}).body || "").match(/grid-template-areas:([^;]*);/);
+  const unfolded = areas(wideStage, (r) => r.selector === ".programStage");
+  // Only with the view there and unfolded: folded, the editor's row would
+  // be as tall as its content, which is nothing.
+  const unfoldedOnly = '.programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"]))';
+  const tallStage = stageRules("@media (min-width: 960px) and (min-height: 861px) {");
+  check(tallStage.every((r) => r.selector.startsWith(unfoldedOnly)), `wide and tall: the view unfolded only: ${tallStage.map((r) => r.selector)}`);
+  const tall = areas(tallStage, (r) => r.selector === unfoldedOnly);
+  const foldedRule = wideStage.find((r) => r.selector.includes(':has(> .programSim[data-collapsed="yes"])'));
+  const foldedAreas = areas(wideStage, (r) => r === foldedRule);
+  const noSim = areas(wideStage, (r) => r.selector === '.programStage[data-sim="no"]');
+  check(unfolded && /"editor\s+toggle sim"\s*"console toggle sim"/.test(unfolded[1]), `wide: the view the column's height: ${unfolded && unfolded[1]}`);
+  check(tall && /"editor toggle sim"\s*"editor toggle console"/.test(tall[1]), `wide and tall: the console under the view: ${tall && tall[1]}`);
+  check(foldedAreas && /"editor\s+toggle"\s*"console toggle"/.test(foldedAreas[1]), `wide, folded: under the editor, the heading still there: ${foldedAreas && foldedAreas[1]}`);
+  // A hidden view counts as folded: the no-simulator rule must win.
+  check(foldedRule && foldedRule.selector.includes(':not([data-sim="no"])'), `folded, never with no simulator: ${foldedRule && foldedRule.selector}`);
+  check(noSim && /^\s*"editor"\s*"console"\s*$/.test(noSim[1]), `no simulator: the editor the width: ${noSim && noSim[1]}`);
+  // The heading and the view take their areas only as the stage's own grid
+  // items, which they are through .programSim.
+  const wide = blockRules(programCss, "@media (min-width: 960px) and (min-height: 521px) {") || [];
+  check(wide.some((r) => r.selector === ".programSim" && /display:\s*contents/.test(r.body)), "the view's parts are the stage's grid items");
+  check(folded.$("simToggle").parentNode === folded.$("programSim") && folded.$("simSlot").parentNode === folded.$("programSim") &&
+    folded.$("programSim").parentNode === folded.$("programStage"), "the heading and the view in .programSim, in the stage");
+  check(folded.$("programState").parentNode.parentNode === folded.$("programStage"), "the console is in the stage");
+  // The narrowest wide pane (960 px windows) keeps the toolbar to one row
+  // on either target: the buttons a step narrower again.
+  const narrowPane = blockRules(programCss, "@container program (max-width: 599.98px) {") || [];
+  check(narrowPane.some((r) => /\.programBar > button/.test(r.selector) && /padding-inline:\s*var\(--s-2\)/.test(r.body)), "a narrow pane's toolbar a step narrower");
 
   const again = loadPage({ stored: { "rover.programTarget": "simulator" } });
   check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
@@ -3061,6 +3159,45 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
   await answer(page, "yes");
   check(page.evalIn("__answers.join()") === "false,true", `answers ${page.evalIn("__answers.join()")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The wide layout's two columns are the same beside both tabs (F3, F3d):
+// two rail widths, one per tab, left the address, the scan and Autonomous
+// starting at different edges, and Autonomous under nothing on the Program
+// tab. Layout itself is measured in a browser; this holds the shape.
+test("wide: one rail width beside both tabs, for the address, the note, the rail and Autonomous; Stop under the left pane", () => {
+  const css = panelCss();
+  const rules = cssRules(css);
+  const root = rules.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--rail:\s*clamp\(320px, 30vw, 460px\);/.test(root), "one rail, from the viewport alone");
+  const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
+  check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
+  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
+  const perTab = wide.filter((r) => /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
+  check(perTab.length === 0, `no grid of its own beside either tab: ${perTab.map((r) => r.selector)}`);
+  const body = (selector) => (wide.find((r) => r.selector === selector) || {}).body || "";
+  for (const selector of [".shell", ".bar", ".actions"]) {
+    check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(selector)), `${selector}: the left pane, then the rail`);
+  }
+  for (const selector of [".link", "#note"]) check(!/\bwidth:/.test(body(selector)), `${selector} fills the rail's column: ${body(selector)}`);
+  check(/justify-self:\s*start/.test(body("#stop")) && /width:\s*min\(100%, 480px\)/.test(body("#stop")), `Stop from the left pane's edge, at most 480 px: ${body("#stop")}`);
+  check(/min-height:\s*calc\(var\(--tap\) \+ var\(--s-3\)\)/.test(body(".actions button")), "Stop and Autonomous 56 px");
+  check(/grid-area:\s*1 \/ 1;/.test(body("#stop")) && /grid-area:\s*1 \/ 2;/.test(body("#auto")), "Stop under the left pane, Autonomous under the rail");
+  // The short wide block (521 to 640 px tall) sizes the stick again, and
+  // keeps the bar's 56 px.
+  const short = mediaRules("@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {") || [];
+  for (const [where, rules] of [["wide", wide], ["short", short]]) {
+    const stick = (((rules.find((r) => r.selector === ":root" && /--stick:/.test(r.body)) || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
+    check(/var\(--rail\)/.test(stick), `${where}: the stick budgets the one rail: ${stick}`);
+  }
+  check(!short.some((r) => /\.actions button/.test(r.selector) && /min-height/.test(r.body)), "short: Stop and Autonomous stay 56 px");
+  // A renamed variable left behind reads as nothing: the stick at 0.
+  const declared = new Set(fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((f) => f.endsWith(".css"))
+    .flatMap((f) => [...stylesheet(f).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1])));
+  const undeclared = [...new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]))].filter((v) => !declared.has(v));
+  check(undeclared.length === 0, `panel.css reads only variables a stylesheet declares: ${undeclared}`);
+  // The scan fills its column beside both tabs: no card sized to its drawing.
+  check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
 });
 
 test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {

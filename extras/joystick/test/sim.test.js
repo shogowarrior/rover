@@ -23,7 +23,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { src, CODES, telemetry } = require("./firmware.js");
-const { stylesheet, cssRules, blockRules } = require("./css.js");
+const { stylesheet, cssRules, blockRules, outside } = require("./css.js");
 
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -1159,39 +1159,77 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
   assert.equal(button("4×").getAttribute("aria-pressed"), "true", "and the buttons show it");
 
   // The one or the other, by the bar's width; narrower still, the room's
-  // name takes a row of its own, and the settings open below both rows.
-  // The widths follow the tools' size, which follows the layout: the list
-  // where the buttons no longer fit beside the room's longest name, the
-  // row where the list no longer does.
+  // name takes a row of its own, and the settings open below both rows:
+  // the list where the buttons no longer fit beside the room's longest
+  // name, the row where the list no longer does. The tools are one size on
+  // every layout (the panel's one control height), so the widths are too.
   const css = stylesheet("sim.css");
   const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
-  const layouts = {
-    "one column": "@media (max-width: 959.98px), (max-height: 520.98px) {",
-    wide: "@media (min-width: 960px) and (min-height: 521px) {",
-  };
-  const widths = {};
-  for (const [name, opening] of Object.entries(layouts)) {
-    // The layout's block that holds the container queries (the wide one
-    // has another, for the tools' size).
-    let start = -1;
-    do start = css.indexOf(opening, start + 1);
-    while (start >= 0 && !(blockRules(css.slice(start), opening) || []).some((r) => r.selector === ".sim-speed-pick"));
-    assert.ok(start >= 0, `${name}: its block`);
-    const queries = [...css.slice(start).matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)].slice(0, 2);
-    assert.equal(queries.length, 2, `${name}: two widths`);
-    const [list_, row] = queries.map((m) => ({ px: Number(m[1]), rules: blockRules(css.slice(start), m[0]) || [] }));
-    assert.match(rule(list_.rules, ".sim-speed"), /display:\s*none/, `${name}: no buttons`);
-    assert.match(rule(list_.rules, ".sim-speed-pick"), /display:\s*block/, `${name}: the list`);
-    assert.match(rule(row.rules, ".sim-room"), /flex-basis:\s*100%/, `${name}: the room's own row`);
-    assert.match(rule(row.rules, ".sim-more"), /--sim-bar-h:\s*calc\(2 \* var\(--sim-tool\)/, `${name}: the settings below both rows`);
-    assert.ok(row.px < list_.px, `${name}: the row only narrower than the list`);
-    widths[name] = list_.px;
-  }
-  assert.ok(widths.wide < widths["one column"], "the wide layout's smaller tools fit a narrower bar");
+  // Outside every @media: the same widths on every layout.
+  const everywhere = outside(css, "@media");
+  const queries = [...everywhere.matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)]
+    .map((m) => ({ px: Number(m[1]), rules: blockRules(everywhere, m[0]) || [] }))
+    .filter((q) => q.rules.some((r) => /^\.sim-(speed|room)/.test(r.selector)));
+  assert.equal(queries.length, 2, `two widths for the bar, for every layout: ${queries.map((q) => q.px)}`);
+  const [list_, row] = queries;
+  assert.match(rule(list_.rules, ".sim-speed"), /display:\s*none/, "no buttons");
+  assert.match(rule(list_.rules, ".sim-speed-pick"), /display:\s*block/, "the list");
+  assert.match(rule(row.rules, ".sim-room"), /flex-basis:\s*100%/, "the room's own row");
+  assert.match(rule(row.rules, ".sim-more"), /--sim-bar-h:\s*calc\(2 \* var\(--sim-tool\)/, "the settings below both rows");
+  assert.ok(row.px < list_.px, "the row only narrower than the list");
+  const tools = cssRules(css).filter((r) => /--sim-tool:/.test(r.body)).map((r) => r.body.match(/--sim-tool:\s*([^;]+);/)[1]);
+  assert.deepEqual(tools, ["var(--tap)"], "the tools a full touch target everywhere");
   // The list's own rule, ahead of the container queries that override it.
   assert.match(rule(cssRules(css), ".sim-speed-pick"), /display:\s*none/, "otherwise the buttons alone");
   const settings = cssRules(css).find((r) => r.selector === ".sim-more" && /position:\s*absolute/.test(r.body));
   assert.match(settings.body, /top:\s*calc\([^;]*var\(--sim-bar-h\)/, "the settings open below the bar's rows");
+  assert.deepEqual(page.errors, []);
+});
+
+// Beside the editor the view is as tall as its room needs at its width
+// (F3e), which only CSS can know: the view gives it each room's shape.
+test("the view: each room's shape goes on the slot, for a stage sized to the room", () => {
+  const { page, byClass } = pageWithView();
+  const slot = page.$("simSlot");
+  const { PAD } = page.evalIn("({ PAD: SimView.PAD })");
+  assert.equal(slot.style.getPropertyValue("--room-pad-x"), `${PAD.left + PAD.right}px`, "the margins kept clear across");
+  assert.equal(slot.style.getPropertyValue("--room-pad-y"), `${PAD.top + PAD.bottom}px`, "and down");
+  const room = byClass("sim-room")[0];
+  for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
+    room.value = key;
+    page.fire(room, "change");
+    const { width, height } = page.evalIn("targets.simulator.room");
+    assert.equal(Number(slot.style.getPropertyValue("--room-aspect")).toFixed(3), (width / height).toFixed(3), `${key}: ${width} x ${height} m`);
+  }
+  // What uses them: the stage beside the editor, from the view's width.
+  const css = stylesheet("sim.css");
+  const wide = blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {") || [];
+  const stage = (wide.find((r) => r.selector === ".sim-stage") || {}).body || "";
+  for (const name of ["--room-aspect", "--room-pad-x", "--room-pad-y"]) assert.match(stage, new RegExp(`var\\(${name}\\)`), `the stage's height uses ${name}`);
+  // Worked out for a view 400 px wide, each room fills the stage's width
+  // and height at once, inside its 1 px border and SimView's margins: no
+  // bands either way.
+  const calc = (stage.match(/height:\s*calc\(([^;]*)\);/) || [])[1] || "";
+  const padX = PAD.left + PAD.right;
+  const padY = PAD.top + PAD.bottom;
+  for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
+    room.value = key;
+    page.fire(room, "change");
+    const { width, height } = page.evalIn("targets.simulator.room");
+    const expression = calc.replace(/var\(--room-pad-x\)/g, padX).replace(/var\(--room-pad-y\)/g, padY)
+      .replace(/var\(--room-aspect\)/g, width / height).replace(/100cqw/g, 400).replace(/px/g, "");
+    assert.match(expression, /^[\d.\s+\-*/()]+$/, `${key}: the height is plain arithmetic once filled in: ${expression}`);
+    const tall = Function(`return ${expression};`)();
+    assert.ok(Math.abs((400 - 2 - padX) / width - (tall - 2 - padY) / height) < 1e-9, `${key}: ${tall.toFixed(1)} px tall fits it both ways`);
+  }
+  // The view sizes from its width, its content sets its height, and the
+  // settings hang from the stage (program.css), not from the view.
+  const view = (wide.find((r) => r.selector === ".sim") || {}).body || "";
+  assert.match(view, /container-type:\s*inline-size/, "a width container, not a size one");
+  assert.match(view, /position:\s*static/, "not the settings' containing block");
+  const programStage = (blockRules(stylesheet("program.css"), "@media (min-width: 960px) and (min-height: 521px) {") || [])
+    .find((r) => r.selector === ".programStage") || {};
+  assert.match(programStage.body || "", /position:\s*relative/, "the stage is");
   assert.deepEqual(page.errors, []);
 });
 

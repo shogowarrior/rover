@@ -203,8 +203,10 @@
       </div>
 
       <!-- The editor, and beside it (below it, on a phone) the simulator's
-           view. #simSlot is the simulator's to fill: program.css gives it a
-           definite size, and nothing else is ever put in it. -->
+           view, then the console: under the view on a wide screen, under
+           the editor otherwise. #simSlot is the simulator's to fill:
+           program.css gives it a definite size, and nothing else is ever
+           put in it. -->
       <div class="programStage" id="programStage" data-sim="yes">
         <div class="programEditor">
           <div id="programWorkspace"></div>
@@ -220,22 +222,23 @@
                   aria-controls="simSlot">Simulator</button>
           <div id="simSlot"></div>
         </div>
-      </div>
 
-      <!-- What is running and why it stopped, then everything the program
-           and the runner said. -->
-      <div class="programConsole">
-        <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
-        <ol class="programLog" id="programLog" aria-label="Program output"></ol>
+        <!-- What is running and why it stopped, then everything the program
+             and the runner said. -->
+        <div class="programConsole">
+          <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
+          <ol class="programLog" id="programLog" aria-label="Program output"></ol>
+        </div>
       </div>
     </section>
 
     <!-- The rail: what the rover reports, and Stop. Its parts are rows of
          the shell's grid: on a phone the scan above the open tab and Stop at
          the foot of the screen; on a wide screen a column beside the open
-         tab, narrower beside the Program tab, with Stop and Autonomous in a
-         bar across the foot that the tab switch never moves. It comes after
-         the tabs so that Stop is the last control in the focus order. -->
+         tab, as wide beside both, with Stop and Autonomous in a bar across
+         the foot under the two columns, which the tab switch never moves.
+         It comes after the tabs so that Stop is the last control in the
+         focus order. -->
     <div class="rail">
       <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
            it again when the rover says true, says nothing, or the link goes.
@@ -263,6 +266,9 @@
         <svg id="scan" role="img" aria-labelledby="scanDesc">
           <title id="scanDesc">Live ultrasonic scan at five bearings</title>
         </svg>
+        <!-- Until the rover's first frame (panel.css says when): the column
+             keeps its size and says what will be in it. -->
+        <p class="scanEmpty">No rover connected: its scan shows here</p>
       </section>
 
       <section class="readouts">

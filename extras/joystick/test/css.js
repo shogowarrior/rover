@@ -29,6 +29,19 @@ function blockRules(css, opening) {
   return cssRules(text.slice(start + opening.length, end - 1));
 }
 
+// The stylesheet, comments gone, without every block an at-rule of that
+// name opens ("@media"), however deep: what applies outside them all.
+// cssRules() and blockRules() take what it returns.
+function outside(css, atRule) {
+  let text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (let at = text.indexOf(atRule); at >= 0; at = text.indexOf(atRule, at)) {
+    let end = text.indexOf("{", at) + 1;
+    for (let depth = 1; depth > 0 && end < text.length; end++) depth += text[end] === "{" ? 1 : text[end] === "}" ? -1 : 0;
+    text = text.slice(0, at) + text.slice(end);
+  }
+  return text;
+}
+
 // css/looks.css, and then extra (CSS in its shape), block by block: its
 // selector, the look it is for (the default block's is its second
 // selector, after :root), and what it declares, name to value.
@@ -40,4 +53,4 @@ function lookBlocks(extra = "") {
   }));
 }
 
-module.exports = { stylesheet, cssRules, blockRules, lookBlocks };
+module.exports = { stylesheet, cssRules, blockRules, outside, lookBlocks };
