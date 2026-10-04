@@ -259,39 +259,58 @@ simulator the Driver sends to
 `SimTarget.command()` in the Link's place; `command()` clamps a duration to
 the firmware's 1.5 s cap (`COMMAND_DURATION_MAX_MS`, checked against
 `Tuning.h`) and takes over from a preview's held motion. A link lost or gone
-stale lets go of nothing driving the simulator. The tests listed above are
+stale lets go of nothing driving the simulator but a held stick, whose
+scheme goes with the link. The tests listed above are
 in, with layout tests for the view's place, and each was checked by
 breaking what it holds.
 
-On a wide screen the dock is as wide as its controls and the view takes the
-rest of the left pane, on the rover target too (a card says what the place
-is for), so the stick is the same size on both targets. On a screen 761 px
-tall or more the dock's controls go into one column under the stick: with
-two, the view had a strip (160 px at 1024 x 768). Measured, the stick and
-the living room's floor:
+From 1180 px wide, or on a screen 761 px tall or more, the dock is as wide
+as its controls and the view takes the rest of the left pane, on the rover
+target too (a card says what the place is for), so the stick is the same
+size on both targets. On a screen 761 px tall or more the dock's controls
+go into one column under the stick: with two, the view had a strip (160 px
+at 1024 x 768). Narrower and shorter, beside the dock's two columns, the
+view was a strip too (112 px wide at 960 x 540, its room 20 px), so there
+the dock is as it was before F1 on either target, and on the simulator the
+view takes the scan's cell in the rail, the readouts staying, as on a
+phone. Measured, the stick and the living room's floor:
 
-| Screen | Stick | Floor | The dock's columns |
+| Screen | Stick | Floor | The view |
 |---|---|---|---|
-| 1024 x 768 | 219 | 300 x 225 | one |
-| 1180 x 820 | 271 | 399 x 299 | one |
-| 1280 x 800 | 251 | 489 x 367 | one |
-| 1366 x 657 | 228 | 280 x 210 | two, the stick at most 2/5 of the pane |
-| 1600 x 900 | 351 | 633 x 475 | one |
+| 960 x 540 | 238 | none: the wheels and the motion, 302 x 149 | in the rail |
+| 1100 x 700 | 308 | 206 x 155 | in the rail |
+| 1179 x 760 | 335 | 286 x 215 | in the rail |
+| 1180 x 700 | 175 | 227 x 170 | beside two columns, the stick at most 2/5 of the pane |
+| 1280 x 720 | 203 | 269 x 202 | beside two columns |
+| 1366 x 657 | 228 | 280 x 210 | beside two columns |
+| 1536 x 730 | 275 | 377 x 283 | beside two columns |
+| 1024 x 768 | 195 | 300 x 225 | beside one column |
+| 1180 x 820 | 247 | 422 x 316 | beside one column |
+| 1280 x 800 | 227 | 492 x 369 | beside one column |
+| 1600 x 900 | 327 | 657 x 493 | beside one column |
 
 The stick was 352 px at 1280 x 800 before: the view's room comes from it.
-The Program tab's view is unchanged, within 2 px.
+At every size above, the stick's box stays put through a link coming and
+going, a switch of target, a pivot chosen under ADVANCED and a motor fault,
+and every switch in the header takes a click at its centre. The Program
+tab's view is unchanged, within 2 px.
 
-On a phone the view takes the scan's row on the simulator target, which is
-143 px at 375 x 812, 79 at 375 x 667 and 26 at 360 x 560: too short for a
-room anyone could read. Under 300 px the view shows the wheels and the
-motion, larger, with the bar's playback, pause and reset; under 120 px
-without the bar; under 32 px the move alone (`css/sim.css`). A tablet
-upright gets the whole view (321 px at 768 x 1024). The switch's own row
-costs the phone 54 px, and the scan pays for it on the rover target too: at
-375 x 667 the fan loses its readings, and at 360 x 560 the fan gives way and
-the readouts stay. Putting the switch in a row that already exists would
-win it back; the mark-and-status row is full once a rover is connected, and
-the tabs-and-scheme row has no room for a third switch at 375 px.
+On a phone the view takes the scan's row on the simulator target, which
+under NORMAL is 143 px at 375 x 812, 131 at 375 x 667 and 132 at 360 x 560:
+too short for a room anyone could read. Under 300 px the view shows the
+wheels and the motion, larger, with the bar's playback, pause and reset;
+under 120 px without the bar or the log; under 32 px the move alone
+(`css/sim.css`). A tablet upright gets the whole view under NORMAL (321 px
+at 768 x 1024), and the wheels and the motion under ADVANCED (263 px). The switch's own row costs a phone 54 px, and the scan
+pays for it on the rover target too (143 px at 375 x 812 against 197
+before). On a phone 600 px tall or less, every phone on its side among
+them, the Drive tab leaves the switch to the Program tab: at 375 x 548 its
+row left the scan 11 px, and choosing Pivot moved the stick 10 px; on a
+phone on its side under 780 px wide it ran the head past the screen. There
+the Drive tab's scan is as it was before F1. Putting the switch in a row
+that already exists would win the 54 px back on taller phones; the
+mark-and-status row is full once a rover is connected, and the
+tabs-and-scheme row has no room for a third switch at 375 px.
 
 ## F2. File actions in one menu
 
@@ -511,9 +530,13 @@ own, so it stays open below.
 
 F1 added Rover | Simulator after Normal | Advanced: the same row on a wide
 screen, and a row of its own under the other two on a phone, where the row
-has no room for a third switch. Both tabs' content still starts at the same
+has no room for a third switch. On a phone 600 px tall or less, every phone
+on its side among them, the Drive tab leaves it to the Program tab (F1 says
+why). From 960 to 999 px wide the tabs and the scheme are a step narrower,
+or Advanced ran under Rover. Both tabs' content still starts at the same
 height, and no label overflows at 375 x 812, 812 x 375 or any wide size; at
-480 x 320 "Simulator" overflows as the others there do.
+480 x 320 the switch is on the Program tab only, where "Simulator"
+overflows as the others there do.
 
 ### F3c. The right column at all times
 
@@ -561,6 +584,12 @@ card's full size, on both tabs and at every width but the smallest cards
 a link up and its first frame to come, the link pill says so. A link that
 goes keeps its last scan, dimmed, as before. The column's width never
 changes with the link.
+
+F1 amended "never takes its place on a wide screen": from 960 to 1179 px
+wide under 761 px tall the left pane has no room for the view beside the
+dock, so on the Drive tab on the simulator target it takes the fan's cell
+in the rail, as on a phone, and the readouts stay. Everywhere else on a
+wide screen the fan keeps its place on both targets.
 
 ### F3d. One right-column width
 
@@ -1111,11 +1140,15 @@ waits for the owner.
 - **Done** (step 2): `js/programtab.js` asked with native `confirm()` to
   load an example, import over a program, and Clear, which the desktop
   app's browser pane dismisses unseen. They ask in the page now.
-- At 480 x 320 on its side, the middle column is 101 px wide and the tab,
-  scheme and target labels overflow their buttons. Found while verifying the last
+- At 480 x 320 on its side, the middle column is 101 px wide and the tab
+  and scheme labels overflow their buttons, and on the Program tab the
+  target's. Found while verifying the last
   branch's landscape layout. F3b took it up and left it: cutting the
   segments' padding is not enough, and the fix is a narrower stick or right
   column at that size.
+- On an upright phone taller than 600 px the target switch's own row costs
+  the scan 54 px on either target (F1 says what winning it back would
+  take).
 - `client/ws.py` prints a raw traceback when the rover is unreachable, where
   `client/drive.py` prints one clean line.
 - No stand-in rover or project verify recipe is committed. The one used to

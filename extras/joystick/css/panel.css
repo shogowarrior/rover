@@ -1552,9 +1552,25 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .shell > [role="tabpanel"] { margin-top: var(--s-2); }
 
+  /* The target's own row left the scan 11 px at 375 x 548, and choosing
+     Pivot moved the stick; on its side under 780 px wide the row ran the
+     head past the screen, and the stick moved as a link came or went. On
+     the Drive tab the target is chosen from the Program tab here, and the
+     view in the scan's place says which it is. */
+  .shell:has(> #driveTab:not([hidden])) .switches > .target { display: none; }
+
   /* The scan gives way to the dock down to nothing: with its padding it
      could not, and the family's slot opening moved the stick (360 x 560). */
   .scan { padding-block: var(--s-1) 0; }
+
+  /* So does the motor fault in its place on the Drive tab, its text centred
+     while the row has room: with its padding and margin it held 31 px more
+     than the scan, and under ADVANCED a fault ran the page past the screen
+     and the stick under the Stop bar (360 x 560). */
+  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
+    margin-bottom: 0;
+    padding-block: 0;
+  }
 
   .dock { padding-bottom: var(--s-3); }
 
@@ -2068,12 +2084,6 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .controls { column-gap: var(--s-3); }
 
   .switches { grid-template-columns: minmax(0, 1fr); }
-
-  /* A third switch row ran the header past the screen with the address
-     showing (667 x 375), so the stick moved as a link came or went: on the
-     Drive tab the target is chosen from the Program tab here, and the view
-     in the scan's place says which it is. */
-  .shell:has(> #driveTab:not([hidden])) .switches > .target { display: none; }
 
   .wordmark { display: none; }
 

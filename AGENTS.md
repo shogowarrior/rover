@@ -341,8 +341,9 @@ with one exception: leaving the Drive tab lets go of a held stick (one STOP,
 only if it was driving), which hidden could be neither steered nor centred.
 A held rotate button carries on, except on the simulator target (below).
 The scan, the readouts and the Stop and Autonomous buttons stay on screen on
-both tabs, connected or not, but for one exception: on a phone the Drive
-tab's view of the simulator takes the scan's row on the simulator target.
+both tabs, connected or not, but for one exception: on the simulator target
+the Drive tab's view of the simulator takes the scan's place on a phone, and
+in the rail from 960 to 1179 px wide under 761 px tall.
 Until the rover's first frame the scan's card says no rover is connected, at
 its full size, and after a link goes it keeps the last scan, dimmed. Stop
 and Autonomous stay in the same place; on a phone the scan gives the Program
@@ -356,16 +357,19 @@ what height is left; on a wide screen (960 px by 521 px and up) the open tab
 fills the left, and the rail, one width (`--rail`) beside both tabs, holds
 the address, the note, the scan and the readouts on the right, so the tab
 switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
-under the left pane (at most 480 px) and Autonomous under the rail. The Drive
-tab splits the left pane: the dock as wide as its controls, and beside it the
-simulator's view, or on the rover target a card holding its place, so a
-switch of target moves nothing. On a screen 761 px tall or more the dock's
-controls stack in one column under the stick, which leaves the view most of
-the pane; on a shorter one the dock keeps two columns and the stick takes at
-most two fifths of the pane's width. On a phone the view gets the scan's row,
-under 300 px on most phones, so there it shows the wheels and the motion
-rather than a room too small to read (`css/sim.css`), and on a short phone
-the move alone. The Program tab puts the simulator's view beside the editor, as tall as its
+under the left pane (at most 480 px) and Autonomous under the rail. From
+1180 px wide, or 761 px tall, the Drive tab splits the left pane: the dock
+as wide as its controls, and beside it the simulator's view, or on the rover
+target a card holding its place, so a switch of target moves nothing. On a
+screen 761 px tall or more the dock's controls stack in one column under the
+stick, which leaves the view most of the pane; on a shorter one the dock
+keeps two columns and the stick takes at most two fifths of the pane's
+width. Narrower and shorter the pane has no room for both, so the dock is
+the same on either target and the view takes the scan's cell in the rail.
+In the scan's place, there or on a phone, the view is its row's height,
+under 300 px on most phones, so it shows the wheels and the motion rather
+than a room too small to read (`css/sim.css`), and on a short phone the
+move alone. The Program tab puts the simulator's view beside the editor, as tall as its
 room needs at its width (`SimView` sets `--room-aspect` on the slot holding
 it), with
 the console under it on a screen 861 px tall or more and under the editor on
@@ -426,9 +430,12 @@ and leaves the rover alone. The scheme toggle still shows and sets the
 rover's scheme (F3g, in `docs/features.md`, gives the simulator its own). A
 switch is a new way to lose control, so it stops a running program and lets
 go of every held control, with one STOP to the target left behind if this
-panel was driving it. A lost or stale link lets go of nothing driving the
-simulator but a held stick, because the rover's scheme goes with the link
-and a change of scheme lets go of a held stick. Leaving the Drive tab lets
+panel was driving it. On a phone 600 px tall or less, every phone on its
+side among them, the Drive tab leaves the switch to the Program tab: its row
+left the scan nothing to give way with, and the stick moved. A lost or stale
+link lets go of nothing driving the simulator but a held stick, because the
+rover's scheme goes with the link and a change of scheme lets go of a held
+stick. Leaving the Drive tab lets
 go of a held rotate button too: off the Drive tab the view plays at the
 operator's speed. A drive press takes the simulated rover over from a
 preview, as it does the rover from a program. There is one view of the

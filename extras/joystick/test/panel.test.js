@@ -3311,15 +3311,20 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   // A phone's switch row has room for two switches: the target goes under.
   const row = base.find((r) => r.selector === ".switches > .target");
   check(row && /grid-column:\s*1 \/ -1;/.test(row.body), `the target a row of its own on a phone: ${row && row.body}`);
-  // On its side under 780 px wide a third row ran the head past the screen:
+  // 600 px tall or less its row left the scan nothing to give (a pivot
+  // moved the stick at 375 x 548) or ran the head past a phone on its side:
   // the Drive tab leaves the target to the Program tab there.
-  const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [])
-    .find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) .switches > .target");
-  check(side && /display:\s*none;/.test(side.body), `a narrow phone on its side: no target on the Drive tab: ${side && side.body}`);
+  const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
+  const side = short600.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) .switches > .target");
+  check(side && /display:\s*none;/.test(side.body), `a short phone: no target on the Drive tab: ${side && side.body}`);
   // Under 600 px tall the scan's row gives way to nothing: with its padding
   // it could not, and the family's slot opening moved the stick.
-  const scan = (mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || []).find((r) => r.selector === ".scan");
+  const scan = short600.find((r) => r.selector === ".scan");
   check(scan && /padding-block:\s*var\(--s-1\) 0;/.test(scan.body), `short phone: the scan's padding cut: ${scan && scan.body}`);
+  // And the fault in its place on the Drive tab: its padding and margin
+  // held more than the scan's, and a fault moved the stick (360 x 560).
+  const fault = short600.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
+  check(fault && /margin-bottom:\s*0;/.test(fault.body) && /padding-block:\s*0;/.test(fault.body), `short phone: the fault card gives way as the scan does: ${fault && fault.body}`);
 
   // The view too short for its room: height queries on the view itself,
   // outside every @media so a phone's and the rail's apply, while a wide

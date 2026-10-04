@@ -137,15 +137,22 @@ The first thread then did F1, the first half of step 5, in a PR of its own
   go of nothing driving the simulator but a held stick (the rover's scheme
   goes with the link), and a drive press ends a preview;
 - one view of the simulator, moved beside the Drive tab's controls while
-  they drive it and held at 1x there; on a wide screen its place beside the
-  dock is kept on the rover target too, with the dock's controls in one
-  column on a screen 761 px tall or more;
-- on a phone the view takes the scan's row on the simulator, showing the
-  wheels and the motion where the row is too short for the room.
+  they drive it and held at 1x there; from 1180 px wide or 761 px tall its
+  place beside the dock is kept on the rover target too, with the dock's
+  controls in one column on a screen 761 px tall or more;
+- narrower and shorter, and on a phone, the view takes the scan's place on
+  the simulator, showing the wheels and the motion where it is too short
+  for the room.
 
-The switch's own row costs a phone's scan 54 px on either target; F1 in
-features.md says what winning it back would take. The target label joins
-the overflow at 480 x 320.
+Its review round (logic, then layout) fixed: Stop reaching the rover only
+after the simulator, a paused view left frozen on the Drive tab, a held
+rotate button carrying on off the tab, the view a strip at 960 x 540, the
+switches overlapping at 960 px, a pivot or a motor fault moving the stick
+on short screens, and the head running past a phone on its side. The
+switch's own row costs an upright phone over 600 px tall 54 px of scan on
+either target; F1 in features.md says what winning it back would take. On
+a phone 600 px tall or less the Drive tab leaves the switch to the Program
+tab. Panel tests 245/245 and the protocol check pass.
 
 ## Current work
 
