@@ -32,7 +32,8 @@ mapping and the move names telemetry reports, in
 extras/joystick/js/mecanum.js, which extras/joystick/test/mecanum.test.js
 checks instead; and the panel's simulator's copies in
 extras/joystick/js/sim.js (the wheel table from src/MovePatterns.cpp, the
-sweep timing from ExploreParams and the telemetry keys it writes), which
+sweep timing from ExploreParams, the telemetry keys it writes and the
+command duration cap from src/Tuning.h), which
 extras/joystick/test/sim.test.js checks instead. CI runs both.
 
 Standard library only; the files are parsed with regular expressions.

@@ -83,9 +83,8 @@ const readouts = new Readouts({
 const driven = {
   simulator: null, // the simulator's Target while it is the one driven
   send(frame) {
-    if (!this.simulator) return link.send(frame);
-    this.simulator.command(frame.move, frame.speed, frame.duration);
-    return true;
+    if (this.simulator) this.simulator.command(frame.move, frame.speed, frame.duration);
+    else link.send(frame);
   },
 };
 
@@ -129,7 +128,8 @@ link.onState((state) => {
 // the wheels itself when the client driving it disconnects. The motor warning
 // belongs to the link it came over, so it goes too. While the Driver drives
 // the simulator the link is not its concern: a rover rebooting must not let
-// go of the stick driving the simulated one.
+// go of what drives the simulated one. Only a held stick goes, because the
+// rover's scheme goes with the link (the scheme's block, below).
 link.onState((state, cause) => {
   if (state === "down") {
     if (!driven.simulator) driver.standDown(cause);
@@ -153,12 +153,13 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 // Outside the tabs, so both are in reach whatever tab is showing. Stop always
 // sends STOP, driving or not: it is also how to stop an exploring rover. On
 // the simulator the Driver's STOP goes there, and Stop sends one to a
-// connected rover too, since Stop means everything; Autonomous acts on the
+// connected rover too, since Stop means everything: first, so that nothing
+// the simulator does can keep it from the rover. Autonomous acts on the
 // simulator alone. Both also stop a program, a preview included: see the
 // Program tab's block.
 byId("stop").addEventListener("click", () => {
-  driver.stopRover();
   if (driven.simulator) link.send({ move: STOP, speed: 0, duration: MOVE_DURATION_MS });
+  driver.stopRover();
 });
 byId("auto").addEventListener("click", () => driver.resumeAutonomous());
 
@@ -367,15 +368,20 @@ runner.onState((state, { kind }) => {
 // Leaving the Drive tab lets go of a held stick (one STOP, only if it was
 // driving): hidden, the stick can no longer be steered or centred, since
 // joy.js throws on every move of a canvas with no layout, and the last move
-// went on repeating until the thumb lifted. A held rotate button carries on,
-// as it has nothing to steer and its release still arrives; a program or an
-// exploring rover is left alone.
+// went on repeating until the thumb lifted. On the rover a held rotate
+// button carries on, as it has nothing to steer and its release still
+// arrives; a program or an exploring rover is left alone. On the simulator
+// it goes too: off the Drive tab the view plays at the operator's speed,
+// and at 4x each re-sent move ran out before the next (placeSimView).
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
 // size: fit it again whenever the tab is shown. The simulator's view goes
 // with the tab that shows it.
 tabs.onChange((tab) => {
-  if (tab.id !== "tabDrive") driver.releaseStick();
+  if (tab.id !== "tabDrive") {
+    if (driven.simulator) driver.standDown("tab");
+    else driver.releaseStick();
+  }
   placeSimView();
   if (tab.id === "tabProgram") programTab.shown();
 });

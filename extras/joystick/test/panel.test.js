@@ -2544,13 +2544,18 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(page.errors.length === 0, `errors ${page.errors}`);
 
   // The switch offers what the registry holds: the rover, and the simulator
-  // when its scripts registered one; its view's place shows only then.
-  const sim = page.evalIn("'simulator' in targets");
-  check(segments(page).length === (sim ? 2 : 1), `segments ${segments(page).map((b) => b.textContent)}`);
-  check(page.$("target").hidden === !sim && page.$("programSim").hidden === !sim && page.$("driveView").hidden === !sim,
-    "the switch and both places for the view follow the registry");
-  check(page.$("programStage").dataset.sim === (sim ? "yes" : "no"), "stage layout follows it");
-  check(page.$("simSlot") !== null && all(page.$("programTab")).includes(page.$("simSlot")), "#simSlot is in the Program tab");
+  // when its scripts registered one; its view's places show only then.
+  for (const without of [false, true]) {
+    const p = without ? loadPage({ leaveOut: ["js/sim.js", "js/simview.js"] }) : page;
+    const sim = p.evalIn("'simulator' in targets");
+    check(sim === !without, `the simulator registered: ${sim}`);
+    check(segments(p).length === (sim ? 2 : 1), `segments ${segments(p).map((b) => b.textContent)}`);
+    check(p.$("target").hidden === !sim && p.$("programSim").hidden === !sim && p.$("driveView").hidden === !sim,
+      `the switch and both places for the view follow the registry, ${without ? "without" : "with"} the simulator`);
+    check(p.$("programStage").dataset.sim === (sim ? "yes" : "no"), "stage layout follows it");
+    check(p.$("simSlot") !== null && all(p.$("programTab")).includes(p.$("simSlot")), "#simSlot is in the Program tab");
+    check(p.errors.length === 0, `errors ${p.errors}`);
+  }
 });
 
 test("program: the editor refits as its box changes size, not only as the tab is shown", () => {
@@ -3247,6 +3252,16 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   const wideView = wide.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
   check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
   check(!wide.some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
+  const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector));
+  const strays = anywhere.flatMap((r) => r.selector.split(",").map((x) => x.trim())).filter((x) => !/(\.driveViewOff|#driveSimSlot)$/.test(x));
+  check(anywhere.length > 0 && strays.length === 0, `outside every @media, the target picks only the card or the view: ${strays}`);
+  // Two fifths of the pane's width at most for the stick beside the view, at
+  // any height under 761 px.
+  const shortWide = mediaRules("@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {") || [];
+  for (const [where, rules] of [["wide", wide], ["short", shortWide]]) {
+    const formula = (((rules.find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
+    check(/\(100vw - var\(--rail\) - \d+px\) \* 0\.4/.test(formula), `${where}: the stick at most 2/5 of the pane: ${formula}`);
+  }
   const tall = mediaRules("@media (min-width: 960px) and (min-height: 761px) {") || [];
   const controls = (tall.find((r) => r.selector === ".controls") || {}).body || "";
   const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).join(" ");
@@ -3266,6 +3281,13 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   const base = cssRules(outside(panelCss(), "@media"));
   const which = base.find((r) => /body\[data-target="simulator"\] \.driveViewOff/.test(r.selector));
   check(which && /body:not\(\[data-target="simulator"\]\) #driveSimSlot/.test(which.selector) && /display:\s*none;/.test(which.body), "the card on the rover, the view on the simulator");
+  // The row sets the view's height: sim.css's floor for the view elsewhere
+  // would hold it at 280 px, past the row, and no short step would apply.
+  const floor = base.find((r) => r.selector === "#driveSimSlot .sim");
+  check(floor && /min-height:\s*0;/.test(floor.body), `the row's height, not the view's floor: ${floor && floor.body}`);
+  // A phone's switch row has room for two switches: the target goes under.
+  const row = base.find((r) => r.selector === ".switches > .target");
+  check(row && /grid-column:\s*1 \/ -1;/.test(row.body), `the target a row of its own on a phone: ${row && row.body}`);
 
   // The view too short for its room: height queries on the view itself,
   // outside every @media so a phone's apply, while a wide view's container
@@ -3275,6 +3297,11 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   const hidden = short.find((r) => /display:\s*none;/.test(r.body));
   check(hidden && [".sim-stage", ".sim-room", ".sim-settings"].every((c) => hidden.selector.includes(c)), `short: the room and what only it needs go: ${hidden && hidden.selector}`);
   check(!short.some((r) => /\.sim-(foot|inset|move|bar)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
+  const shorter = blockRules(outside(sim, "@media"), "@container sim (max-height: 119.98px) {") || [];
+  check(shorter.some((r) => r.selector === ".sim-bar" && /display:\s*none;/.test(r.body)), "shorter: the bar goes");
+  const line = blockRules(outside(sim, "@media"), "@container sim (max-height: 31.98px) {") || [];
+  const gone = (line.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
+  check([".sim-inset", ".sim-twist", ".sim-said"].every((c) => gone.includes(c)) && !/\.sim-move/.test(gone), `a line: the move alone: ${gone}`);
   const wideSim = (blockRules(sim, "@media (min-width: 960px) and (min-height: 521px) {") || []).find((r) => r.selector === ".sim");
   check(wideSim && /container-type:\s*inline-size;/.test(wideSim.body), `wide: the view's container measures width only: ${wideSim && wideSim.body}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -3587,6 +3614,14 @@ test("target: on the simulator the Drive tab drives it, and nothing but Stop rea
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+test("target: on the simulator Stop reaches the rover first, whatever the simulator does", () => {
+  const { page, ws } = connected(telemetry());
+  toSimulator(page);
+  page.evalIn("targets.simulator.command = () => { throw new Error('a fault in the simulator'); };");
+  page.fire(page.$("stop"), "click");
+  check(names(ws).join() === "STOP", `the exploring rover was sent ${names(ws)}`);
+});
+
 test("target: a switch under a held control sends one STOP to the target left behind, then nothing until a fresh press", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const sim = simCommands(page);
@@ -3624,7 +3659,7 @@ test("target: a switch under a held control sends one STOP to the target left be
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: a lost or stale link lets go of nothing driving the simulator", () => {
+test("target: a lost or stale link lets go of nothing driving the simulator but a held stick, whose scheme goes with it", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const sim = simCommands(page);
   toSimulator(page);
@@ -3635,6 +3670,36 @@ test("target: a lost or stale link lets go of nothing driving the simulator", ()
   check(sim().every((m) => m === "ROTATE_COUNTERCLOCKWISE") && sim.count() >= 15, `driving on: ${sim.count()} ${sim().slice(-2)}`);
   lift(page, page.$("ccw"), 1);
   check(sim().slice(-1)[0] === "STOP", "let go: STOP");
+
+  // The rover's scheme goes with the link, and a change of scheme lets go
+  // of a held stick, as ever: under ADVANCED a held pivot would otherwise
+  // turn into a translation with no fresh press.
+  const ws2 = connectOpen(page);
+  ws2.serverMsg(telemetry({ mode: "MANUAL" }));
+  const s = stickTouch(page, 0);
+  s.start(); s.move(0, -100);
+  const mark = sim.count();
+  ws2.serverDrop();
+  check(sim(mark).join() === "STOP", `one STOP to the simulator: ${sim(mark)}`);
+  page.clock.advance(1000);
+  check(sim.count() === mark + 1, `then nothing: ${sim(mark)}`);
+  s.end();
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("target: leaving the Drive tab on the simulator lets go of a held rotate button too", () => {
+  // Off the Drive tab the view plays at the operator's speed, and at 4x each
+  // re-sent move ran out before the next: the simulated rover drove in jerks.
+  const page = loadPage();
+  const sim = simCommands(page);
+  toSimulator(page);
+  press(page, page.$("cw"), 1);
+  page.clock.advance(250);
+  page.fire(page.$("tabProgram"), "click");
+  check(sim().join() === "ROTATE_CLOCKWISE,ROTATE_CLOCKWISE,STOP", `one STOP: ${sim()}`);
+  page.clock.advance(1000);
+  lift(page, page.$("cw"), 1);
+  check(sim.count() === 3, `then nothing: ${sim()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3670,8 +3735,6 @@ test("target: a drive press takes the simulated rover over from a preview, and o
   page.fire(page.$("stop"), "click");
   await pageFrames(page, 100, page.evalIn("targets.simulator"));
   check(ended(page) && /Stop was pressed/.test(ended(page).reason), `Stop: ${JSON.stringify(ended(page))}`);
-  // On the rover, the simulator's preview is not there to stop: a press on
-  // the rover's target never reaches it.
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3710,6 +3773,13 @@ test("target: one view of the simulator, on the Drive tab while it is driven, he
   check(!speeds()[2].disabled && /Play at 4 times/.test(speeds()[2].getAttribute("title")), "4x offered again");
   page.fire(page.$("tabDrive"), "click");
   check(slot() === "driveSimSlot" && sim.playback === 1, "and held again on the Drive tab");
+  // A pause left on the Program tab would freeze what the Drive tab drives,
+  // on a phone with no bar to resume it from: driven, the view plays.
+  page.fire(page.$("tabProgram"), "click");
+  page.fire(view().querySelectorAll(".sim-pause")[0], "click");
+  check(sim.paused, "paused on the Program tab");
+  page.fire(page.$("tabDrive"), "click");
+  check(!sim.paused && sim.playback === 1, `playing at 1x on the Drive tab: paused ${sim.paused}`);
   toRover(page);
   check(slot() === "simSlot" && sim.playback === 4, "on the rover, the Program tab's view keeps it");
   check(page.errors.length === 0, `errors ${page.errors}`);

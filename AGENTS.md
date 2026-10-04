@@ -338,13 +338,14 @@ window or hiding the tab stops what the panel is driving and leaves an
 exploring rover alone. Its Drive and Program tabs switch only what is shown,
 with one exception: leaving the Drive tab lets go of a held stick (one STOP,
 only if it was driving), which hidden could be neither steered nor centred.
-A held rotate button carries on. The scan, the readouts and the Stop and
-Autonomous buttons stay on screen on both tabs, connected or not: until the
-rover's first frame the scan's card says no rover is connected, at its full
-size, and after a link goes it keeps the last scan, dimmed. Stop and
-Autonomous stay in the same place; on a phone the scan gives the Program tab
-room as a strip above it, and on the simulator target gives the Drive tab's
-view of the simulator its row.
+A held rotate button carries on, except on the simulator target (below).
+The scan, the readouts and the Stop and Autonomous buttons stay on screen on
+both tabs, connected or not, but for one exception: on a phone the Drive
+tab's view of the simulator takes the scan's row on the simulator target.
+Until the rover's first frame the scan's card says no rover is connected, at
+its full size, and after a link goes it keeps the last scan, dimmed. Stop
+and Autonomous stay in the same place; on a phone the scan gives the Program
+tab room as a strip above it.
 
 The layout is `css/panel.css`'s, on its tokens (colours, type, space, radii).
 On a phone the Drive tab is a dock at the foot of the screen, the stick under
@@ -363,7 +364,8 @@ most two fifths of the pane's width. On a phone the view gets the scan's row,
 under 300 px on most phones, so there it shows the wheels and the motion
 rather than a room too small to read (`css/sim.css`), and on a short phone
 the move alone. The Program tab puts the simulator's view beside the editor, as tall as its
-room needs at its width (`SimView` sets `--room-aspect` on `#simSlot`), with
+room needs at its width (`SimView` sets `--room-aspect` on the slot holding
+it), with
 the console under it on a screen 861 px tall or more and under the editor on
 a shorter one; the view folds away to a strip on every layout, and starts
 folded unless the target is the simulator. The editor refits as its box
@@ -395,16 +397,22 @@ held rotate button and a running program carry on. The family selector
 (`js/targetswitch.js`) for the whole page: what the Drive tab's controls
 drive, and what a program runs on. On the simulator the Driver sends to it
 in the Link's place (`driven` in `js/app.js`), through the same arbitration,
-re-sends and deadlines, and nothing the Drive tab does reaches the rover
-except Stop, which stops a connected rover too. Autonomous there takes the
-simulated rover's mode and leaves the rover alone. A switch is a new way to
-lose control, so it stops a running program and lets go of every held
-control, with one STOP to the target left behind if this panel was driving
-it; a lost or stale link lets go of nothing driving the simulator. A drive
-press takes the simulated rover over from a preview, as it does the rover
-from a program. There is one view of the simulator: beside the Drive tab's
-controls while they drive it, held at 1x there because the Driver re-sends
-in real time, and on the Program tab otherwise.
+re-sends and deadlines, and no move the Drive tab makes reaches the rover.
+Stop stops a connected rover too, first, so nothing the simulator does can
+keep it from the rover. Autonomous there takes the simulated rover's mode
+and leaves the rover alone. The scheme toggle still shows and sets the
+rover's scheme (F3g, in `docs/features.md`, gives the simulator its own). A
+switch is a new way to lose control, so it stops a running program and lets
+go of every held control, with one STOP to the target left behind if this
+panel was driving it. A lost or stale link lets go of nothing driving the
+simulator but a held stick, because the rover's scheme goes with the link
+and a change of scheme lets go of a held stick. Leaving the Drive tab lets
+go of a held rotate button too: off the Drive tab the view plays at the
+operator's speed. A drive press takes the simulated rover over from a
+preview, as it does the rover from a program. There is one view of the
+simulator: beside the Drive tab's controls while they drive it, playing at
+1x there because the Driver re-sends in real time, and on the Program tab
+otherwise.
 
 **The Program tab** runs a block program on the rover, or previews it on the
 simulator. On the rover it needs a live link, and drives only through
@@ -534,8 +542,9 @@ operator passes one to an upload instead.
   them), autonomy thresholds in `ExploreParams`, pins in `Pins.h`. A value a
   client mirrors names its copy in a comment, and `tools/check_protocol.py`
   checks the copy. The panel simulator's copies in
-  `extras/joystick/js/sim.js` (the wheel table, the sweep timing) are
-  checked by `extras/joystick/test/sim.test.js` instead.
+  `extras/joystick/js/sim.js` (the wheel table, the sweep timing, the
+  command duration cap) are checked by `extras/joystick/test/sim.test.js`
+  instead.
 - Optional features are switches in `Features.h`, not commented-out code, and
   every setting keeps compiling (CI builds `car_wire_gamepad` for the gamepad
   path).

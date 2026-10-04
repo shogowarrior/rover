@@ -303,7 +303,9 @@ function makeWebSocketClass(clock, sockets) {
 // marked resizeObserved. Off by default, so
 // that no other test's clock runs the simulator's view. A large frameMs is a
 // throttled display: a pane out of view, where timers still run on time.
-function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16 } = {}) {
+// leaveOut: scripts the page lists but does not get, as a file that failed
+// to load.
+function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16, leaveOut = [] } = {}) {
   const clock = makeClock();
   const sockets = [];
 
@@ -363,7 +365,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
       get() { const e = new Error("The operation is insecure."); e.name = "SecurityError"; throw e; } });`, ctx);
   }
 
-  const loaded = scripts.filter((src) => !isRemote(src));
+  const loaded = scripts.filter((src) => !isRemote(src) && !leaveOut.includes(src));
   for (const src of loaded) {
     vm.runInContext(fs.readFileSync(path.join(PANEL_ROOT, src), "utf8"), ctx, { filename: src });
     if (src === "joy.js") {

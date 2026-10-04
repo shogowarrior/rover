@@ -500,7 +500,9 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-2);
 }
 
-/* Rover | Simulator, a row of its own under the tabs and the scheme. */
+/* Rover | Simulator: on a phone, a row of its own under the tabs and the
+   scheme, which leave no room for a third switch. A wide screen's row is a
+   flex row (below), with room for all three. */
 .switches > .target { grid-column: 1 / -1; }
 
 /* Segmented controls: the tabs, the scheme, the stick family. One track;

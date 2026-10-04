@@ -24,7 +24,8 @@
  *   holdPlayback(why)
  *       Hold the playback at 1x, the faster speeds disabled with why as
  *       their title, as buttons and in the playback list alike; null lets
- *       go, back to the speed chosen last. For the Drive tab: its Driver
+ *       go, back to the speed chosen last. Holding also plays a paused
+ *       view. For the Drive tab: its Driver
  *       re-sends a held move every 200 ms of real time, each lasting 400 ms
  *       of simulated time, so at 2x or 4x each ran out before the next
  *       came and the simulated rover drove in jerks.
@@ -33,8 +34,9 @@
  * playback speed (the target steps it in fixed steps of its own), and it
  * draws at the display's rate with requestAnimationFrame. While the page is
  * hidden it does nothing at all, and the preview simply waits; while only
- * the view is out of sight (the Drive tab showing, or the view folded away
- * to watch the blocks) a preview in progress runs on, undrawn,
+ * the view is out of sight (the Drive tab showing on the rover target, or
+ * the view folded away to watch the blocks) a preview in progress runs on,
+ * undrawn,
  * and an idle one asks for no frames at all until it is shown or a program
  * starts on it.
  *
@@ -125,6 +127,9 @@ class SimView {
     }
     this.#ui.speedPick.setAttribute("title", this.#held || "Playback speed");
     this.#target.playback = this.#held ? 1 : this.#chosen;
+    // A pause left on the Program tab would freeze what the Drive tab
+    // drives, where a phone's view has no bar to resume it from.
+    if (this.#held) this.#target.paused = false;
     this.#render();
   }
 
@@ -181,8 +186,8 @@ class SimView {
     return this.#ui.root.getClientRects().length > 0;
   }
 
-  // Out of sight with nothing to run -- the Drive tab showing, and no
-  // program on the simulator -- both loops rest, rather than keep a phone
+  // Out of sight with nothing to run -- the Drive tab showing on the rover
+  // target, and no program on the simulator -- both loops rest, rather than keep a phone
   // busy through a whole drive. Being shown (the ResizeObserver) or a program
   // starting (the target's onWake) wakes them, timing afresh.
   #canIdle() {

@@ -285,8 +285,9 @@ can be put in dropdown too. there can be multiple based on what is needed.
 but htink before you do as some things might be better without dropdown to
 make it explicit/"
 
-**Done** (step 3). The Program toolbar holds the Rover | Simulator switch,
-Run, Stop program and one File menu button (`#programMenu`). Its menu
+**Done** (step 3). The Program toolbar held the Rover | Simulator switch
+(in the header since F1), Run, Stop program and one File menu button
+(`#programMenu`). Its menu
 (`#programMenuList`) holds the four examples under an Examples heading
 (the group `#programExamples`), a separator, Import…, Export, a separator
 and Clear, built on `Popover` and following the spec's *Menus*. The menu is

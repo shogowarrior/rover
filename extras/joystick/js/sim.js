@@ -1,6 +1,7 @@
 /**
- * The simulator: a preview of what a block program would make the rover do,
- * worked out here and drawn by SimView, with nothing sent to the rover.
+ * The simulator: a preview of what a block program or the Drive tab's
+ * controls would make the rover do, worked out here and drawn by SimView,
+ * with nothing sent to the rover.
  *
  *   RoverSim    the chassis: its pose, the command it is carrying out, and
  *               how the four wheels move it
@@ -8,7 +9,8 @@
  *   SimSonar    the servo sweep the firmware runs in manual mode, and what
  *               each bearing last read
  *   SimTarget   the program runner's Target over all three, on a simulated
- *               clock of its own (see below)
+ *               clock of its own (see below), which also takes the Drive
+ *               tab's commands
  *
  * It is a preview, not a promise. The wheels follow ideal mecanum kinematics
  * with no slip, inertia or motor lag; the sonar is one ray per ping; contact

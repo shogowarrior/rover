@@ -105,11 +105,13 @@ The same thread then did F1, the first half of step 5, in a PR of its own
 
 - one Rover | Simulator switch in the header for the whole page: on the
   simulator the Drive tab's Driver sends to `SimTarget.command()` in the
-  Link's place, so nothing but Stop reaches the rover, and Autonomous takes
-  only the simulated rover's mode;
+  Link's place, so no move reaches the rover and only Stop stops it too,
+  and Autonomous takes only the simulated rover's mode; the scheme toggle
+  is still the rover's until F3g;
 - a switch lets go of everything on the target left behind (a running
   program, held controls, one STOP if driving), a lost or stale link lets
-  go of nothing driving the simulator, and a drive press ends a preview;
+  go of nothing driving the simulator but a held stick (the rover's scheme
+  goes with the link), and a drive press ends a preview;
 - one view of the simulator, moved beside the Drive tab's controls while
   they drive it and held at 1x there; on a wide screen its place beside the
   dock is kept on the rover target too, with the dock's controls in one
