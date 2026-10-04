@@ -3,6 +3,7 @@
 #include <ArduinoOTA.h>
 #include <MD5Builder.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 
 #include "Features.h"
 #include "Timing.h"
@@ -49,7 +50,26 @@ String otaSecret() {
 #endif
 }
 
+// Confirm an image on trial (verifyRollbackLater() below): it got online,
+// so it could be replaced over the air.
+void keepRunningImage() {
+  esp_ota_img_states_t state;
+  if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+      state == ESP_OTA_IMG_PENDING_VERIFY) {
+    esp_ota_mark_app_valid_cancel_rollback();
+  }
+}
+
 }  // namespace
+
+// A new image, from either update path, boots once on trial: unless it is
+// confirmed, the bootloader goes back to the previous one at the next reset.
+// arduino-esp32 confirms it before setup() runs unless this says to wait;
+// goOnline() confirms it instead, once WiFi is up. So an image that crashes,
+// hangs or never gets online, one that could not be replaced over the air,
+// is undone by the next reset (EN, power, watchdog). An image flashed over
+// USB is never on trial.
+extern "C" bool verifyRollbackLater() { return true; }
 
 Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware)
     : rover(rover), remote(remote), firmware(firmware) {}
@@ -120,6 +140,9 @@ bool Network::connect() {
 
 void Network::goOnline() {
   if (!otaStarted) {
+    // Before either update path starts: an update overwrites the other slot,
+    // the one this image goes back to until it is confirmed.
+    keepRunningImage();
     configureOta();
     otaStarted = true;
   }
