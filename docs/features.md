@@ -101,8 +101,8 @@ also remind the thread to make inwdows collapsible wherever needed. keeping mind
 5. **Done.** [F1](#f1-a-simulator-for-the-drive-tab), then
    [F3g](#f3g-normal-and-advanced-on-both-tabs), which builds on F1's target
    switch.
-6. [F3h](#f3h-both-sticks-shown-disabled-by-scheme): the biggest change to the
-   Drive tab's arbitration.
+6. **Done.** [F3h](#f3h-both-sticks-shown-disabled-by-scheme): the biggest
+   change to the Drive tab's arbitration.
 7. [F4](#f4-other-buttons).
 
 [F5](#f5-themes-and-options), themes and the Options gear, came later and
@@ -983,6 +983,50 @@ schemes, the ones NORMAL cannot use visibly disabled; the right stick's moves
 come from `moveForStick` and pass the vectors; nothing moves under a held
 stick when the scheme flips; and the README and `docs/mecanum.md` list the
 panel's and the pad's controls side by side.
+
+**Done** (step 6), with the three defaults above: the second stick drives
+the pivots, the pad is unchanged, and an upright phone has two smaller
+sticks. The left stick always translates; the right one drives the pivots
+by quadrant, with Pivot | Pivot sideways over it. Under NORMAL the right
+stick and its switch stay on screen, dimmed, take no press, and the line
+over the stick says "Advanced only." (its title says why); under ADVANCED
+the line is the caveat, "Untested: go slow.". The Driver tracks the two
+sticks apart: the rotate button pressed last wins, then the stick pressed
+last, then a program, and letting go of one hands the rover back to the
+other if it is still held. Two thumbs at once work, a touch the system
+cancels lets go of its own stick only, and a mouse released anywhere lets
+go of both. A change to NORMAL lets go of a held pivot stick (one STOP,
+only if it was driving), and once ADVANCED is back the line over it asks
+for a fresh press; the translate stick, the rotate buttons and a program
+carry on. Choosing a family under a held pivot stick re-steers it at once.
+
+Every layout has the same controls: the family's row over the pivot stick,
+the translate stick's caption over the left, and the rotate buttons and
+the speed under the two. A phone upright has them in the dock over Stop; a
+phone on its side has a stick down each edge, with the header, the scan,
+and Stop and Autonomous in the middle; a wide screen has them side by side
+in the dock, and from 1180 px wide beside the simulator's view, each stick
+then at most a quarter of the pane. The layouts that stacked the controls
+in one column on a tall wide screen are gone. Each stick's size is a
+budget from the viewport, its sum written in `css/panel.css`. Measured in
+a headless browser at 320 x 568 to 412 x 915 upright, 568 x 320 to
+1000 x 500 on its side, 768 x 1024 and 820 x 1180 (iPad), and 960 x 540 to
+1920 x 1080: no stick moves through a scheme change, a family change, a
+press request, a motor fault or a lost link on the simulator target, and
+the Stop bar never covers either stick. Sticks: 162 px at 375 x 812, 112
+at 375 x 548, 210 at 740 x 360 on its side, 282 at 1024 x 768, 202 at
+1280 x 800 beside the view. Still as on main: with no rover connected the
+address row runs a 548 to 667 px tall phone, and a 568 x 320 phone on its
+side, a little past the screen, when nothing can drive. The README's
+control table and `docs/mecanum.md` list the panel's and the pad's
+controls side by side; the pad reaches the pivots with L1 or R1, and its
+right stick is still not read.
+
+Tests: both sticks' arbitration, two thumbs, a cancelled touch, the mouse,
+the scheme and family rules, the press requests, the refits and box moves
+for each stick, both canvases' ancestors, the look rebuilding both, and the
+layout's rules on a phone on its side, each checked by breaking what it
+holds. Panel tests 258/258.
 
 ## F4. Other buttons
 

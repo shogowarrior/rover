@@ -167,13 +167,36 @@ It then did F3g, the second half of step 5, in a PR of its own:
 
 Panel tests 251/251 and the protocol check pass.
 
+It then did F3h, step 6, in a PR of its own (features.md has the
+measurements):
+
+- two sticks on every layout: the left one always translates, the right one
+  drives the pivots by quadrant with Pivot | Pivot sideways over it, and
+  under NORMAL the right stick and its switch stay on screen, dimmed and
+  off, the line over the stick saying "Advanced only.";
+- the Driver tracks the sticks apart (rotate pressed last, then the stick
+  pressed last, then a program); a change to NORMAL lets go of a held pivot
+  stick only, and the translate stick, the rotate buttons and a program
+  carry on;
+- the layouts: an upright phone has both sticks in the dock over Stop, a
+  phone on its side a stick down each edge with the header, the scan and
+  Stop between them, a wide screen both sticks side by side, beside the
+  simulator's view from 1180 px; the tall wide one-column dock is gone;
+- on a phone up to 760 px tall a motor fault no longer moves the sticks,
+  and on the simulator target the address waits on the Program tab, so a
+  lost link moves nothing.
+
+The PS3 pad is unchanged: its right stick is still not read, and the README
+and `docs/mecanum.md` list the panel's and the pad's controls side by side.
+Panel tests 258/258 and the protocol check pass.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
 quotes them verbatim and maps each to an item (F1-F5) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
-when it is done. Do them in this order; 1 to 5 are done, so the next thread
-starts at F3h:
+when it is done. Do them in this order; 1 to 6 are done, so the next thread
+starts at F4:
 
 1. **Done.** Write the layout and interaction spec (F3f) into features.md, and send it
    to the owner with every "Ask the owner" question in features.md, in one
@@ -187,8 +210,8 @@ starts at F3h:
 4. **Done.** F3 with F3a to F3e: one layout for both tabs.
 5. **Done.** F1: a simulator for the Drive tab; then F3g: Normal |
    Advanced usable on both tabs, with or without a rover.
-6. F3h: both sticks shown in Drive mode, the one NORMAL cannot use visibly
-   disabled.
+6. **Done.** F3h: both sticks shown in Drive mode, the one NORMAL cannot
+   use visibly disabled.
 7. F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
 **One thread at a time,** each on one item or a few related ones: each item
