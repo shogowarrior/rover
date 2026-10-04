@@ -1990,6 +1990,8 @@ test("schemes: the family selector is offered under ADVANCED only; corner hints 
 // The phone-on-its-side block's opening, as css/panel.css writes it, and the
 // rules inside one @media block of panel.css (css.js).
 const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
+// Where the Drive tab's view of the simulator sits beside the dock (F1).
+const DRIVE_BESIDE = "@media (min-width: 1180px) and (min-height: 521px), (min-width: 960px) and (min-height: 761px) {";
 const panelCss = () => stylesheet("panel.css");
 const mediaRules = (opening) => blockRules(panelCss(), opening);
 
@@ -2077,21 +2079,26 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   ]) check(!caught(css), `flagged harmless: ${css}`);
 });
 
-// Layout the fake DOM cannot lay out, held by the stylesheet's words. Beside
-// a landscape stick the motor-fault card takes the scan's place; at its own
-// height the page grew and the stick slid half off a 568 x 320 screen. And a
-// line clamp in a card the grid stretches cut the text mid-sentence and still
-// showed the lines after its ellipsis. Measured in a browser at 480 x 320 to
-// 812 x 375 (css/panel.css says what it found).
-test("motorsReady: the fault beside a landscape stick takes no height of its own, and no fault card clamps its lines", () => {
+// Layout the fake DOM cannot lay out, held by the stylesheet's words. On a
+// phone the motor-fault card takes the scan's place; at its own height the
+// page grew and the stick slid half off a 568 x 320 screen, or under the
+// Stop bar at 375 x 667. And a line clamp in a card the grid stretches cut
+// the text mid-sentence and still showed the lines after its ellipsis.
+// Measured in a browser at 375 x 667 and 480 x 320 to 812 x 375
+// (css/panel.css says what it found).
+test("motorsReady: the fault beside a phone's stick takes no height of its own, and no fault card clamps its lines", () => {
   const besideStick = (selector) =>
     /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(selector.trim());
-  // Only in the landscape block: anywhere else, the upright phone's card too
-  // would shrink to two lines.
-  const beside = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(",").some(besideStick));
-  check(beside.length === 1, `the Drive tab's fault card, in the landscape block: ${beside.map((r) => r.selector)}`);
-  const body = beside.length === 1 ? beside[0].body : "";
+  // In the block for every phone, upright or on its side.
+  const phone = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || []).filter((r) => r.selector.split(",").some(besideStick));
+  check(phone.length === 1, `the Drive tab's fault card, in the phone block: ${phone.map((r) => r.selector)}`);
+  const body = phone.length === 1 ? phone[0].body : "";
   check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
+  // On its side the row is what the head and readouts leave: the card keeps
+  // its headline and a line more, whatever that is.
+  const beside = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(",").some(besideStick));
+  const floor = beside.length === 1 ? beside[0].body : "";
+  check(/\bmin-height:\s*calc\(/.test(floor) && /box-sizing:\s*content-box/.test(floor), `on its side, a floor of two lines: ${floor}`);
   // And only beside the stick: the Program tab's card, contained, fell to its
   // floor and scrolled inside a page that scrolls.
   const rules = cssRules(panelCss());
@@ -3196,12 +3203,16 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
   const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
   check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
   const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  // The Drive tab splits only the left pane, for the simulator's view (F1):
-  // the rail stays the last column, as wide, and the bar under all three.
-  const driveView = ".shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden]))";
-  const perTab = wide.filter((r) => r.selector !== driveView && /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
+  const perTab = wide.filter((r) => /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
   check(perTab.length === 0, `no grid of its own beside either tab: ${perTab.map((r) => r.selector)}`);
-  const split = (wide.find((r) => r.selector === driveView) || {}).body || "";
+  // Where the left pane has room for it (DRIVE_BESIDE), the Drive tab splits
+  // only that pane, for the simulator's view (F1): the rail stays the last
+  // column, as wide, and the bar under all three.
+  const driveView = ".shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden]))";
+  const beside = mediaRules(DRIVE_BESIDE) || [];
+  const others = beside.filter((r) => r.selector !== driveView && /grid-template/.test(r.body));
+  check(others.length === 0, `nothing else there sets a grid: ${others.map((r) => r.selector)}`);
+  const split = (beside.find((r) => r.selector === driveView) || {}).body || "";
   check(/grid-template-columns:\s*auto minmax\(0, 1fr\) var\(--rail\);/.test(split), `the Drive tab's left pane split in two, the rail as ever: ${split}`);
   const areas = (split.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || [];
   check(areas.join(" ") === '"head head head" "main view fault" "main view scan" "main view read" "act  act  act"', `the dock, the view, then the rail; the bar across: ${areas}`);
@@ -3244,30 +3255,56 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
   for (let n = page.canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of the stick");
 
-  // Wide: the left pane split, and the view in its column on either target
-  // (the rail test holds the grid). Tall enough, the dock's controls in one
-  // column, the family's held-open slot last, so a scheme change moves
-  // nothing; the stick budgets the rail there too.
-  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  const wideView = wide.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
+  // Wide, from 1180 px or 761 px tall: the left pane split, and the view in
+  // its column on either target (the rail test holds the grid). Nothing
+  // there follows the target, so a switch moves nothing.
+  const beside = mediaRules(DRIVE_BESIDE) || [];
+  const wideView = beside.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
   check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
-  check(!wide.some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
+  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
+  check(![...wide, ...beside].some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
   const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector));
   const strays = anywhere.flatMap((r) => r.selector.split(",").map((x) => x.trim())).filter((x) => !/(\.driveViewOff|#driveSimSlot)$/.test(x));
   check(anywhere.length > 0 && strays.length === 0, `outside every @media, the target picks only the card or the view: ${strays}`);
-  // Two fifths of the pane's width at most for the stick beside the view, at
-  // any height under 761 px.
-  const shortWide = mediaRules("@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {") || [];
-  for (const [where, rules] of [["wide", wide], ["short", shortWide]]) {
-    const formula = (((rules.find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(/\(100vw - var\(--rail\) - \d+px\) \* 0\.4/.test(formula), `${where}: the stick at most 2/5 of the pane: ${formula}`);
+  // Beside the view under 761 px tall the dock keeps its two columns, the
+  // stick at most two fifths of the pane's width.
+  for (const opening of [
+    "@media (min-width: 1180px) and (min-height: 521px) and (max-height: 760.98px) {",
+    "@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {",
+  ]) {
+    const formula = ((((mediaRules(opening) || []).find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
+    check(/\(100vw - var\(--rail\) - \d+px\) \* 0\.4/.test(formula), `${opening}: the stick at most 2/5 of the pane: ${formula}`);
   }
+  // There the caveat takes two lines in the short layout's type, and the
+  // family's held-open slot holds both: with one, a pivot moved the stick.
+  const twoLines = ((mediaRules("@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {") || []).find((r) => r.selector === "#familySlot") || {}).body || "";
+  check(/min-height:[^;]*2 \* var\(--lh-body\) \* var\(--t-xs\)/.test(twoLines), `short, beside the view: the slot holds two caveat lines: ${twoLines}`);
+  // Narrower and under 761 px tall, the view takes the fan's place in the
+  // rail on the simulator, as on a phone, and the dock is left alone: the
+  // target there picks only the scan or the view.
+  const rail = mediaRules("@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) and (max-height: 760.98px) {") || [];
+  const onTarget = rail.filter((r) => /data-target/.test(r.selector));
+  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `the rail: the target picks the scan or the view: ${onTarget.map((r) => r.selector)}`);
+  const inRail = onTarget.find((r) => /\.driveView/.test(r.selector));
+  check(inRail && /grid-area:\s*scan;/.test(inRail.body), `the rail: the view in the scan's cell: ${inRail && inRail.body}`);
+  check(onTarget.some((r) => /\.scan$/.test(r.selector) && /display:\s*none;/.test(r.body)), "the rail: the scan gives way");
+  // The row's height, so that sim.css's steps for a short view apply.
+  const railSim = rail.find((r) => r.selector === "#driveSimSlot .sim");
+  check(railSim && /container-type:\s*size;/.test(railSim.body), `the rail: the view a size container: ${railSim && railSim.body}`);
+  // Tall enough, the dock's controls in one column, the family's held-open
+  // slot last, so a scheme change moves nothing; the stick budgets the
+  // rail, and 573 px of height for what is above and under it, the sum
+  // css/panel.css lists.
   const tall = mediaRules("@media (min-width: 960px) and (min-height: 761px) {") || [];
   const controls = (tall.find((r) => r.selector === ".controls") || {}).body || "";
   const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).join(" ");
   check(areas === '"stick" "spin" "speed" "family"', `tall wide: one column, the family last: ${areas}`);
   const stick = (((tall.find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(/var\(--rail\)/.test(stick) && /var\(--svh\)/.test(stick), `tall wide: the stick from the viewport and the rail: ${stick}`);
+  check(/var\(--rail\)/.test(stick) && /100 \* var\(--svh\) - 573px/.test(stick), `tall wide: the stick from the viewport and the rail: ${stick}`);
+  // From 960 to 999 px wide the tabs, the scheme and the target share a row:
+  // a step narrower, or Advanced ran under Rover.
+  const narrow = mediaRules("@media (min-width: 960px) and (max-width: 999.98px) and (min-height: 521px) {") || [];
+  check(narrow.some((r) => /\.tabs \[role="tab"\]/.test(r.selector) && /\.scheme \.segmented button/.test(r.selector) && /padding-inline/.test(r.body)), "960 to 999 px: the switches a step narrower");
 
   // A phone: on the simulator, the Drive tab's view in place of the scan,
   // sized by its row (a size container), a motor fault still winning the
@@ -3288,17 +3325,28 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   // A phone's switch row has room for two switches: the target goes under.
   const row = base.find((r) => r.selector === ".switches > .target");
   check(row && /grid-column:\s*1 \/ -1;/.test(row.body), `the target a row of its own on a phone: ${row && row.body}`);
+  // On its side under 780 px wide a third row ran the head past the screen:
+  // the Drive tab leaves the target to the Program tab there.
+  const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [])
+    .find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) .switches > .target");
+  check(side && /display:\s*none;/.test(side.body), `a narrow phone on its side: no target on the Drive tab: ${side && side.body}`);
+  // Under 600 px tall the scan's row gives way to nothing: with its padding
+  // it could not, and the family's slot opening moved the stick.
+  const scan = (mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || []).find((r) => r.selector === ".scan");
+  check(scan && /padding-block:\s*var\(--s-1\) 0;/.test(scan.body), `short phone: the scan's padding cut: ${scan && scan.body}`);
 
   // The view too short for its room: height queries on the view itself,
-  // outside every @media so a phone's apply, while a wide view's container
-  // measures width only, so they never apply there.
+  // outside every @media so a phone's and the rail's apply, while a wide
+  // view's container elsewhere measures width only, so they never apply
+  // there.
   const sim = stylesheet("sim.css");
   const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 299.98px) {") || [];
   const hidden = short.find((r) => /display:\s*none;/.test(r.body));
   check(hidden && [".sim-stage", ".sim-room", ".sim-settings"].every((c) => hidden.selector.includes(c)), `short: the room and what only it needs go: ${hidden && hidden.selector}`);
   check(!short.some((r) => /\.sim-(foot|inset|move|bar)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
   const shorter = blockRules(outside(sim, "@media"), "@container sim (max-height: 119.98px) {") || [];
-  check(shorter.some((r) => r.selector === ".sim-bar" && /display:\s*none;/.test(r.body)), "shorter: the bar goes");
+  const goes = (shorter.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
+  check([".sim-bar", ".sim-log"].every((c) => goes.includes(c)), `shorter: the bar goes, and the log, whose lines ran over the motion: ${goes}`);
   const line = blockRules(outside(sim, "@media"), "@container sim (max-height: 31.98px) {") || [];
   const gone = (line.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
   check([".sim-inset", ".sim-twist", ".sim-said"].every((c) => gone.includes(c)) && !/\.sim-move/.test(gone), `a line: the move alone: ${gone}`);

@@ -474,10 +474,13 @@
    room would be a strip: the view shows the wheels and the motion
    instead, larger, with the bar's playback, pause and reset, and drops
    what only the room needs (the room's name and the settings: the rays,
-   the trail and the key). Shorter still, the wheels and the motion alone,
-   then the move alone.
-   The Program tab's view is never this short, and a wide view's size is
-   its own (inline-size containment), so these never apply to either. */
+   the trail and the key). Shorter still, the wheels and the motion alone
+   (the log's two lines ran over the motion's), then the move alone.
+   The Drive tab's view in a wide rail's scan cell (panel.css, 960 to 1179
+   px wide and under 761 px tall) is sized by its cell too, so these apply
+   there. The Program tab's view is never this short, and a wide view's
+   size elsewhere is its own (inline-size containment), so these never
+   apply to either. */
 @container sim (max-height: 299.98px) {
   .sim-stage,
   .sim-room,
@@ -490,7 +493,8 @@
 }
 
 @container sim (max-height: 119.98px) {
-  .sim-bar { display: none; }
+  .sim-bar,
+  .sim-log { display: none; }
 }
 
 @container sim (max-height: 47.98px) {
