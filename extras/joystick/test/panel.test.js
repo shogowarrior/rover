@@ -3191,8 +3191,15 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
   const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
   check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
   const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  const perTab = wide.filter((r) => /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
+  // The Drive tab splits only the left pane, for the simulator's view (F1):
+  // the rail stays the last column, as wide, and the bar under all three.
+  const driveView = ".shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden]))";
+  const perTab = wide.filter((r) => r.selector !== driveView && /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
   check(perTab.length === 0, `no grid of its own beside either tab: ${perTab.map((r) => r.selector)}`);
+  const split = (wide.find((r) => r.selector === driveView) || {}).body || "";
+  check(/grid-template-columns:\s*auto minmax\(0, 1fr\) var\(--rail\);/.test(split), `the Drive tab's left pane split in two, the rail as ever: ${split}`);
+  const areas = (split.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || [];
+  check(areas.join(" ") === '"head head head" "main view fault" "main view scan" "main view read" "act  act  act"', `the dock, the view, then the rail; the bar across: ${areas}`);
   const body = (selector) => (wide.find((r) => r.selector === selector) || {}).body || "";
   for (const selector of [".shell", ".bar", ".actions"]) {
     check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(selector)), `${selector}: the left pane, then the rail`);

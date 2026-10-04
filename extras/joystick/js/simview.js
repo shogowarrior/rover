@@ -95,11 +95,15 @@ class SimView {
 
     document.addEventListener("visibilitychange", () => this.#wake());
     // Shown again (the Program tab chosen, the view unfolded), or resized.
+    // The root too: a view too short for the room hides the stage and still
+    // shows the rover's wheels.
     if (this.#canRest) {
-      new ResizeObserver(() => {
+      const observer = new ResizeObserver(() => {
         this.#fit();
         this.#wake();
-      }).observe(this.#ui.stage);
+      });
+      observer.observe(this.#ui.root);
+      observer.observe(this.#ui.stage);
     }
     target.onWake(() => this.#wake());
     this.#wake();
@@ -171,8 +175,10 @@ class SimView {
     if (this.#raf === null) this.#raf = requestAnimationFrame(() => this.#frame());
   }
 
+  // The root, not the stage: a view too short for the room shows only the
+  // foot, whose wheels still turn.
   #shown() {
-    return this.#ui.stage.getClientRects().length > 0;
+    return this.#ui.root.getClientRects().length > 0;
   }
 
   // Out of sight with nothing to run -- the Drive tab showing, and no
@@ -253,7 +259,7 @@ class SimView {
     ui.reset = this.#tool(bar, "Reset: put the rover back where it starts and clear the trail (stops a preview). " +
       "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6");
     ui.reset.addEventListener("click", () => this.#target.reset());
-    ui.more = this.#tool(bar, "Rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3");
+    ui.more = this.#tool(bar, "Rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
 
     // The room.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);

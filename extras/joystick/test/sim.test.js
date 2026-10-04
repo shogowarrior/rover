@@ -1438,6 +1438,23 @@ test("the view's frames: none while hidden or idle out of sight, and no jump aft
   assert.deepEqual(page.errors, []);
 });
 
+// A view too short for the room (the Drive tab's on a phone) hides the
+// stage and shows the wheels and the motion: shown is the view's, not the
+// stage's, or a drive there drew nothing.
+test("the view's frames: with the room hidden, the view still draws the motion", async () => {
+  const { page, sim, byClass } = pageWithView({ frames: true });
+  assert.ok(byClass("sim")[0].resizeObserved, "the view's own box is watched, as well as the room's");
+  page.fire(page.$("tabProgram"), "click");
+  byClass("sim-stage")[0].hidden = true;
+  page.resized();
+  await pageFrames(page, 100);
+  assert.equal(byClass("sim-move")[0].textContent, "STOP");
+  sim.command(protocol.ROTATE_CLOCKWISE, 128, 400);
+  await pageFrames(page, 160);
+  assert.equal(byClass("sim-move")[0].textContent, "ROTATE_CLOCKWISE", "drawn");
+  assert.deepEqual(page.errors, []);
+});
+
 test("the preview reports the rover's scheme; nothing of its own reaches the page", async () => {
   const { page, sim } = pageWithView();
   const ws = connectOpen(page);

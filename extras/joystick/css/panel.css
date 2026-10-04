@@ -500,6 +500,9 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-2);
 }
 
+/* Rover | Simulator, a row of its own under the tabs and the scheme. */
+.switches > .target { grid-column: 1 / -1; }
+
 /* Segmented controls: the tabs, the scheme, the stick family. One track;
    the chosen segment raised inside it. Each segment is a full 44 px
    target; the chosen one's inset frame only draws it smaller. */
@@ -1192,6 +1195,70 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   stroke: none;
 }
 
+/* --- the Drive tab's view of the simulator ---------------------------------- */
+
+/* Beside the dock, never around it (joystick.html says why). On a phone it
+   shows only on the simulator, in the scan's place (below); on a wide
+   screen beside the dock, on either target. #driveSimSlot is the
+   simulator's view's while the Drive tab drives it (app.js), and
+   .driveViewOff says what the place is for while the target is the rover. */
+.driveView {
+  grid-area: scan;
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.driveViewOff {
+  display: grid;
+  place-content: center;
+  gap: var(--s-1);
+  flex: 1 1 auto;
+  margin: 0;
+  padding: var(--s-5);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-xl);
+}
+
+.driveViewOff strong {
+  font-size: var(--t-md);
+  color: var(--readout);
+}
+
+.driveViewOff span { max-width: 36ch; }
+
+/* clip, as #simSlot's (program.css): the settings' scroll margin. */
+#driveSimSlot {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+
+/* The slot sets the height here, whatever the view's floor elsewhere. */
+#driveSimSlot .sim { min-height: 0; }
+
+/* A row shorter than the view's bar (a short phone): half the padding, so
+   the motion keeps a line (sim.css drops the rest). */
+@container driveview (max-height: 63.98px) {
+  #driveSimSlot .sim { padding-block: var(--s-1); }
+}
+
+body[data-target="simulator"] .driveViewOff,
+body:not([data-target="simulator"]) #driveSimSlot { display: none; }
+
 /* --- the other layouts ------------------------------------------------------- */
 
 /* Every layout but the side-by-side one (the media query below, negated). */
@@ -1233,6 +1300,18 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
      stay: the Move the rover reports while no wheel turns is what the fault
      explains. */
   .shell:has(#motorsFault:not([hidden])) .scan { display: none; }
+
+  /* On the simulator the Drive tab's view takes the scan's place, and the
+     readouts stay, the rover's as ever. Its size is the row's, never its
+     content's (a size container), so as the scan does it gives way rather
+     than move the dock. A motor fault still wins the place: it is about
+     the rover, which Stop still reaches. */
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) .scan { display: none; }
+
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) > .driveView:not([hidden]) {
+    display: flex;
+    container: driveview / size;
+  }
 
   .shell:has(#motorsFault:not([hidden])) .fault {
     grid-area: scan;
@@ -1317,11 +1396,13 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    nothing. The Program tab scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
-    /* As much stick as the screen's height and the dock's width allow. 324
-       px of height is the header, the bar and the dock's own padding and
-       caption; 368 px of width the gutters, the rail's gap and the dock's
-       other column. */
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 324px, 100vw - var(--rail) - 368px), 400px);
+    /* As much stick as the screen's height allows, and of the left pane's
+       width, two fifths, the simulator's view beside the dock taking the
+       rest. 324 px of height is the header, the bar and the dock's own
+       padding and caption; 388 px of width the gutters, the columns' gaps,
+       the dock's padding and gap and its other column. The view's place is
+       kept on either target, so the target never changes this. */
+    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 324px, (100vw - var(--rail) - 388px) * 0.4), 400px);
     --shell-max: 1600px;
     --pill-h: 34px;
   }
@@ -1339,6 +1420,34 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
       "act  act";
     column-gap: var(--s-5);
     padding-top: var(--s-5);
+  }
+
+  /* The Drive tab's left pane: the dock as wide as its controls, and the
+     simulator's view the rest, at its room's shape (F1). The rail's column
+     is the same as beside the Program tab. */
+  .shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden])) {
+    grid-template-columns: auto minmax(0, 1fr) var(--rail);
+    grid-template-areas:
+      "head head head"
+      "main view fault"
+      "main view scan"
+      "main view read"
+      "act  act  act";
+  }
+
+  /* The settings hang from the view's bar over whatever is under the room
+     (sim.css), as on the Program tab: this is their containing block. */
+  .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
+    grid-area: view;
+    display: flex;
+    position: relative;
+  }
+
+  /* As tall as its room needs at its width (sim.css), up to the pane's
+     height, as on the Program tab. */
+  #driveSimSlot {
+    flex: 0 1 auto;
+    border-radius: var(--r-xl);
   }
 
   /* Two rows on the shell's two columns: the mark and the status, then the
@@ -1431,7 +1540,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
      the stick sets the grid's height, and the family coming and going with
      the scheme moves nothing. */
   .controls {
-    grid-template-columns: var(--stick) minmax(220px, 300px);
+    grid-template-columns: var(--stick) 220px;
     grid-template-rows: auto auto 1fr;
     grid-template-areas:
       "stick spin"
@@ -1502,11 +1611,11 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
    family's held-open slot -- was taller than the dock and spilled over the
    tabs, the scheme and the bar, where a click on Advanced rotated the
    rover. Everything around the stick a step smaller, the caveat to one
-   line, so the column fits whatever the height. --stick's 264 px and 344 px
-   are the side-by-side layout's 324 px and 368 px, for these sizes. */
+   line, so the column fits whatever the height. --stick's 264 px and 364 px
+   are the side-by-side layout's 324 px and 388 px, for these sizes. */
 @media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(180px, min(44 * var(--svh), 100 * var(--svh) - 264px, 100vw - var(--rail) - 344px), 400px);
+    --stick: clamp(140px, min(44 * var(--svh), 100 * var(--svh) - 264px, (100vw - var(--rail) - 364px) * 0.4), 400px);
   }
 
   .shell { padding-top: var(--s-4); }
@@ -1526,6 +1635,37 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   .actions {
     margin-top: var(--s-3);
     padding-block: var(--s-2) var(--s-3);
+  }
+}
+
+/* Side by side on a screen 761 px tall or more, as most laptops and an iPad
+   on its side are: the dock's controls in one column, the stick at its
+   head, so the simulator's view beside the dock takes most of the left
+   pane. With the dock's two columns the view had a strip (about 260 px at
+   1280 x 800, 160 at 1024 x 768). The rotate buttons put their word beside
+   their icon, and the family's held-open slot comes last, so the scheme
+   changing moves nothing. 549 px of height is the header, the bar, the
+   dock's padding and the stick's caption, and the rotate buttons, the
+   speed and the family's slot under the stick; 420 px of width leaves the
+   view 300 px at least. */
+@media (min-width: 960px) and (min-height: 761px) {
+  :root {
+    --stick: clamp(160px, min(100 * var(--svh) - 549px, 100vw - var(--rail) - 420px), 360px);
+  }
+
+  .dock { padding: var(--s-4); }
+
+  .controls {
+    grid-template-columns: max(var(--stick), 248px);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: "stick" "spin" "speed" "family";
+    gap: var(--s-3);
+  }
+
+  .spin button {
+    flex-direction: row;
+    gap: var(--s-2);
+    min-height: var(--tap-lg);
   }
 }
 
