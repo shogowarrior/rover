@@ -1186,9 +1186,17 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Off under NORMAL (family.js): drawn faded, its hints with it, and deaf
    to a touch, which lands on the pad instead, whose title says why. The
-   Driver takes no press from it either. Opacity, which no rule on a
-   stick's ancestors may be a containing block for (panel.test.js). */
-#pivotPad[data-off="yes"] { opacity: 0.45; }
+   Driver takes no press from it either. The pad takes that touch as the
+   stick would (joy.js sets touch-action: none on a stick's box): a thumb
+   resting there pans, zooms or calls out nothing, which would move the
+   page, and the other stick under its thumb with it. Opacity, which no
+   rule on a stick's ancestors may be a containing block for
+   (panel.test.js). */
+#pivotPad[data-off="yes"] {
+  opacity: 0.45;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
 
 #pivotPad[data-off="yes"] #pivotStick { pointer-events: none; }
 

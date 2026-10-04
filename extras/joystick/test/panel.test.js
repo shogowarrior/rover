@@ -1886,7 +1886,22 @@ test("sticks: a touchcancel lets go of its own stick, and the other drives on", 
   page.clock.advance(450);
   check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `the translate stick drives on ${names(ws, mark)}`);
   move.cancel();
-  check(names(ws, mark).slice(-1).join() === "STOP", `then the other ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD,STOP", `then the other ${names(ws, mark)}`);
+
+  // A touch taken from a stick held but not driving sends nothing: the
+  // stick pressed last drives on, with no STOP between.
+  {
+    const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+    const pivot = pivotTouch(page, 0);
+    const move = stickTouch(page, 1);
+    pivot.start(); pushTo(page, pivot, 60, 60);
+    move.start(); pushTo(page, move, 0, 70);
+    const mark = count(ws);
+    pivot.cancel();
+    page.clock.advance(450);
+    check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD", `the pivot touch taken away while the translate stick drove: ${names(ws, mark)}`);
+    check(page.pivotJoy.GetX() === "0" && page.joy.GetY() !== "0", `the pivot knob recentred, the translate knob held: ${page.pivotJoy.GetX()} ${page.joy.GetY()}`);
+  }
 });
 
 test("sticks: the pivot stick takes no press while off, and turning it off stops only what it was driving", () => {
@@ -1919,7 +1934,7 @@ test("sticks: the pivot stick takes no press while off, and turning it off stops
     page.evalIn("driver.enablePivots(true)");
     pushTo(page, p, 60, -60);
     page.clock.advance(450);
-    check(names(ws, mark).slice(-1).join() === "STOP", `the pivot thumb, never pressed again, sent ${names(ws, mark)}`);
+    check(names(ws, mark).join() === "MOVE_FORWARD,MOVE_FORWARD,STOP", `the translate stick's STOP, and nothing from the pivot thumb, never pressed again: ${names(ws, mark)}`);
   }
 
   // Pressed but centred: nothing to let go of, nothing sent.
@@ -2290,6 +2305,13 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 
   const hints = rules.find((r) => r.sheet === "css/panel.css" && r.selector === ".hints");
   check(hints && /pointer-events:\s*none/.test(hints.body), `.hints lets touches through: ${hints && hints.body}`);
+  // Off, the pivot stick is deaf to touches, and its pad takes them as the
+  // stick would: no pan, zoom or callout, which would move the page and the
+  // other stick under its thumb.
+  const offStick = rules.find((r) => r.sheet === "css/panel.css" && r.selector === '#pivotPad[data-off="yes"] #pivotStick');
+  check(offStick && /pointer-events:\s*none/.test(offStick.body), `the off pivot stick takes no touch: ${offStick && offStick.body}`);
+  const offPad = rules.find((r) => r.sheet === "css/panel.css" && r.selector === '#pivotPad[data-off="yes"]');
+  check(offPad && /touch-action:\s*none/.test(offPad.body) && /-webkit-touch-callout:\s*none/.test(offPad.body), `the off pad pans and calls out nothing: ${offPad && offPad.body}`);
 
   // joy.js places a touch by its canvas's offsetParent: no ancestor of
   // either stick's canvas may become one, by a stylesheet or its own style
