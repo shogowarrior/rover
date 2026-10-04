@@ -1,7 +1,7 @@
 # Requested features: the next work
 
 The owner's requests for the browser panel and the controls, from
-2026-10-03. Steps 1 to 3 of the [order of work](#order-of-work) are done; the
+2026-10-03. Steps 1 to 4 of the [order of work](#order-of-work) are done; the
 rest is not started. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
@@ -94,8 +94,8 @@ The screenshot that came with it shows the Program tab on a wide screen
 7. [F4](#f4-other-buttons).
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
-at 375, 1280 and about 1600 px (see the handoff for how, without the desktop
-pane), and `/code-review` rounds until one comes back clean.
+at 375, 1024 x 768, 1180 x 820, 1280 and about 1600 px (see the handoff for
+how, without the desktop pane), and `/code-review` rounds until one comes back clean.
 
 ## The owner's answers
 
@@ -119,7 +119,7 @@ spec it changes.
 | 11 | F3c | The rover's data on the right at all times, or not shown without a rover? | at all times, with an empty state | none yet |
 | 12 | F3d | A wider right column for the fan, or a narrower one for the editor? | the middle: `clamp(320px, 30vw, 460px)` | none yet |
 | 13 | F3e | May the simulated room be drawn turned 90 degrees? | no: north stays up | none yet |
-| 14 | F3e | Does the Program console move under the simulator, or stay under the editor? | under the simulator on wide screens | none yet |
+| 14 | F3e | Does the Program console move under the simulator, or stay under the editor? | under the simulator on wide screens 861 px tall or more, under the editor on shorter ones | none yet |
 | 15 | F3g | With a rover connected and the target on Simulator, does the simulator's scheme follow the rover's? | its own, starting from the rover's | none yet |
 | 16 | F3g | Should NORMAL refuse pivots in programs outright (a firmware change), or keep asking? | keep asking | none yet |
 | 17 | F3h | What does the second stick drive? | the pivots | none yet |
@@ -555,7 +555,9 @@ portrait pane remains.
 - May the room be drawn turned 90 degrees, or must its "north" stay up?
   *(default: north stays up)*
 - Does the Program console move under the simulator, or stay under the
-  editor? *(default: under the simulator on wide screens)*
+  editor? *(default: under the simulator on wide screens 861 px tall or
+  more, under the editor on shorter ones, where under the view it left the
+  room a strip; first "under the simulator on wide screens")*
 
 **Tests.** `sim.test.js`'s view tests (drag, the turn handle, "the view: a
 bearing to the rover's left reads, and is drawn, on its left", pause, bump
@@ -573,20 +575,27 @@ its fold strip, and takes 44% of the pane (`clamp(260px, 44cqw, 560px)`:
 280 px at 1024, 364 at 1280, 472 at 1600). SimView puts the room's aspect
 (`--room-aspect`) and its margins (`--room-pad-x`, `--room-pad-y`, from
 `SimView.PAD`) on `#simSlot`, and sim.css gives the stage the height the
-room needs at the view's width. The console sits under the view and takes
-what is left, at least 120 px, its log as tall as that allows; where the
-column is too short, the stage gives way and the room fits its height.
-Measured for all four rooms from 1024 x 768 to 1600 x 900, the room fills
-its stage's width or height, with only SimView's own margins above and
-below it (19 and 23 px: the badge and the scale bar). The settings hang
-from the bar over the console, so a corridor's short view still has room
-for them. The key stays in the settings on a wide screen: under the status
+room needs at the view's width, up to the stage's height. On a screen 861
+px tall or more the console sits under the view and takes what is left, at
+least 120 px and never less than its content, its log as tall as that
+allows. Shorter, as most laptop and iPad windows are, the console goes under
+the editor and the view has the column's height: under the view, the
+console left the room a strip across a wide column (the living room 122 x
+92 px at 1366 x 657, now 298 x 224; 174 x 131 at 1024 x 768, now 244 x
+183). Measured for all four rooms from 960 x 540 to 1920 x 969, the room
+fills its stage's width or height, with only SimView's own margins above and
+below it (19 and 23 px: the badge and the scale bar). The settings hang from
+the bar over what is under the room, so a corridor's short view still has
+room for them. The key stays in the settings on a wide screen: under the status
 it cost the room its height.
 
 The view folds on every layout now, for the owner's "collapsible wherever
 needed": beside the editor its heading is a strip down its side, and
 folded, only the strip stays, the editor takes the width (580 px instead of
-288 at 1024 x 768) and the console goes under the editor. It starts folded
+288 at 1024 x 768) and the console goes under the editor. A fold, or the
+console growing under the editor, changes the editor's size, and Blockly
+refits only to a window's resize, so the Program tab watches the editor's
+box and refits it. It starts folded
 unless the target is the simulator, as it always did on a phone, and
 choosing the simulator unfolds it. The simulator's bar is 44 px tall on
 every layout (the spec's one control height), so the bar is one row from
@@ -609,8 +618,9 @@ has applied yet describes the target, not today's page.
 *Layouts.* Three, chosen by the viewport as today: **wide** (960 px wide and
 521 px tall and up), **a phone on its side** (landscape, 520 px tall or
 less), and **a phone upright** (the rest). Every check is made at 375 x 812,
-480 x 320 and 812 x 375 for the phones, and 1280 x 800 and about 1600 x 900
-(the owner's screen) for wide, on both tabs.
+480 x 320 and 812 x 375 for the phones, and 1024 x 768 and 1180 x 820 (a
+laptop or an iPad on its side, which the owner puts first), 1280 x 800 and
+about 1600 x 900 (the owner's screen) for wide, on both tabs.
 
 *Regions.* Four, in this order on screen and in the focus order, on every
 layout and both tabs:
@@ -922,7 +932,7 @@ control table lists them.
 | Simulator 1x / 2x / 4x | simulator bar | narrow view only | its state should show |
 | Simulator Pause, Reset | simulator bar | no | quick, stateful toggles |
 | Simulator settings | simulator bar | already one | a `Popover`, like the File menu |
-| Simulator fold | Program tab, phone | no | a disclosure |
+| Simulator fold | Program tab, every layout (a strip down the view's side on wide) | no | a disclosure |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
 
 ## Open from earlier work

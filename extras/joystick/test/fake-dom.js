@@ -298,7 +298,8 @@ function makeWebSocketClass(clock, sockets) {
 // data blocked). stored: what "ok" storage holds before the page loads.
 // frames: give the page requestAnimationFrame, a frame every frameMs (16) ms
 // of the clock, and a ResizeObserver whose callbacks page.resized() runs
-// (nothing here lays the page out to notice a change). Off by default, so
+// (nothing here lays the page out to notice a change); what it observes is
+// marked resizeObserved. Off by default, so
 // that no other test's clock runs the simulator's view. A large frameMs is a
 // throttled display: a pane out of view, where timers still run on time.
 function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, frames = false, frameMs = 16 } = {}) {
@@ -352,7 +353,7 @@ function loadPage({ touch = true, storage = "ok", stored = {}, stickSize = 230, 
   if (frames) {
     ctx.requestAnimationFrame = (fn) => clock.setTimeout(() => fn(clock.now()), frameMs);
     ctx.cancelAnimationFrame = clock.clear;
-    ctx.ResizeObserver = class { constructor(fn) { resizeCallbacks.push(fn); } observe() {} unobserve() {} disconnect() {} };
+    ctx.ResizeObserver = class { constructor(fn) { resizeCallbacks.push(fn); } observe(target) { target.resizeObserved = true; } unobserve() {} disconnect() {} };
   }
   vm.createContext(ctx);
   if (storage === "throws") {

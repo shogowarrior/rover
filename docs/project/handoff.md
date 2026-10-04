@@ -77,8 +77,9 @@ The same thread then did step 4, F3 with F3a to F3e, in a PR of its own
 - the scan's card says "No rover connected: its scan shows here" until the
   rover's first frame (`ScanView.clear()`);
 - on the Program tab, the simulator's view beside the editor as tall as its
-  room needs (`--room-aspect`, set by `SimView`), the console under it, and
-  a fold strip, so the view folds away on every layout and the editor takes
+  room needs (`--room-aspect`, set by `SimView`), the console under it on a
+  screen 861 px tall or more and under the editor on a shorter one, and a
+  fold strip, so the view folds away on every layout and the editor takes
   the width; it starts folded unless the target is the simulator;
 - the simulator's bar at 44 px on every layout, the spec's one control
   height.
@@ -86,8 +87,18 @@ The same thread then did step 4, F3 with F3a to F3e, in a PR of its own
 The owner's later ask (landscape on a laptop or an iPad first, more of the
 width, windows that fold where needed) is in it: measured at 1024 x 768 and
 1180 x 820 as well as 1280 and 1600. The right column does not fold: F3c
-keeps it on screen. Panel tests 200/200 and the protocol check pass. Still
-open from F3b: the tab and scheme labels overflow at 480 x 320.
+keeps it on screen.
+
+Its review round (four lenses, each finding checked by a skeptic) found and
+fixed: the room drawn small at laptop and iPad heights with the console
+under it (now under the editor below 861 px), Blockly not refitting as a
+fold or the console resized the editor, the console's log clipped in a
+narrow column, the toolbar wrapping on the Rover target from 960 to 970 px,
+an empty strip beside the editor when the simulator fails to load, the
+hidden empty state stretching a small scan card, and tests that let nine
+kinds of regression through. Panel tests 201/201 and the protocol check
+pass. Still open from F3b: the tab and scheme labels overflow at 480 x
+320.
 
 ## Current work
 
@@ -177,8 +188,9 @@ There:
 - `node --test extras/joystick/test/` runs the real page against a fake DOM,
   WebSocket and clock, and covers behaviour.
 - For layout, use Playwright's chromium headless shell only, as
-  [instructions.md](instructions.md) says, measuring at 375, 1280 and
-  about 1600 px (the owner's screen). Where the container already has one
+  [instructions.md](instructions.md) says, measuring at 375, 1024 x 768,
+  1180 x 820, 1280 and about 1600 px (the owner's screen; the owner puts a
+  laptop or an iPad on its side first). Where the container already has one
   under `/opt/pw-browsers` (its `chromium_headless_shell-<revision>`), skip
   `playwright install` and pin the `playwright` package whose browser
   revision matches it (1.56.1 for revision 1194). Where `cdn.jsdelivr.net` is

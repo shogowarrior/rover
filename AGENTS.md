@@ -354,9 +354,11 @@ the address, the note, the scan and the readouts on the right, so the tab
 switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
 under the left pane (at most 480 px) and Autonomous under the rail. The
 Program tab puts the simulator's view beside the editor, as tall as its
-room needs at its width (`SimView` sets `--room-aspect` on `#simSlot`), and
-the console under it; the view folds away to a strip on every layout, and
-starts folded unless the target is the simulator. No ancestor of the
+room needs at its width (`SimView` sets `--room-aspect` on `#simSlot`), with
+the console under it on a screen 861 px tall or more and under the editor on
+a shorter one; the view folds away to a strip on every layout, and starts
+folded unless the target is the simulator. The editor refits as its box
+changes size, which Blockly does only for a window's resize. No ancestor of the
 stick may be positioned, transformed, filtered or contained: joy.js places a
 touch by its canvas's offsetParent, and `panel.test.js` reads every stylesheet
 for it. Any move of the stick's box on the screen under a held stick lets go

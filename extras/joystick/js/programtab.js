@@ -12,8 +12,9 @@
  *     ui            the tab's elements, by name: run, runLabel, stop, the
  *                   File menu's button and list (menu, menuList), examples
  *                   (the group its examples go in), exportButton,
- *                   importButton, importFile, clear, stage, hint, offline,
- *                   simPane, simToggle, state, log.
+ *                   importButton, importFile, clear, stage, workspace (the
+ *                   block editor's box), hint, offline, simPane, simToggle,
+ *                   state, log.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
  *   editorUnavailable(why)  there will be no editor: say why in its place and
@@ -21,6 +22,8 @@
  *   refresh()               re-check whether the chosen target is ready (the
  *                           link changed).
  *   shown()                 the tab has just been shown: fit the editor to it.
+ *                           Within the tab the editor refits itself as its
+ *                           box changes size.
  *   setScheme(scheme)       the rover's control scheme, as telemetry reports
  *                           it (SchemeToggle), or null while unknown.
  *   note(text, tone)        add a line to the console, for what the runner
@@ -99,6 +102,13 @@ class ProgramTab {
     ui.importFile.addEventListener("change", () => this.#import().catch(reportFault));
     ui.clear.addEventListener("click", () => this.#clear().catch(reportFault));
     ui.simToggle.addEventListener("click", () => this.#expandSim(ui.simToggle.getAttribute("aria-expanded") !== "true"));
+    // Blockly refits itself only to a window's resize. On a wide screen its
+    // box also changes as the view folds, or as the console under it grows.
+    if (typeof ResizeObserver === "function") {
+      new ResizeObserver(() => {
+        if (this.#editor) this.#editor.resize();
+      }).observe(ui.workspace);
+    }
 
     runner.onState((state, detail) => this.#onRunnerState(state, detail));
     runner.onLog((entry) => this.#appendLog(entry));

@@ -23,7 +23,7 @@ const { RoverBlocks } = require("../js/blocks.js");
 const { BEARINGS } = require("../js/scan.js");
 const { loadPage, all, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { src, CODES, telemetry } = require("./firmware.js");
-const { stylesheet, cssRules, blockRules } = require("./css.js");
+const { stylesheet, cssRules, blockRules, outside } = require("./css.js");
 
 const near = (actual, expected, tolerance, what) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -1165,8 +1165,10 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
   // every layout (the panel's one control height), so the widths are too.
   const css = stylesheet("sim.css");
   const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
-  const queries = [...css.matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)]
-    .map((m) => ({ px: Number(m[1]), rules: blockRules(css, m[0]) || [] }))
+  // Outside every @media: the same widths on every layout.
+  const everywhere = outside(css, "@media");
+  const queries = [...everywhere.matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)]
+    .map((m) => ({ px: Number(m[1]), rules: blockRules(everywhere, m[0]) || [] }))
     .filter((q) => q.rules.some((r) => /^\.sim-(speed|room)/.test(r.selector)));
   assert.equal(queries.length, 2, `two widths for the bar, for every layout: ${queries.map((q) => q.px)}`);
   const [list_, row] = queries;
@@ -1204,7 +1206,30 @@ test("the view: each room's shape goes on the slot, for a stage sized to the roo
   const wide = blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {") || [];
   const stage = (wide.find((r) => r.selector === ".sim-stage") || {}).body || "";
   for (const name of ["--room-aspect", "--room-pad-x", "--room-pad-y"]) assert.match(stage, new RegExp(`var\\(${name}\\)`), `the stage's height uses ${name}`);
-  assert.match(stage, /100cqw/, "at the view's width");
+  // Worked out for a view 400 px wide, each room fills the stage's width
+  // and height at once, inside its 1 px border and SimView's margins: no
+  // bands either way.
+  const calc = (stage.match(/height:\s*calc\(([^;]*)\);/) || [])[1] || "";
+  const padX = PAD.left + PAD.right;
+  const padY = PAD.top + PAD.bottom;
+  for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
+    room.value = key;
+    page.fire(room, "change");
+    const { width, height } = page.evalIn("targets.simulator.room");
+    const expression = calc.replace(/var\(--room-pad-x\)/g, padX).replace(/var\(--room-pad-y\)/g, padY)
+      .replace(/var\(--room-aspect\)/g, width / height).replace(/100cqw/g, 400).replace(/px/g, "");
+    assert.match(expression, /^[\d.\s+\-*/()]+$/, `${key}: the height is plain arithmetic once filled in: ${expression}`);
+    const tall = Function(`return ${expression};`)();
+    assert.ok(Math.abs((400 - 2 - padX) / width - (tall - 2 - padY) / height) < 1e-9, `${key}: ${tall.toFixed(1)} px tall fits it both ways`);
+  }
+  // The view sizes from its width, its content sets its height, and the
+  // settings hang from the stage (program.css), not from the view.
+  const view = (wide.find((r) => r.selector === ".sim") || {}).body || "";
+  assert.match(view, /container-type:\s*inline-size/, "a width container, not a size one");
+  assert.match(view, /position:\s*static/, "not the settings' containing block");
+  const programStage = (blockRules(stylesheet("program.css"), "@media (min-width: 960px) and (min-height: 521px) {") || [])
+    .find((r) => r.selector === ".programStage") || {};
+  assert.match(programStage.body || "", /position:\s*relative/, "the stage is");
   assert.deepEqual(page.errors, []);
 });
 

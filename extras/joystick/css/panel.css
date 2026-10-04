@@ -787,7 +787,10 @@ body:is([data-link="up"], [data-link="stale"]) #note {
 }
 
 /* The fan and, until there is something to draw, the empty state, in one
-   cell: the state over the fan's empty rings, the card at its full size. */
+   cell: the state over the fan's empty rings, the card at its full size.
+   The cell is the card's own size: hidden in a small card, the state still
+   sized an auto row, and the fan spilled out of the card. */
+.scan { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
 .scan > * { grid-area: 1 / 1; }
 
 /* Before the rover's first frame, whatever the tab, the width or the

@@ -172,30 +172,30 @@
 /* The wide layout's left pane: the page no longer scrolls, the pane does.
    The stage takes what the toolbar leaves of it, down to a floor under
    which the pane scrolls. The editor fills its height on the left. On the
-   right, the view's heading as a strip down its side, the view as tall as
-   its room needs at its width (sim.css), and the console under it with the
-   rest, its log as tall as that leaves. Folded, only the strip stays, at
-   the stage's right edge, the editor takes the width and the console goes
-   under it; with no simulator at all, the same without the strip. The
-   view takes 44% of the pane, about half with its strip. The toolbar's
-   buttons are a step narrower, so it keeps to one row beside the rail. */
+   right, the view's heading as a strip down its side, and the view as tall
+   as its room needs at its width (sim.css), up to the stage's height; the
+   console goes under the editor. Folded, only the strip stays, at the
+   stage's right edge, and the editor takes the width; with no simulator at
+   all, the same without the strip. The view takes 44% of the pane, about
+   half with its strip. The toolbar's buttons are a step narrower, so it
+   keeps to one row beside the rail. */
 @media (min-width: 960px) and (min-height: 521px) {
   .programStage {
-    /* The settings popover hangs from the view's bar over the console,
-       not only over the room (sim.css): this is its containing block. */
+    /* The settings popover hangs from the view's bar over whatever is
+       under the room, not only over the room (sim.css): this is its
+       containing block. */
     position: relative;
     flex: 1 1 0;
     min-height: 380px;
     grid-template-columns: minmax(0, 1fr) var(--tap) clamp(260px, 44cqw, 560px);
-    grid-template-rows: minmax(0, auto) minmax(120px, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
-      "editor toggle sim"
-      "editor toggle console";
+      "editor  toggle sim"
+      "console toggle sim";
   }
 
-  .programStage:has(> .programSim[data-collapsed="yes"]) {
+  .programStage:not([data-sim="no"]):has(> .programSim[data-collapsed="yes"]) {
     grid-template-columns: minmax(0, 1fr) var(--tap);
-    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
       "editor  toggle"
       "console toggle";
@@ -203,7 +203,6 @@
 
   .programStage[data-sim="no"] {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas: "editor" "console";
   }
 
@@ -226,6 +225,7 @@
 
   #simSlot {
     grid-area: sim;
+    align-self: start;
     position: static;
     display: flex;
     flex-direction: column;
@@ -239,14 +239,37 @@
     flex-direction: column;
   }
 
+  .programBar > button,
+  .programBar .menuButton,
+  .programBar .segmented button { padding-inline: var(--s-3); }
+
+  /* A pane under 600 px (the narrowest windows) takes them a step further. */
+  @container program (max-width: 599.98px) {
+    .programBar > button,
+    .programBar .menuButton,
+    .programBar .segmented button { padding-inline: var(--s-2); }
+  }
+}
+
+/* Tall enough for the view at its width and a console under it: the console
+   moves under the view and takes the rest of that column, its log as tall
+   as that leaves, and the editor the stage's whole height. Shorter, the
+   console under the view squeezed the room to a strip across a wide
+   column, at the laptop and iPad heights the panel is mostly used at. */
+@media (min-width: 960px) and (min-height: 861px) {
+  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) {
+    grid-template-rows: minmax(0, auto) minmax(min-content, 1fr);
+    grid-template-areas:
+      "editor toggle sim"
+      "editor toggle console";
+  }
+
+  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programConsole { min-height: 120px; }
+
   .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programLog {
     flex: 1 1 auto;
     max-height: none;
   }
-
-  .programBar > button,
-  .programBar .menuButton,
-  .programBar .segmented button { padding-inline: var(--s-3); }
 }
 
 /* Over the workspace while it is empty. */
