@@ -1216,8 +1216,10 @@ pressed, not Stop. T presses it too. Until a frame names the mode it is off, so 
 press resumes, as the button did. A halted rover still reports
 AUTONOMOUS: off and on again retries it at once.
 
-On a phone the header and the foot bar are as they were, words and all:
-measured against `main` at nine phone and tablet sizes, nothing moved. On
+On a phone the header and the foot bar are as they were, words and all,
+but for the mode pill in the motors pill's place on the simulator target
+(above): measured against `main` at nine phone and tablet sizes, nothing
+else changed and no stick moved. On
 the simulator target, F3i and F3j together:
 
 | Screen | Stick before | Stick | Room before | Room |

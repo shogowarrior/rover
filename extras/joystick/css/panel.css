@@ -1596,7 +1596,10 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
      phone (79 px of row at 375 x 667) and the stick under the Stop bar, and
      beside a landscape stick (see its block) slid the stick half off the
      screen. The Program tab has no stick and scrolls as a page, so there
-     the card keeps its own height. The status's motors pill says it too.
+     the card keeps its own height. The status's motors pill says it too,
+     except on the simulator target under 440 px wide and on a phone on
+     its side, where the mode pill takes its place and the card alone
+     says it.
      Centred when it fits, from the top when it scrolls, where centring
      would put its first lines out of reach; start where safe is unknown. */
   .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
@@ -2251,7 +2254,7 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
    they must, or Stop moved as the tab changed). The status keeps to one
    row beside the gear: it takes the mark's place, and its pills close up
    and drop their lamps, whose colour their tint already shows (with them,
-   "No link" was cut short at 480 x 320). The readouts take the type size a
+   "No link" was cut short at 480 x 320), and the mode pill its dot. The readouts take the type size a
    portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   /* 156 px: half of the gutters (48), the gaps (24) and the 240 px the
@@ -2273,7 +2276,8 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
   .pill { --pill-x: var(--s-1); }
 
-  .pill > .lamp { display: none; }
+  .pill > .lamp,
+  .modePill::before { display: none; }
 
   .cell output { font-size: var(--t-sm); }
 

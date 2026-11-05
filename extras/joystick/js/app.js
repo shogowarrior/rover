@@ -415,15 +415,18 @@ schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 
 // A program driving the rover from the Program tab goes on while the Drive
 // tab shows, and nothing there said so: the tab itself is marked while one
-// runs. A press of any drive control takes over, as ever.
+// runs, and says so on hover. A press of any drive control takes over, as
+// ever. Its own title, what the tab is, comes back after: on a wide screen
+// the tab is its icon alone.
 const programTabButton = byId("tabProgram");
+const programTabTitle = programTabButton.getAttribute("title");
 runner.onState((state, { kind }) => {
   if (state !== "idle" && kind === "rover") {
     programTabButton.dataset.running = "yes";
     programTabButton.setAttribute("title", "A program is driving the rover. Any drive press, Stop or Autonomous takes over.");
   } else {
     delete programTabButton.dataset.running;
-    programTabButton.removeAttribute("title");
+    programTabButton.setAttribute("title", programTabTitle);
   }
 });
 

@@ -3704,19 +3704,48 @@ test("wide: the header one row, Stop beside the gear and Autonomous at the other
 // Every button says on hover what it does, the owner's ask with Stop's
 // icon ("all buttons should have that"): the header's icons above all,
 // whose words are shown to a screen reader alone, and every other button
-// on the page, in each state of the link. The question dialog's answers,
-// which say what they do in full, are its own.
-test("every button titled with what it does, in every state of the link", () => {
+// on the page, in each state of the link, of the editor and of a program,
+// on either target. The question dialog's answers, which say what they do
+// in full, are its own.
+test("every button titled with what it does, in every state of the link and of a program", async () => {
   const page = loadPage();
   const untitled = () => all(page.doc.documentElement)
     .filter((n) => n.tagName === "BUTTON" && !["askNo", "askYes"].includes(n.id))
     .filter((n) => !(n.getAttribute("title") || n.title))
     .map((n) => n.id || n.dataset.family || n.dataset.target || n.dataset.scheme || n.textContent);
   check(untitled().length === 0, `untitled with no link: ${untitled()}`);
+  const tabTitle = page.$("tabProgram").getAttribute("title");
+  check(/^Program/.test(tabTitle), `the Program tab: ${tabTitle}`);
   const ws = connectOpen(page);
   check(untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled with a link: ${untitled()}, connect '${page.$("connect").title}'`);
-  ws.serverMsg(telemetry({ mode: "AUTONOMOUS", scheme: "ADVANCED" }));
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   check(untitled().length === 0, `untitled with telemetry: ${untitled()}`);
+  // Off under NORMAL, the family's segments say why too.
+  const familySegs = all(page.$("familyChoice")).filter((n) => n.dataset.family);
+  check(familySegs.length === 2 && familySegs.every((b) => b.disabled && /Advanced only/.test(b.title)), `the family off: ${familySegs.map((b) => b.title)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(familySegs.every((b) => !b.disabled && !/Advanced only/.test(b.title) && b.title !== ""), `the family on: ${familySegs.map((b) => b.title)}`);
+
+  // The editor up, then a program run on the rover, and after it.
+  standInEditor(page);
+  check(untitled().length === 0 && page.$("programRun").title === "Run the program on the rover" && /Import/.test(page.$("programMenu").title), `with the editor: ${untitled()}, Run '${page.$("programRun").title}', File '${page.$("programMenu").title}'`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && untitled().length === 0, `running: ${untitled()}`);
+  check(/^A program is running/.test(page.$("programRun").title) && /driving the rover/.test(page.$("tabProgram").getAttribute("title")), `running: Run '${page.$("programRun").title}', tab '${page.$("tabProgram").getAttribute("title")}'`);
+  await liveForAsync(page, ws, 2000);
+  check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the run: ${untitled()}, tab '${page.$("tabProgram").getAttribute("title")}'`);
+
+  // The simulator target: its view unfolded, a preview, and after it.
+  page.fire(segments(page)[1], "click");
+  check(page.$("simToggle").getAttribute("aria-expanded") === "true" && /Fold/.test(page.$("simToggle").title), `the fold open: ${page.$("simToggle").title}`);
+  check(untitled().length === 0 && page.$("programRun").title === "Preview the program on the simulator", `the simulator: ${untitled()}, Run '${page.$("programRun").title}'`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && untitled().length === 0, `previewing: ${untitled()}`);
+  page.fire(page.$("programStop"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the preview: ${page.evalIn("runner.state")} ${untitled()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4037,7 +4066,7 @@ test("program: the Program tab is marked while a program drives the rover, not w
   check(marked(), "and while the Drive tab shows");
   press(page, page.$("cw"), 1); // any press takes over
   await flush();
-  check(page.evalIn("runner.state") === "idle" && !marked() && tab.getAttribute("title") === null, "unmarked once it stopped");
+  check(page.evalIn("runner.state") === "idle" && !marked() && /^Program: /.test(tab.getAttribute("title")), `unmarked once it stopped, its own title back: ${tab.getAttribute("title")}`);
   lift(page, page.$("cw"), 1);
   if (page.evalIn("'simulator' in targets")) {
     page.evalIn("runner.run(async (api) => { await api.wait(5); }, targets.simulator);");

@@ -60,6 +60,7 @@ class ProgramTab {
     menu: "The examples, Import, Export and Clear",
     example: "Load this example into the editor",
     run: { rover: "Run the program on the rover", simulator: "Preview the program on the simulator" },
+    running: "A program is running: Stop program ends it",
     fold: { open: "Fold the simulator's view away", folded: "Show the simulator's view" },
     import: "Open a program saved with Export",
     clear: "Remove every block",
@@ -335,7 +336,7 @@ class ProgramTab {
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;
     ui.run.disabled = !editor || empty || !idle || !readiness.ok;
-    ui.run.title = !editor ? this.#editorWhy : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : ProgramTab.TITLES.run[kind] || "";
+    ui.run.title = !editor ? this.#editorWhy : !idle ? ProgramTab.TITLES.running : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : ProgramTab.TITLES.run[kind] || "";
     ui.stop.disabled = state !== "running";
 
     // Without an editor no item can act, so neither can the menu. With one,

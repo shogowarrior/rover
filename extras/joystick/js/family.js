@@ -100,10 +100,9 @@ class FamilySelector {
   constructor({ choice, group, pad, label, hints, note }) {
     this.#ui = { group, pad, label, note };
 
-    for (const { family, label: name, title } of FamilySelector.OPTIONS) {
+    for (const { family, label: name } of FamilySelector.OPTIONS) {
       const button = segment(choice, () => this.#choose(family));
       button.dataset.family = family;
-      button.title = title;
       button.appendChild(FamilySelector.#icon(family, 1, 1).svg);
       dom.html("span", { class: "name" }, button, name);
       this.#buttons.set(family, button);
@@ -153,7 +152,13 @@ class FamilySelector {
     const { group, pad, label, note } = this.#ui;
     const offered = this.#offered;
     pressSegment(this.#buttons, this.#family);
-    for (const button of this.#buttons.values()) button.disabled = !offered;
+    // Each segment says what its family does, and while the pivots are off
+    // why it cannot be chosen (F3f: disabled, with a title that says why).
+    for (const { family, title } of FamilySelector.OPTIONS) {
+      const button = this.#buttons.get(family);
+      button.disabled = !offered;
+      button.title = offered ? title : `${title} ${FamilySelector.OFF_TITLE}`;
+    }
     group.dataset.off = offered ? "no" : "yes";
     pad.dataset.off = offered ? "no" : "yes";
     pad.title = offered ? "" : FamilySelector.OFF_TITLE;

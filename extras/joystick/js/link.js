@@ -61,8 +61,8 @@ class Link {
   static CONNECT_TITLE = Object.freeze({
     down: "Connect to the rover at this address (Enter in the address does too).",
     connecting: "Cancel: stop trying to reach the rover.",
-    up: "Disconnect: stop what this panel drives and close the link. A rover exploring keeps exploring: press Stop for that.",
-    stale: "Disconnect: stop what this panel drives and close the link. A rover exploring keeps exploring: press Stop for that.",
+    up: "Disconnect: close the link to the rover, stopping what this panel drives on it. A rover exploring keeps exploring: press Stop for that.",
+    stale: "Disconnect: close the link to the rover, stopping what this panel drives on it. A rover exploring keeps exploring: press Stop for that.",
   });
 
   #ui;
