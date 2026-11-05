@@ -14,8 +14,8 @@
    tab, where nothing else says so, shows it too. A status dot (panel.css
    draws them all). */
 .tabs [role="tab"][data-running="yes"]::after {
-  background: var(--live);
-  box-shadow: 0 0 0 3px var(--live-soft);
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
@@ -69,6 +69,7 @@
 .programBar .run {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 @media (hover: hover) {
@@ -346,11 +347,11 @@
 .programState::before { background: var(--dim); }
 
 .programState[data-tone="ready"]::before,
-.programState[data-tone="done"]::before { background: var(--live); }
+.programState[data-tone="done"]::before { background: var(--ok); }
 
 .programState[data-tone="running"]::before {
-  background: var(--live);
-  box-shadow: 0 0 0 4px var(--live-soft);
+  background: var(--ok);
+  box-shadow: 0 0 0 4px var(--ok-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
@@ -385,7 +386,7 @@
 .programLog li::before { content: "·"; flex: none; color: var(--faint); }
 .programLog li[data-tone="say"] { color: var(--readout); }
 .programLog li[data-tone="say"]::before { content: "›"; color: var(--live); }
-.programLog li[data-tone="done"] { color: var(--live); }
+.programLog li[data-tone="done"] { color: var(--ok); }
 .programLog li[data-tone="stopped"],
 .programLog li[data-tone="failed"] { color: var(--warn); }
 /* The simulator's own word (app.js): a bump is worth seeing among the rest. */
@@ -486,13 +487,13 @@
 .blocklyFlyoutLabelText { fill: var(--dim); }
 
 /* A selected block is outlined in the text colour; the running one glows
-   green, the panel's "live", whatever its own. */
+   in the green of the rover doing well, whatever its own. */
 .blocklySelected > .blocklyPath { stroke: var(--readout); stroke-width: 2px; }
 
 .blocklyHighlighted > .blocklyPath {
-  stroke: var(--live);
+  stroke: var(--ok);
   stroke-width: 3px;
-  filter: drop-shadow(0 0 6px var(--live));
+  filter: drop-shadow(0 0 6px var(--ok));
 }
 
 /* Menus: the context menu and dropdowns. */

@@ -363,7 +363,7 @@ class SimView {
     }
     const rays = dom.html("div", { class: "sim-key-row" }, key);
     dom.html("span", { class: "label", title: "Each ray is drawn from where the rover was when it pinged" }, rays, "Sonar");
-    for (const [kind, text] of [["stop", `≤ ${STOP_CM}`], ["warn", `≤ ${GO_CM}`], ["live", "farther"], ["none", "no echo"]]) {
+    for (const [kind, text] of [["stop", `≤ ${STOP_CM}`], ["warn", `≤ ${GO_CM}`], ["clear", "farther"], ["none", "no echo"]]) {
       const item = dom.html("span", { class: "sim-key-item" }, rays);
       dom.html("i", { class: `sim-swatch ray ${kind}`, "aria-hidden": "true" }, item);
       dom.html("span", {}, item, text);

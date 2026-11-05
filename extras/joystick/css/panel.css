@@ -180,7 +180,7 @@ button {
   font-weight: var(--fw-semi);
   color: var(--readout);
   background: var(--raised);
-  border: 1px solid transparent;
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   cursor: pointer;
   touch-action: manipulation;
@@ -316,6 +316,7 @@ input[type="range"]::-moz-range-thumb {
   font-weight: var(--fw-medium);
   text-align: left;
   background: none;
+  border-color: transparent;
   border-radius: var(--r-sm);
 }
 
@@ -397,23 +398,16 @@ input[type="range"]::-moz-range-thumb {
 /* Each section after the first set off from the one above. */
 .options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
 
-/* A row per theme: its name, then its Dark and Light tiles. Close-set, so
-   that the three fit a phone on its side unscrolled. */
+/* Dark | Light across the popover, then a tile per theme, side by side,
+   each previewed in the flavour in force. The toggle is a group in a menu,
+   whose groups stack: its segments stay in a row. */
+.options .flavours { flex-direction: row; }
+
 .looks {
   display: grid;
-  gap: var(--s-1);
-}
-
-.lookTheme {
-  display: grid;
-  grid-template-columns: 4.5rem repeat(2, minmax(0, 1fr));
-  align-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-2);
-}
-
-.lookThemeName {
-  font-size: var(--t-sm);
-  font-weight: var(--fw-semi);
+  margin-top: var(--s-1);
 }
 
 /* A tile: its radio, out of sight but in the focus order (the arrow keys
@@ -475,7 +469,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* The keyboard's keys (keys.js), under the looks: a row per pair, the keys
-   as caps, then what they do, set as the looks' rows are. */
+   as caps, then what they do. */
 .keys {
   display: grid;
   gap: var(--s-1);
@@ -520,9 +514,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* The panel in miniature (look.js builds it), painted only in the tokens
    its data-look gives it: --case, --panel, --raised, --rule, --readout,
-   --dim, --live, --on-live, --warn, --stop and --on-stop. A card on the
-   case, with two lines of text and a status pill of a teal lamp and an
-   amber one; under it, Autonomous lit and Stop. */
+   --dim, --live, --on-live, --ok, --warn, --stop and --on-stop. A card on
+   the case, with two lines of text and a status pill of a green lamp and
+   an amber one; under it, a button in the controls' blue, and Stop. */
 .lookSwatch {
   display: grid;
   gap: var(--s-0);
@@ -567,7 +561,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
 }
 
-.lookLamp.live { background: var(--live); }
+.lookLamp.ok { background: var(--ok); }
 .lookLamp.warn { background: var(--warn); }
 
 .lookFoot {
@@ -576,7 +570,7 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-0);
 }
 
-/* Each with a mark in its own ink: a word on Autonomous, Stop's square. */
+/* Each with a mark in its own ink: a word on the button, Stop's square. */
 .lookGo,
 .lookStop {
   height: 9px;
@@ -616,6 +610,7 @@ input[type="range"]::-moz-range-thumb {
 .ask .yes {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 @media (hover: hover) {
@@ -688,7 +683,7 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: var(--track-tight);
 }
 
-/* The mark: a wheel hub in the stick's teal. */
+/* The mark: a wheel hub in the stick's blue. */
 .wordmark::before {
   content: "";
   flex: none;
@@ -717,14 +712,15 @@ input[type="range"]::-moz-range-thumb {
    flex row (below), with room for all three. */
 .switches > .target { grid-column: 1 / -1; }
 
-/* Segmented controls: the tabs, the scheme, the stick family. One track;
-   the chosen segment raised inside it. Each segment is a full 44 px
-   target; the chosen one's inset frame only draws it smaller. */
+/* Segmented controls: the tabs, the scheme, the stick family. One edged
+   track; the chosen segment inverted inside it, the one thing in the track
+   that is lit. Each segment is a full 44 px target; the chosen one's inset
+   frame only draws it smaller. */
 .tabs,
 .segmented {
   display: flex;
   background: var(--raised);
-  border: 1px solid transparent;
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
 }
 
@@ -744,17 +740,15 @@ input[type="range"]::-moz-range-thumb {
   .segmented button:hover { color: var(--readout); background: none; }
 }
 
+/* A disabled segment keeps its chip where it is the one in force: a stale
+   scheme, and the family under NORMAL, which fade it (below). */
 .tabs [role="tab"][aria-selected="true"],
-.segmented button[aria-pressed="true"] {
-  color: var(--readout);
+.segmented button[aria-pressed="true"],
+.scheme[data-state="stale"] .segmented button[aria-pressed="true"],
+.family[data-off="yes"] .segmented button[aria-pressed="true"] {
+  color: var(--on-chosen);
   background: var(--chosen);
   box-shadow: inset 0 0 0 3px var(--raised);
-}
-
-/* The open tab is where the operator is: the one segment in the accent. */
-.tabs [role="tab"][aria-selected="true"] {
-  color: var(--live-ink);
-  background: var(--live-soft);
 }
 
 .segmented button:disabled {
@@ -787,12 +781,6 @@ input[type="range"]::-moz-range-thumb {
    faded, and its segments are disabled: no telemetry could confirm a
    request. */
 .scheme[data-state="stale"] .segmented { opacity: 0.55; }
-
-.scheme[data-state="stale"] .segmented button[aria-pressed="true"] {
-  color: var(--readout);
-  background: var(--chosen);
-  box-shadow: inset 0 0 0 3px var(--raised);
-}
 
 /* Status pills: the link, the mode and the motors. Each takes its colour
    from the state it shows, so a glance at the corner says enough. */
@@ -848,8 +836,11 @@ input[type="range"]::-moz-range-thumb {
   background: currentColor;
 }
 
+/* All well is quiet: the word in the ink and a green lamp. Only what needs
+   the operator is tinted, so it is what the eye finds. */
 body[data-link="down"] .linkPill { color: var(--stop-ink); background: var(--stop-soft); }
-body[data-link="up"] .linkPill { color: var(--live); background: var(--live-soft); }
+body[data-link="up"] .linkPill { color: var(--readout); }
+body[data-link="up"] .linkPill .lamp { background: var(--ok); }
 body[data-link="stale"] .linkPill { color: var(--warn); background: var(--warn-soft); }
 body[data-link="connecting"] .lamp { animation: pending 600ms ease-in-out infinite alternate; }
 
@@ -878,11 +869,11 @@ body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
    last mode, greyed. Exploring is the loud one -- the rover is moving by
    itself -- and fills the pill. */
 body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill { color: var(--readout); }
-body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--live); }
+body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--ok); }
 
 body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill {
-  color: var(--on-live);
-  background: var(--live);
+  color: var(--on-ok);
+  background: var(--ok);
 }
 
 body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before {
@@ -900,7 +891,8 @@ body:has(#motorsFault:is([data-ready="yes"], [data-ready="no"])) .motorsPill [da
 body:has(#motorsFault[data-ready="yes"]) .motorsPill [data-say="yes"],
 body:has(#motorsFault[data-ready="no"]) .motorsPill [data-say="no"] { display: inline; }
 
-body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill { color: var(--live); background: var(--live-soft); }
+body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill { color: var(--readout); }
+body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill .lamp { background: var(--ok); }
 body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); background: var(--warn-soft); }
 
 .link {
@@ -918,7 +910,7 @@ body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); backgr
   font-size: var(--t-md);
   color: var(--readout);
   background: var(--panel);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   -webkit-user-select: text;
   user-select: text;
@@ -930,6 +922,7 @@ body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); backgr
 body[data-link="down"] #connect {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 /* What the link has to say, under the address it is about: a line in the
@@ -999,7 +992,7 @@ body:is([data-link="up"], [data-link="stale"]) #note {
   display: grid;
   padding: var(--s-3) var(--s-1) var(--s-1);
   background:
-    radial-gradient(90% 60% at 50% 75%, var(--live-glow), transparent),
+    radial-gradient(90% 60% at 50% 75%, var(--glow), transparent),
     radial-gradient(circle, var(--raised) 1px, transparent 1.5px) 0 0 / var(--s-5) var(--s-5),
     var(--panel);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
@@ -1066,6 +1059,15 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
   transition: d var(--glide) linear, fill var(--glide) linear, opacity var(--glide) linear;
 }
 
+/* A clear way is drawn open, its edge in green and its body faint, where
+   something closing in or inside STOP is solid: the shape tells them apart
+   where red-green colour blindness takes the hues' difference away. */
+.wedge[data-zone="clear"] {
+  fill-opacity: 0.3;
+  stroke: var(--ok);
+  stroke-width: 1.5px;
+}
+
 .ring {
   fill: none;
   stroke: var(--rule);
@@ -1104,9 +1106,6 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 /* The ring labels take their ring's colour. */
 .tick.stop { fill: var(--stop-ink); }
 .tick.go { fill: var(--warn); }
-
-/* The rover, at the fan's centre. */
-#scan > circle { fill: var(--live); }
 
 /* Without a live link the fan is history: the wedges fade and the numbers
    grey, still legible. */
@@ -1289,8 +1288,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   stroke-linejoin: round;
 }
 
-.hint .glyph,
-.family button[aria-pressed="true"] .glyph { color: var(--live); }
+.hint .glyph { color: var(--live); }
 
 .hint[data-corner="upLeft"] { align-self: start; justify-self: start; }
 .hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; text-align: right; }
@@ -1317,12 +1315,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* Off, the family chosen stays lit but faded, as a stale scheme does: it
    is the one the stick takes up again under ADVANCED. */
 .family[data-off="yes"] .segmented { opacity: 0.55; }
-
-.family[data-off="yes"] .segmented button[aria-pressed="true"] {
-  color: var(--readout);
-  background: var(--chosen);
-  box-shadow: inset 0 0 0 3px var(--raised);
-}
 
 /* The stick's line: the caveat while it is on, amber as the motor warning
    is (a caution, not a stop), what it waits for while it is off, or a
@@ -1386,6 +1378,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .spin button[data-held="yes"] {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 /* One line, no taller than the rotate buttons beside it: the caption and
@@ -1442,16 +1435,18 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   border-radius: var(--r-lg);
 }
 
+/* Lit while the rover explores, in the green of the rover doing well:
+   tinted and edged rather than filled, so that Stop beside it stays the
+   loudest thing on the bar. */
 #auto[aria-pressed="true"] {
-  color: var(--on-live);
-  background: var(--live);
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok);
 }
 
-/* The last mode a link that went reported: exploring then, not known now. */
-body:not([data-link="up"]) #auto[aria-pressed="true"] {
-  color: var(--live);
-  background: var(--live-soft);
-}
+/* The last mode a link that went reported: exploring then, not known now,
+   so its edge is dashed, as an unknown scheme's track is. */
+body:not([data-link="up"]) #auto[aria-pressed="true"] { border-style: dashed; }
 
 #stop {
   font-size: var(--t-xl);
@@ -1460,6 +1455,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   text-transform: uppercase;
   color: var(--on-stop);
   background: var(--stop);
+  border-color: transparent;
   box-shadow: var(--lift-stop);
 }
 
@@ -1840,7 +1836,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     padding: var(--s-6);
     border-radius: var(--r-xl);
     box-shadow: none;
-    background: radial-gradient(70% 60% at 30% 55%, var(--live-glow), transparent), var(--panel);
+    background: radial-gradient(70% 60% at 30% 55%, var(--glow), transparent), var(--panel);
   }
 
   /* The two sticks at their size, the grid as tall as its content. */
@@ -2246,7 +2242,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   font: inherit;
   color: var(--readout);
   background: var(--case);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   -webkit-user-select: text;
   user-select: text;
@@ -2262,6 +2258,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 #optionsPanel #firmwareStart:not(:disabled) {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 #optionsPanel .firmware button:disabled {
@@ -2284,8 +2281,8 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 #optionsPanel #firmwareProgress::-webkit-progress-bar { background: var(--raised-hi); }
-#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--live); }
-#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--live); }
+#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--ok); }
+#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--ok); }
 
 #optionsPanel #firmwareStatus {
   margin: 0;
@@ -2294,4 +2291,4 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 #optionsPanel #firmwareStatus[data-tone="bad"] { color: var(--warn); }
-#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--live); }
+#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--ok); }

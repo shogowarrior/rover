@@ -40,33 +40,37 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // The surfaces: the page, under the header, the Program tab, Blockly's
 // workspace and the log (--case); the cards, menus, the dock and the bars
 // (--panel), with the glow behind the scan and the wide dock; buttons,
-// tracks, idle pills, the flyout and the room's floor (--raised); a hovered
-// or pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
+// tracks, pills, the flyout and the room's floor (--raised); a hovered or
+// pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
 // or button replaces its fill with the tint.
 const AUDIT = [
-  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--chosen", "--faint", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, buttons, menus, the keys' caps, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
-  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--live-glow over --panel"], TEXT,
+  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case"], TEXT,
+    "the page's text, the readouts, buttons, menus, the keys' caps, the pills while all is well, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel"], TEXT,
     "captions, the note, the keys' note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
-  ["--live", ["--case", "--panel", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
-    "the log's done, a firmware update's, a pending segment, the link and motors pills, Autonomous as last reported"],
-  ["--live-ink", ["--live-soft over --raised"], TEXT, "the open tab"],
-  ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, a held rotate button, the mode pill while exploring"],
-  ["--warn", ["--case", "--panel", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
+  ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word and icon: the tabs, the scheme, the target, the stick's family, Dark | Light"],
+  ["--live", ["--case", "--raised"], TEXT, "a pending segment, the log's say"],
+  ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, Update, a held rotate button"],
+  ["--ok", ["--case", "--panel", "--ok-soft over --panel"], TEXT, "the log's done, a firmware update's, Autonomous lit and as last reported"],
+  ["--on-ok", ["--ok"], TEXT, "the mode pill while exploring"],
+  ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case"], TEXT,
     "the note gone bad, the phase, the stick's caption, the GO tick, the pills, the fault's headline, the log"],
-  ["--stop-ink", ["--panel", "--live-glow over --panel", "--stop-soft over --case"], TEXT,
+  ["--stop-ink", ["--panel", "--glow over --panel", "--stop-soft over --case"], TEXT,
     "the STOP tick, the link pill down, Stop program, a stall or a bump in the simulator"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
   // A fresh sonar ray is drawn at 0.95.
-  ["--live", ["--case", "--panel", "--live-glow over --panel", "--raised", "--raised-hi", "--chosen", "--sim-plate"], MARK,
-    "the focus ring, the slider's thumb, the stick's knob, the scan's rover, the stick's and families' icons, a pressed tool, a forward wheel"],
-  ["--warn at 0.95", ["--live-glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
+  ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
+    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar, the rover's aim"],
+  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list"],
+  ["--ok", ["--case", "--panel", "--raised", "--glow over --panel", "--sim-plate"], MARK,
+    "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a clear sonar ray, a forward wheel"],
+  ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
-  ["--live", ["--live-glow over --panel"], MARK, "the scan's wedge, clear"],
-  ["--warn", ["--live-glow over --panel"], MARK, "the scan's wedge, closing in"],
-  ["--stop", ["--live-glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
-  ["--case", ["--live", "--sim-back"], MARK, "the arrow on a turning wheel"],
+  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
+  ["--stop", ["--glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
+  ["--readout", ["--glow over --panel"], MARK, "the scan's rover"],
+  ["--case", ["--ok", "--sim-back"], MARK, "the arrow on a turning wheel"],
   // joy.js shades the stick's knob from --live at the canvas's centre
   // toward --stick-rim 200 px out (js/drive.js), and the well under it
   // shades from --raised toward --case (css/panel.css) out to the box's
@@ -78,12 +82,11 @@ const AUDIT = [
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
-  ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's and an input's edge"],
-  ["--warn at 0.55", ["--live-glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
-  ["--stop-ink at 0.65", ["--live-glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
+  ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's edge"],
+  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
+  ["--stop-ink at 0.65", ["--glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
   ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],
   ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],
-  ["--chosen", ["--raised"], QUIET, "the chosen segment in its track; its ink says so too"],
   ["--raised-hi", ["--raised"], QUIET, "a box on the room's floor"],
   ["--raised-hi", ["--case"], QUIET, "Blockly's grid"],
   ["--raised-hi", ["--panel"], QUIET, "a firmware update's bar, in the Options popover"],

@@ -6,18 +6,27 @@
    the first says what each is for. The rest of the tokens (type, space,
    sizes, layout) are the same in every look, in css/panel.css.
 
-   Three themes, each Dark and Light. Console is the slate instrument
-   console. Field is for glare or a bright room: the most contrast, its ink
-   at 7:1 and its rules strong. Blueprint is tinted: deep navy, or pale blue
-   drafting paper.
+   Three themes, each Dark and Light. Console is the default: neutral
+   black, or white, with every control edged. Field is for glare or a
+   bright room: the most contrast, its ink at 7:1 and its rules strong.
+   Blueprint is tinted: deep navy, or pale blue drafting paper.
 
-   Three signal hues, each with one job, in every look. Teal is the accent:
-   the operator's own controls and the rover doing well (linked, a clear
-   way, exploring). joy.js paints the stick's knob in it (js/drive.js reads
-   --live), so the stick and the page agree. Amber is caution: something
-   closing in, a fault. Red is Stop and danger and nothing else -- anywhere
-   else it would stop meaning anything -- and one red in every look. A light
-   look darkens its teal and amber until they hold as text on its surfaces.
+   Controls read at a glance. Each control's edge holds 3:1 against what it
+   sits on, and the chosen segment of a switch is inverted: the page's ink
+   as its fill, its word in the case colour.
+
+   Four signal hues, each with one job, in every look. Blue is the
+   operator's own controls: the stick's knob, the slider, the focus ring,
+   the button that does the next thing (Connect, Run). joy.js paints the
+   knob in it (js/drive.js reads --live), so the stick and the page agree.
+   Green is the rover doing well: linked, its motors answering, a clear way,
+   exploring, a program running. Amber is caution: something closing in, a
+   fault. Red is Stop and danger and nothing else -- anywhere else it would
+   stop meaning anything -- and one red in every look. Blue for what the
+   operator touches and green for what the rover reports keep apart for
+   every common colour-vision deficiency, as do green, amber and red by
+   their lightness, and every one of them is named where it is drawn. A
+   light look darkens its hues until they hold as text on its surfaces.
    test/looks.test.js holds every look to the contrast each pairing of ink
    and surface in its audit needs: a rule that paints a token on a new
    surface adds its pairing there. */
@@ -27,40 +36,43 @@
   color-scheme: dark;
 
   /* surfaces, from the page up: the page, a card, a control, a hovered
-     one, and the chosen segment, raised out of its track */
-  --case: #0b0d11;
-  --panel: #151920;
-  --raised: #1f242c;
-  --raised-hi: #2b323c;
-  --chosen: #39414d;
-  --rule: #2a3039;
-  --shade: rgb(0 0 0 / 0.5);
+     one; the chosen segment and its word; a control's edge */
+  --case: #000000;
+  --panel: #111214;
+  --raised: #24262a;
+  --raised-hi: #34373c;
+  --chosen: #f2f3f5;
+  --on-chosen: #000000;
+  --edge: #6b6f76;
+  --rule: #2c2f33;
+  --shade: rgb(0 0 0 / 0.65);
 
   /* ink */
-  --readout: #f1f3f6;
-  --dim: #9aa4b1;
-  --faint: #4a525d; /* marks, never text */
-
-  /* signals */
-  --live: #4db8a8;
-  --on-live: #062420;
-  --live-ink: #86d9cc; /* teal text on a teal tint */
-  --live-soft: rgb(77 184 168 / 0.16);
+  --readout: #ffffff;
+  --dim: #b6bac1;
+  --faint: #55595f; /* marks, never text */
   /* the haze behind the scan and the wide dock's stick */
-  --live-glow: rgb(77 184 168 / 0.08);
-  --warn: #ffb547;
-  --warn-soft: rgb(255 181 71 / 0.12);
+  --glow: rgb(255 255 255 / 0.035);
+
+  /* signals: the operator's controls, the rover doing well, caution, Stop */
+  --live: #4d9dff;
+  --on-live: #000000;
+  --ok: #3fdb68;
+  --on-ok: #000000;
+  --ok-soft: rgb(63 219 104 / 0.16);
+  --warn: #ffb02e;
+  --warn-soft: rgb(255 176 46 / 0.14);
   --stop: #d23c37;
   --stop-hi: #bb302b;
   --on-stop: #ffffff; /* Stop's word, on its red */
-  --stop-ink: #ff7a6e; /* red text on a surface */
-  --stop-soft: rgb(210 60 55 / 0.16);
+  --stop-ink: #ff7b70; /* red text on a surface */
+  --stop-soft: rgb(210 60 55 / 0.18);
   --stop-glow: rgb(210 60 55 / 0.32);
 
   /* the stick, as joy.js paints it (js/drive.js): the knob shades from
      --live toward its rim, and the ring marks how far it reaches */
-  --stick-rim: #1c1e21;
-  --stick-ring: #383c42;
+  --stick-rim: #1d3f73;
+  --stick-ring: #474a50;
 
   /* art drawn for a light ground (Blockly's zoom and trash icons), as this
      look shows it */
@@ -68,34 +80,37 @@
 
   /* the simulator's room (css/sim.css): its grid and the rover's halo and
      deck in the ink, faint; the rover's plate; a backward wheel */
-  --sim-grid: rgb(241 243 246 / 0.045);
-  --sim-grid-major: rgb(241 243 246 / 0.09);
-  --sim-halo: rgb(241 243 246 / 0.05);
-  --sim-deck: rgb(241 243 246 / 0.2);
-  --sim-plate: #3a424e;
-  --sim-back: #a594f9;
+  --sim-grid: rgb(255 255 255 / 0.05);
+  --sim-grid-major: rgb(255 255 255 / 0.1);
+  --sim-halo: rgb(255 255 255 / 0.05);
+  --sim-deck: rgb(255 255 255 / 0.2);
+  --sim-plate: #3b3e44;
+  --sim-back: #b49dff;
 }
 
 [data-look="console-light"] {
   color-scheme: light;
 
-  --case: #e8ecf0;
-  --panel: #f8f9fb;
-  --raised: #dfe4ea;
-  --raised-hi: #d0d7df;
-  --chosen: #ffffff;
-  --rule: #c8d0d9;
+  --case: #e8eaed;
+  --panel: #ffffff;
+  --raised: #eef0f3;
+  --raised-hi: #d8dce2;
+  --chosen: #16181b;
+  --on-chosen: #ffffff;
+  --edge: #80868f;
+  --rule: #c6cbd2;
   --shade: rgb(16 24 34 / 0.18);
 
-  --readout: #12171e;
-  --dim: #4b5664;
-  --faint: #a4adb8;
+  --readout: #0a0b0d;
+  --dim: #444a53;
+  --faint: #9ba1aa;
+  --glow: rgb(0 0 0 / 0.025);
 
-  --live: #006b5f;
+  --live: #0b5cd6;
   --on-live: #ffffff;
-  --live-ink: #00544a;
-  --live-soft: rgb(77 184 168 / 0.2);
-  --live-glow: rgb(77 184 168 / 0.1);
+  --ok: #0a7a33;
+  --on-ok: #ffffff;
+  --ok-soft: rgb(20 170 70 / 0.16);
   --warn: #865900;
   --warn-soft: rgb(255 181 71 / 0.24);
   --stop: #d23c37;
@@ -105,16 +120,16 @@
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);
 
-  --stick-rim: var(--live-ink);
+  --stick-rim: #073f94;
   --stick-ring: var(--faint);
 
   --light-art: none;
 
-  --sim-grid: rgb(18 23 30 / 0.06);
-  --sim-grid-major: rgb(18 23 30 / 0.12);
-  --sim-halo: rgb(18 23 30 / 0.05);
-  --sim-deck: rgb(18 23 30 / 0.22);
-  --sim-plate: #c3ccd6;
+  --sim-grid: rgb(10 11 13 / 0.06);
+  --sim-grid-major: rgb(10 11 13 / 0.12);
+  --sim-halo: rgb(10 11 13 / 0.05);
+  --sim-deck: rgb(10 11 13 / 0.22);
+  --sim-plate: #c3c8d0;
   --sim-back: #6447d1;
 }
 
@@ -125,19 +140,22 @@
   --panel: #0a0a0a;
   --raised: #1c1c1c;
   --raised-hi: #2e2e2e;
-  --chosen: #424242;
+  --chosen: #ffffff;
+  --on-chosen: #000000;
+  --edge: #8f8f8f;
   --rule: #6b6b6b;
   --shade: rgb(0 0 0 / 0.7);
 
   --readout: #ffffff;
   --dim: #c4c4c4;
   --faint: #575757;
+  --glow: rgb(255 255 255 / 0);
 
-  --live: #45dcc5;
+  --live: #66b0ff;
   --on-live: #000000;
-  --live-ink: #8ef0e0;
-  --live-soft: rgb(69 220 197 / 0.18);
-  --live-glow: rgb(69 220 197 / 0);
+  --ok: #45e07a;
+  --on-ok: #000000;
+  --ok-soft: rgb(69 224 122 / 0.18);
   --warn: #ffc247;
   --warn-soft: rgb(255 194 71 / 0.16);
   --stop: #d23c37;
@@ -147,7 +165,7 @@
   --stop-soft: rgb(210 60 55 / 0.22);
   --stop-glow: rgb(210 60 55 / 0.4);
 
-  --stick-rim: var(--case);
+  --stick-rim: #1a3a6b;
   --stick-ring: var(--faint);
 
   --light-art: invert(1);
@@ -165,21 +183,24 @@
 
   --case: #ebebeb;
   --panel: #ffffff;
-  --raised: #e0e0e0;
-  --raised-hi: #cccccc;
-  --chosen: #ffffff;
+  --raised: #f2f2f2;
+  --raised-hi: #dcdcdc;
+  --chosen: #000000;
+  --on-chosen: #ffffff;
+  --edge: #6e6e6e;
   --rule: #6e6e6e;
   --shade: rgb(0 0 0 / 0.22);
 
   --readout: #000000;
   --dim: #383838;
   --faint: #979797;
+  --glow: rgb(0 0 0 / 0);
 
-  --live: #005c51;
+  --live: #0050c8;
   --on-live: #ffffff;
-  --live-ink: #00443b;
-  --live-soft: rgb(0 150 130 / 0.16);
-  --live-glow: rgb(0 150 130 / 0.06);
+  --ok: #006b2b;
+  --on-ok: #ffffff;
+  --ok-soft: rgb(0 150 60 / 0.16);
   --warn: #785000;
   --warn-soft: rgb(255 176 32 / 0.28);
   --stop: #d23c37;
@@ -189,7 +210,7 @@
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.3);
 
-  --stick-rim: var(--live-ink);
+  --stick-rim: #00347f;
   --stick-ring: var(--faint);
 
   --light-art: none;
@@ -209,19 +230,22 @@
   --panel: #0a1628;
   --raised: #12233b;
   --raised-hi: #1b3150;
-  --chosen: #274268;
+  --chosen: #e6efff;
+  --on-chosen: #050d19;
+  --edge: #5576a3;
   --rule: #1f3658;
   --shade: rgb(0 4 12 / 0.6);
 
   --readout: #e6efff;
-  --dim: #92a9c9;
+  --dim: #9db3d2;
   --faint: #3a5479;
+  --glow: rgb(140 190 255 / 0.05);
 
-  --live: #4fd0bd;
-  --on-live: #03211c;
-  --live-ink: #8fe6d8;
-  --live-soft: rgb(79 208 189 / 0.16);
-  --live-glow: rgb(79 208 189 / 0.08);
+  --live: #6cb4ff;
+  --on-live: #031226;
+  --ok: #4fe08a;
+  --on-ok: #02200e;
+  --ok-soft: rgb(79 224 138 / 0.16);
   --warn: #ffbf5e;
   --warn-soft: rgb(255 191 94 / 0.13);
   --stop: #d23c37;
@@ -231,7 +255,7 @@
   --stop-soft: rgb(210 60 55 / 0.18);
   --stop-glow: rgb(210 60 55 / 0.34);
 
-  --stick-rim: var(--case);
+  --stick-rim: #1a3a6b;
   --stick-ring: var(--faint);
 
   --light-art: invert(1) brightness(0.85);
@@ -241,29 +265,32 @@
   --sim-halo: rgb(230 239 255 / 0.05);
   --sim-deck: rgb(230 239 255 / 0.2);
   --sim-plate: #2b4369;
-  --sim-back: #b4a4ff;
+  --sim-back: #c4a8ff;
 }
 
 [data-look="blueprint-light"] {
   color-scheme: light;
 
   --case: #e4edf8;
-  --panel: #f3f7fc;
-  --raised: #d7e3f2;
-  --raised-hi: #c6d6eb;
-  --chosen: #fbfdff;
+  --panel: #f6f9fd;
+  --raised: #eaf1f9;
+  --raised-hi: #d3e0f0;
+  --chosen: #0b2142;
+  --on-chosen: #ffffff;
+  --edge: #7189aa;
   --rule: #b2c6df;
   --shade: rgb(8 28 60 / 0.18);
 
   --readout: #0b2142;
   --dim: #3c5577;
   --faint: #9db2cf;
+  --glow: rgb(30 90 180 / 0.04);
 
-  --live: #006a5e;
+  --live: #0a58cc;
   --on-live: #ffffff;
-  --live-ink: #00534a;
-  --live-soft: rgb(40 175 155 / 0.18);
-  --live-glow: rgb(40 175 155 / 0.08);
+  --ok: #066b33;
+  --on-ok: #ffffff;
+  --ok-soft: rgb(20 160 80 / 0.16);
   --warn: #855900;
   --warn-soft: rgb(255 181 71 / 0.26);
   --stop: #d23c37;
@@ -273,7 +300,7 @@
   --stop-soft: rgb(210 60 55 / 0.12);
   --stop-glow: rgb(210 60 55 / 0.28);
 
-  --stick-rim: var(--live-ink);
+  --stick-rim: #063a86;
   --stick-ring: var(--faint);
 
   --light-art: none;

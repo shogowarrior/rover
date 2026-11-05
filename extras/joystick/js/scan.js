@@ -51,10 +51,15 @@ class ScanView {
     return R_MIN + (R_MAX - R_MIN) * Math.sqrt(clamp(cm / RANGE_CM, 0, 1));
   }
 
+  // Where a reading falls: inside STOP, closing in, or a clear way.
+  static zoneFor(cm) {
+    if (cm <= STOP_CM) return "stop";
+    if (cm <= GO_CM) return "warn";
+    return "clear";
+  }
+
   static colorFor(cm) {
-    if (cm <= STOP_CM) return "var(--stop)";
-    if (cm <= GO_CM) return "var(--warn)";
-    return "var(--live)";
+    return { stop: "var(--stop)", warn: "var(--warn)", clear: "var(--ok)" }[ScanView.zoneFor(cm)];
   }
 
   #svg;
@@ -127,7 +132,7 @@ class ScanView {
       dom.svg("text", { class: "tick", ...at, y: (y - 10).toFixed(1) }, this.#svg, b.label);
     });
 
-    dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--dim)" }, this.#svg);
+    dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--readout)" }, this.#svg);
   }
 
   #showDistance(view, cm) {
@@ -135,6 +140,7 @@ class ScanView {
       // The rover sends no distances until it has measured every bearing once
       // after booting. Clear the wedge rather than leave an old one standing.
       view.wedge.setAttribute("d", "");
+      view.wedge.removeAttribute("data-zone");
       view.reading.textContent = "—";
       return;
     }
@@ -149,6 +155,7 @@ class ScanView {
     view.wedge.setAttribute("d", ScanView.#wedgePath(view.screen, r));
     view.wedge.setAttribute("fill", noEcho ? "var(--dim)" : ScanView.colorFor(cm));
     view.wedge.setAttribute("opacity", noEcho ? "0.4" : "1");
+    view.wedge.setAttribute("data-zone", noEcho ? "none" : ScanView.zoneFor(cm));
     view.reading.textContent = noEcho ? "no echo" : `${Math.round(cm)}cm`;
   }
 

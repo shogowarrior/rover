@@ -506,7 +506,7 @@ class Driver {
     stick.painted = JSON.stringify(colours);
   }
 
-  // The knob in the page's teal, shading toward the look's rim, inside the
+  // The knob in the page's blue, shading toward the look's rim, inside the
   // look's ring (--stick-rim and --stick-ring in css/looks.css), as joy.js
   // names them. A colour the page cannot read (css/looks.css missing, or
   // styles turned off) is left to joy.js's own: handed an empty one, its
