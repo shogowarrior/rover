@@ -478,18 +478,34 @@ picked while the Drive tab is hidden is drawn as the tab is shown, before a
 press can land.
 
 **The look.** The page's colours are `css/looks.css`'s: six looks, three
-themes in Dark and Light, worn as `<html data-look>`. The gear in the
-header opens Options, where `js/look.js` offers them and remembers the
-choice; it loads in `<head>`, so the page is drawn in that look from the
-first paint, and paints the browser's bar (`theme-color`) then too. The
-popover is not modal: Stop stays one press while it is open. On an upright
+themes (Console, the default, Field and Blueprint) in Dark and Light, worn
+as `<html data-look>`. The gear in the header opens Options, where
+`js/look.js` offers a Dark | Light toggle that keeps the theme and a tile
+per theme that keeps the flavour, and remembers the look; it loads in
+`<head>`, so the page is drawn in that look from the first paint, and
+paints the browser's bar (`theme-color`) then too. Every look keeps four
+signal hues, each with one job: blue (`--live`) for the operator's own
+controls (the knob, the slider, focus, Connect, Run), green (`--ok`) for
+the rover doing well, amber (`--warn`) for caution, and red (`--stop`) for
+Stop and danger alone. The edge (`--edge`) of a button, a switch's
+track, a field or a theme tile holds 3:1 against what it sits on, and the
+chosen segment of a switch is inverted (`--chosen`, its word and anything
+else on it in `--on-chosen`). Nothing is told apart by hue alone: an
+all-well pill is quiet (ink and a green lamp) so a fault stands out, a
+clear way on the scan is drawn open, a sonar ray closing in is heavy in
+the simulator, and a lit Autonomous button is tinted and edged, not
+filled. The popover is not modal: Stop stays one press while it is open. On an upright
 phone under 440 px, and on a phone on its side, the mode pill gives way to
 the gear; Autonomous lights while the rover explores. What takes a colour as
 a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
 it again on a change, through `lookToken()`; everything else follows
 through `var()`. A new colour is a token in every look, never a literal:
 `test/looks.test.js` fails a stylesheet that writes one, a token missing
-from a look, and a pairing in its contrast audit that falls short. The
+from a look, a pairing in its contrast audit that falls short, a teal
+among a look's greens and tints as drawn on their grounds or among the
+block colours, which the owner turned down, and a stylesheet that fades a
+colour out over a ground it cannot know (a faint green over a blue ground
+mixes to teal). The
 audit is a hand-kept list, so a rule that paints a token on a new surface
 adds its pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
 colours the same in every look.

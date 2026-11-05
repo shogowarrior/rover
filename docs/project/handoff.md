@@ -252,10 +252,48 @@ Host tests 192/192, panel tests 301/301, the protocol check and every board
 build pass. That thread built and tested the firmware in its own container
 despite the registry block: see "Firmware builds in a cloud thread" below.
 
+On 2026-11-05 the owner asked to replace the teal look with a darker,
+higher-contrast one and for a Dark | Light toggle in settings. A thread did
+it, F7 in features.md, panel colours only, beside the layout thread working
+on the header and panes the same day:
+
+- Console Dark, the default, is black with white ink, its buttons, switch
+  tracks, fields and theme tiles edged at 3:1 (`--edge`), and the chosen
+  segment of each switch inverted (`--chosen`, its word in `--on-chosen`);
+- the teal is gone: blue (`--live`) is the operator's controls, green
+  (`--ok`) the rover doing well, amber caution and red Stop alone, in all
+  six looks; all-well pills are quiet, a clear way on the scan is drawn
+  open, a near sonar ray in the simulator heavy, and a lit Autonomous is
+  tinted and edged, so no state hangs on hue alone;
+- no teal anywhere, tints and blocks included: Blueprint's green tints are
+  opaque and a clear way's body (`--ok-body`) yellower, since a faint green
+  over its blue mixed to teal, and the motion blocks are a dusky rose
+  (`#805362`) that a red-green colour-blind eye still tells from every
+  other category; `looks.test.js` checks both;
+- Options has a Dark | Light toggle and a tile per theme (Console, Field,
+  Blueprint) in place of six tiles; look ids are unchanged, so a
+  remembered look still applies.
+
+Three review rounds (four lenses, then four, then three, each finding
+checked by a skeptic) kept 43 findings, many found by more than one lens,
+and fixed them all, each fix with a test that fails without it. Round 1: the all-well lamps lost on a phone on
+its side, blue and green drawn on the inverted chip, a disabled Run
+without its edge, Autonomous lit under 4.5:1 on a phone's bare bar in
+Console Light, the simulator's rays told apart by hue alone, and the motion
+blocks still teal. Round 2: Blueprint still drawing teal where a faint
+green mixed with its navy (and a mint on its pale blue), round 1's olive
+motion blocks matching control and stop for a red-green colour-blind eye,
+chosen words running off their chips on the narrowest phones, and the
+theme tiles framed at 1.4:1. Round 3: the same mixing through a fade (the
+scan's history once the link goes, the running block's glow, the halos'
+pulse, the chosen toolbox pill) and Blockly's white on a light look's
+"Create variable" button. Panel tests 313/313 and the protocol check
+pass. No firmware changed.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
-quotes them verbatim and maps each to an item (F1-F6) with today's code, the
+quotes them verbatim and maps each to an item (F1-F7) with today's code, the
 binding rules, a proposal, the owner's questions with defaults, tests, and
 when it is done. They were done in this order, and all seven are done; what
 F4 deferred is under "Open, not started" below:
@@ -276,7 +314,8 @@ F4 deferred is under "Open, not started" below:
    use visibly disabled.
 7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
-F6, firmware updates from the panel, came later and is done too.
+F6, firmware updates from the panel, and F7, darker looks with a Dark |
+Light toggle, came later and are done too.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -308,9 +347,10 @@ and the next thread's task names that branch.
 - F6's checks for the owner, which need the rover: bench-checklist.md,
   section 10, including the trial boot. Nothing about updates from the
   panel has run on a board yet.
-- F5's checks for the owner, which need a real screen: features.md, F5,
-  lists them, and what it left as it was (Blockly's focus colours, its
-  faint zoom and trash icons).
+- F5's and F7's checks for the owner, which need a real screen:
+  features.md, F5 and F7, list them, and what each left as it was
+  (Blockly's focus colours, its faint zoom and trash icons; Console Dark
+  and Field Dark now close, the light looks' dark amber).
 - The gear sits at the end of the header's first group, which on a wide
   screen is mid-header. A later header change (F1 moved the Rover |
   Simulator switch into the header) can give it the header's right end.
