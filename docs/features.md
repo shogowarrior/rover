@@ -6,7 +6,9 @@ and so are [F5](#f5-themes-and-options), from a second message that evening,
 and [F6](#f6-firmware-updates-from-the-panel), from the next morning;
 what [F4](#f4-other-buttons) deferred waits for the owner. The owner's
 comments on the try-it page on 2026-11-05, a larger view of the simulator
-on the Drive tab, are [F3i](#f3i-the-drive-tab-split-for-the-view).
+on the Drive tab, a one-row header and Stop beside the gear, are
+[F3i](#f3i-the-drive-tab-split-for-the-view) and
+[F3j](#f3j-one-header-row-stop-beside-the-gear).
 [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
@@ -112,6 +114,10 @@ so much wasted space on this and the right most pane whatever that is for. can y
 | i had asked this to be bigger. i still see it the smallest window | Done: [F3i](#f3i-the-drive-tab-split-for-the-view) |
 | so much wasted space on this and the right most pane whatever that is for. | Done: [F3i](#f3i-the-drive-tab-split-for-the-view), "Before" says what the pane was |
 | can you please tile them vertically with a side split for the preview? | Done: [F3i](#f3i-the-drive-tab-split-for-the-view) |
+| this is BIGGG.. move it to the top next or left of setting for stop with just icon and hover to see more info. | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear) |
+| all buttons should have that | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear): every icon in the header has its hint on hover, and every pill its state |
+| also move autonomus as a toggle | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear), "Autonomous is a toggle" |
+| instead of 2-3 lines...can this be converged into one line? and yet be ergonomical | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear) |
 
 ## Order of work
 
@@ -175,6 +181,8 @@ spec it changes.
 | 18 | F3h | Should the PS3 pad's right stick get the same mapping (a firmware change)? | no, not in this round | none yet |
 | 19 | F3h | On an upright phone: two smaller sticks, or one stick with the pivots shown disabled? | two smaller sticks | none yet |
 | 20 | F4 | Which reading of "other buttons" was meant, and is the split right? | all three; PS3 Cross = STOP and keyboard keys now, the rest later | none yet |
+| 21 | F3j | On a phone, does Stop move to the top too? | no: it stays at the foot, under the thumb | none yet |
+| 22 | F3j | Autonomous beside Stop, or at the header row's other end? | the other end, so a reach for Stop never starts the rover exploring | none yet |
 
 ## Rules every item keeps
 
@@ -531,6 +539,12 @@ wide size measured, and Autonomous fills the cell under the rail; both are
 56 px tall. Stop keeps its red fill and glow, Autonomous its raised fill,
 lit while the rover explores. The phone bar is unchanged.
 
+[F3j](#f3j-one-header-row-stop-beside-the-gear) amended this at the
+owner's later ask: on a wide screen Stop is a red icon, 64 x 44 px, beside
+the gear in the header's one row, and Autonomous a 44 px toggle at that
+row's other end; the foot bar is a phone's alone. Both stay the last
+controls in the focus order.
+
 ### F3b. The top rows
 
 **Asked:** "drive/program at the top"
@@ -572,6 +586,10 @@ or Advanced ran under Rover. Both tabs' content still starts at the same
 height, and no label overflows at 375 x 812, 812 x 375 or any wide size; at
 480 x 320 the switch is on the Program tab only, where "Simulator"
 overflows as the others there do.
+
+[F3j](#f3j-one-header-row-stop-beside-the-gear) put the switch row in the
+header's one row on a wide screen, each segment an icon with its word as
+its name and a hint on hover, so the 960 to 999 px step is gone.
 
 ### F3c. The right column at all times
 
@@ -626,6 +644,12 @@ dock, so on the Drive tab on the simulator target it takes the fan's cell
 in the rail, as on a phone, and the readouts stay. Everywhere else on a
 wide screen the fan keeps its place on both targets.
 
+[F3i](#f3i-the-drive-tab-split-for-the-view) amended this again at the
+owner's later ask: beside the Drive tab on a wide screen the scan is the
+left side on the rover target, the simulator's view takes its place on the
+simulator target, and the readouts are under the dock. Beside the Program
+tab the right column is as before, at all times.
+
 ### F3d. One right-column width
 
 **Asked:** "its a bit confusing what goes into the right with the size
@@ -657,8 +681,9 @@ with the readouts at the column's foot and no empty row.
 
 [F3i](#f3i-the-drive-tab-split-for-the-view) amended this at the owner's
 later ask: beside the Drive tab the right column is the dock's, with the
-readouts under it, and the scan is the left side on the rover target. The
-address, the note and Autonomous keep the one width beside both tabs.
+readouts under it, and the scan is the left side on the rover target.
+[F3j](#f3j-one-header-row-stop-beside-the-gear) then put the address, the
+note and Autonomous in the header's one row.
 
 ### F3e. The simulator view fills its pane
 
@@ -856,6 +881,16 @@ stick's box moved.
 **Done when** the spec is in this file, has gone to the owner with the
 questions, and every item follows it (amended by any answer that comes
 back).
+
+Amended at the owner's later asks, by
+[F3i](#f3i-the-drive-tab-split-for-the-view) and
+[F3j](#f3j-one-header-row-stop-beside-the-gear): on a wide screen the
+header is one row, 44 px tall, which holds Stop and Autonomous (still the
+last controls in the focus order) and the switch row as icons, each
+carrying its word as its accessible name and its hint as its title; the
+foot bar is a phone's alone; and beside the Drive tab the right column is
+the dock's, with the readouts under it, the scan being the left side on
+the rover target.
 
 ### F3g. Normal and Advanced on both tabs
 
@@ -1100,40 +1135,84 @@ chip's temperature), which show the rover, not the simulator.
   asked; the column is as wide as the two sticks need, from the rail's
   width up to 45% of the screen (672 px, two 300 px sticks, at most), so
   the view is the larger side;
-- where the height limits the sticks, the readouts go under the view
-  instead, and the column is the dock's alone: under the dock they would
-  cost the stick 57 px. Each range of widths moves them at the height
-  where that changes no stick: 739 px tall up to 1179 px wide, 781 up to
-  1365 and 809 from 1366;
-- the readouts keep one line and one height wherever they are: each label
-  over its value, the phase coming and going at the line's end, a value
-  too long for its cell cut short, so nothing moves a held stick;
-- the header and the Stop bar are as before, the address, the note and
-  Autonomous on the rail's width beside both tabs.
+- the readouts keep one line and one height: each label over its value,
+  the phase coming and going at the line's end, a value too long for its
+  cell cut short, so nothing moves a held stick.
 
-The Program tab, an upright phone and a phone on its side are unchanged:
-measured against `main` at 21 sizes, only the wide Drive tab moved. On the
-simulator target:
+A first version moved the readouts under the view where the height limited
+the sticks, at a height per range of widths. Its review found that it left
+the view less room than before on short laptop windows (1366 x 657,
+1280 x 577), with the header's two rows and the foot bar still taking
+their height; F3j, in the same PR, gave that height back, and the readouts
+stay under the dock at every height. The table under F3j has the sizes.
 
-| Screen | Stick before | Stick | View before | View |
+### F3j. One header row, Stop beside the gear
+
+**Asked** on the try-it page, 2026-11-05: "this is BIGGG.. move it to the
+top next or left of setting for stop with just icon and hover to see more
+info. all buttons should have that\n\nalso move autonomus as a toggle",
+on Stop and Autonomous, and "instead of 2-3 lines...can this be converged
+into one line? and yet be ergonomical", on the header.
+
+**Before.** On a wide screen the header took two rows (the mark and the
+status, then the tabs, the scheme and the target, beside the address and
+the note), and Stop and Autonomous a bar across the foot, Stop 480 px wide
+and both 56 px tall: about 240 px of a 720 px screen. Autonomous only ever
+asked the rover to explore, lit while it did.
+
+**Done.** On a wide screen (960 x 521 px and up) the header is one row,
+44 px tall, the same beside both tabs:
+
+- from the left: the mark; the Autonomous toggle; the status pills; Drive |
+  Program, Normal | Advanced and Rover | Simulator, each segment an icon
+  with its word as its name and a hint on hover (`labelSegment()`); the
+  note, in what the row leaves, two lines at most and the whole of it on
+  hover; the address and Connect; Stop, a red icon 64 px wide; the gear;
+- Stop sits beside the gear as asked, and Autonomous at the row's other
+  end, by the mark, so a hand reaching for Stop cannot start the rover
+  exploring. Both keep their place in the page's markup, the last controls
+  in the focus order and a phone's foot bar, and the grid draws them into
+  the header's row;
+- up to 1280 px wide each status pill is its icon alone (the link's WiFi
+  arcs, the mode's compass, the motors' wheel) in its state's colour; every
+  pill is titled with what it says in full, at every width;
+- the mode pill gives way to the Autonomous toggle, which shows the same,
+  except on the simulator target, where the toggle shows the simulator's
+  mode and the pill the rover's;
+- there is no foot bar on a wide screen: the height it and the header's
+  second row took goes to the sticks, the view and the Program tab.
+
+**Autonomous is a toggle** on every layout (`js/autotoggle.js`): on while
+the target explores, as telemetry reports it, and a press turns it the
+other way, off sending STOP and on RESUME_AUTONOMOUS, each a press as
+before. T presses it too. Until a frame names the mode it is off, so a
+press resumes, as the button did. A halted rover still reports
+AUTONOMOUS: off and on again retries it at once.
+
+On a phone the header and the foot bar are as they were, words and all:
+measured against `main` at nine phone and tablet sizes, nothing moved. On
+the simulator target, F3i and F3j together:
+
+| Screen | Stick before | Stick | Room before | Room |
 |---|---|---|---|---|
-| 960 x 600 | 212 | 188 | 320 x 279, in the rail, too short for the room | 460 x 309 |
-| 1024 x 700 | 248 | 194 | 320 x 359, in the rail | 495 x 389 |
-| 1024 x 768 | 282 | 194 | 320 x 427, in the rail | 495 x 525 |
-| 1180 x 820 | 185 | 230 | 297 x 577 | 581 x 577 |
-| 1280 x 700 | 202 | 248 | 332 x 457 | 644 x 389 |
-| 1280 x 800 | 202 | 252 | 332 x 557 | 636 x 557 |
-| 1366 x 1024 | 217 | 271 | 362 x 781 | 683 x 781 |
-| 1440 x 900 | 230 | 288 | 388 x 657 | 724 x 657 |
-| 1470 x 830 | 235 | 295 | 399 x 587 | 741 x 587 |
-| 1920 x 1080 | 300 | 300 | 380 x 837 | 860 x 837 |
+| 960 x 600 | 212 | 188 | none, its row too short | 424 x 318 |
+| 1024 x 768 | 282 | 194 | 284 x 213, in the rail | 459 x 344 |
+| 1180 x 820 | 185 | 230 | 261 x 196 | 545 x 409 |
+| 1280 x 577 | 189 | 260 | 264 x 198 | 457 x 343 |
+| 1280 x 800 | 202 | 252 | 296 x 222 | 600 x 450 |
+| 1366 x 657 | 205 | 271 | 344 x 258 | 542 x 407 |
+| 1366 x 1024 | 217 | 271 | 326 x 244 | 647 x 485 |
+| 1440 x 900 | 230 | 288 | 352 x 264 | 688 x 516 |
+| 1536 x 730 | 247 | 300 | 385 x 289 | 640 x 480 |
+| 1920 x 1080 | 300 | 300 | 344 x 258 | 824 x 618 |
 
 Below 1180 px wide the sticks are smaller than before, 45% of the screen
-being all the column takes, and the view is half as wide again. At every
-size measured, from 960 x 521 to 1920 x 1080 and at each step's edges, no
-stick moves when the move's name, the phase or the chip changes, a motor
-fault comes or goes, or the target switches, and the switch between the
-readouts' two places changes no stick.
+being all the column takes; from 1180 they are larger. Beside the Program
+tab the rail's scan is 147 px taller. At every size measured no stick
+moves when the move's name, the phase or the chip changes, a motor fault
+comes or goes, the target switches, the link goes, comes back or goes
+stale, the mode changes or the scheme does, and no part of the header
+leaves its row or overlaps another.
 
 ## F4. Other buttons
 

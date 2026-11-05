@@ -776,6 +776,25 @@ test("explore() says it is not simulated, reports AUTONOMOUS and stands still", 
   assert.notDeepEqual(target.state.pose, pose);
 });
 
+test("mode and onMode: the Autonomous toggle's, told each change at once, and never keeping the preview awake", () => {
+  const target = new SimTarget({ bearings: BEARINGS, room: "living" });
+  const heard = [];
+  const unsubscribe = target.onMode((mode) => heard.push(mode));
+  assert.equal(target.mode, "MANUAL");
+  assert.equal(target.idle, true, "a mode listener is not a telemetry listener");
+  target.command(protocol.RESUME_AUTONOMOUS, 0, 0);
+  assert.equal(target.mode, "AUTONOMOUS");
+  target.explore(); // already exploring: no change, nothing said
+  target.command(protocol.STOP, 0, 400);
+  target.command(protocol.RESUME_AUTONOMOUS, 0, 0);
+  target.reset();
+  target.reset(); // already manual
+  assert.deepEqual(heard, ["AUTONOMOUS", "MANUAL", "AUTONOMOUS", "MANUAL"]);
+  unsubscribe();
+  target.explore();
+  assert.equal(heard.length, 4, "unsubscribed");
+});
+
 test("a reset or a change of room is a loss; both leave a clean state", async () => {
   const target = new SimTarget({ bearings: BEARINGS, room: "living" });
   const lost = [];

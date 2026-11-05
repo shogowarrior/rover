@@ -78,9 +78,9 @@ paired address in `src/Features.h`.
 
 ## Controls
 
-Any command, a stop included, takes control from exploration; the Autonomous
-button, `t` or START hands it back, and also restarts exploration that has
-halted. While you hold a control the client re-sends it; let go and the rover
+Any command, a stop included, takes control from exploration; turning the
+panel's Autonomous toggle on, `t` or START hands it back, and also restarts
+exploration that has halted (on the panel, turn it off and on again). While you hold a control the client re-sends it; let go and the rover
 stops within half a second.
 
 | | Browser panel | Keyboard (`drive.py`, and the panel) | PS3 pad |
@@ -93,7 +93,7 @@ stops within half a second.
 | Programs | The Program tab | -- | -- |
 | Simulator | Rover \| Simulator, in the header: the Drive tab and programs drive a simulated rover | -- | -- |
 | Stop | Stop | space | Cross (a held stick then drives again only from centre), or let go of the stick |
-| Back to autonomous | Autonomous | `t` | START |
+| Back to autonomous | The Autonomous toggle, lit while the rover explores: a press while it is lit stops the rover | `t` (on the panel it presses the toggle) | START |
 
 The panel takes `drive.py`'s keys too: the drive and speed keys while its
 Drive tab shows, Space and `t` on either tab. The gear's Options list them.

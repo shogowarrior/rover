@@ -57,6 +57,16 @@ class SchemeToggle {
     Object.freeze({ scheme: SCHEME_NORMAL, label: "Normal" }),
     Object.freeze({ scheme: SCHEME_ADVANCED, label: "Advanced" }),
   ]);
+  // The header's icons (labelSegment): the four ways a translate goes, and
+  // a turn about a corner, as the pivots turn.
+  static ICONS = Object.freeze({
+    [SCHEME_NORMAL]: ["M12 3v18M3 12h18", "m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"],
+    [SCHEME_ADVANCED]: ["M6 20V10a5 5 0 0 1 5-5h8", "m16 2 3 3-3 3", "M4 20h4"],
+  });
+  static HINTS = Object.freeze({
+    [SCHEME_NORMAL]: "Normal: the left stick and the rotate buttons. The pivots are off.",
+    [SCHEME_ADVANCED]: "Advanced: the pivots too, on the right stick.",
+  });
 
   #link;
   #group;
@@ -72,8 +82,9 @@ class SchemeToggle {
     this.#link = link;
     this.#group = group;
     for (const { scheme, label } of SchemeToggle.OPTIONS) {
-      const button = segment(choice, () => this.#choose(scheme));
-      button.textContent = label;
+      const button = labelSegment(segment(choice, () => this.#choose(scheme)), {
+        word: label, paths: SchemeToggle.ICONS[scheme], hint: SchemeToggle.HINTS[scheme],
+      });
       button.dataset.scheme = scheme;
       this.#buttons.set(scheme, button);
     }
@@ -182,6 +193,9 @@ class SchemeToggle {
           : "";
     pressSegment(this.#buttons, scheme);
     for (const [option, button] of this.#buttons) {
+      // Its own hint, and what the group says: hovering a segment shows
+      // the button's title, not the group's.
+      button.title = [SchemeToggle.HINTS[option], this.#group.title].filter(Boolean).join(" ");
       button.disabled = !known || stale;
       if (option === pending) button.dataset.pending = "yes";
       else delete button.dataset.pending;

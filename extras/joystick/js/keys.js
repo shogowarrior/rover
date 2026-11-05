@@ -3,7 +3,7 @@
  *
  *   W S    forward, back               Q E    rotate left, right
  *   A D    strafe left, right          - +    speed down, up
- *   Space  Stop                        T      Autonomous
+ *   Space  Stop                        T      Autonomous on or off
  *
  * A drive key is held as a rotate button is (Driver.holdKey): it drives from
  * its keydown to its keyup, at the slider's speed, re-sent meanwhile, and the
@@ -18,13 +18,14 @@
  * press. - and + step the slider by SPEED_STEP, as drive.py steps its speed,
  * and _ and = do too, unshifted. The drive and speed keys act while the
  * Drive tab shows, where what they drive is in view; Space and T press the
- * Stop and Autonomous buttons, so they do exactly what those do, on either
- * tab.
+ * Stop button and the Autonomous toggle, so they do exactly what those do,
+ * on either tab: T on a rover reported exploring stops it, where drive.py's
+ * always asks it to explore.
  *
  *   new Keyboard({ driver, speed, stop, auto, driveTab, dialog, legend })
  *     driver      the Driver;
  *     speed       the speed slider;
- *     stop, auto  the Stop and Autonomous buttons;
+ *     stop, auto  the Stop button and the Autonomous toggle;
  *     driveTab    the Drive tab's panel;
  *     dialog      the page's <dialog>: while it is open, every key is its;
  *     legend      an empty element, Options', that the keys are listed in.
@@ -81,7 +82,7 @@ class Keyboard {
     Object.freeze({ keys: ["Q", "E"], does: "Rotate left, right" }),
     Object.freeze({ keys: ["−", "+"], does: "Slower, faster" }),
     Object.freeze({ keys: ["Space"], does: "Stop" }),
-    Object.freeze({ keys: ["T"], does: "Autonomous" }),
+    Object.freeze({ keys: ["T"], does: "Autonomous on or off" }),
   ]);
   #ui;
 

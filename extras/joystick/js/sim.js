@@ -841,6 +841,11 @@ class SimSonar {
  *   releasedDrag       see SIM_RELEASED_DRAG
  *   setScheme(name)    as the rover takes {"scheme": name}; app.js and
  *                      SchemeToggle call it, not SimView
+ *   mode, onMode(fn)   the simulated rover's mode, MODE_MANUAL or
+ *                      MODE_AUTONOMOUS, and fn(mode) as it changes: for
+ *                      the Autonomous toggle (AutoToggle.bind). Not
+ *                      counted as a listener, so it never keeps the
+ *                      preview awake (idle)
  *   clearTrail()       forget the path and the bump marks
  *   onLog(fn)          fn({text, tone}), as ProgramRunner's, when the preview
  *                      has something to say: a bump (tone "bump"), or that
@@ -949,6 +954,7 @@ class SimTarget {
   #lostListeners = new Listeners();
   #logListeners = new Listeners();
   #wakeListeners = new Listeners();
+  #modeListeners = new Listeners();
 
   constructor({ bearings, room = "living", releasedDrag = SIM_RELEASED_DRAG, scheme = SCHEME_NORMAL } = {}) {
     this.#sonar = new SimSonar(bearings);
@@ -1076,6 +1082,14 @@ class SimTarget {
 
   set releasedDrag(drag) {
     this.#sim.releasedDrag = drag;
+  }
+
+  get mode() {
+    return this.#mode;
+  }
+
+  onMode(fn) {
+    return this.#modeListeners.add(fn);
   }
 
   get scheme() {
@@ -1280,6 +1294,7 @@ class SimTarget {
     this.#mode = mode;
     this.#sim.release();
     this.#sonar.restart(now);
+    this.#modeListeners.emit(mode);
   }
 
   // One fixed step of the world.
@@ -1360,6 +1375,7 @@ class SimTarget {
   // lost nor cut short.
   #resetWorld() {
     const now = this.#clock.now;
+    const wasMode = this.#mode;
     this.#held = null;
     this.#mode = MODE_MANUAL;
     this.#sim.release();
@@ -1370,6 +1386,7 @@ class SimTarget {
     this.#trail = [this.#trailPoint()];
     this.#bumps = [];
     this.#contact = null;
+    if (wasMode !== MODE_MANUAL) this.#modeListeners.emit(MODE_MANUAL);
   }
 
   // The tone travels with the words, so no reader has to tell a bump by how

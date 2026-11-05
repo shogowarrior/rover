@@ -187,7 +187,7 @@ test("keys: the rotate button or key pressed last wins, and letting go hands bac
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("keys: Space stops and T explores, on either tab, as the buttons do", () => {
+test("keys: Space stops and T toggles Autonomous, on either tab, as the buttons do", () => {
   // An exploring rover, nothing held: Space is still a STOP, as Stop is.
   const { page, ws } = connected(telemetry());
   const space = down(page, " ");
@@ -196,16 +196,20 @@ test("keys: Space stops and T explores, on either tab, as the buttons do", () =>
   down(page, " ", { repeat: true });
   check(names(ws).join() === "STOP", `a held Space stops once: ${names(ws)}`);
   check(up(page, " ").defaultPrevented, "and its keyup");
+  // T presses the toggle: off while the rover still reports exploring.
   tap(page, "t");
-  check(names(ws).join() === "STOP,RESUME_AUTONOMOUS", `T: ${names(ws)}`);
+  check(names(ws).join() === "STOP,STOP", `T on an exploring rover: ${names(ws)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  tap(page, "t");
+  check(names(ws).join() === "STOP,STOP,RESUME_AUTONOMOUS", `T on a rover in manual: ${names(ws)}`);
   down(page, "t", { repeat: true });
-  check(count(ws) === 2, `a held T asks once: ${names(ws)}`);
+  check(count(ws) === 3, `a held T asks once: ${names(ws)}`);
 
-  // On the Program tab too, where the foot bar's buttons are as well.
+  // On the Program tab too, where Stop and Autonomous are as well.
   toProgram(page);
   tap(page, " ");
   tap(page, "T");
-  check(names(ws, 2).join() === "STOP,RESUME_AUTONOMOUS", `on the Program tab: ${names(ws, 2)}`);
+  check(names(ws, 3).join() === "STOP,RESUME_AUTONOMOUS", `on the Program tab: ${names(ws, 3)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
