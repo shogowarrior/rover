@@ -609,6 +609,9 @@ class SimView {
   // Each bearing's last ping, drawn from where the rover was when it was
   // taken, in the scan fan's colours: an old reading fades, and one with no
   // echo is a faint dashed line to where the sound glanced off or ran out.
+  // Its zone goes on the line too, so css/sim.css draws one closing in or
+  // at STOP heavy: green and amber share a lightness, and hue alone would
+  // not tell them apart for everyone.
   #drawRays({ readings, now }) {
     const room = this.#target.room;
     const { CM } = SimView;
@@ -635,6 +638,7 @@ class SimView {
       line.setAttribute("y2", (to.y * CM).toFixed(1));
       line.setAttribute("stroke", colour);
       line.setAttribute("data-echo", noEcho ? "none" : "yes");
+      line.setAttribute("data-zone", noEcho ? "none" : ScanView.zoneFor(reading.cm));
       line.setAttribute("opacity", (noEcho ? 0.55 - 0.25 * age : 0.95 - 0.55 * age).toFixed(2));
       line.setAttribute("visibility", "visible");
       dot.setAttribute("cx", (to.x * CM).toFixed(1));

@@ -623,9 +623,10 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(by.distanceRight.wedge.getAttribute("fill") === "var(--stop)", "25 cm (= STOP) red");
   check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--warn)", "30 cm amber");
   check(by.distanceFront.wedge.getAttribute("fill") === "var(--ok)", "150 cm green");
-  // Drawn whole: looks.test.js audits the wedges at full strength, and the
-  // red one falls under 3:1 in Console Dark and Blueprint Dark at 0.85.
-  check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo drawn whole");
+  // Every echo at opacity 1 (a clear one's body is faded by CSS, its edge
+  // whole): looks.test.js audits the wedges at full strength, and the red
+  // one falls under 3:1 in Console Dark and Blueprint Dark at 0.85.
+  check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo at full opacity");
   const fr = by.distanceFrontRight;
   check(fr.wedge.getAttribute("fill") === "var(--dim)" && fr.wedge.getAttribute("opacity") === "0.4", "no echo faded");
   // Each wedge says where it falls, so the clear way can be drawn open.
@@ -4532,6 +4533,33 @@ test("look: whatever is filled in --chosen is written in --on-chosen", () => {
   for (const state of ['.scheme[data-state="stale"] .segmented button[aria-pressed="true"]', '.family[data-off="yes"] .segmented button[aria-pressed="true"]']) {
     check(selectors.includes(state), `kept inverted while disabled: ${state}`);
   }
+});
+
+test("look: what else marks the chosen chip is drawn in its ink, not in blue or green", () => {
+  // Blue on the chip fell to 1.9:1 (Blueprint Dark), green to under 3:1.
+  const rule = (file, selector) => (cssRules(stylesheet(file)).find((r) => r.selector === selector) || {}).body || "";
+  const pending = rule("panel.css", '.segmented button[aria-pressed="true"][data-pending="yes"]');
+  check(/(^|[^-])color:\s*var\(--on-chosen\)/.test(pending) && /outline-color:\s*var\(--on-chosen\)/.test(pending),
+    `a chosen scheme also asked for: its word and frame in --on-chosen: ${pending}`);
+  const dot = rule("program.css", '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
+  check(/background:\s*var\(--on-chosen\)/.test(dot), `the open Program tab's running dot in --on-chosen: ${dot}`);
+});
+
+test("look: a disabled Run keeps the edge its filled state drops", () => {
+  const rule = (selector) => (cssRules(stylesheet("program.css")).find((r) => r.selector === selector) || {}).body || "";
+  check(/border-color:\s*transparent/.test(rule(".programBar .run")), "Run, filled, drops its edge");
+  check(/border-color:\s*var\(--edge\)/.test(rule(".programBar .run:disabled")), "disabled, unfilled, it is edged as every other control");
+});
+
+test("look: on a phone on its side the all-well pills keep their green lamp, the only colour they have", () => {
+  // The block drops the pills' lamps to keep "No link" whole at 480 x 320;
+  // a tinted pill's colour shows without one, an all-well pill's does not.
+  const block = blockRules(panelCss(), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
+  check(block.some((r) => r.selector === ".pill > .lamp" && /display:\s*none/.test(r.body)), "the lamps dropped there");
+  const kept = block.find((r) => /\.linkPill > \.lamp/.test(r.selector) && /display:\s*block/.test(r.body));
+  const selectors = kept ? kept.selector.split(",").map((each) => each.trim()) : [];
+  check(selectors.includes('body[data-link="up"] .linkPill > .lamp'), `Link's lamp kept while the link is up: ${selectors}`);
+  check(selectors.includes('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), `Motors OK's lamp kept: ${selectors}`);
 });
 
 test("look: a tile's preview is painted only in the tokens every look declares for it", () => {

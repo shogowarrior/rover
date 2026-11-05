@@ -145,10 +145,12 @@ class ScanView {
       return;
     }
 
-    // A no-echo reading is not a measurement. Show it at full reach but faded,
-    // so "nothing came back" never reads as a confirmed clear path. An echo
-    // is drawn whole: the red wedge, at the 0.85 it once was, fell under
-    // 3:1 on the card in Console Dark and Blueprint Dark
+    // A no-echo reading is not a measurement. Show it at full reach in grey,
+    // faded and unedged, so "nothing came back" never takes a clear way's
+    // shape: css/panel.css draws a clear echo open (a faint body inside a
+    // green edge) by its data-zone. Every echo is at opacity 1, and one
+    // closing in or at STOP is solid: the red wedge, at the 0.85 it once
+    // was, fell under 3:1 on the card in Console Dark and Blueprint Dark
     // (test/looks.test.js).
     const noEcho = cm >= FAR_CM;
     const r = noEcho ? ScanView.R_MAX : ScanView.radiusFor(cm);

@@ -19,6 +19,12 @@
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
+/* On the open tab the dot sits on the chosen chip, where green fell under
+   3:1 in the dark looks: it takes the chip's ink, as the tab's word does. */
+.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
+  background: var(--on-chosen);
+}
+
 /* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar
    follows the tab's own width, which the layout sets, not the window's. */
 #programTab {
@@ -79,6 +85,7 @@
 .programBar .run:disabled {
   color: var(--dim);
   background: var(--raised);
+  border-color: var(--edge);
   filter: none;
 }
 

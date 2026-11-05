@@ -24,9 +24,12 @@
    fault. Red is Stop and danger and nothing else -- anywhere else it would
    stop meaning anything -- and one red in every look. Blue for what the
    operator touches and green for what the rover reports keep apart for
-   every common colour-vision deficiency, as do green, amber and red by
-   their lightness, and every one of them is named where it is drawn. A
-   light look darkens its hues until they hold as text on its surfaces.
+   every common colour-vision deficiency. Green and amber share a
+   lightness, and a light look's red comes close to both, so wherever they
+   meet a shape or a word tells them apart too: a clear way on the scan is
+   drawn open, a simulator ray closing in is heavy, and every pill and
+   readout says what it shows. A light look darkens its hues until they
+   hold as text on its surfaces.
    test/looks.test.js holds every look to the contrast each pairing of ink
    and surface in its audit needs: a rule that paints a token on a new
    surface adds its pairing there. */
@@ -108,7 +111,7 @@
 
   --live: #0b5cd6;
   --on-live: #ffffff;
-  --ok: #0a7a33;
+  --ok: #086d2d;
   --on-ok: #ffffff;
   --ok-soft: rgb(20 170 70 / 0.16);
   --warn: #865900;

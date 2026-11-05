@@ -228,6 +228,11 @@
 .sim-rays line { stroke-width: 1.5; stroke-linecap: round; }
 .sim-rays line[data-echo="none"] { stroke-dasharray: 3 4; }
 
+/* A return closing in or at STOP is heavy, a clear one thin: green and
+   amber share a lightness, so the weight tells them apart as well as the
+   hue (simview.js sets data-zone; the key below matches). */
+.sim-rays line:is([data-zone="warn"], [data-zone="stop"]) { stroke-width: 3; }
+
 .sim-bump circle,
 .sim-bump path {
   fill: none;
@@ -558,6 +563,7 @@
 
 .sim-swatch.ray.stop { border-color: var(--stop); }
 .sim-swatch.ray.warn { border-color: var(--warn); }
+.sim-swatch.ray:is(.stop, .warn) { border-top-width: 4px; }
 .sim-swatch.ray.clear { border-color: var(--ok); }
 .sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
 

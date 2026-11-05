@@ -411,7 +411,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* A tile: its radio, out of sight but in the focus order (the arrow keys
-   move between the looks), the preview, and the name. The checked tile and
+   move between the themes), the preview, and the name. The checked tile and
    the focused one show through the radio's own state, never :has(), which
    a browser without it would drop. */
 .lookTile {
@@ -457,7 +457,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--dim);
 }
 
-/* The look in force: its name lit, behind a lamp. */
+/* The theme in force: its name lit, behind a lamp. */
 .lookTile input:checked ~ .lookName { color: var(--readout); }
 
 .lookTile input:checked ~ .lookName::before {
@@ -606,7 +606,7 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-3);
 }
 
-/* The agreeing button, in the accent: the action the question names. */
+/* The agreeing button, in the controls' blue: the action the question names. */
 .ask .yes {
   color: var(--on-live);
   background: var(--live);
@@ -764,6 +764,13 @@ input[type="range"]::-moz-range-thumb {
   outline: 1px dashed var(--live);
   outline-offset: -4px;
   animation: pending 800ms ease-in-out infinite alternate;
+}
+
+/* A click back on the scheme in force while another is asked for leaves
+   it both: it keeps the chip's ink, where blue fell under 3:1. */
+.segmented button[aria-pressed="true"][data-pending="yes"] {
+  color: var(--on-chosen);
+  outline-color: var(--on-chosen);
 }
 
 @keyframes pending { to { opacity: 0.5; } }
@@ -2153,10 +2160,12 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
    land on Advanced. They take a row each, and the columns close up (the
    shell's, the dock's and Stop's bar beside the Program tab together, as
    they must, or Stop moved as the tab changed). The status keeps to one
-   row beside the gear: it takes the mark's place, and its pills close up
-   and drop their lamps, whose colour their tint already shows (with them,
-   "No link" was cut short at 480 x 320). The readouts take the type size a
-   portrait phone of this width would. */
+   row beside the gear: it takes the mark's place, and its pills close up,
+   a tinted one dropping its lamp, whose colour the tint already shows
+   (with them, "No link" was cut short at 480 x 320). Link and Motors OK
+   keep theirs: with no tint, their green lamp is all that says all is
+   well. The readouts take the type size a portrait phone of this width
+   would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   /* 156 px: half of the gutters (48), the gaps (24) and the 240 px the
      middle column keeps for the tabs and the scheme, a row each. */
@@ -2178,6 +2187,9 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .pill { --pill-x: var(--s-1); }
 
   .pill > .lamp { display: none; }
+
+  body[data-link="up"] .linkPill > .lamp,
+  body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp { display: block; }
 
   .cell output { font-size: var(--t-sm); }
 

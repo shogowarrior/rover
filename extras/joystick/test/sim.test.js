@@ -1189,6 +1189,15 @@ test("the view: a bearing to the rover's left reads, and is drawn, on its left",
   const [, rightFromY, , rightToY] = end(rays[rays.length - 1]);
   near(leftToY, 200, 0.1, "the left ray ends on the top wall, the rover's left");
   assert.ok(leftToY > leftFromY && rightToY < rightFromY, `left ray up the map, right ray down: ${end(rays[0])} ${end(rays[rays.length - 1])}`);
+  // Each ray names its zone as the scan's wedge does, and a near one is
+  // drawn heavy, its key too: green and amber share a lightness.
+  const zone = (cm) => (cm >= protocol.FAR_CM ? "none" : cm <= protocol.STOP_CM ? "stop" : cm <= protocol.GO_CM ? "warn" : "clear");
+  assert.deepEqual(rays.map((ray) => ray.getAttribute("data-zone")), readings.map(zone), `zones for ${readings}`);
+  assert.equal(rays[0].getAttribute("data-zone"), "warn", "the top wall, 32 cm away, is closing in");
+  const css = stylesheet("sim.css");
+  const heavy = (selector) => (cssRules(css).find((r) => r.selector === selector) || {}).body || "";
+  assert.match(heavy('.sim-rays line:is([data-zone="warn"], [data-zone="stop"])'), /stroke-width:\s*3;/, "a near ray heavier than the 1.5 of a clear one");
+  assert.match(heavy(".sim-swatch.ray:is(.stop, .warn)"), /border-top-width:\s*4px;/, "its key heavier than the 2 px of a clear one");
   assert.deepEqual(page.errors, []);
 });
 
