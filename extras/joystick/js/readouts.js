@@ -7,8 +7,8 @@
  *
  *   new Readouts({ modePill, mode, move, phaseCell, phase, temp, motorsPill, motorsFault })
  *     modePill, motorsPill  the header's pills, titled with what they show
- *                           in full: a wide screen's header shows their
- *                           lamps alone.
+ *                           in full: up to 1280 px wide a wide screen's
+ *                           header shows their icons alone.
  *   show(data)   update from a telemetry object; a key it lacks leaves its
  *                readout as it was (motorsReady excepted, below).
  *   linkDown()   the link the readings came over has gone.

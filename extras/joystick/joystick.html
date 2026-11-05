@@ -138,7 +138,8 @@
       </div>
 
       <div class="link">
-        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false">
+        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false"
+               title="The rover's address: host, or host:port. Enter connects.">
         <button id="connect">Connect</button>
       </div>
 
@@ -181,11 +182,13 @@
         </div>
 
         <div class="spin" role="group" aria-label="Rotate">
-          <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q">
+          <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q"
+                  title="Rotate left (Q): counter-clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
             <span>Left</span>
           </button>
-          <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E">
+          <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E"
+                  title="Rotate right (E): clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
             <span>Right</span>
           </button>
@@ -195,7 +198,8 @@
           <span class="label" id="speedLabel">Speed</span>
           <output id="speedOut">64</output>
           <input type="range" id="speed" min="0" max="255" step="8" value="64"
-                 aria-labelledby="speedLabel">
+                 aria-labelledby="speedLabel"
+                 title="Speed (- and +): the top speed the sticks and the rotate buttons drive at.">
         </div>
       </div>
     </section>

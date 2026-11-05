@@ -65,8 +65,9 @@ Remind to check for ota feature as I had  and add it the the dashboard ui
 Make sure to not commit WiFi details
 ```
 
-Two comments on the try-it page came on 2026-11-05, the first on the
-Drive tab's view of the simulator, the second on its dock:
+Four comments on the try-it page came on 2026-11-05: on the Drive tab's
+view of the simulator, on its dock, on the bar holding Stop and
+Autonomous, and on the header:
 
 ```text
 i had asked this to be bigger. i still see it the smallest window
@@ -74,6 +75,16 @@ i had asked this to be bigger. i still see it the smallest window
 
 ```text
 so much wasted space on this and the right most pane whatever that is for. can you please tile them vertically with a side split for the preview?
+```
+
+```text
+this is BIGGG.. move it to the top next or left of setting for stop with just icon and hover to see more info. all buttons should have that
+
+also move autonomus as a toggle
+```
+
+```text
+instead of 2-3 lines...can this be converged into one line? and yet be ergonomical
 ```
 
 ## Coverage
@@ -115,7 +126,7 @@ so much wasted space on this and the right most pane whatever that is for. can y
 | so much wasted space on this and the right most pane whatever that is for. | Done: [F3i](#f3i-the-drive-tab-split-for-the-view), "Before" says what the pane was |
 | can you please tile them vertically with a side split for the preview? | Done: [F3i](#f3i-the-drive-tab-split-for-the-view) |
 | this is BIGGG.. move it to the top next or left of setting for stop with just icon and hover to see more info. | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear) |
-| all buttons should have that | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear): every icon in the header has its hint on hover, and every pill its state |
+| all buttons should have that | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear): every button on the page has its hint on hover, every icon in the header among them, and every pill its state |
 | also move autonomus as a toggle | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear), "Autonomous is a toggle" |
 | instead of 2-3 lines...can this be converged into one line? and yet be ergonomical | Done: [F3j](#f3j-one-header-row-stop-beside-the-gear) |
 
@@ -1148,11 +1159,12 @@ stay under the dock at every height. The table under F3j has the sizes.
 
 ### F3j. One header row, Stop beside the gear
 
-**Asked** on the try-it page, 2026-11-05: "this is BIGGG.. move it to the
-top next or left of setting for stop with just icon and hover to see more
-info. all buttons should have that\n\nalso move autonomus as a toggle",
-on Stop and Autonomous, and "instead of 2-3 lines...can this be converged
-into one line? and yet be ergonomical", on the header.
+**Asked** on the try-it page, 2026-11-05, on Stop and Autonomous: "this is
+BIGGG.. move it to the top next or left of setting for stop with just icon
+and hover to see more info. all buttons should have that", then "also move
+autonomus as a toggle"; and on the header, "instead of 2-3 lines...can
+this be converged into one line? and yet be ergonomical". The comments are
+quoted whole under [The request, verbatim](#the-request-verbatim).
 
 **Before.** On a wide screen the header took two rows (the mark and the
 status, then the tabs, the scheme and the target, beside the address and
@@ -1166,26 +1178,41 @@ asked the rover to explore, lit while it did.
 - from the left: the mark; the Autonomous toggle; the status pills; Drive |
   Program, Normal | Advanced and Rover | Simulator, each segment an icon
   with its word as its name and a hint on hover (`labelSegment()`); the
-  note, in what the row leaves, two lines at most and the whole of it on
-  hover; the address and Connect; Stop, a red icon 64 px wide; the gear;
+  address and Connect; the note, in what the row leaves, two lines at most
+  and the whole of it on hover; Stop, a red icon 64 px wide; the gear;
 - Stop sits beside the gear as asked, and Autonomous at the row's other
   end, by the mark, so a hand reaching for Stop cannot start the rover
-  exploring. Both keep their place in the page's markup, the last controls
-  in the focus order and a phone's foot bar, and the grid draws them into
-  the header's row;
+  exploring. Nor can it land on Disconnect, which leaves an exploring rover
+  exploring with no link to stop it: the note, which takes no press, is
+  Stop's neighbour, never under 24 px wide, and Disconnect is at least
+  57 px from Stop at every size measured. The gear, Stop's other
+  neighbour, only opens Options, which leaves Stop one press. Stop and
+  Autonomous keep their place in the page's markup, the last controls in
+  the focus order and a phone's foot bar, and the grid draws them into the
+  header's row;
 - up to 1280 px wide each status pill is its icon alone (the link's WiFi
   arcs, the mode's compass, the motors' wheel) in its state's colour; every
   pill is titled with what it says in full, at every width;
 - the mode pill gives way to the Autonomous toggle, which shows the same,
   except on the simulator target, where the toggle shows the simulator's
-  mode and the pill the rover's;
+  mode and the pill the rover's. That holds on a phone too, where the
+  mode pill takes the motors pill's place on the simulator target (the
+  rover's motors drive nothing there, and a fault still shows as its
+  strip): without it nothing said a rover sent exploring before the switch
+  was still moving by itself;
+- every button on the page says on hover what it does: Connect (and what
+  Disconnect leaves running), the rotate buttons and the speed with their
+  keys, the family's two segments, Run, the File menu and its examples,
+  the simulator's fold and settings, and the firmware's Choose and Update,
+  as well as the header's icons;
 - there is no foot bar on a wide screen: the height it and the header's
   second row took goes to the sticks, the view and the Program tab.
 
 **Autonomous is a toggle** on every layout (`js/autotoggle.js`): on while
 the target explores, as telemetry reports it, and a press turns it the
-other way, off sending STOP and on RESUME_AUTONOMOUS, each a press as
-before. T presses it too. Until a frame names the mode it is off, so a
+other way: pressed while off it sends RESUME_AUTONOMOUS, pressed while on
+STOP, each a press as before, and a program it stops says Autonomous was
+pressed, not Stop. T presses it too. Until a frame names the mode it is off, so a
 press resumes, as the button did. A halted rover still reports
 AUTONOMOUS: off and on again retries it at once.
 
@@ -1374,7 +1401,8 @@ on each change, and a script holds every look to WCAG AA.
 - The gear (`#options`) in the header opens Options (`#optionsPanel`), the
   tiles under Theme. On an upright phone narrower than 440 px, and on a
   phone on its side, the mode pill gives way to it: Autonomous lights while
-  the rover explores. Under 500 px upright the wordmark keeps its mark and
+  the rover explores (since F3j, on the simulator target the motors pill
+  gives way instead, and the mode pill keeps the rover's mode). Under 500 px upright the wordmark keeps its mark and
   drops its word, and on a phone on its side under 780 px the pills drop
   their lamps, so the status keeps its row. At 480 x 320 "Motors OK" is cut
   short beside the gear, as main cuts "No motor shield" there, and "No motor
@@ -1522,8 +1550,8 @@ Safari is untested.
 | Drive \| Program | header | no | which tab is open must show; leaving Drive lets go of a held stick |
 | Normal \| Advanced | header | no | shows the state that decides what the stick does |
 | Address, Connect / Disconnect | header | no | the first step, and a way to stop driving |
-| Stop | foot bar | never | safety: one press, same place, stops exploring too |
-| Autonomous | foot bar | no | starts the robot moving on its own: a deliberate press |
+| Stop | the header's row beside the gear on a wide screen; the foot bar on a phone | never | safety: one press, same place, stops exploring too |
+| Autonomous | the header row's other end on a wide screen; the foot bar, beside Stop, on a phone | no | a toggle: turned on it starts the robot moving on its own, a deliberate press; turned off it stops it |
 | Stick family | Drive tab | no | re-steers a held stick: one tap mid-drive |
 | Stick, rotate, speed | Drive tab | no | held or continuous controls |
 | Rover \| Simulator | header | no | decides whether the Drive tab and Run move the real rover |

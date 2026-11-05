@@ -436,12 +436,15 @@ height, so a middle column that outgrows a short screen moves neither
 stick. On a wide screen (960 px by 521 px and up) the header is one row,
 44 px tall, the same beside both tabs: the mark, the Autonomous toggle, the
 status pills, the tabs, the scheme and the target as icons with their
-hints on hover, the note (two lines at most, the whole of it on hover),
-the address, and Stop, red, beside the gear. Stop and Autonomous are the
+hints on hover, the address, the note (two lines at most, the whole of it
+on hover), and Stop, red, beside the gear. Stop and Autonomous are the
 rail's last elements, for the focus order and a phone's foot, drawn into
 the header's row by the grid, at its two ends so a hand reaching for Stop
-cannot start the rover exploring. Up to 1280 px wide each status pill is
-its icon alone, titled with what it says. Beside the Program tab the rail,
+cannot start the rover exploring, nor land on Disconnect, which would
+leave an exploring rover exploring and the panel no link to stop it: the
+note, which takes no press, is Stop's neighbour, never under 24 px wide.
+Up to 1280 px wide each status pill is its icon alone, titled with what it
+says. Every button on the page says on hover what it does. Beside the Program tab the rail,
 one width (`--rail`), holds the scan and the readouts. The Drive tab splits
 the page instead: on the left, at the page's height, what its controls
 drive, the simulator's view on the simulator target and the scan on the
@@ -488,8 +491,10 @@ choice; it loads in `<head>`, so the page is drawn in that look from the
 first paint, and paints the browser's bar (`theme-color`) then too. The
 popover is not modal: Stop stays one press while it is open. On an upright
 phone under 440 px, and on a phone on its side, the mode pill gives way to
-the gear; on a wide screen it gives way to the Autonomous toggle, except on
-the simulator target, where the toggle shows the simulator's mode. What takes a colour as
+the gear; on a wide screen it gives way to the Autonomous toggle. On the
+simulator target, where the toggle shows the simulator's mode, the pill
+keeps the rover's on every layout, in the motors pill's place on those
+phones. What takes a colour as
 a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
 it again on a change, through `lookToken()`; everything else follows
 through `var()`. A new colour is a token in every look, never a literal:
@@ -517,9 +522,10 @@ gamepad.
 **The Autonomous toggle** (`js/autotoggle.js`) is on while the target
 explores, as telemetry reports it (the simulator's mode on the simulator
 target, `AutoToggle.bind()`), never as asked. A press turns it the other
-way through the Driver: off sends RESUME_AUTONOMOUS
-(`Driver.resumeAutonomous()`), on sends STOP (`Driver.stopRover()`), each
-a press that lets go of everything held and stops a program. Until a frame
+way through the Driver: pressed while off it sends RESUME_AUTONOMOUS
+(`Driver.resumeAutonomous()`), pressed while on STOP (`Driver.stopRover()`,
+whose stand-down names Autonomous, not Stop, as what was pressed), each a
+press that lets go of everything held and stops a program. Until a frame
 names the mode it is off, so a press resumes, as the button it replaced
 did. A halted rover still reports AUTONOMOUS, so off and on again retries
 it at once.

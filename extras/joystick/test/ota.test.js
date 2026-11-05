@@ -245,7 +245,7 @@ test("Update stays off, saying why, until the link is up, the rover reports its 
   ws.serverMsg(telemetry({ firmware: RUNNING }));
   assert.equal(status(page).textContent, "", "and gone with the old firmware");
   assert.equal(page.$("firmwareBuild").textContent, RUNNING.slice(0, 8));
-  assert.ok(!start(page).disabled && start(page).title === "", start(page).title);
+  assert.ok(!start(page).disabled && /^Send the file to the rover/.test(start(page).title), start(page).title);
   assert.ok(cancel(page).disabled && cancel(page).title === "No update to cancel.");
   assert.ok(progress(page).hidden, "no bar before an update");
 

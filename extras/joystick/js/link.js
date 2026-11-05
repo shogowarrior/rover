@@ -9,9 +9,11 @@
  *     host        the address field (host or host:port); Enter connects,
  *                 and leaves the field, so the keyboard's Space and T (keys.js)
  *                 stop and explore rather than type into it;
- *     connect     the Connect / Cancel / Disconnect button;
+ *     connect     the Connect / Cancel / Disconnect button, titled with what
+ *                 a press does;
  *     linkPill    the header's link pill, titled with the state in full:
- *                 a wide screen's header shows its lamp alone;
+ *                 up to 1280 px wide a wide screen's header shows its icon
+ *                 alone;
  *     linkState   the state's label, in it; note: the status line;
  *     storageKey  where the address is remembered.
  *
@@ -54,6 +56,13 @@ class Link {
     connecting: "Connecting to the rover.",
     up: "Linked: the rover's telemetry is arriving.",
     stale: "No data: the rover's telemetry has stopped.",
+  });
+  // What a press of the Connect button does, in each state.
+  static CONNECT_TITLE = Object.freeze({
+    down: "Connect to the rover at this address (Enter in the address does too).",
+    connecting: "Cancel: stop trying to reach the rover.",
+    up: "Disconnect: stop what this panel drives and close the link. A rover exploring keeps exploring: press Stop for that.",
+    stale: "Disconnect: stop what this panel drives and close the link. A rover exploring keeps exploring: press Stop for that.",
   });
 
   #ui;
@@ -201,6 +210,7 @@ class Link {
     linkPill.title = Link.TITLE[state];
     connect.textContent =
       state === "down" ? "Connect" : state === "connecting" ? "Cancel" : "Disconnect";
+    connect.title = Link.CONNECT_TITLE[state];
     this.#stateListeners.emit(state, cause);
   }
 

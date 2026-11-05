@@ -266,15 +266,20 @@ PR, panel only (features.md, F3i and F3j):
   most 45% of the screen), the dock with the readouts on one line under it;
 - the header is one 44 px row beside both tabs: the mark, the Autonomous
   toggle, the status pills, the tabs, the scheme and the target as icons
-  with hover hints, the note (two lines at most), the address, and Stop, a
-  red icon, beside the gear; there is no foot bar on a wide screen;
+  with hover hints, the address, the note (two lines at most), and Stop, a
+  red icon, beside the gear, with the note, not Disconnect, beside Stop;
+  there is no foot bar on a wide screen;
+- every button on the page has a hover hint saying what it does;
 - Autonomous is a toggle on every layout (`js/autotoggle.js`): on while the
   target explores, a press turns it off (STOP) or on (RESUME_AUTONOMOUS);
+  on the simulator target it shows the simulator's mode, and the mode pill
+  keeps the rover's, on a phone in the motors pill's place;
 - the Program tab gains the header's and the foot bar's height, and every
-  phone layout is as it was. The view's room is about 60% wider than on
-  main at laptop sizes (600 x 450 at 1280 x 800, from 296 x 222); below
-  1180 px wide the sticks are smaller (194 px at 1024 x 768, from 282), and
-  above it larger (252 at 1280 x 800, from 202).
+  phone layout is as it was but for that pill. The view's room is twice as
+  wide as on main at 1280 x 800 (600 x 450, from 296 x 222) and about 60%
+  wider at 1366 x 657 (542 x 407, from 344 x 258); below 1180 px wide the
+  sticks are smaller (194 px at 1024 x 768, from 282), and above it larger
+  (252 at 1280 x 800, from 202).
 
 ## Current work
 
@@ -338,12 +343,6 @@ and the next thread's task names that branch.
 - F5's checks for the owner, which need a real screen: features.md, F5,
   lists them, and what it left as it was (Blockly's focus colours, its
   faint zoom and trash icons).
-- The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. A later header change (F1 moved the Rover |
-  Simulator switch into the header) can give it the header's right end.
-  Moving it means updating the panel test that pins it to the masthead's
-  end, and keeping it within `--tap-lg` of the top, which the popover's
-  height cap assumes.
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
   traceback, and no committed stand-in rover.

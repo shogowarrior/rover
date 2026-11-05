@@ -3048,7 +3048,7 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's Stop, link loss and a stale link each stop it", async () => {
+test("program: a manual press, blur, a hidden page, Stop, Autonomous either way, the tab's Stop, link loss and a stale link each stop it", async () => {
   const cases = [
     // [what, act, the reason, what goes out after it]
     ["a rotate press", (page) => press(page, page.$("ccw"), 3), /^the rover was driven by hand\.$/, "ROTATE_COUNTERCLOCKWISE"],
@@ -3057,6 +3057,9 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
     ["a hidden page", (page) => { page.doc.hidden = true; page.fire(page.doc, "visibilitychange", { bubbles: false }); }, /hidden/, "STOP"],
     ["Stop", (page) => page.fire(page.$("stop"), "click"), /^Stop was pressed\.$/, "STOP"],
     ["Autonomous", (page) => page.fire(page.$("auto"), "click"), /^Autonomous was pressed\.$/, "RESUME_AUTONOMOUS"],
+    // Turned off, lit by a rover reported exploring: STOP, and the console
+    // names the toggle, not Stop.
+    ["Autonomous, lit", (page, ws) => { ws.serverMsg(telemetry({ mode: "AUTONOMOUS" })); page.fire(page.$("auto"), "click"); }, /^Autonomous was pressed\.$/, "STOP"],
     ["the tab's Stop", (page) => page.fire(page.$("programStop"), "click"), /Program tab/, "STOP"],
     ["link loss", (page, ws) => ws.serverDrop(), /link to the rover was lost/, ""],
     ["Disconnect", (page) => page.fire(page.$("connect"), "click"), /disconnected/, "STOP"],
@@ -3567,7 +3570,7 @@ test("program: an item that asks leaves the focus on the File button once answer
   // Mid-run, the items that would change the editor say so; an empty
   // editor has nothing to clear.
   const titles = () => [...exampleItems(page), page.$("programImport"), page.$("programClear")].map((b) => `${b.disabled ? "off" : "on"}:${b.title}`);
-  check(titles().join("|") === "on:|on:|on:|on:|on:Open a program saved with Export|on:Remove every block", `idle: ${titles()}`);
+  check(titles().join("|") === "on:Load this example into the editor|".repeat(4) + "on:Open a program saved with Export|on:Remove every block", `idle: ${titles()}`);
   startProgram(page, "await api.wait(5);");
   await flush();
   check(titles().every((t) => t === "off:Stop the program first"), `mid-run: ${titles()}`);
@@ -3610,8 +3613,10 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
 
 // The wide layout's header is one row beside both tabs (F3j, the owner's
 // ask: it had taken two, and Stop and Autonomous a bar across the foot):
-// the mark, Autonomous, the status, the three switches as icons, the note,
-// the address, and Stop beside the gear. Beside the Program tab the rail
+// the mark, Autonomous, the status, the three switches as icons, the
+// address, the note, and Stop beside the gear. The note, which takes no
+// press, is Stop's neighbour: Disconnect there left an exploring rover
+// exploring, and the panel no link to stop it. Beside the Program tab the rail
 // is a column, the scan and the readouts, one width from the viewport
 // alone; the Drive tab is split for the simulator's view (F3i, the next
 // test). Layout itself is measured in a browser; this holds the shape.
@@ -3634,9 +3639,9 @@ test("wide: the header one row, Stop beside the gear and Autonomous at the other
   // One row, a touch target tall, its parts in their columns.
   const bar = body(".bar");
   check(/grid-template-rows:\s*var\(--tap\);/.test(bar), `one row, 44 px: ${bar}`);
-  check(areas(bar).join(" ") === '"mark auto status switches note link stop gear"', `the row's order: ${areas(bar)}`);
-  check(/grid-template-columns:\s*var\(--mark\) var\(--tap\) auto auto minmax\(0, 1fr\) auto var\(--stop-w\) var\(--pill-h\);/.test(bar),
-    `Autonomous's and Stop's places their own widths, the note what is left: ${bar}`);
+  check(areas(bar).join(" ") === '"mark auto status switches link note stop gear"', `the row's order: ${areas(bar)}`);
+  check(/grid-template-columns:\s*var\(--mark\) var\(--tap\) auto auto auto minmax\(var\(--s-6\), 1fr\) var\(--stop-w\) var\(--pill-h\);/.test(bar),
+    `Autonomous's and Stop's places their own widths, the note what is left, never under 24 px between Connect and Stop: ${bar}`);
   check(/display:\s*contents;/.test(body(".masthead")), "the masthead's parts are cells of the row");
   for (const [selector, area] of [[".wordmark", "mark"], [".status", "status"], [".switches", "switches"], ["#note", "note"], [".link", "link"], [".masthead > .menuHolder", "gear"]]) {
     check(new RegExp(`grid-area:\\s*${area};`).test(body(selector)), `${selector} in ${area}: ${body(selector)}`);
@@ -3694,6 +3699,41 @@ test("wide: the header one row, Stop beside the gear and Autonomous at the other
   // The scan fills its place beside both tabs: no card sized to its drawing.
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Every button says on hover what it does, the owner's ask with Stop's
+// icon ("all buttons should have that"): the header's icons above all,
+// whose words are shown to a screen reader alone, and every other button
+// on the page, in each state of the link. The question dialog's answers,
+// which say what they do in full, are its own.
+test("every button titled with what it does, in every state of the link", () => {
+  const page = loadPage();
+  const untitled = () => all(page.doc.documentElement)
+    .filter((n) => n.tagName === "BUTTON" && !["askNo", "askYes"].includes(n.id))
+    .filter((n) => !(n.getAttribute("title") || n.title))
+    .map((n) => n.id || n.dataset.family || n.dataset.target || n.dataset.scheme || n.textContent);
+  check(untitled().length === 0, `untitled with no link: ${untitled()}`);
+  const ws = connectOpen(page);
+  check(untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled with a link: ${untitled()}, connect '${page.$("connect").title}'`);
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS", scheme: "ADVANCED" }));
+  check(untitled().length === 0, `untitled with telemetry: ${untitled()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// On a phone the mode pill gives way to the Autonomous toggle at the foot,
+// lit while the rover explores. On the simulator target the toggle shows
+// the simulated rover's mode, so there the pill keeps the rover's, in the
+// motors pill's place: nothing else said a rover sent exploring before the
+// switch was still moving by itself.
+test("phones: on the simulator target the mode pill keeps the rover's mode, in the motors pill's place", () => {
+  for (const opening of ["@media (max-width: 439.98px) {", LANDSCAPE_PHONE]) {
+    const rules = mediaRules(opening) || [];
+    const hides = (pill) => rules.filter((r) => /display:\s*none;/.test(r.body))
+      .flatMap((r) => r.selector.split(",").map((x) => x.trim().replace(/\s+/g, " ")))
+      .filter((selector) => selector.endsWith(pill));
+    check(hides(".modePill").join() === 'body:not([data-target="simulator"]) .modePill', `${opening} the mode pill hidden off the simulator target alone: ${hides(".modePill")}`);
+    check(hides(".motorsPill").join() === 'body[data-target="simulator"] .motorsPill', `${opening} the motors pill on it alone: ${hides(".motorsPill")}`);
+  }
 });
 
 // The Drive tab's view of the simulator (F1) sits beside the dock, never

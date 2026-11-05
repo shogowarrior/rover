@@ -57,6 +57,10 @@ class ProgramTab {
   // What the File menu's items do, and why one cannot now (F3f: disabled,
   // with a title that says why).
   static TITLES = Object.freeze({
+    menu: "The examples, Import, Export and Clear",
+    example: "Load this example into the editor",
+    run: { rover: "Run the program on the rover", simulator: "Preview the program on the simulator" },
+    fold: { open: "Fold the simulator's view away", folded: "Show the simulator's view" },
     import: "Open a program saved with Export",
     clear: "Remove every block",
     busy: "Stop the program first",
@@ -164,6 +168,7 @@ class ProgramTab {
 
   #expandSim(open) {
     this.#ui.simToggle.setAttribute("aria-expanded", String(open));
+    this.#ui.simToggle.title = ProgramTab.TITLES.fold[open ? "open" : "folded"];
     this.#ui.simPane.dataset.collapsed = open ? "no" : "yes";
   }
 
@@ -330,7 +335,7 @@ class ProgramTab {
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;
     ui.run.disabled = !editor || empty || !idle || !readiness.ok;
-    ui.run.title = !editor ? this.#editorWhy : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : "";
+    ui.run.title = !editor ? this.#editorWhy : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : ProgramTab.TITLES.run[kind] || "";
     ui.stop.disabled = state !== "running";
 
     // Without an editor no item can act, so neither can the menu. With one,
@@ -339,10 +344,10 @@ class ProgramTab {
     const canEdit = this.#canEdit();
     const busy = canEdit ? "" : titles.busy;
     ui.menu.disabled = !editor;
-    ui.menu.title = editor ? "" : this.#editorWhy;
+    ui.menu.title = editor ? titles.menu : this.#editorWhy;
     for (const item of this.#exampleItems) {
       item.disabled = !canEdit;
-      item.title = busy;
+      item.title = busy || titles.example;
     }
     ui.importButton.disabled = !canEdit;
     ui.importButton.title = busy || titles.import;

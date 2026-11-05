@@ -814,8 +814,9 @@ input[type="range"]::-moz-range-thumb {
 /* A pill gives way before it overflows: what it says is cut short, never
    drawn over its neighbour or the gear. The layouts size them so it
    seldom is: below 440 px, and on a phone on its side, the mode pill gives
-   way altogether (below), so the longest set there is "Link" and "No motor
-   shield" beside the mark and the gear. */
+   way altogether (below), or on the simulator target the motors pill, so
+   the longest set there is "Link" and "No motor shield" beside the mark
+   and the gear. */
 .pill {
   --pill-x: calc(var(--s-1) + var(--s-0));
   display: inline-flex;
@@ -866,11 +867,16 @@ body[data-link="down"] :is(.modePill, .motorsPill),
 body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 
 /* An upright phone's row also holds the gear, and three pills beside it
-   ran out of room: the mode pill gives way to the Autonomous button at the
+   ran out of room: the mode pill gives way to the Autonomous toggle at the
    foot, lit while the rover explores, as it does on a phone on its side
-   (see that layout). */
+   (see that layout). On the simulator target the toggle shows the
+   simulated rover's mode, so the pill keeps the rover's, and the motors
+   pill gives way instead: the rover's motors drive nothing there, and a
+   fault still shows as its strip. Nothing else said a rover started
+   exploring before the switch was still moving by itself. */
 @media (max-width: 439.98px) {
-  .modePill { display: none; }
+  body:not([data-target="simulator"]) .modePill,
+  body[data-target="simulator"] .motorsPill { display: none; }
 }
 
 /* readouts.js reports "MANUAL" and "AUTONOMOUS"; the pill says them in
@@ -1745,18 +1751,21 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
      Stop and Autonomous a bar across the foot. From the left: the mark;
      Autonomous's place, its toggle showing the mode beside the link's; the
      status; the tabs, the scheme and the target, each segment an icon with
-     its hint on hover; the note, in what the row leaves; the address; and
+     its hint on hover; the address; the note, in what the row leaves; and
      Stop's place, beside the gear at the far end. Stop and Autonomous are
      the rail's (joystick.html says why), and are drawn into their places
      from there (below): at the two ends of the row, so a hand reaching for
-     Stop cannot start the rover exploring. Every part keeps to the row, as
-     tall as a touch target, so nothing it says, or the target or the link
-     changes, moves anything under it. */
+     Stop cannot start the rover exploring. Nor land on Disconnect, which
+     leaves an exploring rover exploring and the panel no link to stop it:
+     the note, which takes no press, is Stop's neighbour, never narrower
+     than 24 px. Every part keeps to the row, as tall as a
+     touch target, so nothing it says, or the target or the link changes,
+     moves anything under it. */
   .bar {
     display: grid;
-    grid-template-columns: var(--mark) var(--tap) auto auto minmax(0, 1fr) auto var(--stop-w) var(--pill-h);
+    grid-template-columns: var(--mark) var(--tap) auto auto auto minmax(var(--s-6), 1fr) var(--stop-w) var(--pill-h);
     grid-template-rows: var(--tap);
-    grid-template-areas: "mark auto status switches note link stop gear";
+    grid-template-areas: "mark auto status switches link note stop gear";
     align-items: center;
     column-gap: var(--head-gap);
     margin-bottom: var(--s-4);
@@ -2183,8 +2192,11 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
   /* The header's column also holds the gear, and the mode pill beside the
      other two wrapped the status to a second row: it gives way to the
-     Autonomous button, lit while the rover explores. */
-  .modePill { display: none; }
+     Autonomous toggle, lit while the rover explores, except on the
+     simulator target, where the motors pill gives way instead (see the
+     upright phone's). */
+  body:not([data-target="simulator"]) .modePill,
+  body[data-target="simulator"] .motorsPill { display: none; }
 
   .status { flex-wrap: wrap; }
 

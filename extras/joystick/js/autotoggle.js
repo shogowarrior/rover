@@ -1,10 +1,13 @@
 /**
- * The Autonomous toggle, beside Stop: on while the target explores, off
+ * The Autonomous toggle: beside Stop on a phone, at the other end of the
+ * header's row from it on a wide screen. On while the target explores, off
  * while it waits for the controls. A press turns it the other way, through
- * the Driver: on sends RESUME_AUTONOMOUS (Driver.resumeAutonomous()), off
- * sends STOP (Driver.stopRover()), and each does all that the Driver's own
- * does. Both are presses: they take over from what the panel holds, and a
- * program stops (app.js).
+ * the Driver: turned on it sends RESUME_AUTONOMOUS
+ * (Driver.resumeAutonomous()), turned off STOP (Driver.stopRover(), with
+ * the reason "autonomous", so a program it stops says Autonomous was
+ * pressed, not Stop), and each does all that the Driver's own does. Both
+ * are presses: they take over from what the panel holds, and a program
+ * stops (app.js).
  *
  * Like the scheme toggle, it shows what the target reports, never what it
  * asked for: the rover's mode as telemetry last reported it, or on the
@@ -71,7 +74,7 @@ class AutoToggle {
   // Rendered again at once for the simulator, whose mode changes as it
   // takes the command; the rover's comes with its next frame.
   #press() {
-    if (this.on) this.#driver.stopRover();
+    if (this.on) this.#driver.stopRover({ reason: "autonomous" });
     else this.#driver.resumeAutonomous();
     this.#render();
   }

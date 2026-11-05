@@ -42,8 +42,8 @@
  */
 class FamilySelector {
   static OPTIONS = Object.freeze([
-    Object.freeze({ family: FAMILY_PIVOT, label: "Pivot" }),
-    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways" }),
+    Object.freeze({ family: FAMILY_PIVOT, label: "Pivot", title: "Pivot: the right stick turns the rover about the wheels on one side (L1 on the pad)." }),
+    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways", title: "Pivot sideways: the right stick swings the front or the rear about the other axle (R1 on the pad)." }),
   ]);
 
   // Each family's icon, as an SVG path in a 16-unit box, drawn for the
@@ -100,9 +100,10 @@ class FamilySelector {
   constructor({ choice, group, pad, label, hints, note }) {
     this.#ui = { group, pad, label, note };
 
-    for (const { family, label: name } of FamilySelector.OPTIONS) {
+    for (const { family, label: name, title } of FamilySelector.OPTIONS) {
       const button = segment(choice, () => this.#choose(family));
       button.dataset.family = family;
+      button.title = title;
       button.appendChild(FamilySelector.#icon(family, 1, 1).svg);
       dom.html("span", { class: "name" }, button, name);
       this.#buttons.set(family, button);
