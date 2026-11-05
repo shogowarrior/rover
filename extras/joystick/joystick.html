@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Drive the mecanum rover and watch its ultrasonic scan">
-  <meta name="theme-color" content="#0b0d11">
+  <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="css/looks.css">
   <link rel="stylesheet" href="css/panel.css">
   <link rel="stylesheet" href="css/program.css">
@@ -54,8 +54,8 @@
           </span>
         </div>
 
-        <!-- Options, under the gear: the page's look, which look.js fills in
-             and remembers, the keys, which keys.js lists, and a firmware
+        <!-- Options, under the gear: the page's look, Dark or Light and a
+             theme, which look.js fills in and remembers, the keys, which keys.js lists, and a firmware
              update over the link, which firmware.js runs. popover.js opens
              and closes it. It is not modal, and not a dialog: nothing behind
              it is made inert and nothing holds the focus, so Stop stays one
@@ -69,6 +69,7 @@
           </button>
           <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" data-keys="own" hidden>
             <h2 class="menuLabel" id="lookLabel">Theme</h2>
+            <div class="segmented flavours" id="flavourChoice" role="group" aria-label="Dark or light"></div>
             <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
             <h2 class="menuLabel" id="keysLabel">Keys</h2>
             <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>

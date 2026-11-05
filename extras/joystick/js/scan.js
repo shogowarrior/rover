@@ -51,10 +51,20 @@ class ScanView {
     return R_MIN + (R_MAX - R_MIN) * Math.sqrt(clamp(cm / RANGE_CM, 0, 1));
   }
 
+  // Where a reading falls: inside STOP, closing in, or a clear way.
+  static zoneFor(cm) {
+    if (cm <= STOP_CM) return "stop";
+    if (cm <= GO_CM) return "warn";
+    return "clear";
+  }
+
+  // Each zone's colour, as an echo's wedge is filled. A clear one's body
+  // is drawn in --ok-body by css/panel.css, by its data-zone, over this:
+  // the attribute is what an unstyled page shows.
+  static #ZONE_COLOURS = Object.freeze({ stop: "var(--stop)", warn: "var(--warn)", clear: "var(--ok)" });
+
   static colorFor(cm) {
-    if (cm <= STOP_CM) return "var(--stop)";
-    if (cm <= GO_CM) return "var(--warn)";
-    return "var(--live)";
+    return ScanView.#ZONE_COLOURS[ScanView.zoneFor(cm)];
   }
 
   #svg;
@@ -127,7 +137,7 @@ class ScanView {
       dom.svg("text", { class: "tick", ...at, y: (y - 10).toFixed(1) }, this.#svg, b.label);
     });
 
-    dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--dim)" }, this.#svg);
+    dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--readout)" }, this.#svg);
   }
 
   #showDistance(view, cm) {
@@ -135,20 +145,24 @@ class ScanView {
       // The rover sends no distances until it has measured every bearing once
       // after booting. Clear the wedge rather than leave an old one standing.
       view.wedge.setAttribute("d", "");
+      view.wedge.removeAttribute("data-zone");
       view.reading.textContent = "—";
       return;
     }
 
-    // A no-echo reading is not a measurement. Show it at full reach but faded,
-    // so "nothing came back" never reads as a confirmed clear path. An echo
-    // is drawn whole: the red wedge, at the 0.85 it once was, fell under
-    // 3:1 on the card in Console Dark and Blueprint Dark
+    // A no-echo reading is not a measurement. Show it at full reach in grey,
+    // faded and unedged, so "nothing came back" never takes a clear way's
+    // shape: css/panel.css draws a clear echo open (a faint body inside a
+    // green edge) by its data-zone. Every echo is at opacity 1, and one
+    // closing in or at STOP is solid: the red wedge, at the 0.85 it once
+    // was, fell under 3:1 on the card in Console Dark and Blueprint Dark
     // (test/looks.test.js).
     const noEcho = cm >= FAR_CM;
     const r = noEcho ? ScanView.R_MAX : ScanView.radiusFor(cm);
     view.wedge.setAttribute("d", ScanView.#wedgePath(view.screen, r));
     view.wedge.setAttribute("fill", noEcho ? "var(--dim)" : ScanView.colorFor(cm));
     view.wedge.setAttribute("opacity", noEcho ? "0.4" : "1");
+    view.wedge.setAttribute("data-zone", noEcho ? "none" : ScanView.zoneFor(cm));
     view.reading.textContent = noEcho ? "no echo" : `${Math.round(cm)}cm`;
   }
 

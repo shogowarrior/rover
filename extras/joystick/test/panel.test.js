@@ -601,6 +601,41 @@ test("stick throttle: same move at most every 100 ms, direction change at once",
   check(count(ws) - mark2 === 2 || count(ws) - mark2 === 3, `unchanged stick for 500 ms sent ${count(ws) - mark2}`);
 });
 
+// Green, amber and red come close for red-green colour blindness, so a clear
+// way is told apart by its shape too: open, where closing in and STOP are
+// solid.
+test("the scan draws a clear way open: a faint body inside a green edge", () => {
+  const clear = cssRules(panelCss()).filter((rule) => rule.selector === '.wedge[data-zone="clear"]');
+  check(clear.length === 1, `one rule for it: ${clear.length}`);
+  const opacity = Number((clear[0].body.match(/fill-opacity:\s*([\d.]+)/) || [])[1]);
+  check(opacity > 0 && opacity <= 0.4, `its body faint: ${opacity}`);
+  // In --ok-body, which a look on a blue ground makes yellower than its
+  // --ok, or the mix would be teal (looks.test.js checks every look).
+  check(/(^|[^-])fill:\s*var\(--ok-body\)/.test(clear[0].body), `its body in --ok-body: ${clear[0].body}`);
+  check(/stroke:\s*var\(--ok\)/.test(clear[0].body) && /stroke-width:/.test(clear[0].body), `its edge in green: ${clear[0].body}`);
+  const HISTORY = 'body:not([data-link="up"]) .wedge[data-zone="clear"]';
+  const solid = cssRules(panelCss()).filter((rule) => /\.wedge\b/.test(rule.selector) && ![".wedge[data-zone=\"clear\"]", HISTORY].includes(rule.selector) && /(^|[\s;])(fill-opacity|stroke)\s*:/.test(rule.body));
+  check(solid.length === 0, `nothing else outlines or fades a wedge: ${solid.map((rule) => rule.selector)}`);
+  // A link that goes fades the fan to a quarter: a green that faint over
+  // Blueprint's navy or pale blue mixes to teal, so history's clear way
+  // greys, still open. By its colours: WebKit applies no CSS filter to an
+  // SVG shape.
+  const history = cssRules(panelCss()).filter((rule) => rule.selector === HISTORY);
+  check(history.length === 1 && /(^|[^-])fill:\s*var\(--dim\)/.test(history[0].body) && /stroke:\s*var\(--dim\)/.test(history[0].body) && !/filter/.test(history[0].body),
+    `a stale clear way greyed by its colours: ${history.map((rule) => rule.body)}`);
+  // A zone change eases the body's opacity with its colour, or for a moment
+  // a clear way turning amber is solid green: the shape for closing in.
+  const wedge = cssRules(panelCss()).find((rule) => rule.selector === ".wedge");
+  check(wedge && /transition:[^;]*fill-opacity/.test(wedge.body), `the body's opacity eases: ${wedge && wedge.body}`);
+});
+
+test("look: Blockly's own rules do not outrank the look's ink on a flyout button", () => {
+  // The renderer injects .zelos-renderer.rover-theme .blocklyText (white),
+  // which a plainer selector loses to: white on a light look's button.
+  const rule = cssRules(stylesheet("program.css")).find((r) => /\.blocklyFlyoutButton \.blocklyText$/.test(r.selector));
+  check(rule && rule.selector.startsWith(".zelos-renderer.rover-theme ") && /fill:\s*var\(--readout\)/.test(rule.body), `outranks the renderer: ${rule && rule.selector}`);
+});
+
 test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", () => {
   const { page, ws } = connected(telemetry({ distanceLeft: 20, distanceFrontLeft: 30, distanceFront: 150, distanceFrontRight: 999, distanceRight: 25 }));
   const B = scanBearings(page);
@@ -609,19 +644,23 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(by.distanceLeft.wedge.getAttribute("fill") === "var(--stop)", "20 cm red");
   check(by.distanceRight.wedge.getAttribute("fill") === "var(--stop)", "25 cm (= STOP) red");
   check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--warn)", "30 cm amber");
-  check(by.distanceFront.wedge.getAttribute("fill") === "var(--live)", "150 cm teal");
-  // Drawn whole: looks.test.js audits the wedges at full strength, and the
-  // red one falls under 3:1 in Console Dark and Blueprint Dark at 0.85.
-  check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo drawn whole");
+  check(by.distanceFront.wedge.getAttribute("fill") === "var(--ok)", "150 cm green");
+  // Every echo at opacity 1 (a clear one's body is faded by CSS, its edge
+  // whole): looks.test.js audits the wedges at full strength, and the red
+  // one falls under 3:1 in Console Dark and Blueprint Dark at 0.85.
+  check(["distanceLeft", "distanceFrontLeft", "distanceFront"].every((key) => by[key].wedge.getAttribute("opacity") === "1"), "an echo at full opacity");
   const fr = by.distanceFrontRight;
   check(fr.wedge.getAttribute("fill") === "var(--dim)" && fr.wedge.getAttribute("opacity") === "0.4", "no echo faded");
+  // Each wedge says where it falls, so the clear way can be drawn open.
+  const zones = B.map((b) => b.wedge.getAttribute("data-zone")).join();
+  check(zones === "stop,warn,clear,none,stop", `zones ${zones}`);
   check(fr.wedge.getAttribute("d").includes("A140.0 140.0"), "no echo at full reach");
   check(fr.reading.textContent === "no echo", fr.reading.textContent);
   check(by.distanceLeft.reading.textContent === "20cm", by.distanceLeft.reading.textContent);
   ws.serverMsg(telemetry({ distanceFrontLeft: 40 }));
   check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--warn)", "40 cm (= GO) amber");
   ws.serverMsg(telemetry({ distanceFrontLeft: 41 }));
-  check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--live)", "41 cm teal");
+  check(by.distanceFrontLeft.wedge.getAttribute("fill") === "var(--ok)" && by.distanceFrontLeft.wedge.getAttribute("data-zone") === "clear", "41 cm green, clear");
 
   // Screen placement: the rover's left is the panel's left.
   const firstX = (b) => Number(b.wedge.getAttribute("d").match(/^M([\d.]+)/)[1]);
@@ -631,7 +670,7 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   ws.serverMsg(FRAMES.manualBeforeScan);
   for (const b of B) {
     check(b.wedge.getAttribute("d") === "", `${b.key} cleared`);
-    check(b.reading.textContent === "—", `${b.key} reading cleared`);
+    check(b.reading.textContent === "—" && !b.wedge.hasAttribute("data-zone"), `${b.key} reading and zone cleared`);
   }
   // One key missing only clears that one.
   ws.serverMsg(telemetry({ distanceFront: undefined }));
@@ -4407,19 +4446,33 @@ test("target: one view of the simulator, on the Drive tab while it is driven, he
 
 /* --- the look ------------------------------------------------------------- */
 
-// The page's look (look.js), picked in the Options popover under the gear.
-// Looks of the tests' own, read after css/looks.css, give each a colour the
-// default does not have, whatever the file holds.
+// The page's look (look.js), picked in the Options popover under the gear:
+// a Dark | Light toggle and a tile per theme. Looks of the tests' own, read
+// after css/looks.css, give each a colour the default does not have,
+// whatever the file holds: console-light is the toggle away from the
+// default, blueprint-dark a tile away.
 const TEST_LOOKS = `
-[data-look="field-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; --stick-rim: #054a42; --stick-ring: var(--faint); }
+[data-look="console-light"] { --case: #f4f6f8; --live: #0a6f63; --faint: #a3adb8; --stick-rim: #054a42; --stick-ring: var(--faint); }
 [data-look="blueprint-dark"] { --case: #0b1a33; --live: #3fc9b8; --faint: #34507c; }`;
-const LOOK_IDS = require("../js/look.js").LookPicker.LOOKS.map((look) => look.id);
+const { LOOKS } = require("../js/look.js").LookPicker;
+const DEFAULT_CASE = lookBlocks()[0].declared.get("--case");
 const lookRadios = (page) => page.$("lookChoice").querySelectorAll('input[name="look"]');
-// As the operator picks one: the radio checked, the others not, and its
-// change event.
-function pickLook(page, id) {
-  for (const radio of lookRadios(page)) radio.checked = radio.getAttribute("value") === id;
+const flavourSegments = (page) => page.$("flavourChoice").querySelectorAll("button");
+const checkedTheme = (page) => lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join();
+const pressedFlavour = (page) => flavourSegments(page).filter((button) => button.getAttribute("aria-pressed") === "true").map((button) => button.textContent).join();
+// As the operator picks a theme: its radio checked, the others not, and its
+// change event. A flavour: a click on its segment.
+function pickTheme(page, theme) {
+  for (const radio of lookRadios(page)) radio.checked = radio.getAttribute("value") === theme;
   page.fire(lookRadios(page).find((radio) => radio.checked), "change");
+}
+const pickFlavour = (page, flavour) => page.fire(flavourSegments(page).find((button) => button.textContent === flavour), "click");
+// A look, as the operator gets to it: its theme's tile where that differs,
+// then its flavour's segment where that does.
+function pickLook(page, id) {
+  const look = LOOKS.find((each) => each.id === id);
+  if (checkedTheme(page) !== look.theme.toLowerCase()) pickTheme(page, look.theme.toLowerCase());
+  if (pressedFlavour(page) !== look.flavour) pickFlavour(page, look.flavour);
 }
 const worn = (page) => page.doc.documentElement.getAttribute("data-look");
 const themeColor = (page) => page.doc.querySelector('meta[name="theme-color"]').getAttribute("content");
@@ -4434,33 +4487,136 @@ test("look: each theme a Dark and a Light, each look's id its theme and flavour"
   }
 });
 
-test("look: one tile per look in the gear's popover, a row per theme, the look in force checked", () => {
+test("look: Dark | Light and a tile per theme in the gear's popover, the look in force shown", () => {
   const page = loadPage();
+  const flavours = page.$("flavourChoice");
+  check(flavours.getAttribute("role") === "group" && flavours.getAttribute("aria-label") === "Dark or light", "a group named Dark or light");
+  check((flavours.getAttribute("class") || "").split(/\s+/).includes("segmented"), "drawn as the page's other switches are");
+  check(flavourSegments(page).map((button) => button.textContent).join() === "Dark,Light", `segments ${flavourSegments(page).map((button) => button.textContent)}`);
+  check(flavourSegments(page).every((button) => button.getAttribute("type") === "button"), "buttons that submit nothing");
+  check(pressedFlavour(page) === "Dark", `pressed ${pressedFlavour(page)}`);
+
   const group = page.$("lookChoice");
   check(group.getAttribute("role") === "radiogroup" && page.$(group.getAttribute("aria-labelledby")).textContent === "Theme", "a radiogroup named Theme");
-  const rows = group.children;
-  check(rows.map((row) => row.children[0].textContent).join() === "Console,Field,Blueprint", `rows ${rows.map((row) => row.children[0].textContent)}`);
-  check(rows.every((row) => row.children[0].getAttribute("aria-hidden") === "true"), "a row's name is for the eye: each tile says its theme");
-  const tiles = rows.flatMap((row) => row.children.slice(1));
-  check(tiles.length === 6 && tiles.every((tile) => tile.tagName === "LABEL"), `six tiles, each a label: ${tiles.length}`);
-  const words = (n) => all(n).map((m) => m.textContent).join("");
-  check(tiles.map(words).join() === "Console Dark,Console Light,Field Dark,Field Light,Blueprint Dark,Blueprint Light", `names ${tiles.map(words)}`);
+  const tiles = group.children;
+  check(tiles.length === 3 && tiles.every((tile) => tile.tagName === "LABEL"), `three tiles, each a label: ${tiles.length}`);
+  const words = (n) => all(n).filter((m) => m.children.length === 0).map((m) => m.textContent).join("");
+  check(tiles.map(words).join() === "Console,Field,Blueprint", `names ${tiles.map(words)}`);
   tiles.forEach((tile, i) => {
+    const theme = ["console", "field", "blueprint"][i];
     const [radio] = tile.querySelectorAll("input");
-    check(radio && radio.getAttribute("type") === "radio" && radio.getAttribute("name") === "look" && radio.getAttribute("value") === LOOK_IDS[i], `tile ${i}: a radio for ${LOOK_IDS[i]}`);
+    check(radio && radio.getAttribute("type") === "radio" && radio.getAttribute("name") === "look" && radio.getAttribute("value") === theme, `tile ${i}: a radio for ${theme}`);
     const swatches = tile.querySelectorAll(".lookSwatch");
-    check(swatches.length === 1 && swatches[0].getAttribute("data-look") === LOOK_IDS[i], `tile ${i}: previewed in ${LOOK_IDS[i]}'s own tokens`);
+    check(swatches.length === 1 && swatches[0].getAttribute("data-look") === `${theme}-dark`, `tile ${i}: previewed in ${theme}-dark's own tokens`);
     check(swatches[0] && swatches[0].parentNode.getAttribute("aria-hidden") === "true", `tile ${i}: the preview is for the eye`);
   });
-  check(lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join() === "console-dark", "the default checked");
+  check(checkedTheme(page) === "console", `the default checked: ${checkedTheme(page)}`);
   check(worn(page) === "console-dark", `html wears ${worn(page)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The owner's ask: Dark or Light as a toggle, apart from the theme.
+test("look: the toggle keeps the theme, a tile keeps the flavour, and the tiles preview the flavour in force", () => {
+  const { page, ws } = connected(telemetry(), { stored: { "rover.look": "blueprint-dark" } }); // exploring: any frame would take control
+  page.evalIn("globalThis.__picked = []; lookPicker.onChange((id) => __picked.push(id));");
+  const swatchLooks = () => page.$("lookChoice").querySelectorAll(".lookSwatch").map((swatch) => swatch.getAttribute("data-look")).join();
+  check(checkedTheme(page) === "blueprint" && pressedFlavour(page) === "Dark", `shows ${checkedTheme(page)}, ${pressedFlavour(page)}`);
+
+  pickFlavour(page, "Light");
+  check(worn(page) === "blueprint-light" && page.store["rover.look"] === "blueprint-light", `Light: wears ${worn(page)}, remembered ${page.store["rover.look"]}`);
+  check(checkedTheme(page) === "blueprint" && pressedFlavour(page) === "Light", `Light: shows ${checkedTheme(page)}, ${pressedFlavour(page)}`);
+  check(swatchLooks() === "console-light,field-light,blueprint-light", `Light: the tiles in ${swatchLooks()}`);
+
+  pickTheme(page, "field");
+  check(worn(page) === "field-light" && page.store["rover.look"] === "field-light", `Field: wears ${worn(page)}, remembered ${page.store["rover.look"]}`);
+  check(pressedFlavour(page) === "Light" && swatchLooks() === "console-light,field-light,blueprint-light", `Field: ${pressedFlavour(page)}, ${swatchLooks()}`);
+
+  pickFlavour(page, "Dark");
+  check(worn(page) === "field-dark" && checkedTheme(page) === "field", `Dark: wears ${worn(page)}, shows ${checkedTheme(page)}`);
+  check(swatchLooks() === "console-dark,field-dark,blueprint-dark", `Dark: the tiles in ${swatchLooks()}`);
+
+  // A press on the flavour in force changes nothing, and says so to no one.
+  pickFlavour(page, "Dark");
+  check(page.evalIn("__picked.join()") === "blueprint-light,field-light,field-dark", `heard ${page.evalIn("__picked.join()")}`);
+  page.clock.advance(2000);
+  check(count(ws) === 0, `sent ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The chosen segment is inverted: the ink as its fill. Its word in the ink
+// as well, as a stale scheme's and an off family's once were, vanishes.
+test("look: whatever is filled in --chosen is written in --on-chosen", () => {
+  const sheets = ["panel.css", "program.css", "sim.css"];
+  const chosen = sheets.flatMap((file) => cssRules(stylesheet(file)).filter((rule) => /background:\s*var\(--chosen\)/.test(rule.body)));
+  check(chosen.length > 0, "found the chosen segment's rule");
+  const unlike = chosen.filter((rule) => !/(^|[^-])color:\s*var\(--on-chosen\)/.test(rule.body));
+  check(unlike.length === 0, `written otherwise: ${unlike.map((rule) => rule.selector)}`);
+  // A disabled segment is unlit but for the one in force (a stale scheme,
+  // the family under NORMAL), which keeps its chip whatever disables it.
+  const unlit = cssRules(panelCss()).filter((rule) => /\.segmented button:disabled/.test(rule.selector) && /background:\s*none/.test(rule.body));
+  check(unlit.length === 1 && unlit[0].selector === '.segmented button:disabled:not([aria-pressed="true"])', `the segment in force kept inverted while disabled: ${unlit.map((rule) => rule.selector)}`);
+});
+
+test("look: the chosen block category is ringed in the ink, not tinted in its colour", () => {
+  // Its own colour as a ring fell under 2:1 in the dark looks, and as a
+  // tint over Blueprint's blue it mixed to teal. --readout on --raised-hi
+  // is audited (looks.test.js).
+  const rule = cssRules(stylesheet("program.css")).find((r) => r.selector === ".blocklyToolboxCategory.roverCategory.blocklyToolboxSelected");
+  check(rule && /background:\s*var\(--raised-hi\)/.test(rule.body) && /box-shadow:\s*inset 0 0 0 2px var\(--readout\)/.test(rule.body), `ringed in the ink: ${rule && rule.body}`);
+});
+
+test("look: what else marks the chosen chip is drawn in its ink, not in blue or green", () => {
+  // Blue on the chip fell to 1.9:1 (Blueprint Dark), green to under 3:1.
+  const rule = (file, selector) => (cssRules(stylesheet(file)).find((r) => r.selector === selector) || {}).body || "";
+  const pending = rule("panel.css", '.segmented button[aria-pressed="true"][data-pending="yes"]');
+  check(/(^|[^-])color:\s*var\(--on-chosen\)/.test(pending) && /outline-color:\s*var\(--on-chosen\)/.test(pending),
+    `a chosen scheme also asked for: its word and frame in --on-chosen: ${pending}`);
+  const dot = rule("program.css", '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
+  check(/background:\s*var\(--on-chosen\)/.test(dot), `the open Program tab's running dot in --on-chosen: ${dot}`);
+});
+
+test("look: a disabled Run keeps the edge its filled state drops", () => {
+  const rule = (selector) => (cssRules(stylesheet("program.css")).find((r) => r.selector === selector) || {}).body || "";
+  check(/border-color:\s*transparent/.test(rule(".programBar .run")), "Run, filled, drops its edge");
+  check(/border-color:\s*var\(--edge\)/.test(rule(".programBar .run:disabled")), "disabled, unfilled, it is edged as every other control");
+});
+
+test("look: on a phone on its side the all-well pills keep their green lamp, the only colour they have", () => {
+  // The block drops the pills' lamps to keep "No link" whole at 480 x 320;
+  // a tinted pill's colour shows without one, an all-well pill's does not.
+  const block = blockRules(panelCss(), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
+  check(block.some((r) => r.selector === ".pill > .lamp" && /display:\s*none/.test(r.body)), "the lamps dropped there");
+  const keeps = (selector) => block.find((r) => r.selector.split(",").map((each) => each.trim()).includes(selector) && /display:\s*block/.test(r.body));
+  const link = keeps('body[data-link="up"] .linkPill > .lamp');
+  check(link, "Link's lamp kept while the link is up");
+  check(keeps('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), "Motors OK's lamp kept");
+  // A browser without :has() drops a whole selector list that holds one.
+  check(link && !/:has\(/.test(link.selector), `Link's lamp in a rule with no :has(): ${link && link.selector}`);
+});
+
+test("look: the chosen segment's word stays on its chip, the only ground its ink reads on, at the narrowest layouts", () => {
+  // Measured headless: at 320 px upright "Advanced" at --t-md ran past its
+  // chip, and on a phone on its side under about 570 px "sideways" at
+  // --t-sm; the part past the chip lay on its frame in --on-chosen.
+  const narrow = mediaRules("@media (max-width: 359.98px) {") || [];
+  const smaller = narrow.find((r) => /font-size:\s*var\(--t-sm\)/.test(r.body));
+  const selectors = smaller ? smaller.selector.split(",").map((each) => each.trim()) : [];
+  check(selectors.includes('.tabs [role="tab"]') && selectors.includes(".segmented button"), `the tabs and every switch a size down under 360 px: ${selectors}`);
+  const side = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
+  check(side.some((r) => r.selector === ".family .segmented button" && /font-size:\s*var\(--t-xs\)/.test(r.body)), "the family's words a size down on a narrow phone on its side");
+});
+
+test("look: on an upright phone the open Program tab's running dot sits in its chip's corner, not past the word", () => {
+  const phone = blockRules(stylesheet("program.css"), "@media (max-width: 439.98px) {") || [];
+  const dot = phone.find((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
+  check(dot && /position:\s*absolute/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
+  check(phone.some((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]' && /position:\s*relative/.test(r.body)), "placed by its own tab");
 });
 
 test("look: a tile's preview is painted only in the tokens every look declares for it", () => {
   // css/looks.css gives each look these, and the preview shows the look by
   // them alone; anything else would show the page's look, not the tile's.
-  const PREVIEW = ["--case", "--panel", "--raised", "--rule", "--readout", "--dim", "--live", "--on-live", "--warn", "--stop", "--on-stop"];
+  const PREVIEW = ["--case", "--panel", "--raised", "--rule", "--readout", "--dim", "--live", "--on-live", "--ok", "--warn", "--stop", "--on-stop"];
   const rules = cssRules(panelCss()).filter((rule) => /\.look(Swatch|Card|Text|Lamps|Lamp|Foot|Go|Stop)\b/.test(rule.selector));
   check(rules.length >= 8, `found the preview's rules: ${rules.length}`);
   const tokens = rules.flatMap((rule) => [...rule.body.matchAll(/var\((--[\w-]+)\)/g)].map(([, token]) => token));
@@ -4481,7 +4637,7 @@ test("look: a remembered look is on <html> from the start; an unknown one, or st
 
   const page = loadPage({ stored: { "rover.look": "blueprint-dark" }, looks: TEST_LOOKS });
   check(worn(page) === "blueprint-dark", `wears ${worn(page)}`);
-  check(lookRadios(page).filter((radio) => radio.checked).map((radio) => radio.getAttribute("value")).join() === "blueprint-dark", "its tile checked");
+  check(checkedTheme(page) === "blueprint" && pressedFlavour(page) === "Dark", `its tile checked, its flavour pressed: ${checkedTheme(page)}, ${pressedFlavour(page)}`);
   check(page.headThemeColor === "#0b1a33" && themeColor(page) === "#0b1a33", `the browser's bar in its --case from <head>: ${page.headThemeColor}, then ${themeColor(page)}`);
   check(page.joyParameters.internalFillColor === "#3fc9b8", `the knob in its --live: ${page.joyParameters.internalFillColor}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -4489,8 +4645,8 @@ test("look: a remembered look is on <html> from the start; an unknown one, or st
   for (const options of [{ stored: { "rover.look": "neon" } }, { stored: { "rover.look": "" } }, { storage: "throws" }, { storage: "null" }]) {
     const fallback = loadPage(options);
     check(worn(fallback) === "console-dark", `${JSON.stringify(options)}: wears ${worn(fallback)}`);
-    check(lookRadios(fallback).filter((radio) => radio.checked).length === 1, `${JSON.stringify(options)}: one tile checked`);
-    check(themeColor(fallback) === "#0b0d11", `${JSON.stringify(options)}: the bar ${themeColor(fallback)}`);
+    check(checkedTheme(fallback) === "console" && pressedFlavour(fallback) === "Dark", `${JSON.stringify(options)}: shows ${checkedTheme(fallback)}, ${pressedFlavour(fallback)}`);
+    check(themeColor(fallback) === DEFAULT_CASE, `${JSON.stringify(options)}: the bar ${themeColor(fallback)}`);
     check(fallback.errors.length === 0, `${JSON.stringify(options)}: errors ${fallback.errors}`);
   }
 });
@@ -4498,13 +4654,13 @@ test("look: a remembered look is on <html> from the start; an unknown one, or st
 test("look: picking one puts it on <html>, remembers it, repaints the browser's bar, and sends nothing", () => {
   const { page, ws } = connected(telemetry(), { looks: TEST_LOOKS }); // exploring: any frame would take control
   page.evalIn("globalThis.__picked = []; lookPicker.onChange((id) => __picked.push(id));");
-  pickLook(page, "field-light");
-  check(worn(page) === "field-light", `wears ${worn(page)}`);
-  check(page.store["rover.look"] === "field-light", `remembered ${page.store["rover.look"]}`);
+  pickLook(page, "console-light");
+  check(worn(page) === "console-light", `wears ${worn(page)}`);
+  check(page.store["rover.look"] === "console-light", `remembered ${page.store["rover.look"]}`);
   check(themeColor(page) === "#f4f6f8", `the browser's bar in its --case: ${themeColor(page)}`);
-  check(page.evalIn("__picked.join()") === "field-light", `heard ${page.evalIn("__picked.join()")}`);
+  check(page.evalIn("__picked.join()") === "console-light", `heard ${page.evalIn("__picked.join()")}`);
   pickLook(page, "console-dark");
-  check(worn(page) === "console-dark" && themeColor(page) === "#0b0d11", `back: ${worn(page)}, ${themeColor(page)}`);
+  check(worn(page) === "console-dark" && themeColor(page) === DEFAULT_CASE, `back: ${worn(page)}, ${themeColor(page)}`);
   page.clock.advance(2000);
   check(count(ws) === 0, `sent ${names(ws)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -4576,7 +4732,7 @@ test("look: with no look to read, the panel still loads, and Stop still stops", 
   const blank = tokensOf(lookBlocks()[0]).map((name) => `${name}: ;`).join(" ");
   const { page, ws } = connected(telemetry(), { looks: `[data-look="console-dark"] { ${blank} }` }); // exploring
   check(page.errors.length === 0, `errors ${page.errors}`);
-  check(page.headThemeColor === "#0b0d11" && themeColor(page) === "#0b0d11", `the browser's bar as joystick.html gives it: ${page.headThemeColor}, ${themeColor(page)}`);
+  check(page.headThemeColor === DEFAULT_CASE && themeColor(page) === DEFAULT_CASE, `the browser's bar as joystick.html gives it: ${page.headThemeColor}, ${themeColor(page)}`);
   const knob = page.joyParameters;
   check(!("internalFillColor" in knob) && !("internalStrokeColor" in knob) && !("externalStrokeColor" in knob), `joy.js's own colours: ${JSON.stringify(knob)}`);
   page.fire(page.$("stop"), "click");
@@ -4591,14 +4747,14 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   page.clock.advance(250);
   check(count(ws) >= 2 && names(ws).every((n) => n === "MOVE_FORWARD"), `drove ${names(ws)}`);
   let mark = count(ws);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   check(names(ws, mark).join() === "STOP" && ws.sentAt.at(-1) === page.clock.now(), `the change sent ${names(ws, mark)}`);
   check(page.$("stickLabel").textContent === page.evalIn("FamilySelector.PRESS_AGAIN"), `the caption asks for a fresh press: '${page.$("stickLabel").textContent}'`);
   check(page.canvas !== first && first.parentNode === null && stickCanvases(page).length === 1, "one new canvas in place of the old");
   check(first.width === 0 && first.height === 0, `the old canvas emptied: ${first.width} x ${first.height}`);
   const knob = page.joyParameters;
   check(knob.internalFillColor === "#0a6f63" && knob.internalStrokeColor === "#054a42" && knob.externalStrokeColor === "#a3adb8",
-    `the knob in field-light: ${JSON.stringify(knob)}`);
+    `the knob in console-light: ${JSON.stringify(knob)}`);
   check(page.joy.GetWidth() === 230, `built at the box's size: ${page.joy.GetWidth()}`);
   // A second change before the fresh press sends nothing, and still asks for one.
   pickLook(page, "blueprint-dark");
@@ -4617,7 +4773,7 @@ test("look: a change under a held stick lets go of it: one STOP, nothing until a
   // A held rotate button drives on: the change lets go of the stick alone.
   press(page, page.$("cw"), 4);
   mark = count(ws);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   page.clock.advance(1000);
   const after = names(ws, mark);
   check(after.length >= 4 && after.every((n) => n === "ROTATE_CLOCKWISE"), `rotate through a change ${after}`);
@@ -4635,7 +4791,7 @@ test("look: a change under both sticks lets go of both with one STOP, and each a
   move.start(); pushTo(page, move, 0, 70);
   pivot.start(); pushTo(page, pivot, 60, 60);
   let mark = count(ws);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   check(names(ws, mark).join() === "STOP", `the change sent ${names(ws, mark)}`);
   check(asks() === "move,pivot", `both ask: ${asks()}`);
   check(page.pivotJoyParameters.internalFillColor === "#0a6f63" && page.joyParameters.internalFillColor === "#0a6f63", "both knobs in the new look");
@@ -4664,7 +4820,7 @@ test("look: a change under both sticks lets go of both with one STOP, and each a
   // answers every request.
   const p = pivotTouch(page, 6);
   p.start(); pushTo(page, p, 60, 60);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   check(asks() === "-,pivot", `the pivot stick alone held: ${asks()}`);
   page.fire(page.$("stop"), "click");
   check(asks() === "-,-", `Stop answers it: ${asks()}`);
@@ -4690,7 +4846,7 @@ test("look: a change while the Drive tab is hidden builds the stick as it is sho
   const first = page.canvas;
   page.fire(page.$("tabProgram"), "click");
   resizeStick(page, 230);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   check(page.canvas === first && page.joyParameters.internalFillColor !== "#0a6f63", "nothing built while hidden");
   page.fire(page.$("tabDrive"), "click");
   check(page.canvas !== first && page.canvas.width === 230, `built as it is shown, at ${page.canvas.width}`);
@@ -4716,11 +4872,13 @@ test("look: a change while the Drive tab is hidden builds the stick as it is sho
 
 test("look: a change repaints the block editor, and is harmless before there is one", () => {
   const page = loadPage({ looks: TEST_LOOKS });
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   check(page.errors.length === 0, `with no editor yet: errors ${page.errors}`);
   standInEditor(page);
-  pickLook(page, "blueprint-dark");
-  check(page.evalIn("__editor.restyled") === 1, `the editor restyled ${page.evalIn("__editor.restyled")} times`);
+  pickTheme(page, "blueprint");
+  check(page.evalIn("__editor.restyled") === 1, `a tile: the editor restyled ${page.evalIn("__editor.restyled")} times`);
+  pickFlavour(page, "Dark");
+  check(page.evalIn("__editor.restyled") === 2, `the toggle: the editor restyled ${page.evalIn("__editor.restyled")} times`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4747,7 +4905,7 @@ test("look: the block editor is built in the look in force, and takes a new one"
     globalThis.__blockEditor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
   `);
   check(page.evalIn("__themes.join()") === "#0b1a33", `built in ${page.evalIn("__themes.join()")}`);
-  page.evalIn('document.documentElement.setAttribute("data-look", "field-light"); __blockEditor.restyle();');
+  page.evalIn('document.documentElement.setAttribute("data-look", "console-light"); __blockEditor.restyle();');
   check(page.evalIn("__themes.join()") === "#0b1a33,#f4f6f8", `restyled in ${page.evalIn("__themes.join()")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
@@ -4756,7 +4914,7 @@ test("look: a change leaves a running program driving", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }), { looks: TEST_LOOKS });
   page.evalIn("driver.program(MOVE_FORWARD, 60)");
   const mark = count(ws);
-  pickLook(page, "field-light");
+  pickLook(page, "console-light");
   page.clock.advance(1000);
   const after = names(ws, mark);
   check(after.length >= 4 && after.every((n) => n === "MOVE_FORWARD"), `the program through a change: ${after}`);

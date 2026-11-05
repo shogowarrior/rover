@@ -3,13 +3,16 @@
  * header and remembered between visits.
  *
  * Every colour is a token of css/looks.css, one block of them per look,
- * keyed by data-look, and the look in force is <html>'s. This file loads in
- * <head>, before anything is drawn, and its one top-level call (at its foot)
- * puts the remembered look on <html> there, so the first paint is already
- * in it. A look the memory does not hold, an id no look has any more, or a
- * memory that cannot be read gives the default.
+ * keyed by data-look, and the look in force is <html>'s. A look is a theme
+ * in one of two flavours, Dark or Light, and the two are picked apart: a
+ * Dark | Light toggle, and a tile per theme. This file loads in <head>,
+ * before anything is drawn, and its one top-level call (at its foot) puts
+ * the remembered look on <html> there, so the first paint is already in it.
+ * A look the memory does not hold, an id no look has any more, or a memory
+ * that cannot be read gives the default.
  *
  *   LookPicker.LOOKS   every look, the default first: { id, theme, flavour }.
+ *                      Every theme comes in every flavour.
  *   LookPicker.STORAGE_KEY
  *                      where the look is remembered. It is not app.js's to
  *                      give, as other parts' keys are: the look is put on
@@ -18,14 +21,16 @@
  *                      put the remembered look on <html>, and paint the
  *                      browser's own bar (theme-color) in its case colour.
  *
- *   new LookPicker(group)
- *     group   the Options popover's empty radiogroup. Each theme gets a row of
- *             it, with a tile per flavour: a radio, a miniature of the panel
- *             in that look's own colours (css/panel.css draws it), and its
- *             name. The look in force is checked.
+ *   new LookPicker({ flavours, themes })
+ *     flavours  the Options popover's empty .segmented group: a segment per
+ *               flavour, the one in force pressed. A press keeps the theme.
+ *     themes    its empty radiogroup: a tile per theme, each a radio, a
+ *               miniature of the panel in that theme's colours in the flavour
+ *               in force (css/panel.css draws it), and its name. A pick keeps
+ *               the flavour. The theme in force is checked.
  *   onChange(fn)
- *     fn(id) after the operator picks a look, once it is on <html> and
- *     remembered. Picking one sends nothing anywhere.
+ *     fn(id) after the operator picks a theme or a flavour, once the new look
+ *     is on <html> and remembered. Picking one sends nothing anywhere.
  *
  *   lookToken(name)
  *     A token of the look in force, or "" when the page cannot read it
@@ -47,70 +52,97 @@ class LookPicker {
     { id: "blueprint-light", theme: "Blueprint", flavour: "Light" },
   ].map(Object.freeze));
 
+  #look; // the entry of LOOKS in force
+  #flavours = new Map(); // flavour -> its segment
+  #swatches = new Map(); // theme -> its tile's miniature
   #changeListeners = new Listeners();
 
   static restore() {
-    LookPicker.#wear(memory.recall(LookPicker.STORAGE_KEY));
+    LookPicker.#wear(LookPicker.#find(memory.recall(LookPicker.STORAGE_KEY)));
   }
 
-  // Put the look with this id on <html>, or the default if none has it.
-  // The browser's bar takes a colour as a plain value: in <head>, the
-  // stylesheets before this file have loaded, so it is painted with the
-  // page's first paint, not when app.js runs. A look the page cannot read
-  // leaves it as joystick.html gives it.
-  static #wear(id) {
-    const look = LookPicker.LOOKS.find((candidate) => candidate.id === id) || LookPicker.LOOKS[0];
+  // The look with this id, or the default if none has it.
+  static #find(id) {
+    return LookPicker.LOOKS.find((look) => look.id === id) || LookPicker.LOOKS[0];
+  }
+
+  // The look of this theme in this flavour.
+  static #of(theme, flavour) {
+    return LookPicker.LOOKS.find((look) => look.theme === theme && look.flavour === flavour);
+  }
+
+  // Each value of a look's field, once, in LOOKS's order.
+  static #each(field) {
+    return [...new Set(LookPicker.LOOKS.map((look) => look[field]))];
+  }
+
+  // Put the look on <html>. The browser's bar takes a colour as a plain
+  // value: in <head>, the stylesheets before this file have loaded, so it is
+  // painted with the page's first paint, not when app.js runs. A look the
+  // page cannot read leaves it as joystick.html gives it.
+  static #wear(look) {
     document.documentElement.setAttribute("data-look", look.id);
     const bar = document.querySelector('meta[name="theme-color"]');
     const colour = lookToken("--case");
     if (bar && colour) bar.setAttribute("content", colour);
   }
 
-  constructor(group) {
-    const worn = document.documentElement.getAttribute("data-look");
-    for (const theme of new Set(LookPicker.LOOKS.map((look) => look.theme))) {
-      const row = dom.html("div", { class: "lookTheme" }, group);
-      // For the eye: each tile's own name says its theme to a screen reader.
-      dom.html("span", { class: "lookThemeName", "aria-hidden": "true" }, row, theme);
-      for (const look of LookPicker.LOOKS.filter((candidate) => candidate.theme === theme)) {
-        const tile = dom.html("label", { class: "lookTile" }, row);
-        const radio = dom.html("input", { type: "radio", name: "look", value: look.id }, tile);
-        radio.checked = look.id === worn;
-        radio.addEventListener("change", () => this.#pick(look.id));
-        LookPicker.#preview(tile, look.id);
-        const name = dom.html("span", { class: "lookName" }, tile);
-        dom.html("span", { class: "srOnly" }, name, `${theme} `);
-        dom.html("span", {}, name, look.flavour);
-      }
+  constructor({ flavours, themes }) {
+    this.#look = LookPicker.#find(document.documentElement.getAttribute("data-look"));
+    for (const flavour of LookPicker.#each("flavour")) {
+      const button = segment(flavours, () => this.#pick(LookPicker.#of(this.#look.theme, flavour)));
+      button.textContent = flavour;
+      this.#flavours.set(flavour, button);
     }
+    for (const theme of LookPicker.#each("theme")) {
+      const tile = dom.html("label", { class: "lookTile" }, themes);
+      const radio = dom.html("input", { type: "radio", name: "look", value: theme.toLowerCase() }, tile);
+      radio.checked = theme === this.#look.theme;
+      radio.addEventListener("change", () => this.#pick(LookPicker.#of(theme, this.#look.flavour)));
+      this.#swatches.set(theme, LookPicker.#preview(tile));
+      dom.html("span", { class: "lookName" }, tile, theme);
+    }
+    this.#show();
   }
 
   onChange(fn) {
     return this.#changeListeners.add(fn);
   }
 
-  #pick(id) {
-    LookPicker.#wear(id);
-    memory.remember(LookPicker.STORAGE_KEY, id);
-    this.#changeListeners.emit(id);
+  // A press on the flavour already in force changes nothing.
+  #pick(look) {
+    if (look === this.#look) return;
+    this.#look = look;
+    LookPicker.#wear(look);
+    memory.remember(LookPicker.STORAGE_KEY, look.id);
+    this.#show();
+    this.#changeListeners.emit(look.id);
   }
 
-  // The panel in miniature, which css/panel.css paints in the look's own
-  // tokens: a card on the case, with two lines of text and a status pill;
-  // under it, Autonomous lit and Stop. The frame round it is the page's, and
-  // shows which tile is checked and which has the focus.
-  static #preview(tile, id) {
+  // The flavour in force pressed, and each tile previewed in it.
+  #show() {
+    pressSegment(this.#flavours, this.#look.flavour);
+    for (const [theme, swatch] of this.#swatches) swatch.setAttribute("data-look", LookPicker.#of(theme, this.#look.flavour).id);
+  }
+
+  // The panel in miniature, which css/panel.css paints in the tokens of the
+  // look its data-look names (#show sets it): a card on the case, with two
+  // lines of text and a status pill; under it, a button in the controls'
+  // blue, and Stop. The frame round it is the page's, and shows which tile
+  // is checked and which has the focus. Returns the miniature.
+  static #preview(tile) {
     const frame = dom.html("span", { class: "lookPreview", "aria-hidden": "true" }, tile);
-    const swatch = dom.html("span", { class: "lookSwatch", "data-look": id }, frame);
+    const swatch = dom.html("span", { class: "lookSwatch" }, frame);
     const card = dom.html("span", { class: "lookCard" }, swatch);
     dom.html("i", { class: "lookText" }, card);
     dom.html("i", { class: "lookText dim" }, card);
     const pill = dom.html("span", { class: "lookLamps" }, card);
-    dom.html("i", { class: "lookLamp live" }, pill);
+    dom.html("i", { class: "lookLamp ok" }, pill);
     dom.html("i", { class: "lookLamp warn" }, pill);
     const foot = dom.html("span", { class: "lookFoot" }, swatch);
     dom.html("i", { class: "lookGo" }, foot);
     dom.html("i", { class: "lookStop" }, foot);
+    return swatch;
   }
 }
 

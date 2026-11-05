@@ -15,7 +15,8 @@
  *                    pressSegment, clamp, radians, degrees, abortableWait,
  *                    isPrimaryPress, reportFault
  *   look.js          LookPicker, lookToken: the page's looks, the one in
- *                    force, and the tiles that pick one
+ *                    force, and the Dark | Light toggle and theme tiles
+ *                    that pick one
  *   protocol.js      the firmware's constants: move codes, scheme and mode names,
  *                    speed limits, the port, distances and timing
  *   mecanum.js       the motions, moveForStick() for the stick families, and
@@ -496,7 +497,7 @@ if (targets.simulator) {
 // The page's colours, picked under the gear (look.js has already put the
 // remembered look on <html>), in a popover that is not modal (see
 // joystick.html).
-const lookPicker = new LookPicker(byId("lookChoice"));
+const lookPicker = new LookPicker({ flavours: byId("flavourChoice"), themes: byId("lookChoice") });
 new Popover(byId("options"), byId("optionsPanel"));
 
 // Whatever took the look's colours as plain values when it was built takes

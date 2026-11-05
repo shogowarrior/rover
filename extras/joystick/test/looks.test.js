@@ -40,33 +40,38 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // The surfaces: the page, under the header, the Program tab, Blockly's
 // workspace and the log (--case); the cards, menus, the dock and the bars
 // (--panel), with the glow behind the scan and the wide dock; buttons,
-// tracks, idle pills, the flyout and the room's floor (--raised); a hovered
-// or pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
+// tracks, pills, the flyout and the room's floor (--raised); a hovered or
+// pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
 // or button replaces its fill with the tint.
 const AUDIT = [
-  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--chosen", "--faint", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, buttons, menus, the keys' caps, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
-  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--live-glow over --panel"], TEXT,
+  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case"], TEXT,
+    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the pills while all is well, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel"], TEXT,
     "captions, the note, the keys' note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
-  ["--live", ["--case", "--panel", "--raised", "--live-soft over --case", "--live-soft over --panel"], TEXT,
-    "the log's done, a firmware update's, a pending segment, the link and motors pills, Autonomous as last reported"],
-  ["--live-ink", ["--live-soft over --raised"], TEXT, "the open tab"],
-  ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, a held rotate button, the mode pill while exploring"],
-  ["--warn", ["--case", "--panel", "--live-glow over --panel", "--warn-soft over --case"], TEXT,
+  ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word and icon: the tabs, the scheme, the target, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame; the open Program tab's running dot"],
+  ["--live", ["--case", "--raised"], TEXT, "a pending segment, the log's say"],
+  ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, Update, a held rotate button"],
+  ["--ok", ["--case", "--panel", "--ok-soft over --panel", "--ok-soft over --case"], TEXT,
+    "the log's done, a firmware update's, Autonomous lit and as last reported (on a card, and on the bare bar of a phone on its side)"],
+  ["--on-ok", ["--ok"], TEXT, "the mode pill while exploring"],
+  ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case"], TEXT,
     "the note gone bad, the phase, the stick's caption, the GO tick, the pills, the fault's headline, the log"],
-  ["--stop-ink", ["--panel", "--live-glow over --panel", "--stop-soft over --case"], TEXT,
+  ["--stop-ink", ["--panel", "--glow over --panel", "--stop-soft over --case"], TEXT,
     "the STOP tick, the link pill down, Stop program, a stall or a bump in the simulator"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
   // A fresh sonar ray is drawn at 0.95.
-  ["--live", ["--case", "--panel", "--live-glow over --panel", "--raised", "--raised-hi", "--chosen", "--sim-plate"], MARK,
-    "the focus ring, the slider's thumb, the stick's knob, the scan's rover, the stick's and families' icons, a pressed tool, a forward wheel"],
-  ["--warn at 0.95", ["--live-glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
+  ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
+    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar, the rover's aim"],
+  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list, the theme tiles"],
+  ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
+    "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
+  ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
-  ["--live", ["--live-glow over --panel"], MARK, "the scan's wedge, clear"],
-  ["--warn", ["--live-glow over --panel"], MARK, "the scan's wedge, closing in"],
-  ["--stop", ["--live-glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
-  ["--case", ["--live", "--sim-back"], MARK, "the arrow on a turning wheel"],
+  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
+  ["--stop", ["--glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
+  ["--readout", ["--glow over --panel"], MARK, "the scan's rover"],
+  ["--case", ["--ok", "--sim-back"], MARK, "the arrow on a turning wheel"],
   // joy.js shades the stick's knob from --live at the canvas's centre
   // toward --stick-rim 200 px out (js/drive.js), and the well under it
   // shades from --raised toward --case (css/panel.css) out to the box's
@@ -78,12 +83,11 @@ const AUDIT = [
   ["--readout", ["--sim-plate"], MARK, "the simulated rover's outline and nose"],
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
-  ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's and an input's edge"],
-  ["--warn at 0.55", ["--live-glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
-  ["--stop-ink at 0.65", ["--live-glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
+  ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's edge"],
+  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
+  ["--stop-ink at 0.65", ["--glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
   ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],
   ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],
-  ["--chosen", ["--raised"], QUIET, "the chosen segment in its track; its ink says so too"],
   ["--raised-hi", ["--raised"], QUIET, "a box on the room's floor"],
   ["--raised-hi", ["--case"], QUIET, "Blockly's grid"],
   ["--raised-hi", ["--panel"], QUIET, "a firmware update's bar, in the Options popover"],
@@ -288,6 +292,137 @@ test("every look's color-scheme is its flavour", () => {
   for (const look of lookBlocks()) {
     assert.equal(look.declared.get("color-scheme"), look.id.split("-").pop(), `${look.id}'s color-scheme`);
   }
+});
+
+// The owner turned the teal look down (docs/features.md, F7). A hue from
+// 155 to 200 degrees reads as teal, or the mint beside it (the old accent,
+// #4db8a8, was 171), and a faint green over a blue ground mixes to one, so
+// each green is checked as it is drawn, on what it is drawn on. A grey has
+// no hue to speak of.
+function hueOf([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const chroma = max - Math.min(r, g, b);
+  if (chroma < 12) return null;
+  const h = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+  return (h * 60 + 360) % 360;
+}
+const teal = (rgb) => {
+  const h = hueOf(rgb);
+  return h !== null && h >= 155 && h <= 200;
+};
+
+test("no look draws a teal: its green, its tints and a clear way's body, as drawn", () => {
+  const found = [];
+  for (const look of lookBlocks()) {
+    const drawn = {
+      "--ok on --panel": surface(look, "--ok"),
+      "--live on --panel": surface(look, "--live"),
+      "--ok-soft over --panel": surface(look, "--ok-soft over --panel"),
+      "--ok-soft over --case": surface(look, "--ok-soft over --case"),
+      "--ok-soft over --raised": surface(look, "--ok-soft over --raised"),
+      "--ok-body at 0.3 over --glow over --panel": over(paint(look, "--ok-body"), surface(look, "--glow over --panel"), 0.3),
+      // A clear sonar ray in the simulator, fresh and aged (simview.js),
+      // and its dot, on the room's floor (--raised).
+      ...Object.fromEntries([0.95, 0.4].map((alpha) => [`--ok-body at ${alpha} over --raised`, over(paint(look, "--ok-body"), surface(look, "--raised"), alpha)])),
+      "--ok-body at 0.5 over --raised": over(paint(look, "--ok-body"), surface(look, "--raised"), 0.5),
+    };
+    for (const [what, rgb] of Object.entries(drawn)) {
+      if (teal(rgb)) found.push(`${look.id}: ${what} at ${Math.round(hueOf(rgb))} degrees`);
+    }
+  }
+  const { RoverBlocks } = require("../js/blocks.js");
+  for (const [category, value] of Object.entries(RoverBlocks.PALETTE)) {
+    if (teal(rgba(value, category))) found.push(`the ${category} blocks, ${value}`);
+  }
+  assert.deepEqual(found, []);
+});
+
+// What the test above cannot see: a green the page itself fades out over
+// whatever is under it (a mix toward transparent, a blur, an animation to
+// transparent). Over Blueprint's navy or pale blue the fade passes through
+// teal, so no stylesheet does it: a halo breathes in its own tint, the
+// running block is edged and not blurred, the chosen toolbox pill is edged
+// and not tinted, and a link that goes greys the scan's clear ways
+// (panel.test.js).
+test("no stylesheet fades a colour out over a ground it cannot know", () => {
+  const found = [];
+  for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
+    const css = stylesheet(file);
+    for (const { selector, body } of cssRules(css)) {
+      if (/color-mix\(/.test(body)) found.push(`a colour mixed in css/${file}'s ${selector}`);
+      if (/drop-shadow\([^)]*var\(--(ok|live|warn|stop)/.test(body)) found.push(`a signal blurred in css/${file}'s ${selector}`);
+    }
+    for (const [, name, frames] of css.matchAll(/@keyframes\s+([\w-]+)\s*\{([\s\S]*?\})\s*\}/g)) {
+      if (/shadow:[^;}]*transparent/.test(frames)) found.push(`a shadow faded to transparent in css/${file}'s @keyframes ${name}`);
+    }
+  }
+  assert.deepEqual(found, []);
+});
+
+// Colour difference as the eye sees it: sRGB to CIELAB (D65), then
+// CIEDE2000, and Machado, Oliveira and Fernandes's (2009) simulation of
+// protanopia and deuteranopia at full severity, in linear RGB.
+const CVD = {
+  normal: null,
+  protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+};
+function labSeen([r, g, b], matrix) {
+  const toLinear = (c) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  let rgb = [r, g, b].map(toLinear);
+  if (matrix) rgb = matrix.map((row) => Math.min(1, Math.max(0, row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2])));
+  const [lr, lg, lb] = rgb;
+  const xyz = [(0.4124 * lr + 0.3576 * lg + 0.1805 * lb) / 0.95047, 0.2126 * lr + 0.7152 * lg + 0.0722 * lb, (0.0193 * lr + 0.1192 * lg + 0.9505 * lb) / 1.08883];
+  const [fx, fy, fz] = xyz.map((t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116));
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function ciede2000([L1, a1, b1], [L2, a2, b2]) {
+  const rad = Math.PI / 180;
+  const meanC = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2;
+  const G = 0.5 * (1 - Math.sqrt(meanC ** 7 / (meanC ** 7 + 25 ** 7)));
+  const [a1p, a2p] = [(1 + G) * a1, (1 + G) * a2];
+  const [C1, C2] = [Math.hypot(a1p, b1), Math.hypot(a2p, b2)];
+  const hue = (b, a) => ((Math.atan2(b, a) / rad) % 360 + 360) % 360;
+  const [h1, h2] = [hue(b1, a1p), hue(b2, a2p)];
+  let dh = h2 - h1;
+  if (C1 * C2 === 0) dh = 0;
+  else if (dh > 180) dh -= 360;
+  else if (dh < -180) dh += 360;
+  const dL = L2 - L1;
+  const dC = C2 - C1;
+  const dH = 2 * Math.sqrt(C1 * C2) * Math.sin((dh / 2) * rad);
+  const mL = (L1 + L2) / 2;
+  const mC = (C1 + C2) / 2;
+  let mh = h1 + h2;
+  if (C1 * C2 !== 0) mh = Math.abs(h1 - h2) <= 180 ? mh / 2 : mh < 360 ? (mh + 360) / 2 : (mh - 360) / 2;
+  const T = 1 - 0.17 * Math.cos((mh - 30) * rad) + 0.24 * Math.cos(2 * mh * rad) + 0.32 * Math.cos((3 * mh + 6) * rad) - 0.2 * Math.cos((4 * mh - 63) * rad);
+  const SL = 1 + (0.015 * (mL - 50) ** 2) / Math.sqrt(20 + (mL - 50) ** 2);
+  const SC = 1 + 0.045 * mC;
+  const SH = 1 + 0.015 * mC * T;
+  const RT = -Math.sin(2 * 30 * Math.exp(-(((mh - 275) / 25) ** 2)) * rad) * 2 * Math.sqrt(mC ** 7 / (mC ** 7 + 25 ** 7));
+  return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
+}
+
+// The blocks' colours are the same in every look, and a block's colour
+// says its category as its words do. Motion's, the blocks a program is
+// made of and the stop block's own category, keeps apart from every other
+// category's for a red-green colour-blind eye too: an olive tried in F7's
+// review was control's brown and the stop block's red to one, and the teal
+// before it came close to variables. Some other pairs were close before F7
+// (control and stop, sensors and logic, under deuteranopia) and are left.
+test("the motion blocks keep apart from every other category, for a red-green colour-blind eye too", () => {
+  const { RoverBlocks } = require("../js/blocks.js");
+  const { motion, ...others } = RoverBlocks.PALETTE;
+  const near = [];
+  for (const [vision, matrix] of Object.entries(CVD)) {
+    const seen = labSeen(rgba(motion, "motion"), matrix);
+    for (const [category, value] of Object.entries(others)) {
+      const difference = ciede2000(seen, labSeen(rgba(value, category), matrix));
+      if (difference < 10) near.push(`${category} (${value}) in ${vision}: ${difference.toFixed(1)}`);
+    }
+  }
+  assert.deepEqual(near, [], `motion (${motion}) under 10 from`);
+  assert.ok(contrast(rgba(motion, "motion"), [255, 255, 255]) >= TEXT, "the blocks' white text holds on it");
 });
 
 for (const id of LOOKS) {

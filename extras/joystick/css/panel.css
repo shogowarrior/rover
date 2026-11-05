@@ -180,7 +180,7 @@ button {
   font-weight: var(--fw-semi);
   color: var(--readout);
   background: var(--raised);
-  border: 1px solid transparent;
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   cursor: pointer;
   touch-action: manipulation;
@@ -316,6 +316,7 @@ input[type="range"]::-moz-range-thumb {
   font-weight: var(--fw-medium);
   text-align: left;
   background: none;
+  border-color: transparent;
   border-radius: var(--r-sm);
 }
 
@@ -397,27 +398,20 @@ input[type="range"]::-moz-range-thumb {
 /* Each section after the first set off from the one above. */
 .options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
 
-/* A row per theme: its name, then its Dark and Light tiles. Close-set, so
-   that the three fit a phone on its side unscrolled. */
+/* Dark | Light across the popover, then a tile per theme, side by side,
+   each previewed in the flavour in force. The toggle is a group in a menu,
+   whose groups stack: its segments stay in a row. */
+.options .flavours { flex-direction: row; }
+
 .looks {
   display: grid;
-  gap: var(--s-1);
-}
-
-.lookTheme {
-  display: grid;
-  grid-template-columns: 4.5rem repeat(2, minmax(0, 1fr));
-  align-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-2);
-}
-
-.lookThemeName {
-  font-size: var(--t-sm);
-  font-weight: var(--fw-semi);
+  margin-top: var(--s-1);
 }
 
 /* A tile: its radio, out of sight but in the focus order (the arrow keys
-   move between the looks), the preview, and the name. The checked tile and
+   move between the themes), the preview, and the name. The checked tile and
    the focused one show through the radio's own state, never :has(), which
    a browser without it would drop. */
 .lookTile {
@@ -430,12 +424,12 @@ input[type="range"]::-moz-range-thumb {
 
 .lookTile input { pointer-events: none; }
 
-/* The page's frame round the look's own colours. */
+/* The page's frame round the look's own colours, edged as a control is. */
 .lookPreview {
   display: block;
   width: 100%;
   padding: var(--s-0);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-sm);
 }
 
@@ -463,7 +457,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--dim);
 }
 
-/* The look in force: its name lit, behind a lamp. */
+/* The theme in force: its name lit, behind a lamp. */
 .lookTile input:checked ~ .lookName { color: var(--readout); }
 
 .lookTile input:checked ~ .lookName::before {
@@ -475,7 +469,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* The keyboard's keys (keys.js), under the looks: a row per pair, the keys
-   as caps, then what they do, set as the looks' rows are. */
+   as caps, then what they do. */
 .keys {
   display: grid;
   gap: var(--s-1);
@@ -520,9 +514,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* The panel in miniature (look.js builds it), painted only in the tokens
    its data-look gives it: --case, --panel, --raised, --rule, --readout,
-   --dim, --live, --on-live, --warn, --stop and --on-stop. A card on the
-   case, with two lines of text and a status pill of a teal lamp and an
-   amber one; under it, Autonomous lit and Stop. */
+   --dim, --live, --on-live, --ok, --warn, --stop and --on-stop. A card on
+   the case, with two lines of text and a status pill of a green lamp and
+   an amber one; under it, a button in the controls' blue, and Stop. */
 .lookSwatch {
   display: grid;
   gap: var(--s-0);
@@ -567,7 +561,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
 }
 
-.lookLamp.live { background: var(--live); }
+.lookLamp.ok { background: var(--ok); }
 .lookLamp.warn { background: var(--warn); }
 
 .lookFoot {
@@ -576,7 +570,7 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-0);
 }
 
-/* Each with a mark in its own ink: a word on Autonomous, Stop's square. */
+/* Each with a mark in its own ink: a word on the button, Stop's square. */
 .lookGo,
 .lookStop {
   height: 9px;
@@ -612,10 +606,11 @@ input[type="range"]::-moz-range-thumb {
   gap: var(--s-3);
 }
 
-/* The agreeing button, in the accent: the action the question names. */
+/* The agreeing button, in the controls' blue: the action the question names. */
 .ask .yes {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 @media (hover: hover) {
@@ -688,7 +683,7 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: var(--track-tight);
 }
 
-/* The mark: a wheel hub in the stick's teal. */
+/* The mark: a wheel hub in the stick's blue. */
 .wordmark::before {
   content: "";
   flex: none;
@@ -717,14 +712,15 @@ input[type="range"]::-moz-range-thumb {
    flex row (below), with room for all three. */
 .switches > .target { grid-column: 1 / -1; }
 
-/* Segmented controls: the tabs, the scheme, the stick family. One track;
-   the chosen segment raised inside it. Each segment is a full 44 px
-   target; the chosen one's inset frame only draws it smaller. */
+/* Segmented controls: the tabs, the scheme, the stick family. One edged
+   track; the chosen segment inverted inside it, the one thing in the track
+   that is lit. Each segment is a full 44 px target; the chosen one's inset
+   frame only draws it smaller. */
 .tabs,
 .segmented {
   display: flex;
   background: var(--raised);
-  border: 1px solid transparent;
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
 }
 
@@ -746,18 +742,15 @@ input[type="range"]::-moz-range-thumb {
 
 .tabs [role="tab"][aria-selected="true"],
 .segmented button[aria-pressed="true"] {
-  color: var(--readout);
+  color: var(--on-chosen);
   background: var(--chosen);
   box-shadow: inset 0 0 0 3px var(--raised);
 }
 
-/* The open tab is where the operator is: the one segment in the accent. */
-.tabs [role="tab"][aria-selected="true"] {
-  color: var(--live-ink);
-  background: var(--live-soft);
-}
-
-.segmented button:disabled {
+/* A disabled segment is unlit, but for the one in force, which keeps its
+   chip (a stale scheme, the family under NORMAL: their groups fade it,
+   below). */
+.segmented button:disabled:not([aria-pressed="true"]) {
   color: var(--dim);
   background: none;
   box-shadow: none;
@@ -770,6 +763,13 @@ input[type="range"]::-moz-range-thumb {
   outline: 1px dashed var(--live);
   outline-offset: -4px;
   animation: pending 800ms ease-in-out infinite alternate;
+}
+
+/* A click back on the scheme in force while another is asked for leaves
+   it both: it keeps the chip's ink, where blue fell under 3:1. */
+.segmented button[aria-pressed="true"][data-pending="yes"] {
+  color: var(--on-chosen);
+  outline-color: var(--on-chosen);
 }
 
 @keyframes pending { to { opacity: 0.5; } }
@@ -787,12 +787,6 @@ input[type="range"]::-moz-range-thumb {
    faded, and its segments are disabled: no telemetry could confirm a
    request. */
 .scheme[data-state="stale"] .segmented { opacity: 0.55; }
-
-.scheme[data-state="stale"] .segmented button[aria-pressed="true"] {
-  color: var(--readout);
-  background: var(--chosen);
-  box-shadow: inset 0 0 0 3px var(--raised);
-}
 
 /* Status pills: the link, the mode and the motors. Each takes its colour
    from the state it shows, so a glance at the corner says enough. */
@@ -848,8 +842,11 @@ input[type="range"]::-moz-range-thumb {
   background: currentColor;
 }
 
+/* All well is quiet: the word in the ink and a green lamp. Only what needs
+   the operator is tinted, so it is what the eye finds. */
 body[data-link="down"] .linkPill { color: var(--stop-ink); background: var(--stop-soft); }
-body[data-link="up"] .linkPill { color: var(--live); background: var(--live-soft); }
+body[data-link="up"] .linkPill { color: var(--readout); }
+body[data-link="up"] .linkPill .lamp { background: var(--ok); }
 body[data-link="stale"] .linkPill { color: var(--warn); background: var(--warn-soft); }
 body[data-link="connecting"] .lamp { animation: pending 600ms ease-in-out infinite alternate; }
 
@@ -878,11 +875,11 @@ body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
    last mode, greyed. Exploring is the loud one -- the rover is moving by
    itself -- and fills the pill. */
 body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill { color: var(--readout); }
-body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--live); }
+body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--ok); }
 
 body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill {
-  color: var(--on-live);
-  background: var(--live);
+  color: var(--on-ok);
+  background: var(--ok);
 }
 
 body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before {
@@ -900,7 +897,8 @@ body:has(#motorsFault:is([data-ready="yes"], [data-ready="no"])) .motorsPill [da
 body:has(#motorsFault[data-ready="yes"]) .motorsPill [data-say="yes"],
 body:has(#motorsFault[data-ready="no"]) .motorsPill [data-say="no"] { display: inline; }
 
-body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill { color: var(--live); background: var(--live-soft); }
+body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill { color: var(--readout); }
+body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill .lamp { background: var(--ok); }
 body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); background: var(--warn-soft); }
 
 .link {
@@ -918,7 +916,7 @@ body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); backgr
   font-size: var(--t-md);
   color: var(--readout);
   background: var(--panel);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   -webkit-user-select: text;
   user-select: text;
@@ -930,6 +928,7 @@ body:has(#motorsFault[data-ready="no"]) .motorsPill { color: var(--warn); backgr
 body[data-link="down"] #connect {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 /* What the link has to say, under the address it is about: a line in the
@@ -999,7 +998,7 @@ body:is([data-link="up"], [data-link="stale"]) #note {
   display: grid;
   padding: var(--s-3) var(--s-1) var(--s-1);
   background:
-    radial-gradient(90% 60% at 50% 75%, var(--live-glow), transparent),
+    radial-gradient(90% 60% at 50% 75%, var(--glow), transparent),
     radial-gradient(circle, var(--raised) 1px, transparent 1.5px) 0 0 / var(--s-5) var(--s-5),
     var(--panel);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
@@ -1063,7 +1062,19 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 /* Readings glide over the telemetry interval rather than snapping, so the
    eye tracks a distance changing instead of a number replacing itself. */
 .wedge {
-  transition: d var(--glide) linear, fill var(--glide) linear, opacity var(--glide) linear;
+  transition: d var(--glide) linear, fill var(--glide) linear, fill-opacity var(--glide) linear, opacity var(--glide) linear;
+}
+
+/* A clear way is drawn open, its edge in green and its body faint, where
+   something closing in or inside STOP is solid: the shape tells them apart
+   where red-green colour blindness takes the hues' difference away. Its
+   body is --ok-body, which a look on a blue ground makes yellower, or the
+   green mixed into the blue would draw it teal. */
+.wedge[data-zone="clear"] {
+  fill: var(--ok-body);
+  fill-opacity: 0.3;
+  stroke: var(--ok);
+  stroke-width: 1.5px;
 }
 
 .ring {
@@ -1105,12 +1116,12 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 .tick.stop { fill: var(--stop-ink); }
 .tick.go { fill: var(--warn); }
 
-/* The rover, at the fan's centre. */
-#scan > circle { fill: var(--live); }
-
 /* Without a live link the fan is history: the wedges fade and the numbers
-   grey, still legible. */
+   grey, still legible. A clear way greys too, still drawn open: its green,
+   faded that far over Blueprint's navy or pale blue, mixed to teal. By its
+   colours, not a filter, which WebKit does not apply to an SVG shape. */
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
+body:not([data-link="up"]) .wedge[data-zone="clear"] { fill: var(--dim); stroke: var(--dim); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Two lines: the move, with the whole width for its longest name (29
@@ -1289,8 +1300,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   stroke-linejoin: round;
 }
 
-.hint .glyph,
-.family button[aria-pressed="true"] .glyph { color: var(--live); }
+.hint .glyph { color: var(--live); }
 
 .hint[data-corner="upLeft"] { align-self: start; justify-self: start; }
 .hint[data-corner="upRight"] { align-self: start; justify-self: end; flex-direction: row-reverse; text-align: right; }
@@ -1317,12 +1327,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* Off, the family chosen stays lit but faded, as a stale scheme does: it
    is the one the stick takes up again under ADVANCED. */
 .family[data-off="yes"] .segmented { opacity: 0.55; }
-
-.family[data-off="yes"] .segmented button[aria-pressed="true"] {
-  color: var(--readout);
-  background: var(--chosen);
-  box-shadow: inset 0 0 0 3px var(--raised);
-}
 
 /* The stick's line: the caveat while it is on, amber as the motor warning
    is (a caution, not a stop), what it waits for while it is off, or a
@@ -1386,6 +1390,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .spin button[data-held="yes"] {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 /* One line, no taller than the rotate buttons beside it: the caption and
@@ -1442,16 +1447,18 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   border-radius: var(--r-lg);
 }
 
+/* Lit while the rover explores, in the green of the rover doing well:
+   tinted and edged rather than filled, so that Stop beside it stays the
+   loudest thing on the bar. */
 #auto[aria-pressed="true"] {
-  color: var(--on-live);
-  background: var(--live);
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok);
 }
 
-/* The last mode a link that went reported: exploring then, not known now. */
-body:not([data-link="up"]) #auto[aria-pressed="true"] {
-  color: var(--live);
-  background: var(--live-soft);
-}
+/* The last mode a link that went reported: exploring then, not known now,
+   so its edge is dashed, as an unknown scheme's track is. */
+body:not([data-link="up"]) #auto[aria-pressed="true"] { border-style: dashed; }
 
 #stop {
   font-size: var(--t-xl);
@@ -1460,6 +1467,7 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   text-transform: uppercase;
   color: var(--on-stop);
   background: var(--stop);
+  border-color: transparent;
   box-shadow: var(--lift-stop);
 }
 
@@ -1704,6 +1712,12 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .actions button { padding-inline: var(--s-2); }
 
+  /* The chosen segment's word is in the chip's ink, which reads only on
+     the chip: at --t-md "Advanced" ran past the chip at 320 px, onto the
+     frame, where it vanished. */
+  .tabs [role="tab"],
+  .segmented button { font-size: var(--t-sm); }
+
   #auto .icon { display: none; }
 }
 
@@ -1840,7 +1854,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     padding: var(--s-6);
     border-radius: var(--r-xl);
     box-shadow: none;
-    background: radial-gradient(70% 60% at 30% 55%, var(--live-glow), transparent), var(--panel);
+    background: radial-gradient(70% 60% at 30% 55%, var(--glow), transparent), var(--panel);
   }
 
   /* The two sticks at their size, the grid as tall as its content. */
@@ -2157,10 +2171,12 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
    land on Advanced. They take a row each, and the columns close up (the
    shell's, the dock's and Stop's bar beside the Program tab together, as
    they must, or Stop moved as the tab changed). The status keeps to one
-   row beside the gear: it takes the mark's place, and its pills close up
-   and drop their lamps, whose colour their tint already shows (with them,
-   "No link" was cut short at 480 x 320). The readouts take the type size a
-   portrait phone of this width would. */
+   row beside the gear: it takes the mark's place, and its pills close up,
+   a tinted one dropping its lamp, whose colour the tint already shows
+   (with them, "No link" was cut short at 480 x 320). Link and Motors OK
+   keep theirs: with no tint, their green lamp is all that says all is
+   well. The readouts take the type size a portrait phone of this width
+   would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   /* 156 px: half of the gutters (48), the gaps (24) and the 240 px the
      middle column keeps for the tabs and the scheme, a row each. */
@@ -2183,11 +2199,28 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .pill > .lamp { display: none; }
 
+  body[data-link="up"] .linkPill > .lamp { display: block; }
+
+  /* A rule of its own: a browser without :has() drops a whole selector
+     list that holds one, and Link's lamp needs none. */
+  body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp { display: block; }
+
   .cell output { font-size: var(--t-sm); }
 
   /* Autonomous drops its icon, as under 360 px upright: in half of the
      240 px the word alone fits, and with the icon it ran past its edges. */
   #auto .icon { display: none; }
+}
+
+/* On its side, under about 570 px wide, the pivot stick is at or near its
+   112 px floor: each family segment is 55 to 63 px wide and its chip 6 px
+   less, and "sideways" at --t-sm (54.5 px) ran past a chip under about
+   55 px, onto the frame, where the chip's ink vanished. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
+  .family .segmented button {
+    font-size: var(--t-xs);
+    letter-spacing: var(--track-tight);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2246,7 +2279,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   font: inherit;
   color: var(--readout);
   background: var(--case);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-md);
   -webkit-user-select: text;
   user-select: text;
@@ -2262,6 +2295,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 #optionsPanel #firmwareStart:not(:disabled) {
   color: var(--on-live);
   background: var(--live);
+  border-color: transparent;
 }
 
 #optionsPanel .firmware button:disabled {
@@ -2284,8 +2318,8 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 #optionsPanel #firmwareProgress::-webkit-progress-bar { background: var(--raised-hi); }
-#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--live); }
-#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--live); }
+#optionsPanel #firmwareProgress::-webkit-progress-value { background: var(--ok); }
+#optionsPanel #firmwareProgress::-moz-progress-bar { background: var(--ok); }
 
 #optionsPanel #firmwareStatus {
   margin: 0;
@@ -2294,4 +2328,4 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 }
 
 #optionsPanel #firmwareStatus[data-tone="bad"] { color: var(--warn); }
-#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--live); }
+#optionsPanel #firmwareStatus[data-tone="good"] { color: var(--ok); }

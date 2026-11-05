@@ -6,9 +6,10 @@
    the height (below). The rest folds into a panel.
 
    The palette is the look's (css/looks.css), the room's own colours (its
-   grid, the rover's plate and deck) included: teal for live, amber for
-   closing distance, red only for stop and danger -- here, a ray inside
-   STOP_CM and a bump. A backward wheel takes the one colour the panel uses
+   grid, the rover's plate and deck) included: green for a clear way and a
+   forward wheel, blue for the rover's aim and the bar's pressed tools,
+   amber for closing distance, red only for stop and danger -- here, a ray
+   inside STOP_CM and a bump. A backward wheel takes the one colour the panel uses
    nowhere else, so it never reads as a warning. .sim names the rest after
    the look's tokens. */
 
@@ -18,7 +19,7 @@
   --sim-box: var(--raised-hi);
   --sim-box-edge: var(--faint);
   --sim-plate-edge: var(--readout);
-  --sim-fwd: var(--live);
+  --sim-fwd: var(--ok);
   --sim-free: var(--faint);
   /* The bar's buttons: a full touch target, the panel's one control
      height, on every layout. */
@@ -82,7 +83,7 @@
   font-size: var(--t-sm);
   color: var(--readout);
   background: var(--raised);
-  border: 1px solid transparent;
+  border: 1px solid var(--edge);
   border-radius: var(--r-sm);
   text-overflow: ellipsis;
 }
@@ -226,6 +227,11 @@
 
 .sim-rays line { stroke-width: 1.5; stroke-linecap: round; }
 .sim-rays line[data-echo="none"] { stroke-dasharray: 3 4; }
+
+/* A return closing in or at STOP is heavy, a clear one thin: green and
+   amber share a lightness, so the weight tells them apart as well as the
+   hue (simview.js sets data-zone; the key below matches). */
+.sim-rays line:is([data-zone="warn"], [data-zone="stop"]) { stroke-width: 3; }
 
 .sim-bump circle,
 .sim-bump path {
@@ -557,7 +563,8 @@
 
 .sim-swatch.ray.stop { border-color: var(--stop); }
 .sim-swatch.ray.warn { border-color: var(--warn); }
-.sim-swatch.ray.live { border-color: var(--live); }
+.sim-swatch.ray:is(.stop, .warn) { border-top-width: 4px; }
+.sim-swatch.ray.clear { border-color: var(--ok-body); }
 .sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
 
 /* Folded open over the room, under the controls that open it, however many

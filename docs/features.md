@@ -3,7 +3,8 @@
 The owner's requests for the browser panel and the controls, from
 2026-10-03. All seven steps of the [order of work](#order-of-work) are done,
 and so are [F5](#f5-themes-and-options), from a second message that evening,
-and [F6](#f6-firmware-updates-from-the-panel), from the next morning;
+[F6](#f6-firmware-updates-from-the-panel), from the next morning, and
+[F7](#f7-darker-looks-and-a-dark--light-toggle), from 2026-11-05;
 what [F4](#f4-other-buttons) deferred waits for the owner. [project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
@@ -60,6 +61,12 @@ Remind to check for ota feature as I had  and add it the the dashboard ui
 Make sure to not commit WiFi details
 ```
 
+And one on 2026-11-05, at 18:52 UTC:
+
+```text
+please work on changing this cyan/teal them... i hate it. make it darker and more contrasting with for intuitive and clear controls. add dardk/light option as toggle in settings
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -95,6 +102,10 @@ Make sure to not commit WiFi details
 | Remind to check for ota feature as I had | Done: [F6](#f6-firmware-updates-from-the-panel), "What was there" |
 | and add it the the dashboard ui | Done: [F6](#f6-firmware-updates-from-the-panel) |
 | Make sure to not commit WiFi details | Done: [F6](#f6-firmware-updates-from-the-panel), the last bullet of "Done" |
+| please work on changing this cyan/teal them... i hate it. | Done: [F7](#f7-darker-looks-and-a-dark--light-toggle), no teal left in any look |
+| make it darker and more contrasting | Done: [F7](#f7-darker-looks-and-a-dark--light-toggle), Console Dark on black, controls edged at 3:1 |
+| with for intuitive and clear controls. | Done: [F7](#f7-darker-looks-and-a-dark--light-toggle), the chosen segment inverted, one job per hue |
+| add dardk/light option as toggle in settings | Done: [F7](#f7-darker-looks-and-a-dark--light-toggle), Dark \| Light in Options |
 
 ## Order of work
 
@@ -123,7 +134,9 @@ Make sure to not commit WiFi details
 [F5](#f5-themes-and-options), themes and the Options gear, came later and
 was done beside steps 1 to 4, by its own thread, and
 [F6](#f6-firmware-updates-from-the-panel), firmware updates from the panel,
-beside steps 6 and 7.
+beside steps 6 and 7. [F7](#f7-darker-looks-and-a-dark--light-toggle),
+darker looks and a Dark | Light toggle, came on 2026-11-05, beside the
+layout work the owner asked for the same day.
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1024 x 768, 1180 x 820, 1280 and about 1600 px (see the handoff for
@@ -1202,7 +1215,9 @@ on each change, and a script holds every look to WCAG AA.
   grey); Field, the most contrast, for glare or a bright room; and
   Blueprint, tinted navy or pale blue. Six tiles in one
   radio set, each a miniature of the panel in its look's colours, drawn by
-  CSS alone (no `:has()`, which Firefox lacked before 121).
+  CSS alone (no `:has()`, which Firefox lacked before 121). [F7](#f7-darker-looks-and-a-dark--light-toggle)
+  replaced the teal colours and the six tiles with a Dark | Light toggle
+  and a tile per theme.
 - Every colour is a token in `css/looks.css`, one block per look, keyed by
   `data-look` on `<html>`. `js/look.js` loads in `<head>` and puts on the
   remembered look (`rover.look` in localStorage, prefixed because Chrome
@@ -1213,19 +1228,22 @@ on each change, and a script holds every look to WCAG AA.
   phone on its side, the mode pill gives way to it: Autonomous lights while
   the rover explores. Under 500 px upright the wordmark keeps its mark and
   drops its word, and on a phone on its side under 780 px the pills drop
-  their lamps, so the status keeps its row. At 480 x 320 "Motors OK" is cut
-  short beside the gear, as main cuts "No motor shield" there, and "No motor
-  shield" is cut on a phone on its side about 530 to 600 px wide and 375 to
-  430 tall, a band main cuts it in too, a little narrower (the fault's card
-  under it says it in full).
+  their lamps (since [F7](#f7-darker-looks-and-a-dark--light-toggle), Link
+  and Motors OK keep theirs while all is well), so the status keeps its
+  row. In Chromium no pill is cut short on a phone on its side from 480 x
+  320 up, "Motors OK" with its lamp and "No motor shield" included; a
+  phone's own font may still cut one (the fault's card under it says it in
+  full).
 - What takes a colour as a plain value is given it again on a change:
   joy.js's stick (built again, letting go of a held stick first as a scheme
   change does: one STOP only if it was driving, and its caption asks for a
   fresh press), Blockly's theme and the browser's `theme-color`, which
   `look.js` paints in `<head>`, with the first paint. The stick's knob
-  shades toward a rim of its look's own (`--stick-rim`): Console Dark's is
-  the one `drive.js` gave joy.js before (`#1c1e21`), and a light look's is
-  its dark teal, where the case colour had faded the knob into its well. A
+  shades toward a rim of its look's own (`--stick-rim`): Console Dark's was
+  the one `drive.js` gave joy.js before (`#1c1e21`), and a light look's its
+  dark teal, where the case colour had faded the knob into its well; since
+  [F7](#f7-darker-looks-and-a-dark--light-toggle) every look's rim is a dark
+  blue (Console Dark's `#1d3f73`). A
   look picked on the Program tab is drawn on the stick as the Drive tab is
   shown.
   Where no look can be read (`css/looks.css` missing), the stick takes
@@ -1352,6 +1370,118 @@ checklist](bench-checklist.md), section 10, "Updating from the panel". And
 the section's look in each theme on a laptop and an iPad-size screen;
 Safari is untested.
 
+## F7. Darker looks and a Dark | Light toggle
+
+**Asked** (2026-11-05, 18:52 UTC): "please work on changing this cyan/teal
+them... i hate it. make it darker and more contrasting with for intuitive
+and clear controls. add dardk/light option as toggle in settings"
+
+**What was there.** F5's six looks, Console Dark the default: a slate case
+(`#0b0d11`) with one teal accent (`#4db8a8`) for the operator's controls
+and the rover doing well alike: the stick's knob, the open tab, Link, a
+clear way on the scan, Autonomous lit, Run and a running program. Controls
+were set apart by a lighter fill, not an edge, and the chosen segment was a
+slightly lighter grey than its track. Options held six tiles in one radio
+set, a tile per look.
+
+**Done.**
+- Console Dark, still the default, is black (`#000000` case, `#111214`
+  cards) with white ink, and its buttons, switch tracks, fields and theme
+  tiles are edged (`--edge`) at 3:1 against what they sit on (a filled
+  button and a menu's rows excepted), so each reads as a control at a
+  glance. The light looks and Field and Blueprint got the same edges.
+- The chosen segment of every switch (Drive | Program, Normal | Advanced,
+  Rover | Simulator, the stick family, Dark | Light) is inverted: the
+  page's ink as its fill (`--chosen`) and its word in `--on-chosen`: the
+  case colour in a dark look, white in a light one. It stays legible where
+  the switch is disabled or stale, and whatever else marks the chip (a
+  scheme asked for again, the open Program tab's running dot) takes the
+  same ink. On the narrowest layouts (under 360 px upright, and the stick
+  family on a phone on its side under about 570 px) the words are a size
+  smaller, so none runs past its chip onto the frame, where that ink
+  vanishes.
+- The teal is gone from every look, tints included: a faint green over
+  Blueprint's navy or pale blue mixed to it, so there the green tint is
+  opaque and a clear way's body (`--ok-body`) a yellower green, and
+  nothing fades a green out over its ground: the clear ways the scan keeps
+  once the link goes are grey (by their colours: WebKit applies no filter
+  to an SVG shape), the simulator's clear rays fade in `--ok-body` too, a
+  running program's halo breathes in its own tint, the running block is
+  edged in green with no glow, and the chosen toolbox category is ringed
+  in the ink on a raised ground, not tinted. `looks.test.js` holds
+  every look's greens, as drawn on their grounds, and every block colour
+  out of the teal hues, and fails a stylesheet that fades a colour out. Its one job is split in two, so each
+  hue has one: blue (`--live`) for the operator's own controls (the knob,
+  the slider, focus, Connect, Run, the hint glyphs), green (`--ok`) for the
+  rover doing well (Link's lamp, Motors OK's lamp, a clear way, exploring,
+  a program running or done). Amber is caution and red is Stop, as before.
+  Three judges (contrast, colour vision, what reads as "safe to drive")
+  picked blue and green over one accent, because a control and a status
+  then never look alike. Blue against green holds for every common
+  colour-vision deficiency. Green and amber share a lightness, and in a
+  light look green and red all but match for a protanope (2.4 to 4.3 apart
+  in CIEDE2000, where the teal was 13.5 or more from the same red), so
+  wherever any two of them meet a shape or a word tells them apart too
+  (below).
+- Nothing is told apart by hue alone. An all-well pill is quiet (ink and a
+  green lamp), so a fault, tinted and worded in amber or red, is what
+  stands out. A
+  clear way on the scan is drawn open (a faint fill with a green edge),
+  amber and red wedges solid; in the simulator a sonar ray closing in or
+  at STOP is drawn heavy, a clear one thin, and its key the same. A lit
+  Autonomous button is tinted and edged in green, not filled, and dashed
+  while the link is not up; the mode pill is filled green while the rover
+  explores. On a phone on its side, where the pills drop their lamps to
+  fit, Link and Motors OK keep theirs.
+- The Program tab's motion blocks were teal too (`PALETTE.motion` in
+  `js/blocks.js`, the same in every look): they are a dusky rose
+  (`#805362`), 10 or more (CIEDE2000) from every other category in normal
+  vision and under simulated protanopia and deuteranopia, where the teal
+  fell to 7 and an olive tried in review to 2 (it looked like control's
+  brown and the stop block's red). The blocks' white text is at 6.3:1.
+- Options: under Theme, a Dark | Light toggle across the popover, then a
+  tile per theme (Console, Field, Blueprint), each previewed in the flavour
+  in force. The toggle keeps the theme and a tile keeps the flavour. Every
+  look keeps its id, so a look remembered before this change still
+  applies.
+- `test/looks.test.js`'s audit takes in the new pairings: the chosen
+  segment's word, the edges on the case and on a card, blue and green as
+  text and as marks, green's own word on its fill, and the scan's rover
+  dot on its haze. Its rows for the knob at the smallest and the largest
+  stick, there since F5, now hold against each look's new dark blue
+  `--stick-rim`.
+
+**Left as it was.** Console Dark and Field Dark are now close: Field
+differs by its strong rules and its 7:1 ink. The "40 GO" tick on the scan
+stays amber, since it marks where caution starts. The light looks' amber is
+dark (it must hold as text on white), and amber and red come close in a
+light look, as before: for a protanope, and as text for a deuteranope. A no-echo wedge is full length at
+2.5:1, as before.
+
+**Tests.** `panel.test.js`: the toggle and the tiles in the popover with the
+look in force shown, the toggle keeping the theme and a tile the flavour,
+the tiles previewing the flavour in force, a remembered look restored,
+whatever is filled in `--chosen` written in `--on-chosen` (disabled and
+stale chips included), a chosen scheme also asked for and the open Program
+tab's running dot in the chip's ink, a disabled Run edged, the all-well
+lamps on a phone on its side (Link's in a rule with no `:has()`), the
+words a size down where a chip is narrowest, the running dot in its
+chip's corner on a phone, the clear wedge drawn open in `--ok-body`,
+gliding in its fill's opacity too, and grey by its colours once the link
+goes, Blockly's flyout button in the look's ink, the chosen toolbox
+category ringed in it; `sim.test.js`: each ray's zone, a near one heavy,
+a clear one and its key in `--ok-body`; `looks.test.js`: the
+audit above, Autonomous lit on the bare bar of a phone on its side, no
+teal drawn in any look or block, no stylesheet fading a colour out over
+its ground, and the motion blocks apart from every category for a
+red-green colour-blind eye. Each new test fails with the
+rule it checks broken.
+
+**Checks for the owner,** which need a real screen: Console Dark and Light
+on a laptop and a tablet, the toggle and the tiles by touch and keyboard,
+the browser bar's colour on a phone after a toggle, and the scan's green,
+amber and red in daylight.
+
 ## Menu or explicit: every control
 
 | Control | Where | Menu? | Why |
@@ -1376,7 +1506,7 @@ Safari is untested.
 | Simulator settings | simulator bar | already one | a `Popover`, like the File menu |
 | Simulator fold | Program tab, every layout (a strip down the view's side on wide) | no | a disclosure |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
-| Options (gear) | header | yes | the look: set once, moves nothing ([F5](#f5-themes-and-options)) |
+| Options (gear) | header | yes | the look, Dark \| Light and a theme: set once, moves nothing ([F5](#f5-themes-and-options), [F7](#f7-darker-looks-and-a-dark--light-toggle)) |
 | The keys' list | Options | yes | a reference that moves nothing ([F4](#f4-other-buttons)) |
 | Firmware update | Options | yes | rare, and out of driving's way; the popover is not modal, so Stop stays one press ([F6](#f6-firmware-updates-from-the-panel)) |
 
