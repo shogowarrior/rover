@@ -20,11 +20,14 @@
 
 <body data-link="down">
   <!-- The shell is a grid of the header, the open tab and the rail (the
-       fault, the scan, the readouts and Stop). On a phone they stack: the
-       scan under the header, the Drive tab as a dock under the thumbs, Stop
-       at the foot of the screen. On a wide screen the rail's parts make a
-       column on the right, the open tab fills the left, and Stop and
-       Autonomous sit in a bar across the foot. css/panel.css lays out both. -->
+       fault, the scan, the readouts, and Stop and Autonomous). On a phone
+       they stack: the scan under the header, the Drive tab as a dock under
+       the thumbs, Stop at the foot of the screen. On a wide screen the
+       header is one row, and Stop and Autonomous are drawn into it, at its
+       two ends; the rail's other parts make a column on the right beside
+       the Program tab, and the Drive tab puts the scan (or the simulator's
+       view) on the left and its dock over the readouts on the right.
+       css/panel.css lays out both. -->
   <main class="shell">
 
     <header class="bar">
@@ -33,21 +36,26 @@
 
         <!-- What the operator must know at a glance: whether the link is up,
              whether the rover is driving itself, and whether its motors
-             answered. The pills take their colour from body[data-link],
-             which link.js keeps, the Autonomous button's aria-pressed and
-             #motorsFault's data-ready, which readouts.js keeps; the motors
-             pill shows the one of its words that data-ready picks. -->
+             answered. Each is titled with what it says in full (link.js,
+             readouts.js); where a wide screen's header is short of room
+             it shows its icon alone. The pills take their colour from body[data-link],
+             which link.js keeps, and #mode's data-mode and #motorsFault's
+             data-ready, which readouts.js keeps; the motors pill shows the
+             one of its words that data-ready picks. -->
         <div class="status" role="group" aria-label="Rover status">
-          <span class="pill linkPill">
+          <span class="pill linkPill" id="linkPill" title="No link to the rover.">
             <span class="lamp" aria-hidden="true"></span>
+            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10a11 11 0 0 1 15 0M7.5 13.5a6.5 6.5 0 0 1 9 0M12 17.5h.01"/></svg>
             <span id="linkState">No link</span>
           </span>
-          <span class="pill modePill">
+          <span class="pill modePill" id="modePill">
+            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
             <span class="srOnly">Mode</span>
             <output id="mode">—</output>
           </span>
-          <span class="pill motorsPill">
+          <span class="pill motorsPill" id="motorsPill">
             <span class="lamp" aria-hidden="true"></span>
+            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/></svg>
             <span data-say="unknown">Motors</span>
             <span data-say="yes">Motors OK</span>
             <span data-say="no">No motor shield</span>
@@ -100,9 +108,16 @@
              joy.js sizes the stick from its container as it is built, and
              needs it laid out. -->
         <div class="tabs" role="tablist" aria-label="Controls">
-          <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true">Drive</button>
+          <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true"
+                  title="Drive: the sticks, the rotate buttons and the speed.">
+            <svg class="icon segIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.4 5.5l-.9 4a2.6 2.6 0 0 1-4.5 1.2L14 16h-4l-1.5 1.7A2.6 2.6 0 0 1 4 16.5l-.9-4A4.5 4.5 0 0 1 7.5 7z"/><path d="M8 10v3M6.5 11.5h3M15.5 10.5h.01M17 12.5h.01"/></svg>
+            <span class="segWord">Drive</span>
+          </button>
           <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
-                  tabindex="-1">Program</button>
+                  tabindex="-1" title="Program: build a program from blocks, and run it on the target.">
+            <svg class="icon segIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+            <span class="segWord">Program</span>
+          </button>
         </div>
 
         <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
@@ -123,12 +138,14 @@
       </div>
 
       <div class="link">
-        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false">
+        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false"
+               title="The rover's address: host, or host:port. Enter connects.">
         <button id="connect">Connect</button>
       </div>
 
-      <!-- What link.js has to say, under the address: how to connect, and
-           why the link went. Empty while all is well. -->
+      <!-- What link.js has to say, under the address (beside it, in a wide
+           screen's one row, where its title holds it whole): how to
+           connect, and why the link went. Empty while all is well. -->
       <p id="note" aria-live="polite"></p>
     </header>
 
@@ -165,11 +182,13 @@
         </div>
 
         <div class="spin" role="group" aria-label="Rotate">
-          <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q">
+          <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q"
+                  title="Rotate left (Q): counter-clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
             <span>Left</span>
           </button>
-          <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E">
+          <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E"
+                  title="Rotate right (E): clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
             <span>Right</span>
           </button>
@@ -179,7 +198,8 @@
           <span class="label" id="speedLabel">Speed</span>
           <output id="speedOut">64</output>
           <input type="range" id="speed" min="0" max="255" step="8" value="64"
-                 aria-labelledby="speedLabel">
+                 aria-labelledby="speedLabel"
+                 title="Speed (- and +): the top speed the sticks and the rotate buttons drive at.">
         </div>
       </div>
     </section>
@@ -187,19 +207,14 @@
     <!-- The Drive tab's view of the simulator, where its controls drive the
          simulated rover while the target is Simulator: app.js moves the
          simulator's one view (simview.js) into #driveSimSlot then, and back
-         to the Program tab's #simSlot otherwise. On a wide screen it keeps
-         its place beside the dock on either target, saying what it is for
-         while the target is the rover, so a switch never moves the stick;
-         on a phone it takes the scan's place, and only on the simulator
+         to the Program tab's #simSlot otherwise. It shows only on the
+         simulator: on a wide screen as the left side of the page, beside
+         the dock's column, where the rover's scan is on the rover, so a
+         switch never moves a stick; on a phone in the scan's place
          (panel.css). Beside the dock, never around it: the simulator's
          boxes are positioned and contained, and no ancestor of the stick may
          be. -->
     <section class="driveView" id="driveView" aria-label="Simulator">
-      <p class="driveViewOff">
-        <strong>Simulator</strong>
-        <span>Choose Simulator at the top to try these controls on a simulated rover. They drive only it then, and
-          Stop stops the rover too.</span>
-      </p>
       <div id="driveSimSlot"></div>
     </section>
 
@@ -287,11 +302,12 @@
       </div>
     </section>
 
-    <!-- The rail: what the rover reports, and Stop. Its parts are rows of
+    <!-- The rail: what the rover reports, and Stop. Its parts are cells of
          the shell's grid: on a phone the scan above the open tab and Stop at
-         the foot of the screen; on a wide screen a column beside the open
-         tab, as wide beside both, with Stop and Autonomous in a bar across
-         the foot under the two columns, which the tab switch never moves.
+         the foot of the screen; on a wide screen a column beside the
+         Program tab, the scan on the left of the Drive tab and the readouts
+         under its dock, with Stop and Autonomous in the header's row, which
+         the tab switch never moves.
          It comes after the tabs so that Stop is the last control in the
          focus order. -->
     <div class="rail">
@@ -335,19 +351,22 @@
         <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
       </section>
 
-      <!-- Outside the tabs, and at the foot of the screen: Stop is in reach
-           whatever tab is showing and wherever the page is scrolled, and
-           switching tabs does not move it. -->
+      <!-- Outside the tabs, at the foot of a phone's screen and in a wide
+           screen's header: Stop is in reach whatever tab is showing and
+           wherever the page is scrolled, and switching tabs does not move
+           it. Autonomous is a toggle, on while the target explores
+           (autotoggle.js). Each word is the button's name; a wide screen
+           shows the icons alone, and the titles say the rest. -->
       <div class="actions">
         <button id="auto" aria-pressed="false" aria-keyshortcuts="T"
-                title="Let the rover explore. If exploration has halted, it looks again.">
+                title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
-          Autonomous
+          <span class="actionWord">Autonomous</span>
         </button>
         <button id="stop" aria-keyshortcuts="Space"
-                title="Stop the rover now, whatever is driving it, even its own exploring.">
+                title="Stop (Space): stop the rover now, whatever is driving it, even its own exploring.">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          Stop
+          <span class="actionWord">Stop</span>
         </button>
       </div>
     </div>
@@ -379,6 +398,7 @@
   <script src="js/drive.js"></script>
   <script src="js/keys.js"></script>
   <script src="js/scheme.js"></script>
+  <script src="js/autotoggle.js"></script>
   <script src="js/family.js"></script>
   <script src="js/tabs.js"></script>
   <script src="js/ask.js"></script>

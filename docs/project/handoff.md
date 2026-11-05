@@ -252,6 +252,35 @@ Host tests 192/192, panel tests 301/301, the protocol check and every board
 build pass. That thread built and tested the firmware in its own container
 despite the registry block: see "Firmware builds in a cloud thread" below.
 
+On 2026-11-05 the owner left four comments on the try-it page: the Drive
+tab's view of the simulator was still the smallest pane; the dock and the
+right pane wasted space, and should be tiled vertically with a side split
+for the view; Stop was too big, and should be an icon beside the gear,
+every button with hover hints, and Autonomous a toggle; and the header's
+two or three lines should be one. The first thread did all four in one
+PR, panel only (features.md, F3i and F3j):
+
+- from 960 px wide the Drive tab splits the page: on the left, at the
+  page's height, the simulator's view on the simulator target and the
+  rover's scan on the rover target; on the right one column (`--drive`, at
+  most 45% of the screen), the dock with the readouts on one line under it;
+- the header is one 44 px row beside both tabs: the mark, the Autonomous
+  toggle, the status pills, the tabs, the scheme and the target as icons
+  with hover hints, the address, the note (two lines at most), and Stop, a
+  red icon, beside the gear, with the note, not Disconnect, beside Stop;
+  there is no foot bar on a wide screen;
+- every button on the page has a hover hint saying what it does;
+- Autonomous is a toggle on every layout (`js/autotoggle.js`): on while the
+  target explores, a press turns it off (STOP) or on (RESUME_AUTONOMOUS);
+  on the simulator target it shows the simulator's mode, and the mode pill
+  keeps the rover's, on a phone in the motors pill's place;
+- the Program tab gains the header's and the foot bar's height, and every
+  phone layout is as it was but for that pill. The view's room is twice as
+  wide as on main at 1280 x 800 (600 x 450, from 296 x 222) and about 60%
+  wider at 1366 x 657 (542 x 407, from 344 x 258); below 1180 px wide the
+  sticks are smaller (194 px at 1024 x 768, from 282), and above it larger
+  (252 at 1280 x 800, from 202).
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -276,7 +305,10 @@ F4 deferred is under "Open, not started" below:
    use visibly disabled.
 7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
-F6, firmware updates from the panel, came later and is done too.
+F6, firmware updates from the panel, came later and is done too, and so
+are F3i, the Drive tab split for a larger view, and F3j, the header in
+one row with Stop beside the gear and Autonomous a toggle, from the
+owner's comments on the try-it page.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -311,16 +343,10 @@ and the next thread's task names that branch.
 - F5's checks for the owner, which need a real screen: features.md, F5,
   lists them, and what it left as it was (Blockly's focus colours, its
   faint zoom and trash icons).
-- The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. A later header change (F1 moved the Rover |
-  Simulator switch into the header) can give it the header's right end.
-  Moving it means updating the panel test that pins it to the masthead's
-  end, and keeping it within `--tap-lg` of the top, which the popover's
-  height cap assumes.
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
   traceback, and no committed stand-in rover.
-- No owner answers yet to the 20 questions (features.md, "The owner's
+- No owner answers yet to the 22 questions (features.md, "The owner's
   answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud
   review, has never run on this code. Only the owner can start it, as with

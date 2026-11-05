@@ -393,8 +393,7 @@ A held rotate button or key carries on, except on the simulator target
 (below).
 The scan, the readouts and the Stop and Autonomous buttons stay on screen on
 both tabs, connected or not, but for one exception: on the simulator target
-the Drive tab's view of the simulator takes the scan's place on a phone, and
-in the rail from 960 to 1179 px wide.
+the Drive tab's view of the simulator takes the scan's place.
 Until the rover's first frame the scan's card says no rover is connected, at
 its full size, and after a link goes it keeps the last scan, dimmed. Stop
 and Autonomous stay in the same place; on a phone the scan gives the Program
@@ -402,13 +401,14 @@ tab room as a strip above it.
 
 **The keyboard** (`js/keys.js`) takes `client/drive.py`'s keys: W S forward
 and back, A D strafe, Q E rotate, - and + the speed by 16, Space Stop, T
-Autonomous. A drive key is held as a rotate button is, through the Driver
+Autonomous on or off. A drive key is held as a rotate button is, through the Driver
 (`holdKey()`): it drives from its keydown to its keyup, held by where it is
 on the keyboard (`event.code`) because its keyup may type something else
 (AltGr on Linux, a layout switched mid-hold), the keyboard's own repeats are
 not presses, and the rotate button or key pressed last wins, one move at a
 time. The drive and speed keys act on the Drive tab alone;
-Space and T press the Stop and Autonomous buttons, on either tab, and
+Space and T press Stop and the Autonomous toggle, on either tab (so T on
+a rover reported exploring stops it, where `drive.py`'s always resumes), and
 Space's keydown and keyup are both cancelled, so a focused button (Run,
 Connect) is never clicked as well; Enter in the address connects and leaves
 the field, so Space stops from there. A keydown is not the panel's in a
@@ -433,20 +433,27 @@ two edges, the rotate buttons under the left and the speed under the right,
 and the header, the scan, and Stop and Autonomous sit in the middle column
 between them, in reach of either thumb; the dock stops at the screen's
 height, so a middle column that outgrows a short screen moves neither
-stick. On a wide screen (960 px by 521 px and up) the open tab fills the
-left, and the rail, one width (`--rail`) beside both tabs, holds the
-address, the note, the scan and the readouts on the right, so the tab
-switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
-under the left pane (at most 480 px) and Autonomous under the rail. From
-1180 px wide the Drive tab splits the left pane: the dock as wide as its
-sticks, each at most a quarter of the pane, and beside it the simulator's
-view, or on the rover target a card holding its place, so a switch of
-target moves nothing. Narrower the pane has no room for both, so the dock
-is the same on either target and the view takes the scan's cell in the
-rail. Each stick is as large as what is above and under it, and the width
-around it, leave; `css/panel.css` sums each layout's budget, from the
-viewport alone (`--stick`).
-In the scan's place, there or on a phone, the view is its row's height,
+stick. On a wide screen (960 px by 521 px and up) the header is one row,
+44 px tall, the same beside both tabs: the mark, the Autonomous toggle, the
+status pills, the tabs, the scheme and the target as icons with their
+hints on hover, the address, the note (two lines at most, the whole of it
+on hover), and Stop, red, beside the gear. Stop and Autonomous are the
+rail's last elements, for the focus order and a phone's foot, drawn into
+the header's row by the grid, at its two ends so a hand reaching for Stop
+cannot start the rover exploring, nor land on Disconnect, which would
+leave an exploring rover exploring and the panel no link to stop it: the
+note, which takes no press, is Stop's neighbour, never under 24 px wide.
+Up to 1280 px wide each status pill is its icon alone, titled with what it
+says. Every button on the page says on hover what it does. Beside the Program tab the rail,
+one width (`--rail`), holds the scan and the readouts. The Drive tab splits
+the page instead: on the left, at the page's height, what its controls
+drive, the simulator's view on the simulator target and the scan on the
+rover target; on the right one column (`--drive`, at most 45% of the
+screen), the dock with the readouts on one line under it, so a switch of
+target moves no stick. Each stick is as large as what is above and under
+it, and the width around it, leave; `css/panel.css` sums each layout's
+budget, from the viewport alone (`--stick`).
+In the scan's place on a phone the view is its row's height,
 under 300 px on most phones, so it shows the wheels and the motion rather
 than a room too small to read (`css/sim.css`), and on a short phone the
 move alone. The Program tab puts the simulator's view beside the editor, as tall as its
@@ -484,7 +491,10 @@ choice; it loads in `<head>`, so the page is drawn in that look from the
 first paint, and paints the browser's bar (`theme-color`) then too. The
 popover is not modal: Stop stays one press while it is open. On an upright
 phone under 440 px, and on a phone on its side, the mode pill gives way to
-the gear; Autonomous lights while the rover explores. What takes a colour as
+the gear; on a wide screen it gives way to the Autonomous toggle. On the
+simulator target, where the toggle shows the simulator's mode, the pill
+keeps the rover's on every layout, in the motors pill's place on those
+phones. What takes a colour as
 a plain value (joy.js's canvas, Blockly's theme, the browser's bar) is given
 it again on a change, through `lookToken()`; everything else follows
 through `var()`. A new colour is a token in every look, never a literal:
@@ -508,6 +518,17 @@ a fresh press once ADVANCED is back, as the line over it then asks; the
 translate stick, a held rotate button and a running program carry on. A
 family chosen under a held pivot stick re-steers it at once, as on the
 gamepad.
+
+**The Autonomous toggle** (`js/autotoggle.js`) is on while the target
+explores, as telemetry reports it (the simulator's mode on the simulator
+target, `AutoToggle.bind()`), never as asked. A press turns it the other
+way through the Driver: pressed while off it sends RESUME_AUTONOMOUS
+(`Driver.resumeAutonomous()`), pressed while on STOP (`Driver.stopRover()`,
+whose stand-down names Autonomous, not Stop, as what was pressed), each a
+press that lets go of everything held and stops a program. Until a frame
+names the mode it is off, so a press resumes, as the button it replaced
+did. A halted rover still reports AUTONOMOUS, so off and on again retries
+it at once.
 
 **The target switch**, Rover | Simulator in the header, is a `TargetSwitch`
 (`js/targetswitch.js`) for the whole page: what the Drive tab's controls

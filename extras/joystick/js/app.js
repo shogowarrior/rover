@@ -12,8 +12,8 @@
  * <head>, the rest at the foot of <body>, after the vendored joy.js:
  *
  *   support.js       what the parts share: Listeners, memory, dom, segment,
- *                    pressSegment, clamp, radians, degrees, abortableWait,
- *                    isPrimaryPress, reportFault
+ *                    pressSegment, labelSegment, clamp, radians, degrees,
+ *                    abortableWait, isPrimaryPress, reportFault
  *   look.js          LookPicker, lookToken: the page's looks, the one in
  *                    force, and the tiles that pick one
  *   protocol.js      the firmware's constants: move codes, scheme and mode names,
@@ -28,6 +28,8 @@
  *   keys.js          Keyboard: client/drive.py's keys, driving through the Driver
  *   scheme.js        SchemeToggle: the control scheme, NORMAL or ADVANCED: the
  *                    rover's, or on the simulator target the simulator's
+ *   autotoggle.js    AutoToggle: the Autonomous toggle, on while the target
+ *                    explores
  *   family.js        FamilySelector: the pivot stick's family, and both
  *                    sticks' labels
  *   tabs.js          Tabs: the Drive and Program tabs
@@ -69,6 +71,7 @@ const link = new Link({
   body: document.body,
   host: byId("host"),
   connect: byId("connect"),
+  linkPill: byId("linkPill"),
   linkState: byId("linkState"),
   note: byId("note"),
   storageKey: "rover.host",
@@ -77,12 +80,13 @@ const link = new Link({
 const scanView = new ScanView(byId("scan"));
 
 const readouts = new Readouts({
+  modePill: byId("modePill"),
   mode: byId("mode"),
   move: byId("move"),
   phaseCell: byId("phaseCell"),
   phase: byId("phase"),
   temp: byId("temp"),
-  auto: byId("auto"),
+  motorsPill: byId("motorsPill"),
   motorsFault: byId("motorsFault"),
 });
 
@@ -165,14 +169,20 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 // sends STOP, driving or not: it is also how to stop an exploring rover. On
 // the simulator the Driver's STOP goes there, and Stop sends one to a
 // connected rover too, since Stop means everything: first, so that nothing
-// the simulator does can keep it from the rover. Autonomous acts on the
-// simulator alone. Both also stop a program, a preview included: see the
-// Program tab's block.
+// the simulator does can keep it from the rover. Autonomous is a toggle,
+// on while the target explores: a press turns it the other way, on the
+// target alone, so on the simulator it leaves the rover be (the target's
+// block binds it there). Both also stop a program, a preview included: see
+// the Program tab's block.
 byId("stop").addEventListener("click", () => {
   if (driven.simulator) link.send({ move: STOP, speed: 0, duration: MOVE_DURATION_MS });
   driver.stopRover();
 });
-byId("auto").addEventListener("click", () => driver.resumeAutonomous());
+const autoToggle = new AutoToggle({ button: byId("auto"), driver });
+link.onTelemetry((data) => autoToggle.show(data));
+link.onState((state) => {
+  if (state === "connecting") autoToggle.clear();
+});
 
 /* --- the keyboard -------------------------------------------------------- */
 
@@ -308,13 +318,15 @@ const autoButton = byId("auto");
 const autoTitle = autoButton.getAttribute("title");
 // The scheme toggle shows and sets the target's scheme: the simulator's is
 // its own, so Normal | Advanced work with no rover, and the Drive tab's
-// family follows it as it follows the rover's.
+// family follows it as it follows the rover's. The Autonomous toggle shows
+// the target's mode.
 function driveTarget(kind) {
   driven.simulator = kind === "simulator" ? targets.simulator : null;
   schemeToggle.bind(driven.simulator);
+  autoToggle.bind(driven.simulator);
   document.body.dataset.target = kind;
   autoButton.setAttribute("title", driven.simulator
-    ? "On the simulator: the simulated rover takes the mode, but exploring is not simulated, so it stands still. The rover is left alone."
+    ? "Autonomous (T), on the simulator: on, the simulated rover takes the mode, but exploring is not simulated, so it stands still; off, it stops. The rover is left alone."
     : autoTitle);
 }
 driveTarget(targetSwitch.kind);
@@ -403,15 +415,18 @@ schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 
 // A program driving the rover from the Program tab goes on while the Drive
 // tab shows, and nothing there said so: the tab itself is marked while one
-// runs. A press of any drive control takes over, as ever.
+// runs, and says so on hover. A press of any drive control takes over, as
+// ever. Its own title, what the tab is, comes back after: on a wide screen
+// the tab is its icon alone.
 const programTabButton = byId("tabProgram");
+const programTabTitle = programTabButton.getAttribute("title");
 runner.onState((state, { kind }) => {
   if (state !== "idle" && kind === "rover") {
     programTabButton.dataset.running = "yes";
     programTabButton.setAttribute("title", "A program is driving the rover. Any drive press, Stop or Autonomous takes over.");
   } else {
     delete programTabButton.dataset.running;
-    programTabButton.removeAttribute("title");
+    programTabButton.setAttribute("title", programTabTitle);
   }
 });
 

@@ -42,8 +42,8 @@
  */
 class FamilySelector {
   static OPTIONS = Object.freeze([
-    Object.freeze({ family: FAMILY_PIVOT, label: "Pivot" }),
-    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways" }),
+    Object.freeze({ family: FAMILY_PIVOT, label: "Pivot", title: "Pivot: the right stick turns the rover about the wheels on one side (L1 on the pad)." }),
+    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways", title: "Pivot sideways: the right stick swings the front or the rear about the other axle (R1 on the pad)." }),
   ]);
 
   // Each family's icon, as an SVG path in a 16-unit box, drawn for the
@@ -152,7 +152,13 @@ class FamilySelector {
     const { group, pad, label, note } = this.#ui;
     const offered = this.#offered;
     pressSegment(this.#buttons, this.#family);
-    for (const button of this.#buttons.values()) button.disabled = !offered;
+    // Each segment says what its family does, and while the pivots are off
+    // why it cannot be chosen (F3f: disabled, with a title that says why).
+    for (const { family, title } of FamilySelector.OPTIONS) {
+      const button = this.#buttons.get(family);
+      button.disabled = !offered;
+      button.title = offered ? title : `${title} ${FamilySelector.OFF_TITLE}`;
+    }
     group.dataset.off = offered ? "no" : "yes";
     pad.dataset.off = offered ? "no" : "yes";
     pad.title = offered ? "" : FamilySelector.OFF_TITLE;

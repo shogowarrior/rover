@@ -6,10 +6,11 @@
    Thumb-first. On a phone the Drive tab is a dock at the foot of the screen,
    the stick under the left thumb, the rotate buttons and Stop under the
    right, and the scan sits at the top where a glance finds it. On a wide
-   screen the same parts sit side by side: the open tab on the left, the
-   rail of what the rover reports on the right, one width beside both tabs,
-   and Stop and Autonomous in a bar across the foot, Stop under the left
-   pane and Autonomous under the rail.
+   screen the same parts sit side by side: beside the Program tab the rail
+   of what the rover reports on the right; the Drive tab split in two, what
+   it drives on the left (the simulator's view, or the rover's scan) and
+   the dock with the readouts on the right; and the header one row, with
+   Stop beside the gear and Autonomous at the row's other end.
 
    One rule shapes the layout: nothing that contains the stick may be
    positioned, transformed, filtered or contained. joy.js places a touch by
@@ -264,8 +265,9 @@ input[type="range"]::-moz-range-thumb {
 /* A menu hangs under its button, right edges together, over whatever is
    below: the holder is positioned for it, and is never an ancestor of a
    stick. Over the block editor and the simulator, which keep their own
-   layers inside them, and under the Stop bar (z-index 2), which nothing
-   may cover. */
+   layers inside them, and under a phone's Stop bar (z-index 2), which
+   nothing may cover. On a wide screen Stop is in the header's row, which
+   a menu hangs below. */
 .menuHolder {
   position: relative;
   flex: none;
@@ -374,13 +376,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* The popover wears the File menu's .menu, above: under its button, right
-   edges together, over the page and under the Stop bar. As wide as a phone
-   on its side leaves left of the gear, and never taller than the screen
-   between the gear, which sits within --tap-lg of the top in every layout,
-   and the Stop bar, at most --tap-lg and its padding tall in every layout:
-   it scrolls inside rather than scroll the page, which would move the
-   stick. Down to the screen's foot, its Firmware section's last lines
-   (Update, the progress bar, how the update went) lay under the bar. */
+   edges together, over the page and under a phone's Stop bar. As wide as a
+   phone on its side leaves left of the gear, and never taller than the
+   screen between the gear, which sits within --tap-lg of the top in every
+   layout, and the Stop bar, at most --tap-lg and its padding tall where
+   there is one (a wide screen has none, and keeps the margin): it scrolls
+   inside rather than scroll the page, which would move the stick. Down to
+   the screen's foot, its Firmware section's last lines (Update, the
+   progress bar, how the update went) lay under the bar. */
 .options {
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
@@ -728,6 +731,11 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-md);
 }
 
+/* A header segment's icon is for the wide layout's one row; elsewhere its
+   word names it (labelSegment, support.js). So is a status pill's. */
+.segIcon,
+.pillIcon { display: none; }
+
 .tabs [role="tab"],
 .segmented button {
   flex: 1 1 0;
@@ -806,8 +814,9 @@ input[type="range"]::-moz-range-thumb {
 /* A pill gives way before it overflows: what it says is cut short, never
    drawn over its neighbour or the gear. The layouts size them so it
    seldom is: below 440 px, and on a phone on its side, the mode pill gives
-   way altogether (below), so the longest set there is "Link" and "No motor
-   shield" beside the mark and the gear. */
+   way altogether (below), or on the simulator target the motors pill, so
+   the longest set there is "Link" and "No motor shield" beside the mark
+   and the gear. */
 .pill {
   --pill-x: calc(var(--s-1) + var(--s-0));
   display: inline-flex;
@@ -858,11 +867,16 @@ body[data-link="down"] :is(.modePill, .motorsPill),
 body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 
 /* An upright phone's row also holds the gear, and three pills beside it
-   ran out of room: the mode pill gives way to the Autonomous button at the
+   ran out of room: the mode pill gives way to the Autonomous toggle at the
    foot, lit while the rover explores, as it does on a phone on its side
-   (see that layout). */
+   (see that layout). On the simulator target the toggle shows the
+   simulated rover's mode, so the pill keeps the rover's, and the motors
+   pill gives way instead: the rover's motors drive nothing there, and a
+   fault still shows as its strip. Nothing else said a rover started
+   exploring before the switch was still moving by itself. */
 @media (max-width: 439.98px) {
-  .modePill { display: none; }
+  body:not([data-target="simulator"]) .modePill,
+  body[data-target="simulator"] .motorsPill { display: none; }
 }
 
 /* readouts.js reports "MANUAL" and "AUTONOMOUS"; the pill says them in
@@ -877,15 +891,15 @@ body[data-link="connecting"] :is(.modePill, .motorsPill) { display: none; }
 /* Only a live link's mode is shown as current: a link that went keeps the
    last mode, greyed. Exploring is the loud one -- the rover is moving by
    itself -- and fills the pill. */
-body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill { color: var(--readout); }
-body[data-link="up"]:has(#auto[aria-pressed="false"]) .modePill::before { background: var(--live); }
+body[data-link="up"] .modePill:has(#mode[data-mode="MANUAL"]) { color: var(--readout); }
+body[data-link="up"] .modePill:has(#mode[data-mode="MANUAL"])::before { background: var(--live); }
 
-body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill {
+body[data-link="up"] .modePill:has(#mode[data-mode="AUTONOMOUS"]) {
   color: var(--on-live);
   background: var(--live);
 }
 
-body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before {
+body[data-link="up"] .modePill:has(#mode[data-mode="AUTONOMOUS"])::before {
   animation: pending 700ms ease-in-out infinite alternate;
 }
 
@@ -1447,8 +1461,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   background: var(--live);
 }
 
-/* The last mode a link that went reported: exploring then, not known now. */
-body:not([data-link="up"]) #auto[aria-pressed="true"] {
+/* The last mode a link that went reported: exploring then, not known now.
+   The simulator's is always known. */
+body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="true"] {
   color: var(--live);
   background: var(--live-soft);
 }
@@ -1478,11 +1493,10 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 /* --- the Drive tab's view of the simulator ---------------------------------- */
 
-/* Beside the dock, never around it (joystick.html says why). On a phone it
-   shows only on the simulator, in the scan's place (below); on a wide
-   screen beside the dock, on either target. #driveSimSlot is the
-   simulator's view's while the Drive tab drives it (app.js), and
-   .driveViewOff says what the place is for while the target is the rover. */
+/* Beside the dock, never around it (joystick.html says why), and only on
+   the simulator: on a phone in the scan's place (below), on a wide screen
+   the left side of the page (F3i). #driveSimSlot is the simulator's
+   view's while the Drive tab drives it (app.js). */
 .driveView {
   grid-area: scan;
   display: none;
@@ -1490,30 +1504,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   min-width: 0;
   min-height: 0;
 }
-
-.driveViewOff {
-  display: grid;
-  place-content: center;
-  gap: var(--s-1);
-  flex: 1 1 auto;
-  margin: 0;
-  padding: var(--s-5);
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
-  text-align: center;
-  text-wrap: balance;
-  color: var(--dim);
-  background: var(--panel);
-  border: 1px dashed var(--rule);
-  border-radius: var(--r-xl);
-}
-
-.driveViewOff strong {
-  font-size: var(--t-md);
-  color: var(--readout);
-}
-
-.driveViewOff span { max-width: 36ch; }
 
 /* clip, as #simSlot's (program.css): the settings' scroll margin. */
 #driveSimSlot {
@@ -1536,9 +1526,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 @container driveview (max-height: 63.98px) {
   #driveSimSlot .sim { padding-block: var(--s-1); }
 }
-
-body[data-target="simulator"] .driveViewOff,
-body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
 /* --- the other layouts ------------------------------------------------------- */
 
@@ -1609,7 +1596,10 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
      phone (79 px of row at 375 x 667) and the stick under the Stop bar, and
      beside a landscape stick (see its block) slid the stick half off the
      screen. The Program tab has no stick and scrolls as a page, so there
-     the card keeps its own height. The status's motors pill says it too.
+     the card keeps its own height. The status's motors pill says it too,
+     except on the simulator target under 440 px wide and on a phone on
+     its side, where the mode pill takes its place and the card alone
+     says it.
      Centred when it fits, from the top when it scrolls, where centring
      would put its first lines out of reach; start where safe is unknown. */
   .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
@@ -1711,23 +1701,29 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   :root { --gutter: var(--s-6); }
 }
 
-/* Side by side: the open tab on the left, the rail on the right, Stop and
-   Autonomous in a bar across the foot, the page exactly as tall as the
-   screen. Two columns, the same beside both tabs: the address and the
-   note, every part of the rail and Autonomous share the rail's width and
-   left edge, and Stop sits under the left pane, so the tab switch moves
-   nothing. The Program tab scrolls inside its own pane. */
+/* Side by side: the open tab on the left, the rail on the right, the page
+   exactly as tall as the screen, under a header of one row (F3j, below).
+   The header is the same beside both tabs, so the tab switch moves nothing
+   in it. The Drive tab splits the rest its own way (F3i, at this block's
+   end). The Program tab scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
-    /* As much stick as the screen's height and half the dock's width
-       allow. Of the height, 452 px is the rest of the left column at
-       960 x 641: the shell's padding and the header with its margin (142),
-       the dock's padding (48), the family's row over the sticks and the
-       rotate buttons' row under them with their gaps (156), Stop's bar
-       with its margin (101), and 5 to spare. Of the width, 140 px is the
-       gutters (48), the rail's gap (20), the dock's padding (48) and the
-       gap between the sticks (24). */
-    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 140px) / 2), 300px);
+    /* Stop, the header's one wider key; and the gap between its parts. */
+    --stop-w: 64px;
+    --head-gap: var(--s-3);
+    /* The Drive tab's column (F3i, below): the two sticks as large as the
+       height leaves them, the column as wide as they need, but never
+       narrower than the rail, nor wider than 45% of the screen, which
+       leaves the simulator's view the larger side. Of the height, 362 px is
+       the rest of the column: the shell's padding above and below (16 and
+       20), the header's row and its margin (44 and 16), the dock's padding
+       (48), the family's row over the sticks and the rotate buttons' row
+       under them with their gaps (156), the readouts under the dock (57),
+       and 5 to spare. Of the width, 72 px is the dock's padding (48) and
+       the gap between the sticks (24): 672 px is two sticks at their
+       largest. */
+    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 362px) + 72px, min(45vw, 672px));
+    --stick: clamp(120px, min(100 * var(--svh) - 362px, (var(--drive) - 72px) / 2), 300px);
     --shell-max: 1600px;
     --pill-h: 34px;
   }
@@ -1736,15 +1732,15 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     height: 100vh;
     height: 100dvh;
     grid-template-columns: minmax(0, 1fr) var(--rail);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
       "head head"
       "main fault"
       "main scan"
-      "main read"
-      "act  act";
+      "main read";
     column-gap: var(--s-5);
-    padding-top: var(--s-5);
+    padding-top: var(--s-4);
+    padding-bottom: var(--s-5);
   }
 
   /* As tall as its room needs at its width (sim.css), up to its place's
@@ -1754,52 +1750,132 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     border-radius: var(--r-xl);
   }
 
-  /* Two rows on the shell's two columns: the mark and the status, then the
-     tabs and the scheme, on the left; the address, then the note under it,
-     on the right. */
+  /* The header in one row (F3j), as the owner asked: it had taken two, and
+     Stop and Autonomous a bar across the foot. From the left: the mark;
+     Autonomous's place, its toggle showing the mode beside the link's; the
+     status; the tabs, the scheme and the target, each segment an icon with
+     its hint on hover; the address; the note, in what the row leaves; and
+     Stop's place, beside the gear at the far end. Stop and Autonomous are
+     the rail's (joystick.html says why), and are drawn into their places
+     from there (below): at the two ends of the row, so a hand reaching for
+     Stop cannot start the rover exploring. Nor land on Disconnect, which
+     leaves an exploring rover exploring and the panel no link to stop it:
+     the note, which takes no press, is Stop's neighbour, never narrower
+     than 24 px. Every part keeps to the row, as tall as a
+     touch target, so nothing it says, or the target or the link changes,
+     moves anything under it. */
   .bar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--rail);
-    grid-template-areas:
-      "mast     link"
-      "switches note";
+    grid-template-columns: var(--mark) var(--tap) auto auto auto minmax(var(--s-6), 1fr) var(--stop-w) var(--pill-h);
+    grid-template-rows: var(--tap);
+    grid-template-areas: "mark auto status switches link note stop gear";
     align-items: center;
-    gap: var(--s-4) var(--s-5);
+    column-gap: var(--head-gap);
     margin-bottom: var(--s-4);
   }
 
-  .masthead {
-    grid-area: mast;
-    justify-content: flex-start;
-    gap: var(--s-5);
-  }
+  /* The masthead's parts are cells of the row. */
+  .masthead { display: contents; }
 
-  .status { gap: var(--s-2); }
+  .wordmark { grid-area: mark; }
 
-  /* The status stays by the mark, and the gear goes to the row's far end,
-     where the status changing its words never moves it. */
+  .wordmark .word { display: none; }
+
+  .status { grid-area: status; }
+
   .masthead > .status { margin-left: 0; }
-  .masthead > .menuHolder { margin-left: auto; }
+
+  .masthead > .menuHolder { grid-area: gear; }
 
   .pill {
     --pill-x: var(--s-3);
     gap: var(--s-2);
-    font-size: var(--t-md);
   }
+
+  /* The mode is the Autonomous toggle's to show, lit while the target
+     explores; on the simulator, where it shows the simulated rover's, the
+     pill still says the rover's. */
+  body:not([data-target="simulator"]) .modePill { display: none; }
 
   .switches {
     grid-area: switches;
     display: flex;
-    gap: var(--s-4);
+    gap: var(--s-2);
   }
 
-  .tabs [role="tab"],
-  .scheme .segmented button { flex: none; padding-inline: var(--s-5); }
+  /* Each segment its icon alone, a touch target square; its word is still
+     its name, and its title says on hover what it does (labelSegment). */
+  .switches [role="tab"],
+  .switches .segmented button {
+    flex: none;
+    width: var(--tap);
+    min-height: calc(var(--tap) - 2px);
+    padding: 0;
+  }
 
-  /* The address and the note: the top of the rail's column. */
+  .segIcon {
+    display: block;
+    width: var(--icon);
+    height: var(--icon);
+  }
+
+  .segWord,
+  .actionWord {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* What the link has to say, in what the row leaves it: two lines at
+     most, cut short with the whole of it on hover (link.js), so the row
+     never grows. */
+  #note {
+    grid-area: note;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    max-height: calc(2 * var(--lh-body) * var(--t-sm));
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body:is([data-link="up"], [data-link="stale"]) #note { white-space: normal; }
+
   .link { grid-area: link; }
 
-  #note { grid-area: note; }
+  #host { width: 8.5rem; flex: none; }
+
+  /* Stop and Autonomous, drawn from the rail into the header's row: each a
+     cell of the shell's head over its place in the bar, which is left
+     empty for it. */
+  .actions { display: contents; }
+
+  .actions button {
+    grid-area: head;
+    align-self: start;
+    min-height: var(--tap);
+    padding: 0;
+  }
+
+  #auto {
+    justify-self: start;
+    width: var(--tap);
+    margin-left: calc(var(--mark) + var(--head-gap));
+  }
+
+  /* Red, and the one wider key, beside the gear. */
+  #stop {
+    justify-self: end;
+    width: var(--stop-w);
+    margin-right: calc(var(--pill-h) + var(--head-gap));
+    box-shadow: none;
+  }
+
+  #auto .icon { width: var(--icon); height: var(--icon); }
 
   .fault {
     margin-bottom: var(--s-4);
@@ -1864,115 +1940,142 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   #speedOut { font-size: var(--t-xl); }
 
-  /* A strip across the foot of the page, its cells under the columns
-     above: Stop under the left pane, from its left edge and no wider than
-     480 px, and Autonomous under the rail, as wide. The gap between them
-     keeps a hand reaching for Stop off Autonomous. Still the page's two
-     largest controls, a step lower than a phone's. */
-  .actions {
-    position: static;
-    grid-template-columns: minmax(0, 1fr) var(--rail);
-    column-gap: var(--s-5);
-    margin-top: var(--s-4);
-    padding-block: var(--s-3) var(--s-4);
-    background: var(--panel);
-    border-top: 1px solid var(--rule);
-  }
-
-  .actions button { min-height: calc(var(--tap) + var(--s-3)); }
-
-  #stop {
-    grid-area: 1 / 1;
-    justify-self: start;
-    width: min(100%, 480px);
-  }
-
-  #auto { grid-area: 1 / 2; }
-
   #programTab {
     overflow-y: auto;
     min-height: 0;
   }
-}
 
-/* The Drive tab's view of the simulator (F1) sits beside the dock wherever
-   the left pane has room for both: from 1180 px wide. There the pane is
-   split, the dock as wide as its two sticks and the view the rest, at its
-   room's shape. The place is kept on the rover target too, with a card
-   saying what it is for, so a switch of target never moves a stick, and
-   the rail's column is the same as beside the Program tab. Each stick takes
-   at most a quarter of the pane, which leaves the view about half of it,
-   less the dock's padding and the gap between the sticks. Of the width,
-   88 px is the gutters (48) and the two gaps between the dock, the view
-   and the rail (40). */
-@media (min-width: 1180px) and (min-height: 521px) {
-  :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 88px) / 4), 300px);
-  }
-
-  .shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden])) {
-    grid-template-columns: auto minmax(0, 1fr) var(--rail);
+  /* The Drive tab split in two (F3i): on the left, at the page's full
+     height, what the controls drive, the simulator's view on the simulator
+     and the rover's scan on the rover; on the right one column, the dock
+     with the readouts joined under it, as wide as the sticks need
+     (--drive). The owner asked for it: beside the dock and the rail the
+     view had been the smallest pane. The dock keeps its place on either
+     target, so a switch moves no stick: the target picks only what fills
+     the left. A motor fault goes over that, never over the dock, so it
+     moves no stick either: the dock spans the fault's row and the one the
+     view takes, and a fault only moves the line between the two. */
+  .shell:has(> #driveTab:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) var(--drive);
     grid-template-areas:
-      "head head head"
-      "main view fault"
-      "main view scan"
-      "main view read"
-      "act  act  act";
+      "head  head"
+      "fault main"
+      "view  main"
+      "view  read";
   }
+
+  /* One card with the readouts under it. */
+  .shell:has(> #driveTab:not([hidden])) .dock { border-radius: var(--r-xl) var(--r-xl) 0 0; }
+
+  /* The readouts on one line, the phase last, each label over its value,
+     so the move has the line less two short cells: beside their labels a
+     halt's phase left "STOP" no room at 960 px wide. Nothing in them
+     changes their height while a stick is held: a phase coming or going
+     (a takeover, exploring and then manual, is a press of the stick) only
+     moves the cells beside it, and every value keeps to its line, cut
+     short rather than wrapped. A move name wrapping as the stick drove it
+     grew the readouts, and moved the dock above them. */
+  .shell:has(> #driveTab:not([hidden])) .readouts {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "move chip phase";
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    row-gap: var(--s-1);
+    padding: var(--s-2) var(--s-4);
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell:first-child { border-bottom: none; }
+
+  .shell:has(> #driveTab:not([hidden])) .cell:last-child,
+  .shell:has(> #driveTab:not([hidden])) #phaseCell {
+    border-bottom: none;
+    border-left: 1px solid var(--rule);
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell output {
+    margin-left: 0;
+    font-size: var(--t-md);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .scan {
+    grid-area: view;
+    border-radius: var(--r-xl);
+  }
+
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
 
   /* The settings hang from the view's bar over whatever is under the room
-     (sim.css), as on the Program tab: this is their containing block. */
-  .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
+     (sim.css), as on the Program tab: this is their containing block, and
+     the view as wide as the place, so they hang under the bar's gear. */
+  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
     grid-area: view;
     display: flex;
     position: relative;
   }
 }
 
-/* Narrower, the pane has no room for the view beside two sticks (at 1024 x
-   768 it would have left each stick 154 px): on the simulator the view
-   takes the fan's place in the rail instead, as on a phone, and the
-   readouts stay. The dock is the same on both targets, so a switch never
-   moves a stick. */
-@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
+/* Side by side up to 1280 px wide: each status pill its icon alone, in its
+   state's colour, and titled with what it says in full (link.js,
+   readouts.js); the header's parts a little closer. With their words the
+   row left the note 8 px at 1024 px wide, and none at all on the
+   simulator target, where the mode pill shows too. An icon rather than
+   the lamp: two lamps the same green said nothing of which was which. */
+@media (min-width: 960px) and (max-width: 1279.98px) and (min-height: 521px) {
+  :root { --head-gap: var(--s-2); }
 
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
-    grid-area: scan;
-    display: flex;
-    position: relative;
+  .pill {
+    justify-content: center;
+    width: var(--pill-h);
+    padding: 0;
   }
 
-  /* The row's height, as on a phone, so that sim.css's steps for a view
-     too short for its room apply: at 960 x 540 the room was 20 px wide. */
-  #driveSimSlot { flex: 1 1 0; }
+  .pill .lamp,
+  .modePill::before { display: none; }
 
-  #driveSimSlot .sim {
-    container-type: size;
-    height: 100%;
+  .pill .pillIcon {
+    display: block;
+    width: var(--icon);
+    height: var(--icon);
   }
-}
 
-/* The three switches on one row from 960 px wide, where Advanced ran under
-   Rover and a press on Rover's edge set the scheme: the tabs and the scheme
-   a little narrower. */
-@media (min-width: 960px) and (max-width: 999.98px) and (min-height: 521px) {
-  .tabs [role="tab"],
-  .scheme .segmented button { padding-inline: var(--s-3); }
+  body[data-link="connecting"] .linkPill .pillIcon { animation: pending 600ms ease-in-out infinite alternate; }
+
+  .pill > :not(.lamp, .pillIcon) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* Side by side on a short screen, 640 px or less (a laptop's browser):
    everything around the sticks a step smaller, so they keep what size the
-   height allows. 388 px is the rest of the left column at 960 x 540: the
-   shell's padding and the header with its margin (134), the dock's
-   padding (32), the family's row and the rotate buttons' with their gaps
-   (128), Stop's bar with its margin (89), and 5 to spare. */
+   height allows. 302 px is the rest of the Drive tab's column: the shell's
+   padding above and below (12 and 12), the header's row and its margin
+   (44 and 12), the dock's padding (32), the family's row and the rotate
+   buttons' with their gaps (128), the readouts (57), and 5 to spare. Of
+   the width, 56 px is the dock's padding (32) and the gap between the
+   sticks (24). */
 @media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 140px) / 2), 300px);
+    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 302px) + 56px, min(45vw, 656px));
+    --stick: clamp(120px, min(100 * var(--svh) - 302px, (var(--drive) - 56px) / 2), 300px);
   }
 
-  .shell { padding-top: var(--s-4); }
+  .shell {
+    padding-top: var(--s-3);
+    padding-bottom: var(--s-3);
+  }
 
   .bar { margin-bottom: var(--s-3); }
 
@@ -1981,17 +2084,6 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .controls { gap: var(--s-2) var(--s-6); }
 
   .spin button { min-height: var(--tap); }
-
-  .actions {
-    margin-top: var(--s-3);
-    padding-block: var(--s-2) var(--s-3);
-  }
-}
-
-@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {
-  :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 88px) / 4), 300px);
-  }
 }
 
 /* A phone on its side, held like a gamepad: the translate stick down the
@@ -2103,8 +2195,11 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   /* The header's column also holds the gear, and the mode pill beside the
      other two wrapped the status to a second row: it gives way to the
-     Autonomous button, lit while the rover explores. */
-  .modePill { display: none; }
+     Autonomous toggle, lit while the rover explores, except on the
+     simulator target, where the motors pill gives way instead (see the
+     upright phone's). */
+  body:not([data-target="simulator"]) .modePill,
+  body[data-target="simulator"] .motorsPill { display: none; }
 
   .status { flex-wrap: wrap; }
 
@@ -2159,7 +2254,7 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
    they must, or Stop moved as the tab changed). The status keeps to one
    row beside the gear: it takes the mark's place, and its pills close up
    and drop their lamps, whose colour their tint already shows (with them,
-   "No link" was cut short at 480 x 320). The readouts take the type size a
+   "No link" was cut short at 480 x 320), and the mode pill its dot. The readouts take the type size a
    portrait phone of this width would. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   /* 156 px: half of the gutters (48), the gaps (24) and the 240 px the
@@ -2181,7 +2276,8 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .pill { --pill-x: var(--s-1); }
 
-  .pill > .lamp { display: none; }
+  .pill > .lamp,
+  .modePill::before { display: none; }
 
   .cell output { font-size: var(--t-sm); }
 
@@ -2193,8 +2289,8 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .wedge { transition: none; }
   .segmented button[data-pending="yes"],
-  body[data-link="connecting"] .lamp { animation: none; }
-  body[data-link="up"]:has(#auto[aria-pressed="true"]) .modePill::before { animation: none; }
+  body[data-link="connecting"] :is(.lamp, .linkPill .pillIcon) { animation: none; }
+  body[data-link="up"] .modePill:has(#mode[data-mode="AUTONOMOUS"])::before { animation: none; }
 }
 
 /* --- firmware updates (firmware.js) ------------------------------------------ */

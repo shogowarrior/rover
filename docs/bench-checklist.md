@@ -310,7 +310,7 @@ password typed in:
    `MANUAL` with the wheels still, and Options must say the rover runs the
    file sent. Try it from Chrome and from Firefox.
 4. **What ends one.** Start an update each time, then:
-   - push the stick, press a drive key or press Autonomous: the update
+   - push the stick, press a drive key or turn Autonomous on: the update
      stops with "The rover was driven, so the update stopped.";
    - press Stop: the update carries on;
    - press Cancel: it stops with "Cancelled.";
