@@ -23,8 +23,10 @@
        fault, the scan, the readouts and Stop). On a phone they stack: the
        scan under the header, the Drive tab as a dock under the thumbs, Stop
        at the foot of the screen. On a wide screen the rail's parts make a
-       column on the right, the open tab fills the left, and Stop and
-       Autonomous sit in a bar across the foot. css/panel.css lays out both. -->
+       column on the right beside the Program tab; the Drive tab puts the
+       scan (or the simulator's view) on the left and its dock over the
+       readouts on the right; Stop and Autonomous sit in a bar across the
+       foot. css/panel.css lays out both. -->
   <main class="shell">
 
     <header class="bar">
@@ -187,19 +189,14 @@
     <!-- The Drive tab's view of the simulator, where its controls drive the
          simulated rover while the target is Simulator: app.js moves the
          simulator's one view (simview.js) into #driveSimSlot then, and back
-         to the Program tab's #simSlot otherwise. On a wide screen it keeps
-         its place beside the dock on either target, saying what it is for
-         while the target is the rover, so a switch never moves the stick;
-         on a phone it takes the scan's place, and only on the simulator
+         to the Program tab's #simSlot otherwise. It shows only on the
+         simulator: on a wide screen as the left side of the page, beside
+         the dock's column, where the rover's scan is on the rover, so a
+         switch never moves a stick; on a phone in the scan's place
          (panel.css). Beside the dock, never around it: the simulator's
          boxes are positioned and contained, and no ancestor of the stick may
          be. -->
     <section class="driveView" id="driveView" aria-label="Simulator">
-      <p class="driveViewOff">
-        <strong>Simulator</strong>
-        <span>Choose Simulator at the top to try these controls on a simulated rover. They drive only it then, and
-          Stop stops the rover too.</span>
-      </p>
       <div id="driveSimSlot"></div>
     </section>
 
@@ -289,9 +286,10 @@
 
     <!-- The rail: what the rover reports, and Stop. Its parts are rows of
          the shell's grid: on a phone the scan above the open tab and Stop at
-         the foot of the screen; on a wide screen a column beside the open
-         tab, as wide beside both, with Stop and Autonomous in a bar across
-         the foot under the two columns, which the tab switch never moves.
+         the foot of the screen; on a wide screen a column beside the
+         Program tab, the scan on the left of the Drive tab and the readouts
+         under its dock, with Stop and Autonomous in a bar across the foot,
+         which the tab switch never moves.
          It comes after the tabs so that Stop is the last control in the
          focus order. -->
     <div class="rail">

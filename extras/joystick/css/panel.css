@@ -6,10 +6,12 @@
    Thumb-first. On a phone the Drive tab is a dock at the foot of the screen,
    the stick under the left thumb, the rotate buttons and Stop under the
    right, and the scan sits at the top where a glance finds it. On a wide
-   screen the same parts sit side by side: the open tab on the left, the
-   rail of what the rover reports on the right, one width beside both tabs,
-   and Stop and Autonomous in a bar across the foot, Stop under the left
-   pane and Autonomous under the rail.
+   screen the same parts sit side by side: beside the Program tab the rail
+   of what the rover reports on the right; the Drive tab split in two, what
+   it drives on the left (the simulator's view, or the rover's scan) and
+   the dock with the readouts on the right; and Stop and Autonomous in a
+   bar across the foot, Stop under the left and Autonomous under the
+   address, on the rail's width beside both tabs.
 
    One rule shapes the layout: nothing that contains the stick may be
    positioned, transformed, filtered or contained. joy.js places a touch by
@@ -1478,11 +1480,10 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 
 /* --- the Drive tab's view of the simulator ---------------------------------- */
 
-/* Beside the dock, never around it (joystick.html says why). On a phone it
-   shows only on the simulator, in the scan's place (below); on a wide
-   screen beside the dock, on either target. #driveSimSlot is the
-   simulator's view's while the Drive tab drives it (app.js), and
-   .driveViewOff says what the place is for while the target is the rover. */
+/* Beside the dock, never around it (joystick.html says why), and only on
+   the simulator: on a phone in the scan's place (below), on a wide screen
+   the left side of the page (F3i). #driveSimSlot is the simulator's
+   view's while the Drive tab drives it (app.js). */
 .driveView {
   grid-area: scan;
   display: none;
@@ -1490,30 +1491,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
   min-width: 0;
   min-height: 0;
 }
-
-.driveViewOff {
-  display: grid;
-  place-content: center;
-  gap: var(--s-1);
-  flex: 1 1 auto;
-  margin: 0;
-  padding: var(--s-5);
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
-  text-align: center;
-  text-wrap: balance;
-  color: var(--dim);
-  background: var(--panel);
-  border: 1px dashed var(--rule);
-  border-radius: var(--r-xl);
-}
-
-.driveViewOff strong {
-  font-size: var(--t-md);
-  color: var(--readout);
-}
-
-.driveViewOff span { max-width: 36ch; }
 
 /* clip, as #simSlot's (program.css): the settings' scroll margin. */
 #driveSimSlot {
@@ -1536,9 +1513,6 @@ body:not([data-link="up"]) #auto[aria-pressed="true"] {
 @container driveview (max-height: 63.98px) {
   #driveSimSlot .sim { padding-block: var(--s-1); }
 }
-
-body[data-target="simulator"] .driveViewOff,
-body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
 /* --- the other layouts ------------------------------------------------------- */
 
@@ -1713,21 +1687,29 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
 /* Side by side: the open tab on the left, the rail on the right, Stop and
    Autonomous in a bar across the foot, the page exactly as tall as the
-   screen. Two columns, the same beside both tabs: the address and the
-   note, every part of the rail and Autonomous share the rail's width and
-   left edge, and Stop sits under the left pane, so the tab switch moves
-   nothing. The Program tab scrolls inside its own pane. */
+   screen. The header and the foot are the same beside both tabs: the
+   address, the note and Autonomous share the rail's width and left edge,
+   and Stop sits under the left pane, so the tab switch moves neither. The
+   Drive tab splits the rest its own way (F3i, at this block's end). The
+   Program tab scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
-    /* As much stick as the screen's height and half the dock's width
-       allow. Of the height, 452 px is the rest of the left column at
-       960 x 641: the shell's padding and the header with its margin (142),
-       the dock's padding (48), the family's row over the sticks and the
-       rotate buttons' row under them with their gaps (156), Stop's bar
-       with its margin (101), and 5 to spare. Of the width, 140 px is the
-       gutters (48), the rail's gap (20), the dock's padding (48) and the
-       gap between the sticks (24). */
-    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 140px) / 2), 300px);
+    /* The Drive tab's column (F3i, below): the two sticks as large as the
+       height leaves them, the column as wide as they need, but never
+       narrower than the rail, nor wider than 45% of the screen, which
+       leaves the simulator's view the larger side. Of the height, 509 px
+       is the rest of the column: the shell's padding and the header with
+       its margin (142), the dock's padding (48), the family's row over the
+       sticks and the rotate buttons' row under them with their gaps (156),
+       the readouts joined under the dock (57), Stop's bar with its margin
+       (101), and 5 to spare. Of the width, 72 px is the dock's padding
+       (48) and the gap between the sticks (24): 672 px is two sticks at
+       their largest. This block's column is used only where the height
+       leaves the sticks all the width allows (the block that moves the
+       readouts says where), so the height here only guards a screen
+       shorter than the one the media query reads. */
+    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 509px) + 72px, min(45vw, 672px));
+    --stick: clamp(120px, min(100 * var(--svh) - 509px, (var(--drive) - 72px) / 2), 300px);
     --shell-max: 1600px;
     --pill-h: 34px;
   }
@@ -1893,63 +1875,87 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
     overflow-y: auto;
     min-height: 0;
   }
-}
 
-/* The Drive tab's view of the simulator (F1) sits beside the dock wherever
-   the left pane has room for both: from 1180 px wide. There the pane is
-   split, the dock as wide as its two sticks and the view the rest, at its
-   room's shape. The place is kept on the rover target too, with a card
-   saying what it is for, so a switch of target never moves a stick, and
-   the rail's column is the same as beside the Program tab. Each stick takes
-   at most a quarter of the pane, which leaves the view about half of it,
-   less the dock's padding and the gap between the sticks. Of the width,
-   88 px is the gutters (48) and the two gaps between the dock, the view
-   and the rail (40). */
-@media (min-width: 1180px) and (min-height: 521px) {
-  :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 452px, (100vw - var(--rail) - 88px) / 4), 300px);
-  }
-
-  .shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden])) {
-    grid-template-columns: auto minmax(0, 1fr) var(--rail);
+  /* The Drive tab split in two (F3i): on the left, at the page's full
+     height, what the controls drive, the simulator's view on the simulator
+     and the rover's scan on the rover; on the right one column, the dock
+     with the readouts joined under it, as wide as the sticks need
+     (--drive). On a screen where the height limits the sticks the
+     readouts go under the view instead (the next block but one). The owner asked for it: beside the dock and
+     the rail the view had been the smallest pane. The dock keeps its place
+     on either target, so a switch moves no stick: the target picks only
+     what fills the left. A motor fault goes over that, never over the
+     dock, so it moves no stick either: the dock spans the fault's row and
+     the one the view takes, and a fault only moves the line between the
+     two. The bar and Autonomous keep the rail, as beside the Program tab:
+     at 1024 px a column as wide as the dock left the tabs, the scheme and
+     the target too little of the header. */
+  .shell:has(> #driveTab:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) var(--drive);
     grid-template-areas:
-      "head head head"
-      "main view fault"
-      "main view scan"
-      "main view read"
-      "act  act  act";
+      "head  head"
+      "fault main"
+      "view  main"
+      "view  read"
+      "act   act";
   }
 
-  /* The settings hang from the view's bar over whatever is under the room
-     (sim.css), as on the Program tab: this is their containing block. */
-  .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
+  /* One card with the readouts under it. */
+  .shell:has(> #driveTab:not([hidden])) .dock { border-radius: var(--r-xl) var(--r-xl) 0 0; }
+
+  /* The readouts on one line, the phase last, each label over its value,
+     so the move has the line less two short cells: beside their labels a
+     halt's phase left "STOP" no room at 960 px wide. Nothing in them
+     changes their height while a stick is held: a phase coming or going
+     (a takeover, exploring and then manual, is a press of the stick) only
+     moves the cells beside it, and every value keeps to its line, cut
+     short rather than wrapped. A move name wrapping as the stick drove it
+     grew the readouts, and moved the dock above them. */
+  .shell:has(> #driveTab:not([hidden])) .readouts {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "move chip phase";
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    row-gap: var(--s-1);
+    padding: var(--s-2) var(--s-4);
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell:first-child { border-bottom: none; }
+
+  .shell:has(> #driveTab:not([hidden])) .cell:last-child,
+  .shell:has(> #driveTab:not([hidden])) #phaseCell {
+    border-bottom: none;
+    border-left: 1px solid var(--rule);
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .cell output {
+    margin-left: 0;
+    font-size: var(--t-md);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .scan {
     grid-area: view;
-    display: flex;
-    position: relative;
+    border-radius: var(--r-xl);
   }
-}
 
-/* Narrower, the pane has no room for the view beside two sticks (at 1024 x
-   768 it would have left each stick 154 px): on the simulator the view
-   takes the fan's place in the rail instead, as on a phone, and the
-   readouts stay. The dock is the same on both targets, so a switch never
-   moves a stick. */
-@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {
   body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
 
+  /* The settings hang from the view's bar over whatever is under the room
+     (sim.css), as on the Program tab: this is their containing block. A
+     room shallower than the place (a corridor) sits in its middle. */
   body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
-    grid-area: scan;
+    grid-area: view;
     display: flex;
+    justify-content: center;
     position: relative;
-  }
-
-  /* The row's height, as on a phone, so that sim.css's steps for a view
-     too short for its room apply: at 960 x 540 the room was 20 px wide. */
-  #driveSimSlot { flex: 1 1 0; }
-
-  #driveSimSlot .sim {
-    container-type: size;
-    height: 100%;
   }
 }
 
@@ -1961,15 +1967,56 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .scheme .segmented button { padding-inline: var(--s-3); }
 }
 
+/* The Drive tab where the height limits the sticks: the readouts go under
+   the left side, and the column is the dock's alone, so the sticks are as
+   large as the height leaves them, and the column as wide as they need,
+   from the rail's width up to the block above's. Under the dock there the
+   readouts cost the stick 57 px: at 960 x 641 it fell past its floor and
+   the dock ran under the Stop bar. 452 px is the rest of the column
+   without them (the 509 above, less their 57).
+   Where the width limits the sticks instead, the readouts stay under the
+   dock, and the view keeps the page's height: at 1280 x 800 the room is a
+   fifth wider, and the sticks are as large. That is from 509 px plus
+   the largest stick the width allows, (45vw - 72px) / 2 up to 300 px, so
+   the switch changes no stick. The media query cannot add the two, so it
+   takes each range of widths at the height its widest needs: 739 px up
+   to 1179 px wide, 781 up to 1365, and 809 from 1366. */
+@media (min-width: 960px) and (min-height: 521px) and (max-height: 738.98px), (min-width: 1180px) and (min-height: 521px) and (max-height: 780.98px), (min-width: 1366px) and (min-height: 521px) and (max-height: 808.98px) {
+  :root {
+    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 452px) + 72px, min(45vw, 672px));
+    --stick: clamp(120px, min(100 * var(--svh) - 452px, (var(--drive) - 72px) / 2), 300px);
+  }
+
+  .shell:has(> #driveTab:not([hidden])) {
+    grid-template-areas:
+      "head  head"
+      "fault main"
+      "view  main"
+      "read  main"
+      "act   act";
+  }
+
+  .shell:has(> #driveTab:not([hidden])) .dock { border-radius: var(--r-xl); }
+
+  .shell:has(> #driveTab:not([hidden])) .readouts {
+    margin-top: var(--s-3);
+    border-top: none;
+    border-radius: var(--r-xl);
+  }
+}
+
 /* Side by side on a short screen, 640 px or less (a laptop's browser):
    everything around the sticks a step smaller, so they keep what size the
-   height allows. 388 px is the rest of the left column at 960 x 540: the
-   shell's padding and the header with its margin (134), the dock's
-   padding (32), the family's row and the rotate buttons' with their gaps
-   (128), Stop's bar with its margin (89), and 5 to spare. */
+   height allows. 388 px is the rest of the Drive tab's column at 960 x
+   540: the shell's padding and the header with its margin (134), the
+   dock's padding (32), the family's row and the rotate buttons' with their
+   gaps (128), Stop's bar with its margin (89), and 5 to spare. Of the
+   width, 56 px is the dock's padding (32) and the gap between the sticks
+   (24). */
 @media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
   :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 140px) / 2), 300px);
+    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 388px) + 56px, min(45vw, 656px));
+    --stick: clamp(120px, min(100 * var(--svh) - 388px, (var(--drive) - 56px) / 2), 300px);
   }
 
   .shell { padding-top: var(--s-4); }
@@ -1985,12 +2032,6 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   .actions {
     margin-top: var(--s-3);
     padding-block: var(--s-2) var(--s-3);
-  }
-}
-
-@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {
-  :root {
-    --stick: clamp(120px, min(100 * var(--svh) - 388px, (100vw - var(--rail) - 88px) / 4), 300px);
   }
 }
 

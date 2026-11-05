@@ -2259,8 +2259,17 @@ test("schemes: the pivot stick and its family are off under NORMAL and on under 
 // The phone-on-its-side block's opening, as css/panel.css writes it, and the
 // rules inside one @media block of panel.css (css.js).
 const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
-// Where the Drive tab's view of the simulator sits beside the dock (F1).
-const DRIVE_BESIDE = "@media (min-width: 1180px) and (min-height: 521px) {";
+// The side-by-side layout's blocks, as css/panel.css opens them: from 960
+// by 521 px, its Drive tab where the height limits the sticks (F3i), and
+// 640 px or less.
+const WIDE = "@media (min-width: 960px) and (min-height: 521px) {";
+// The Drive tab's readouts under the view where the height limits the
+// sticks: each range of widths up to the height its widest needs.
+const STEPS = [[960, 1180, 739], [1180, 1366, 781], [1366, Infinity, 809]];
+const READ_UNDER_VIEW = `@media ${STEPS.map(([from, , height]) => `(min-width: ${from}px) and (min-height: 521px) and (max-height: ${height - 1}.98px)`).join(", ")} {`;
+const WIDE_SHORT = "@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {";
+// The shell with the Drive tab showing, as the wide blocks select it.
+const DRIVE_SHELL = ".shell:has(> #driveTab:not([hidden]))";
 const panelCss = () => stylesheet("panel.css");
 const mediaRules = (opening) => blockRules(panelCss(), opening);
 
@@ -3586,10 +3595,12 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The wide layout's two columns are the same beside both tabs (F3, F3d):
-// two rail widths, one per tab, left the address, the scan and Autonomous
-// starting at different edges, and Autonomous under nothing on the Program
-// tab. Layout itself is measured in a browser; this holds the shape.
+// The wide layout's header and foot are the same beside both tabs (F3,
+// F3d): two rail widths, one per tab, left the address and Autonomous
+// starting at different edges. Beside the Program tab the rail is a
+// column, the scan and the readouts; the Drive tab is split for the
+// simulator's view (F3i, the next test). Layout itself is measured in a
+// browser; this holds the shape.
 test("wide: one rail width beside both tabs, for the address, the note, the rail and Autonomous; Stop under the left pane", () => {
   const css = panelCss();
   const rules = cssRules(css);
@@ -3597,20 +3608,10 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
   check(/--rail:\s*clamp\(320px, 30vw, 460px\);/.test(root), "one rail, from the viewport alone");
   const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
   check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
-  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  const perTab = wide.filter((r) => /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
-  check(perTab.length === 0, `no grid of its own beside either tab: ${perTab.map((r) => r.selector)}`);
-  // Where the left pane has room for it (DRIVE_BESIDE), the Drive tab splits
-  // only that pane, for the simulator's view (F1): the rail stays the last
-  // column, as wide, and the bar under all three.
-  const driveView = ".shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden]))";
-  const beside = mediaRules(DRIVE_BESIDE) || [];
-  const others = beside.filter((r) => r.selector !== driveView && /grid-template/.test(r.body));
-  check(others.length === 0, `nothing else there sets a grid: ${others.map((r) => r.selector)}`);
-  const split = (beside.find((r) => r.selector === driveView) || {}).body || "";
-  check(/grid-template-columns:\s*auto minmax\(0, 1fr\) var\(--rail\);/.test(split), `the Drive tab's left pane split in two, the rail as ever: ${split}`);
-  const areas = (split.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || [];
-  check(areas.join(" ") === '"head head head" "main view fault" "main view scan" "main view read" "act  act  act"', `the dock, the view, then the rail; the bar across: ${areas}`);
+  const wide = mediaRules(WIDE) || [];
+  // A grid set on the shell itself, per tab: not on something inside it.
+  const perTab = wide.filter((r) => /^\.shell:has\(> #(programTab|driveTab)[^ ]*\)$/.test(r.selector) && /grid-template/.test(r.body));
+  check(perTab.length === 1 && perTab[0].selector === DRIVE_SHELL, `a grid of its own beside the Drive tab alone: ${perTab.map((r) => r.selector)}`);
   const body = (selector) => (wide.find((r) => r.selector === selector) || {}).body || "";
   for (const selector of [".shell", ".bar", ".actions"]) {
     check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(selector)), `${selector}: the left pane, then the rail`);
@@ -3619,71 +3620,84 @@ test("wide: one rail width beside both tabs, for the address, the note, the rail
   check(/justify-self:\s*start/.test(body("#stop")) && /width:\s*min\(100%, 480px\)/.test(body("#stop")), `Stop from the left pane's edge, at most 480 px: ${body("#stop")}`);
   check(/min-height:\s*calc\(var\(--tap\) \+ var\(--s-3\)\)/.test(body(".actions button")), "Stop and Autonomous 56 px");
   check(/grid-area:\s*1 \/ 1;/.test(body("#stop")) && /grid-area:\s*1 \/ 2;/.test(body("#auto")), "Stop under the left pane, Autonomous under the rail");
-  // The short wide block (521 to 640 px tall) sizes the stick again, and
-  // keeps the bar's 56 px.
-  const short = mediaRules("@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {") || [];
-  for (const [where, rules] of [["wide", wide], ["short", short]]) {
-    const stick = (((rules.find((r) => r.selector === ":root" && /--stick:/.test(r.body)) || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(/var\(--rail\)/.test(stick), `${where}: the stick budgets the one rail: ${stick}`);
-  }
+  // The short wide block (521 to 640 px tall) keeps the bar's 56 px.
+  const short = mediaRules(WIDE_SHORT) || [];
   check(!short.some((r) => /\.actions button/.test(r.selector) && /min-height/.test(r.body)), "short: Stop and Autonomous stay 56 px");
-  // The scan fills its column beside both tabs: no card sized to its drawing.
+  // The scan fills its place beside both tabs: no card sized to its drawing.
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
 });
 
 // The Drive tab's view of the simulator (F1) sits beside the dock, never
 // around it: joy.js places a touch by its canvas's offsetParent, and the
-// view's box is positioned (wide) or a size container (phone). Its place
-// is kept on either target, so a switch moves nothing; on a phone it takes
-// the scan's row on the simulator, and shows the motion there when the row
-// is too short for the room. Layout itself is measured in a browser.
-test("drive view: beside the dock on a wide screen, in the scan's place on a phone, never around the stick", () => {
+// view's box is positioned (wide) or a size container (phone). On a wide
+// screen the tab is split (F3i): the view, or on the rover the scan, the
+// left side at the page's height, and the dock in a column on the right
+// with the readouts joined under it, or under the view where the height
+// limits the sticks; the same on either target, so a switch moves no stick. On a phone the view takes the scan's row on the
+// simulator, and shows the motion there when the row is too short for the
+// room. Layout itself is measured in a browser.
+test("drive view: the left side of a wide screen, in the scan's place on a phone, never around the stick", () => {
   const page = loadPage();
   const view = page.$("driveView");
-  const siblings = view.parentNode.children.filter((n) => n.tagName);
-  check(view.parentNode === page.$("driveTab").parentNode && siblings[siblings.indexOf(page.$("driveTab")) + 1] === view, "the dock's next sibling, as the wide grid's selector reads it");
+  check(view.parentNode === page.$("driveTab").parentNode, "the dock's sibling, a cell of the shell's grid");
   check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
+  check(view.children.filter((n) => n.tagName).length === 1, "nothing in it but the slot: no card stands in on the rover");
   for (const canvas of [page.canvas, page.pivotCanvas]) {
     for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
   }
 
-  // Wide, from 1180 px: the left pane split, and the view in its column on
-  // either target (the rail test holds the grid). Nothing there follows the
-  // target, so a switch moves nothing.
-  const beside = mediaRules(DRIVE_BESIDE) || [];
-  const wideView = beside.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
-  check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
-  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  check(![...wide, ...beside].some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
+  // Wide: the split, the dock spanning the fault's row and the view's, so a
+  // fault moves only the line between the fault and the view.
+  const wide = mediaRules(WIDE) || [];
+  const split = (wide.find((r) => r.selector === DRIVE_SHELL) || {}).body || "";
+  check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--drive\);/.test(split), `the left side, then the Drive tab's column: ${split}`);
+  const areas = (body) => ((body.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((a) => a.replace(/\s+/g, " "));
+  check(areas(split).join(" ") === '"head head" "fault main" "view main" "view read" "act act"', `the view, the dock over the readouts; the bar across: ${areas(split)}`);
+  const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
+  check(/grid-area:\s*view;/.test(rule(wide, `${DRIVE_SHELL} .scan`)), "the scan on the left on the rover");
+  check(/display:\s*none;/.test(rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} .scan`)), "the scan gives way on the simulator");
+  const shown = rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} > .driveView:not([hidden])`);
+  check(/grid-area:\s*view;/.test(shown) && /display:\s*flex;/.test(shown) && /position:\s*relative;/.test(shown), `the view in its place on the simulator, the settings' containing block: ${shown}`);
+  // The target picks only what fills the left: never the dock or the
+  // readouts, so a switch moves no stick.
+  const onTarget = [...wide, ...(mediaRules(READ_UNDER_VIEW) || []), ...(mediaRules(WIDE_SHORT) || [])].filter((r) => /data-target/.test(r.selector));
+  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `wide: the target picks the scan or the view alone: ${onTarget.map((r) => r.selector)}`);
   const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector));
-  const strays = anywhere.flatMap((r) => r.selector.split(",").map((x) => x.trim())).filter((x) => !/(\.driveViewOff|#driveSimSlot)$/.test(x));
-  check(anywhere.length > 0 && strays.length === 0, `outside every @media, the target picks only the card or the view: ${strays}`);
-  // The dock's two sticks side by side, each a share of the left pane and
-  // of the height left over: half of the pane's width less the dock's own,
-  // and beside the view a quarter, which leaves the view about half. The
-  // pixels are the sums css/panel.css lists; the short block's height is
-  // its own.
-  for (const [opening, height, width] of [
-    ["@media (min-width: 960px) and (min-height: 521px) {", 452, "140px) / 2"],
-    ["@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {", 388, "140px) / 2"],
-    [DRIVE_BESIDE, 452, "88px) / 4"],
-    ["@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {", 388, "88px) / 4"],
-  ]) {
-    const formula = ((((mediaRules(opening) || []).find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(formula.includes(`100 * var(--svh) - ${height}px`) && formula.includes(`(100vw - var(--rail) - ${width}`), `${opening}: the stick from the viewport and the rail: ${formula}`);
+  check(anywhere.length === 0, `outside every @media, nothing follows the target: ${anywhere.map((r) => r.selector)}`);
+  check(!panelCss().includes("@media (min-width: 1180px)"), "one split from 960 px wide: no layout of its own from 1180");
+  // The readouts keep one height while a stick is held: one line, each
+  // label over its value, the phase coming and going at its end, and no
+  // value wrapping.
+  check(areas(rule(wide, `${DRIVE_SHELL} .readouts`)).join(" ") === '"move chip phase"', `one line, the phase last: ${rule(wide, `${DRIVE_SHELL} .readouts`)}`);
+  const cell = rule(wide, `${DRIVE_SHELL} .cell`);
+  check(/flex-direction:\s*column;/.test(cell) && /flex-wrap:\s*nowrap;/.test(cell), `each label over its value, leaving the move the line less two short cells: ${cell}`);
+  const value = rule(wide, `${DRIVE_SHELL} .cell output`);
+  check(/white-space:\s*nowrap;/.test(value) && /overflow:\s*hidden;/.test(value) && /text-overflow:\s*ellipsis;/.test(value), `a value cut short, never wrapped: ${value}`);
+  const shows = [...wide, ...(mediaRules(READ_UNDER_VIEW) || [])].filter((r) => /#phaseCell\[hidden\]/.test(r.selector));
+  check(shows.length === 0, `a hidden phase takes no room on the line: ${shows.map((r) => r.selector)}`);
+  // Where the height limits the sticks the readouts go under the view, and
+  // the column is the dock's alone.
+  const underView = mediaRules(READ_UNDER_VIEW) || [];
+  check(areas(rule(underView, DRIVE_SHELL)).join(" ") === '"head head" "fault main" "view main" "read main" "act act"', `the readouts under the view: ${rule(underView, DRIVE_SHELL)}`);
+  // Under the dock they cost the stick 57 px, so each step of widths moves
+  // them there only from where the height leaves its widest the largest
+  // stick the width allows: the move changes no stick.
+  for (const [, to, height] of STEPS) {
+    const widest = Number.isFinite(to) ? to : 1600;
+    const needs = 509 + Math.min((0.45 * widest - 72) / 2, 300);
+    check(height >= needs && height < needs + 1, `below ${to} px wide: under the dock from ${height} px tall, where ${needs} is needed`);
   }
-  // Narrower, the view takes the fan's place in the rail on the simulator,
-  // as on a phone, and the dock is left alone: the target there picks only
-  // the scan or the view.
-  const rail = mediaRules("@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {") || [];
-  const onTarget = rail.filter((r) => /data-target/.test(r.selector));
-  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `the rail: the target picks the scan or the view: ${onTarget.map((r) => r.selector)}`);
-  const inRail = onTarget.find((r) => /\.driveView/.test(r.selector));
-  check(inRail && /grid-area:\s*scan;/.test(inRail.body), `the rail: the view in the scan's cell: ${inRail && inRail.body}`);
-  check(onTarget.some((r) => /\.scan$/.test(r.selector) && /display:\s*none;/.test(r.body)), "the rail: the scan gives way");
-  // The row's height, so that sim.css's steps for a short view apply.
-  const railSim = rail.find((r) => r.selector === "#driveSimSlot .sim");
-  check(railSim && /container-type:\s*size;/.test(railSim.body), `the rail: the view a size container: ${railSim && railSim.body}`);
+  // The column as wide as two sticks as large as the height leaves, never
+  // narrower than the rail nor wider than 45% of the screen, and the
+  // sticks as large as it and the height allow. The pixels are the sums
+  // css/panel.css lists: the readouts under the dock take 57 of them.
+  for (const [opening, height, width] of [[WIDE, 509, 72], [READ_UNDER_VIEW, 452, 72], [WIDE_SHORT, 388, 56]]) {
+    const root = rule(mediaRules(opening) || [], ":root");
+    const drive = (root.match(/--drive:([^;]*);/) || [])[1] || "";
+    const stick = (root.match(/--stick:([^;]*);/) || [])[1] || "";
+    check(drive.trim() === `clamp(var(--rail), 2 * (100 * var(--svh) - ${height}px) + ${width}px, min(45vw, ${2 * 300 + width}px))`, `${opening}: the column: ${drive}`);
+    check(stick.trim() === `clamp(120px, min(100 * var(--svh) - ${height}px, (var(--drive) - ${width}px) / 2), 300px)`, `${opening}: the sticks: ${stick}`);
+  }
   // The dock's grid is the same at every height: no block for tall screens
   // stacks its controls, which would put the family under the stick.
   check(!/min-height: 761px/.test(panelCss()), "no tall-screen layout of its own");
@@ -3702,8 +3716,6 @@ test("drive view: beside the dock on a wide screen, in the scan's place on a pho
   check(hidesScan && /display:\s*none;/.test(hidesScan.body), `phone: the scan gives way on the simulator: ${onSim.map((r) => r.selector)}`);
   check(showsView && /display:\s*flex;/.test(showsView.body) && /container:\s*driveview \/ size;/.test(showsView.body), `phone: the view in its place, sized by the row: ${showsView && showsView.body}`);
   const base = cssRules(outside(panelCss(), "@media"));
-  const which = base.find((r) => /body\[data-target="simulator"\] \.driveViewOff/.test(r.selector));
-  check(which && /body:not\(\[data-target="simulator"\]\) #driveSimSlot/.test(which.selector) && /display:\s*none;/.test(which.body), "the card on the rover, the view on the simulator");
   // The row sets the view's height: sim.css's floor for the view elsewhere
   // would hold it at 280 px, past the row, and no short step would apply.
   const floor = base.find((r) => r.selector === "#driveSimSlot .sim");

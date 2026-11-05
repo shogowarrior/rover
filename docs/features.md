@@ -4,7 +4,10 @@ The owner's requests for the browser panel and the controls, from
 2026-10-03. All seven steps of the [order of work](#order-of-work) are done,
 and so are [F5](#f5-themes-and-options), from a second message that evening,
 and [F6](#f6-firmware-updates-from-the-panel), from the next morning;
-what [F4](#f4-other-buttons) deferred waits for the owner. [project/handoff.md](project/handoff.md) says where the
+what [F4](#f4-other-buttons) deferred waits for the owner. The owner's
+comments on the try-it page on 2026-11-05, a larger view of the simulator
+on the Drive tab, are [F3i](#f3i-the-drive-tab-split-for-the-view).
+[project/handoff.md](project/handoff.md) says where the
 project stands and how a thread starts; this file is the goal's detail.
 
 Every bullet and clause the owner wrote is quoted below and mapped to an
@@ -60,6 +63,17 @@ Remind to check for ota feature as I had  and add it the the dashboard ui
 Make sure to not commit WiFi details
 ```
 
+Two comments on the try-it page came on 2026-11-05, the first on the
+Drive tab's view of the simulator, the second on its dock:
+
+```text
+i had asked this to be bigger. i still see it the smallest window
+```
+
+```text
+so much wasted space on this and the right most pane whatever that is for. can you please tile them vertically with a side split for the preview?
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -95,6 +109,9 @@ Make sure to not commit WiFi details
 | Remind to check for ota feature as I had | Done: [F6](#f6-firmware-updates-from-the-panel), "What was there" |
 | and add it the the dashboard ui | Done: [F6](#f6-firmware-updates-from-the-panel) |
 | Make sure to not commit WiFi details | Done: [F6](#f6-firmware-updates-from-the-panel), the last bullet of "Done" |
+| i had asked this to be bigger. i still see it the smallest window | Done: [F3i](#f3i-the-drive-tab-split-for-the-view) |
+| so much wasted space on this and the right most pane whatever that is for. | Done: [F3i](#f3i-the-drive-tab-split-for-the-view), "Before" says what the pane was |
+| can you please tile them vertically with a side split for the preview? | Done: [F3i](#f3i-the-drive-tab-split-for-the-view) |
 
 ## Order of work
 
@@ -638,6 +655,11 @@ no empty row under the readouts taller than 24 px.
 both tabs, 459 px tall at 1280 x 800 and 559 at 1600 x 900 on either tab,
 with the readouts at the column's foot and no empty row.
 
+[F3i](#f3i-the-drive-tab-split-for-the-view) amended this at the owner's
+later ask: beside the Drive tab the right column is the dock's, with the
+readouts under it, and the scan is the left side on the rover target. The
+address, the note and Autonomous keep the one width beside both tabs.
+
 ### F3e. The simulator view fills its pane
 
 **Asked:** "the preview is a thin veritcal bar with big gaps in the top and
@@ -1050,6 +1072,68 @@ the scheme and family rules, the press requests, the refits and box moves
 for each stick, both canvases' ancestors, the look rebuilding both, and the
 layout's rules on a phone on its side, each checked by breaking what it
 holds. Panel tests 259/259.
+
+### F3i. The Drive tab split for the view
+
+**Asked** on the try-it page, 2026-11-05: "i had asked this to be bigger.
+i still see it the smallest window", on the Drive tab's view of the
+simulator, and "so much wasted space on this and the right most pane
+whatever that is for. can you please tile them vertically with a side
+split for the preview?", on its dock.
+
+**Before.** On a wide screen the Drive tab had three panes from 1180 px
+wide: the dock, the simulator's view beside it, and the rail. The view was
+the narrowest (332 x 557 at 1280 x 800), each stick had at most a quarter
+of the left pane with room around it, and the rail's scan, on the
+simulator target, only said that no rover was connected. From 960 to
+1179 px wide the view took the scan's cell in the rail (320 x 427 at
+1024 x 768). The right-most pane is that rail: the rover's scan, its five
+sonar bearings, over the readouts (the move, the exploring phase and the
+chip's temperature), which show the rover, not the simulator.
+
+**Done.** From 960 px wide the Drive tab splits the page in two:
+
+- on the left, at the page's height, what the controls drive: the
+  simulator's view on the simulator target, the rover's scan on the rover
+  target (the card that held the view's place on the rover is gone);
+- on the right one column, the dock with the readouts under it, tiled as
+  asked; the column is as wide as the two sticks need, from the rail's
+  width up to 45% of the screen (672 px, two 300 px sticks, at most), so
+  the view is the larger side;
+- where the height limits the sticks, the readouts go under the view
+  instead, and the column is the dock's alone: under the dock they would
+  cost the stick 57 px. Each range of widths moves them at the height
+  where that changes no stick: 739 px tall up to 1179 px wide, 781 up to
+  1365 and 809 from 1366;
+- the readouts keep one line and one height wherever they are: each label
+  over its value, the phase coming and going at the line's end, a value
+  too long for its cell cut short, so nothing moves a held stick;
+- the header and the Stop bar are as before, the address, the note and
+  Autonomous on the rail's width beside both tabs.
+
+The Program tab, an upright phone and a phone on its side are unchanged:
+measured against `main` at 21 sizes, only the wide Drive tab moved. On the
+simulator target:
+
+| Screen | Stick before | Stick | View before | View |
+|---|---|---|---|---|
+| 960 x 600 | 212 | 188 | 320 x 279, in the rail, too short for the room | 460 x 309 |
+| 1024 x 700 | 248 | 194 | 320 x 359, in the rail | 495 x 389 |
+| 1024 x 768 | 282 | 194 | 320 x 427, in the rail | 495 x 525 |
+| 1180 x 820 | 185 | 230 | 297 x 577 | 581 x 577 |
+| 1280 x 700 | 202 | 248 | 332 x 457 | 644 x 389 |
+| 1280 x 800 | 202 | 252 | 332 x 557 | 636 x 557 |
+| 1366 x 1024 | 217 | 271 | 362 x 781 | 683 x 781 |
+| 1440 x 900 | 230 | 288 | 388 x 657 | 724 x 657 |
+| 1470 x 830 | 235 | 295 | 399 x 587 | 741 x 587 |
+| 1920 x 1080 | 300 | 300 | 380 x 837 | 860 x 837 |
+
+Below 1180 px wide the sticks are smaller than before, 45% of the screen
+being all the column takes, and the view is half as wide again. At every
+size measured, from 960 x 521 to 1920 x 1080 and at each step's edges, no
+stick moves when the move's name, the phase or the chip changes, a motor
+fault comes or goes, or the target switches, and the switch between the
+readouts' two places changes no stick.
 
 ## F4. Other buttons
 

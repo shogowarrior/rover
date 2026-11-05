@@ -393,8 +393,7 @@ A held rotate button or key carries on, except on the simulator target
 (below).
 The scan, the readouts and the Stop and Autonomous buttons stay on screen on
 both tabs, connected or not, but for one exception: on the simulator target
-the Drive tab's view of the simulator takes the scan's place on a phone, and
-in the rail from 960 to 1179 px wide.
+the Drive tab's view of the simulator takes the scan's place.
 Until the rover's first frame the scan's card says no rover is connected, at
 its full size, and after a link goes it keeps the last scan, dimmed. Stop
 and Autonomous stay in the same place; on a phone the scan gives the Program
@@ -433,20 +432,22 @@ two edges, the rotate buttons under the left and the speed under the right,
 and the header, the scan, and Stop and Autonomous sit in the middle column
 between them, in reach of either thumb; the dock stops at the screen's
 height, so a middle column that outgrows a short screen moves neither
-stick. On a wide screen (960 px by 521 px and up) the open tab fills the
-left, and the rail, one width (`--rail`) beside both tabs, holds the
-address, the note, the scan and the readouts on the right, so the tab
-switch moves nothing. Stop and Autonomous are a bar across the foot, Stop
-under the left pane (at most 480 px) and Autonomous under the rail. From
-1180 px wide the Drive tab splits the left pane: the dock as wide as its
-sticks, each at most a quarter of the pane, and beside it the simulator's
-view, or on the rover target a card holding its place, so a switch of
-target moves nothing. Narrower the pane has no room for both, so the dock
-is the same on either target and the view takes the scan's cell in the
-rail. Each stick is as large as what is above and under it, and the width
+stick. On a wide screen (960 px by 521 px and up) the header and the foot
+are the same beside both tabs: the address and the note on the right, one
+width (`--rail`), and Stop and Autonomous a bar across the foot, Stop under
+the left (at most 480 px) and Autonomous under the address. Beside the
+Program tab the rail, on the same width, holds the scan and the readouts.
+The Drive tab splits the page instead: on the left, at the page's height,
+what its controls drive, the simulator's view on the simulator target and
+the scan on the rover target; on the right one column (`--drive`, at most
+45% of the screen), the dock with the readouts on one line under it, so a
+switch of target moves no stick. Where the height limits the sticks the
+readouts go under the left side instead, and the column is the dock's
+alone: each range of widths moves them at the height where that changes no
+stick. Each stick is as large as what is above and under it, and the width
 around it, leave; `css/panel.css` sums each layout's budget, from the
 viewport alone (`--stick`).
-In the scan's place, there or on a phone, the view is its row's height,
+In the scan's place on a phone the view is its row's height,
 under 300 px on most phones, so it shows the wheels and the motion rather
 than a room too small to read (`css/sim.css`), and on a short phone the
 move alone. The Program tab puts the simulator's view beside the editor, as tall as its

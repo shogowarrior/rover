@@ -252,6 +252,24 @@ Host tests 192/192, panel tests 301/301, the protocol check and every board
 build pass. That thread built and tested the firmware in its own container
 despite the registry block: see "Firmware builds in a cloud thread" below.
 
+On 2026-11-05 the owner commented on the try-it page that the Drive tab's
+view of the simulator was still the smallest pane, and asked for the dock
+and the right pane tiled vertically with a side split for the view. The
+first thread did that as F3i, panel only (features.md, F3i):
+
+- from 960 px wide the Drive tab splits the page: on the left, at the
+  page's height, the simulator's view on the simulator target and the
+  rover's scan on the rover target; on the right one column (`--drive`, at
+  most 45% of the screen), the dock with the readouts under it;
+- where the height limits the sticks the readouts go under the view
+  instead, at a height per range of widths that changes no stick;
+- the readouts keep one line and one height wherever they are, so nothing
+  in them moves a held stick;
+- the header, the Stop bar, the Program tab and every phone layout are as
+  they were. The view is about twice as wide as before at laptop sizes
+  (636 x 557 at 1280 x 800, from 332 x 557), and below 1180 px wide the
+  sticks are smaller (194 px at 1024 x 768, from 282).
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -276,7 +294,9 @@ F4 deferred is under "Open, not started" below:
    use visibly disabled.
 7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
-F6, firmware updates from the panel, came later and is done too.
+F6, firmware updates from the panel, came later and is done too, and so
+is F3i, the Drive tab split for a larger view, from the owner's comments
+on the try-it page.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
