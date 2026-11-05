@@ -7,13 +7,15 @@
    sizes, layout) are the same in every look, in css/panel.css.
 
    Three themes, each Dark and Light. Console is the default: neutral
-   black, or white, with every control edged. Field is for glare or a
+   black, or white, with its controls edged. Field is for glare or a
    bright room: the most contrast, its ink at 7:1 and its rules strong.
    Blueprint is tinted: deep navy, or pale blue drafting paper.
 
-   Controls read at a glance. Each control's edge holds 3:1 against what it
-   sits on, and the chosen segment of a switch is inverted: the page's ink
-   as its fill, its word in the case colour.
+   Controls read at a glance. The edge of a button, a switch's track, a
+   field or a theme tile holds 3:1 against what it sits on (a filled button
+   needs none), and the chosen segment of a switch is inverted: the page's
+   ink as its fill, its word in --on-chosen (the case colour in a dark
+   look, white in a light one).
 
    Four signal hues, each with one job, in every look. Blue is the
    operator's own controls: the stick's knob, the slider, the focus ring,
@@ -29,7 +31,9 @@
    meet a shape or a word tells them apart too: a clear way on the scan is
    drawn open, a simulator ray closing in is heavy, and every pill and
    readout says what it shows. A light look darkens its hues until they
-   hold as text on its surfaces.
+   hold as text on its surfaces. Nothing here is teal, which the owner
+   turned down: a green tint over a blue ground mixes to it, so the
+   Blueprint looks' tints are opaque and a clear way's body yellower.
    test/looks.test.js holds every look to the contrast each pairing of ink
    and surface in its audit needs: a rule that paints a token on a new
    surface adds its pairing there. */
@@ -63,6 +67,7 @@
   --ok: #3fdb68;
   --on-ok: #000000;
   --ok-soft: rgb(63 219 104 / 0.16);
+  --ok-body: var(--ok); /* a clear way's body on the scan, drawn at 0.3 */
   --warn: #ffb02e;
   --warn-soft: rgb(255 176 46 / 0.14);
   --stop: #d23c37;
@@ -114,6 +119,7 @@
   --ok: #086d2d;
   --on-ok: #ffffff;
   --ok-soft: rgb(20 170 70 / 0.16);
+  --ok-body: var(--ok);
   --warn: #865900;
   --warn-soft: rgb(255 181 71 / 0.24);
   --stop: #d23c37;
@@ -159,6 +165,7 @@
   --ok: #45e07a;
   --on-ok: #000000;
   --ok-soft: rgb(69 224 122 / 0.18);
+  --ok-body: var(--ok);
   --warn: #ffc247;
   --warn-soft: rgb(255 194 71 / 0.16);
   --stop: #d23c37;
@@ -204,6 +211,7 @@
   --ok: #006b2b;
   --on-ok: #ffffff;
   --ok-soft: rgb(0 150 60 / 0.16);
+  --ok-body: var(--ok);
   --warn: #785000;
   --warn-soft: rgb(255 176 32 / 0.28);
   --stop: #d23c37;
@@ -248,7 +256,10 @@
   --on-live: #031226;
   --ok: #4fe08a;
   --on-ok: #02200e;
-  --ok-soft: rgb(79 224 138 / 0.16);
+  /* A faint green over this navy mixes to the teal F7 took out: the tint
+     is opaque, and a clear way's body a yellower green. */
+  --ok-soft: #12351f;
+  --ok-body: #56d233;
   --warn: #ffbf5e;
   --warn-soft: rgb(255 191 94 / 0.13);
   --stop: #d23c37;
@@ -293,7 +304,10 @@
   --on-live: #ffffff;
   --ok: #066b33;
   --on-ok: #ffffff;
-  --ok-soft: rgb(20 160 80 / 0.16);
+  /* As in Blueprint Dark, over this pale blue: an opaque tint, and a
+     yellower body. */
+  --ok-soft: #d6efdc;
+  --ok-body: #1f7a1f;
   --warn: #855900;
   --warn-soft: rgb(255 181 71 / 0.26);
   --stop: #d23c37;

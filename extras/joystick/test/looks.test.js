@@ -63,7 +63,7 @@ const AUDIT = [
   // A fresh sonar ray is drawn at 0.95.
   ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
     "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar, the rover's aim"],
-  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list"],
+  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list, the theme tiles"],
   ["--ok", ["--case", "--panel", "--raised", "--glow over --panel", "--sim-plate"], MARK,
     "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a clear sonar ray, a forward wheel"],
   ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
@@ -292,6 +292,111 @@ test("every look's color-scheme is its flavour", () => {
   for (const look of lookBlocks()) {
     assert.equal(look.declared.get("color-scheme"), look.id.split("-").pop(), `${look.id}'s color-scheme`);
   }
+});
+
+// The owner turned the teal look down (docs/features.md, F7). A hue from
+// 155 to 200 degrees reads as teal, or the mint beside it (the old accent,
+// #4db8a8, was 171), and a faint green over a blue ground mixes to one, so
+// each green is checked as it is drawn, on what it is drawn on. A grey has
+// no hue to speak of.
+function hueOf([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const chroma = max - Math.min(r, g, b);
+  if (chroma < 12) return null;
+  const h = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+  return (h * 60 + 360) % 360;
+}
+const teal = (rgb) => {
+  const h = hueOf(rgb);
+  return h !== null && h >= 155 && h <= 200;
+};
+
+test("no look draws a teal: its green, its tints and a clear way's body, as drawn", () => {
+  const found = [];
+  for (const look of lookBlocks()) {
+    const drawn = {
+      "--ok on --panel": surface(look, "--ok"),
+      "--live on --panel": surface(look, "--live"),
+      "--ok-soft over --panel": surface(look, "--ok-soft over --panel"),
+      "--ok-soft over --case": surface(look, "--ok-soft over --case"),
+      "--ok-soft over --raised": surface(look, "--ok-soft over --raised"),
+      "--ok-body at 0.3 over --glow over --panel": over(paint(look, "--ok-body"), surface(look, "--glow over --panel"), 0.3),
+    };
+    for (const [what, rgb] of Object.entries(drawn)) {
+      if (teal(rgb)) found.push(`${look.id}: ${what} at ${Math.round(hueOf(rgb))} degrees`);
+    }
+  }
+  const { RoverBlocks } = require("../js/blocks.js");
+  for (const [category, value] of Object.entries(RoverBlocks.PALETTE)) {
+    if (teal(rgba(value, category))) found.push(`the ${category} blocks, ${value}`);
+  }
+  assert.deepEqual(found, []);
+});
+
+// Colour difference as the eye sees it: sRGB to CIELAB (D65), then
+// CIEDE2000, and Machado, Oliveira and Fernandes's (2009) simulation of
+// protanopia and deuteranopia at full severity, in linear RGB.
+const CVD = {
+  normal: null,
+  protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+};
+function labSeen([r, g, b], matrix) {
+  const toLinear = (c) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  let rgb = [r, g, b].map(toLinear);
+  if (matrix) rgb = matrix.map((row) => Math.min(1, Math.max(0, row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2])));
+  const [lr, lg, lb] = rgb;
+  const xyz = [(0.4124 * lr + 0.3576 * lg + 0.1805 * lb) / 0.95047, 0.2126 * lr + 0.7152 * lg + 0.0722 * lb, (0.0193 * lr + 0.1192 * lg + 0.9505 * lb) / 1.08883];
+  const [fx, fy, fz] = xyz.map((t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116));
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function ciede2000([L1, a1, b1], [L2, a2, b2]) {
+  const rad = Math.PI / 180;
+  const meanC = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2;
+  const G = 0.5 * (1 - Math.sqrt(meanC ** 7 / (meanC ** 7 + 25 ** 7)));
+  const [a1p, a2p] = [(1 + G) * a1, (1 + G) * a2];
+  const [C1, C2] = [Math.hypot(a1p, b1), Math.hypot(a2p, b2)];
+  const hue = (b, a) => ((Math.atan2(b, a) / rad) % 360 + 360) % 360;
+  const [h1, h2] = [hue(b1, a1p), hue(b2, a2p)];
+  let dh = h2 - h1;
+  if (C1 * C2 === 0) dh = 0;
+  else if (dh > 180) dh -= 360;
+  else if (dh < -180) dh += 360;
+  const dL = L2 - L1;
+  const dC = C2 - C1;
+  const dH = 2 * Math.sqrt(C1 * C2) * Math.sin((dh / 2) * rad);
+  const mL = (L1 + L2) / 2;
+  const mC = (C1 + C2) / 2;
+  let mh = h1 + h2;
+  if (C1 * C2 !== 0) mh = Math.abs(h1 - h2) <= 180 ? mh / 2 : mh < 360 ? (mh + 360) / 2 : (mh - 360) / 2;
+  const T = 1 - 0.17 * Math.cos((mh - 30) * rad) + 0.24 * Math.cos(2 * mh * rad) + 0.32 * Math.cos((3 * mh + 6) * rad) - 0.2 * Math.cos((4 * mh - 63) * rad);
+  const SL = 1 + (0.015 * (mL - 50) ** 2) / Math.sqrt(20 + (mL - 50) ** 2);
+  const SC = 1 + 0.045 * mC;
+  const SH = 1 + 0.015 * mC * T;
+  const RT = -Math.sin(2 * 30 * Math.exp(-(((mh - 275) / 25) ** 2)) * rad) * 2 * Math.sqrt(mC ** 7 / (mC ** 7 + 25 ** 7));
+  return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
+}
+
+// The blocks' colours are the same in every look, and a block's colour
+// says its category as its words do. Motion's, the blocks a program is
+// made of and the stop block's own category, keeps apart from every other
+// category's for a red-green colour-blind eye too: an olive tried in F7's
+// review was control's brown and the stop block's red to one, and the teal
+// before it came close to variables. Some other pairs were close before F7
+// (control and stop, sensors and logic, under deuteranopia) and are left.
+test("the motion blocks keep apart from every other category, for a red-green colour-blind eye too", () => {
+  const { RoverBlocks } = require("../js/blocks.js");
+  const { motion, ...others } = RoverBlocks.PALETTE;
+  const near = [];
+  for (const [vision, matrix] of Object.entries(CVD)) {
+    const seen = labSeen(rgba(motion, "motion"), matrix);
+    for (const [category, value] of Object.entries(others)) {
+      const difference = ciede2000(seen, labSeen(rgba(value, category), matrix));
+      if (difference < 10) near.push(`${category} (${value}) in ${vision}: ${difference.toFixed(1)}`);
+    }
+  }
+  assert.deepEqual(near, [], `motion (${motion}) under 10 from`);
+  assert.ok(contrast(rgba(motion, "motion"), [255, 255, 255]) >= TEXT, "the blocks' white text holds on it");
 });
 
 for (const id of LOOKS) {

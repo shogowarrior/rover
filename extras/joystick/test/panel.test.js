@@ -609,6 +609,9 @@ test("the scan draws a clear way open: a faint body inside a green edge", () => 
   check(clear.length === 1, `one rule for it: ${clear.length}`);
   const opacity = Number((clear[0].body.match(/fill-opacity:\s*([\d.]+)/) || [])[1]);
   check(opacity > 0 && opacity <= 0.4, `its body faint: ${opacity}`);
+  // In --ok-body, which a look on a blue ground makes yellower than its
+  // --ok, or the mix would be teal (looks.test.js checks every look).
+  check(/(^|[^-])fill:\s*var\(--ok-body\)/.test(clear[0].body), `its body in --ok-body: ${clear[0].body}`);
   check(/stroke:\s*var\(--ok\)/.test(clear[0].body) && /stroke-width:/.test(clear[0].body), `its edge in green: ${clear[0].body}`);
   const solid = cssRules(panelCss()).filter((rule) => /\.wedge\b/.test(rule.selector) && rule.selector !== '.wedge[data-zone="clear"]' && /fill-opacity|stroke/.test(rule.body));
   check(solid.length === 0, `nothing else outlines or fades a wedge: ${solid.map((rule) => rule.selector)}`);
@@ -4556,10 +4559,31 @@ test("look: on a phone on its side the all-well pills keep their green lamp, the
   // a tinted pill's colour shows without one, an all-well pill's does not.
   const block = blockRules(panelCss(), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
   check(block.some((r) => r.selector === ".pill > .lamp" && /display:\s*none/.test(r.body)), "the lamps dropped there");
-  const kept = block.find((r) => /\.linkPill > \.lamp/.test(r.selector) && /display:\s*block/.test(r.body));
-  const selectors = kept ? kept.selector.split(",").map((each) => each.trim()) : [];
-  check(selectors.includes('body[data-link="up"] .linkPill > .lamp'), `Link's lamp kept while the link is up: ${selectors}`);
-  check(selectors.includes('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), `Motors OK's lamp kept: ${selectors}`);
+  const keeps = (selector) => block.find((r) => r.selector.split(",").map((each) => each.trim()).includes(selector) && /display:\s*block/.test(r.body));
+  const link = keeps('body[data-link="up"] .linkPill > .lamp');
+  check(link, "Link's lamp kept while the link is up");
+  check(keeps('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), "Motors OK's lamp kept");
+  // A browser without :has() drops a whole selector list that holds one.
+  check(link && !/:has\(/.test(link.selector), `Link's lamp in a rule with no :has(): ${link && link.selector}`);
+});
+
+test("look: the chosen segment's word stays on its chip, the only ground its ink reads on, at the narrowest layouts", () => {
+  // Measured headless: at 320 px upright "Advanced" at --t-md ran past its
+  // chip, and on a phone on its side under about 570 px "sideways" at
+  // --t-sm; the part past the chip lay on its frame in --on-chosen.
+  const narrow = mediaRules("@media (max-width: 359.98px) {") || [];
+  const smaller = narrow.find((r) => /font-size:\s*var\(--t-sm\)/.test(r.body));
+  const selectors = smaller ? smaller.selector.split(",").map((each) => each.trim()) : [];
+  check(selectors.includes('.tabs [role="tab"]') && selectors.includes(".segmented button"), `the tabs and every switch a size down under 360 px: ${selectors}`);
+  const side = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
+  check(side.some((r) => r.selector === ".family .segmented button" && /font-size:\s*var\(--t-xs\)/.test(r.body)), "the family's words a size down on a narrow phone on its side");
+});
+
+test("look: on an upright phone the open Program tab's running dot sits in its chip's corner, not past the word", () => {
+  const phone = blockRules(stylesheet("program.css"), "@media (max-width: 439.98px) {") || [];
+  const dot = phone.find((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
+  check(dot && /position:\s*absolute/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
+  check(phone.some((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]' && /position:\s*relative/.test(r.body)), "placed by its own tab");
 });
 
 test("look: a tile's preview is painted only in the tokens every look declares for it", () => {

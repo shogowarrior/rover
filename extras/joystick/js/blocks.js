@@ -54,11 +54,13 @@ class RoverBlocks {
   // still read on a dark or a light look's workspace. Red is the panel's
   // stop red (--stop in css/looks.css, the same in every look;
   // looks.test.js checks the copy), and only the stop block wears it:
-  // anywhere else it would stop meaning anything. Motion is olive, not the
-  // teal the owner turned down (docs/features.md, F7): further from every
-  // other category than the teal was from math's green.
+  // anywhere else it would stop meaning anything. Motion is a dusky rose:
+  // not the teal the owner turned down (docs/features.md, F7), nor an
+  // olive, which a red-green colour-blind eye takes for control's brown and
+  // the stop block's red. It keeps apart from every other category for
+  // that eye too (looks.test.js).
   static PALETTE = Object.freeze({
-    motion: "#707516",
+    motion: "#805362",
     sensors: "#3674b5",
     control: "#a6651b",
     logic: "#7462d4",

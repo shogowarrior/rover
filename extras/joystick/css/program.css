@@ -20,9 +20,25 @@
 }
 
 /* On the open tab the dot sits on the chosen chip, where green fell under
-   3:1 in the dark looks: it takes the chip's ink, as the tab's word does. */
+   3:1 in the dark looks: it takes the chip's ink, as the tab's word does,
+   with no halo (the state line under it says the program runs). */
 .tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
   background: var(--on-chosen);
+  box-shadow: none;
+}
+
+/* On an upright phone "Program" all but fills the chip, and the dot beside
+   it fell off onto the frame (two thirds of it at 320 px), where the chip's
+   ink does not read: there it sits in the chip's corner instead. A tab is
+   no stick's ancestor, so it may be positioned. */
+@media (max-width: 439.98px) {
+  .tabs [role="tab"][aria-selected="true"][data-running="yes"] { position: relative; }
+
+  .tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+  }
 }
 
 /* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar

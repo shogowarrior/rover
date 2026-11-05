@@ -424,12 +424,12 @@ input[type="range"]::-moz-range-thumb {
 
 .lookTile input { pointer-events: none; }
 
-/* The page's frame round the look's own colours. */
+/* The page's frame round the look's own colours, edged as a control is. */
 .lookPreview {
   display: block;
   width: 100%;
   padding: var(--s-0);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--edge);
   border-radius: var(--r-sm);
 }
 
@@ -1068,8 +1068,11 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 
 /* A clear way is drawn open, its edge in green and its body faint, where
    something closing in or inside STOP is solid: the shape tells them apart
-   where red-green colour blindness takes the hues' difference away. */
+   where red-green colour blindness takes the hues' difference away. Its
+   body is --ok-body, which a look on a blue ground makes yellower, or the
+   green mixed into the blue would draw it teal. */
 .wedge[data-zone="clear"] {
+  fill: var(--ok-body);
   fill-opacity: 0.3;
   stroke: var(--ok);
   stroke-width: 1.5px;
@@ -1707,6 +1710,12 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .actions button { padding-inline: var(--s-2); }
 
+  /* The chosen segment's word is in the chip's ink, which reads only on
+     the chip: at --t-md "Advanced" ran past the chip at 320 px, onto the
+     frame, where it vanished. */
+  .tabs [role="tab"],
+  .segmented button { font-size: var(--t-sm); }
+
   #auto .icon { display: none; }
 }
 
@@ -2188,7 +2197,10 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
 
   .pill > .lamp { display: none; }
 
-  body[data-link="up"] .linkPill > .lamp,
+  body[data-link="up"] .linkPill > .lamp { display: block; }
+
+  /* A rule of its own: a browser without :has() drops a whole selector
+     list that holds one, and Link's lamp needs none. */
   body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp { display: block; }
 
   .cell output { font-size: var(--t-sm); }
@@ -2196,6 +2208,16 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   /* Autonomous drops its icon, as under 360 px upright: in half of the
      240 px the word alone fits, and with the icon it ran past its edges. */
   #auto .icon { display: none; }
+}
+
+/* On its side, under about 570 px wide, the pivot stick is at its 112 px
+   floor: each family segment is 55 px and its chip 49, and "sideways" at
+   --t-sm ran past the chip, onto the frame, where the chip's ink vanished. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
+  .family .segmented button {
+    font-size: var(--t-xs);
+    letter-spacing: var(--track-tight);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
