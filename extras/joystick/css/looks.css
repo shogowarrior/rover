@@ -67,7 +67,7 @@
   --ok: #3fdb68;
   --on-ok: #000000;
   --ok-soft: rgb(63 219 104 / 0.16);
-  --ok-body: var(--ok); /* a clear way's body on the scan, drawn at 0.3 */
+  --ok-body: var(--ok); /* a clear way drawn faint: the scan's body, an aged sonar ray */
   --warn: #ffb02e;
   --warn-soft: rgb(255 176 46 / 0.14);
   --stop: #d23c37;

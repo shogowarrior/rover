@@ -1198,6 +1198,12 @@ test("the view: a bearing to the rover's left reads, and is drawn, on its left",
   const heavy = (selector) => (cssRules(css).find((r) => r.selector === selector) || {}).body || "";
   assert.match(heavy('.sim-rays line:is([data-zone="warn"], [data-zone="stop"])'), /stroke-width:\s*3;/, "a near ray heavier than the 1.5 of a clear one");
   assert.match(heavy(".sim-swatch.ray:is(.stop, .warn)"), /border-top-width:\s*4px;/, "its key heavier than the 2 px of a clear one");
+  // A clear ray fades as it ages, in --ok-body (a yellower green where the
+  // floor is blue, or the faded green is teal: looks.test.js), its key too.
+  const clear = rays.filter((ray) => ray.getAttribute("data-zone") === "clear");
+  assert.ok(clear.length > 0, "a clear ray drawn");
+  assert.ok(clear.every((ray) => ray.getAttribute("stroke") === "var(--ok-body)"), `clear rays in --ok-body: ${clear.map((ray) => ray.getAttribute("stroke"))}`);
+  assert.match(heavy(".sim-swatch.ray.clear"), /border-color:\s*var\(--ok-body\)/, "its key in --ok-body");
   assert.deepEqual(page.errors, []);
 });
 

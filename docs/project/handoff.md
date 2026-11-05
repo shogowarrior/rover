@@ -287,8 +287,13 @@ chosen words running off their chips on the narrowest phones, and the
 theme tiles framed at 1.4:1. Round 3: the same mixing through a fade (the
 scan's history once the link goes, the running block's glow, the halos'
 pulse, the chosen toolbox pill) and Blockly's white on a light look's
-"Create variable" button. Panel tests 313/313 and the protocol check
-pass. No firmware changed.
+"Create variable" button. A `/code-review` pass then found four more:
+the scan's history greyed by a filter WebKit does not apply to an SVG
+shape (now by its colours), the simulator's clear rays faded in `--ok`
+over Blueprint's blue (now `--ok-body`), the chosen toolbox pill's ring
+under 2:1 in the dark looks (now the ink), and a clear wedge's body
+snapping rather than gliding as its fill's opacity changed. Panel tests
+314/314 and the protocol check pass. No firmware changed.
 
 ## Current work
 

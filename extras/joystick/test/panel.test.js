@@ -613,12 +613,20 @@ test("the scan draws a clear way open: a faint body inside a green edge", () => 
   // --ok, or the mix would be teal (looks.test.js checks every look).
   check(/(^|[^-])fill:\s*var\(--ok-body\)/.test(clear[0].body), `its body in --ok-body: ${clear[0].body}`);
   check(/stroke:\s*var\(--ok\)/.test(clear[0].body) && /stroke-width:/.test(clear[0].body), `its edge in green: ${clear[0].body}`);
-  const solid = cssRules(panelCss()).filter((rule) => /\.wedge\b/.test(rule.selector) && rule.selector !== '.wedge[data-zone="clear"]' && /fill-opacity|stroke/.test(rule.body));
+  const HISTORY = 'body:not([data-link="up"]) .wedge[data-zone="clear"]';
+  const solid = cssRules(panelCss()).filter((rule) => /\.wedge\b/.test(rule.selector) && ![".wedge[data-zone=\"clear\"]", HISTORY].includes(rule.selector) && /(^|[\s;])(fill-opacity|stroke)\s*:/.test(rule.body));
   check(solid.length === 0, `nothing else outlines or fades a wedge: ${solid.map((rule) => rule.selector)}`);
   // A link that goes fades the fan to a quarter: a green that faint over
-  // Blueprint's navy or pale blue mixes to teal, so history's clear way greys.
-  const history = cssRules(panelCss()).filter((rule) => rule.selector === 'body:not([data-link="up"]) .wedge[data-zone="clear"]');
-  check(history.length === 1 && /filter:\s*grayscale\(1\)/.test(history[0].body), `a stale clear way greyed: ${history.map((rule) => rule.body)}`);
+  // Blueprint's navy or pale blue mixes to teal, so history's clear way
+  // greys, still open. By its colours: WebKit applies no CSS filter to an
+  // SVG shape.
+  const history = cssRules(panelCss()).filter((rule) => rule.selector === HISTORY);
+  check(history.length === 1 && /(^|[^-])fill:\s*var\(--dim\)/.test(history[0].body) && /stroke:\s*var\(--dim\)/.test(history[0].body) && !/filter/.test(history[0].body),
+    `a stale clear way greyed by its colours: ${history.map((rule) => rule.body)}`);
+  // A zone change eases the body's opacity with its colour, or for a moment
+  // a clear way turning amber is solid green: the shape for closing in.
+  const wedge = cssRules(panelCss()).find((rule) => rule.selector === ".wedge");
+  check(wedge && /transition:[^;]*fill-opacity/.test(wedge.body), `the body's opacity eases: ${wedge && wedge.body}`);
 });
 
 test("look: Blockly's own rules do not outrank the look's ink on a flyout button", () => {
@@ -4543,10 +4551,18 @@ test("look: whatever is filled in --chosen is written in --on-chosen", () => {
   check(chosen.length > 0, "found the chosen segment's rule");
   const unlike = chosen.filter((rule) => !/(^|[^-])color:\s*var\(--on-chosen\)/.test(rule.body));
   check(unlike.length === 0, `written otherwise: ${unlike.map((rule) => rule.selector)}`);
-  const selectors = chosen.flatMap((rule) => rule.selector.split(",").map((each) => each.trim()));
-  for (const state of ['.scheme[data-state="stale"] .segmented button[aria-pressed="true"]', '.family[data-off="yes"] .segmented button[aria-pressed="true"]']) {
-    check(selectors.includes(state), `kept inverted while disabled: ${state}`);
-  }
+  // A disabled segment is unlit but for the one in force (a stale scheme,
+  // the family under NORMAL), which keeps its chip whatever disables it.
+  const unlit = cssRules(panelCss()).filter((rule) => /\.segmented button:disabled/.test(rule.selector) && /background:\s*none/.test(rule.body));
+  check(unlit.length === 1 && unlit[0].selector === '.segmented button:disabled:not([aria-pressed="true"])', `the segment in force kept inverted while disabled: ${unlit.map((rule) => rule.selector)}`);
+});
+
+test("look: the chosen block category is ringed in the ink, not tinted in its colour", () => {
+  // Its own colour as a ring fell under 2:1 in the dark looks, and as a
+  // tint over Blueprint's blue it mixed to teal. --readout on --raised-hi
+  // is audited (looks.test.js).
+  const rule = cssRules(stylesheet("program.css")).find((r) => r.selector === ".blocklyToolboxCategory.roverCategory.blocklyToolboxSelected");
+  check(rule && /background:\s*var\(--raised-hi\)/.test(rule.body) && /box-shadow:\s*inset 0 0 0 2px var\(--readout\)/.test(rule.body), `ringed in the ink: ${rule && rule.body}`);
 });
 
 test("look: what else marks the chosen chip is drawn in its ink, not in blue or green", () => {

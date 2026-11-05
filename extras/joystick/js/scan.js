@@ -58,8 +58,13 @@ class ScanView {
     return "clear";
   }
 
+  // Each zone's colour, as an echo's wedge is filled. A clear one's body
+  // is drawn in --ok-body by css/panel.css, by its data-zone, over this:
+  // the attribute is what an unstyled page shows.
+  static #ZONE_COLOURS = Object.freeze({ stop: "var(--stop)", warn: "var(--warn)", clear: "var(--ok)" });
+
   static colorFor(cm) {
-    return { stop: "var(--stop)", warn: "var(--warn)", clear: "var(--ok)" }[ScanView.zoneFor(cm)];
+    return ScanView.#ZONE_COLOURS[ScanView.zoneFor(cm)];
   }
 
   #svg;

@@ -1404,9 +1404,11 @@ set, a tile per look.
   Blueprint's navy or pale blue mixed to it, so there the green tint is
   opaque and a clear way's body (`--ok-body`) a yellower green, and
   nothing fades a green out over its ground: the clear ways the scan keeps
-  once the link goes are grey, a running program's halo breathes in its
-  own tint, the running block is edged in green with no glow, and the
-  chosen toolbox category is edged, not tinted. `looks.test.js` holds
+  once the link goes are grey (by their colours: WebKit applies no filter
+  to an SVG shape), the simulator's clear rays fade in `--ok-body` too, a
+  running program's halo breathes in its own tint, the running block is
+  edged in green with no glow, and the chosen toolbox category is ringed
+  in the ink on a raised ground, not tinted. `looks.test.js` holds
   every look's greens, as drawn on their grounds, and every block colour
   out of the teal hues, and fails a stylesheet that fades a colour out. Its one job is split in two, so each
   hue has one: blue (`--live`) for the operator's own controls (the knob,
@@ -1464,9 +1466,11 @@ stale chips included), a chosen scheme also asked for and the open Program
 tab's running dot in the chip's ink, a disabled Run edged, the all-well
 lamps on a phone on its side (Link's in a rule with no `:has()`), the
 words a size down where a chip is narrowest, the running dot in its
-chip's corner on a phone, the clear wedge drawn open in `--ok-body` and
-grey once the link goes, Blockly's flyout button in the look's ink;
-`sim.test.js`: each ray's zone, a near one heavy; `looks.test.js`: the
+chip's corner on a phone, the clear wedge drawn open in `--ok-body`,
+gliding in its fill's opacity too, and grey by its colours once the link
+goes, Blockly's flyout button in the look's ink, the chosen toolbox
+category ringed in it; `sim.test.js`: each ray's zone, a near one heavy,
+a clear one and its key in `--ok-body`; `looks.test.js`: the
 audit above, Autonomous lit on the bare bar of a phone on its side, no
 teal drawn in any look or block, no stylesheet fading a colour out over
 its ground, and the motion blocks apart from every category for a

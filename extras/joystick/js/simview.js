@@ -631,14 +631,17 @@ class SimView {
       }
       const to = { x: from.x + lengthM * Math.cos(angle), y: from.y + lengthM * Math.sin(angle) };
       const age = Math.min(1, (now - reading.at) / SimView.RAY_FADE_MS);
-      const colour = noEcho ? "var(--dim)" : ScanView.colorFor(reading.cm);
+      // A clear ray fades as it ages, so it is drawn in --ok-body, which a
+      // look on a blue ground makes yellower: --ok faded over it is teal.
+      const zone = noEcho ? "none" : ScanView.zoneFor(reading.cm);
+      const colour = noEcho ? "var(--dim)" : zone === "clear" ? "var(--ok-body)" : ScanView.colorFor(reading.cm);
       line.setAttribute("x1", (from.x * CM).toFixed(1));
       line.setAttribute("y1", (from.y * CM).toFixed(1));
       line.setAttribute("x2", (to.x * CM).toFixed(1));
       line.setAttribute("y2", (to.y * CM).toFixed(1));
       line.setAttribute("stroke", colour);
       line.setAttribute("data-echo", noEcho ? "none" : "yes");
-      line.setAttribute("data-zone", noEcho ? "none" : ScanView.zoneFor(reading.cm));
+      line.setAttribute("data-zone", zone);
       line.setAttribute("opacity", (noEcho ? 0.55 - 0.25 * age : 0.95 - 0.55 * age).toFixed(2));
       line.setAttribute("visibility", "visible");
       dot.setAttribute("cx", (to.x * CM).toFixed(1));

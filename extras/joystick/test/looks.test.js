@@ -45,7 +45,7 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // or button replaces its fill with the tint.
 const AUDIT = [
   ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, buttons, menus, the keys' caps, the pills while all is well, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the pills while all is well, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
   ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel"], TEXT,
     "captions, the note, the keys' note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
   ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word and icon: the tabs, the scheme, the target, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame; the open Program tab's running dot"],
@@ -64,8 +64,8 @@ const AUDIT = [
   ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
     "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar, the rover's aim"],
   ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list, the theme tiles"],
-  ["--ok", ["--case", "--panel", "--raised", "--glow over --panel", "--sim-plate"], MARK,
-    "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a clear sonar ray, a forward wheel"],
+  ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
+    "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
   ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
   ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
@@ -321,6 +321,10 @@ test("no look draws a teal: its green, its tints and a clear way's body, as draw
       "--ok-soft over --case": surface(look, "--ok-soft over --case"),
       "--ok-soft over --raised": surface(look, "--ok-soft over --raised"),
       "--ok-body at 0.3 over --glow over --panel": over(paint(look, "--ok-body"), surface(look, "--glow over --panel"), 0.3),
+      // A clear sonar ray in the simulator, fresh and aged (simview.js),
+      // and its dot, on the room's floor (--raised).
+      ...Object.fromEntries([0.95, 0.4].map((alpha) => [`--ok-body at ${alpha} over --raised`, over(paint(look, "--ok-body"), surface(look, "--raised"), alpha)])),
+      "--ok-body at 0.5 over --raised": over(paint(look, "--ok-body"), surface(look, "--raised"), 0.5),
     };
     for (const [what, rgb] of Object.entries(drawn)) {
       if (teal(rgb)) found.push(`${look.id}: ${what} at ${Math.round(hueOf(rgb))} degrees`);

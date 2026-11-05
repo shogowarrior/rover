@@ -481,12 +481,13 @@
   .blocklyToolboxCategory.roverCategory:hover { background: var(--raised) !important; }
 }
 
-/* The chosen pill is edged in its category's colour on a raised ground,
-   not tinted: a faint green over Blueprint's navy or pale blue mixes to
-   the teal F7 took out (Math's was 182 degrees). */
+/* The chosen pill is ringed in the ink on a raised ground, not tinted in
+   its category's colour: a faint green over Blueprint's navy or pale blue
+   mixes to the teal F7 took out (Math's was 182 degrees), and a ring in
+   the category's own colour fell under 2:1 in the dark looks. */
 .blocklyToolboxCategory.roverCategory.blocklyToolboxSelected {
   background: var(--raised-hi) !important;
-  box-shadow: inset 0 0 0 1px var(--dot);
+  box-shadow: inset 0 0 0 2px var(--readout);
 }
 
 /* Along the top on a phone: a row of pills that scrolls sideways. */

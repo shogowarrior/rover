@@ -564,7 +564,7 @@
 .sim-swatch.ray.stop { border-color: var(--stop); }
 .sim-swatch.ray.warn { border-color: var(--warn); }
 .sim-swatch.ray:is(.stop, .warn) { border-top-width: 4px; }
-.sim-swatch.ray.clear { border-color: var(--ok); }
+.sim-swatch.ray.clear { border-color: var(--ok-body); }
 .sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
 
 /* Folded open over the room, under the controls that open it, however many

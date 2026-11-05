@@ -740,18 +740,17 @@ input[type="range"]::-moz-range-thumb {
   .segmented button:hover { color: var(--readout); background: none; }
 }
 
-/* A disabled segment keeps its chip where it is the one in force: a stale
-   scheme, and the family under NORMAL, which fade it (below). */
 .tabs [role="tab"][aria-selected="true"],
-.segmented button[aria-pressed="true"],
-.scheme[data-state="stale"] .segmented button[aria-pressed="true"],
-.family[data-off="yes"] .segmented button[aria-pressed="true"] {
+.segmented button[aria-pressed="true"] {
   color: var(--on-chosen);
   background: var(--chosen);
   box-shadow: inset 0 0 0 3px var(--raised);
 }
 
-.segmented button:disabled {
+/* A disabled segment is unlit, but for the one in force, which keeps its
+   chip (a stale scheme, the family under NORMAL: their groups fade it,
+   below). */
+.segmented button:disabled:not([aria-pressed="true"]) {
   color: var(--dim);
   background: none;
   box-shadow: none;
@@ -1063,7 +1062,7 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 /* Readings glide over the telemetry interval rather than snapping, so the
    eye tracks a distance changing instead of a number replacing itself. */
 .wedge {
-  transition: d var(--glide) linear, fill var(--glide) linear, opacity var(--glide) linear;
+  transition: d var(--glide) linear, fill var(--glide) linear, fill-opacity var(--glide) linear, opacity var(--glide) linear;
 }
 
 /* A clear way is drawn open, its edge in green and its body faint, where
@@ -1118,10 +1117,11 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 .tick.go { fill: var(--warn); }
 
 /* Without a live link the fan is history: the wedges fade and the numbers
-   grey, still legible. A clear way greys too: its green, faded that far
-   over Blueprint's navy or pale blue, mixed to teal. */
+   grey, still legible. A clear way greys too, still drawn open: its green,
+   faded that far over Blueprint's navy or pale blue, mixed to teal. By its
+   colours, not a filter, which WebKit does not apply to an SVG shape. */
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
-body:not([data-link="up"]) .wedge[data-zone="clear"] { filter: grayscale(1); }
+body:not([data-link="up"]) .wedge[data-zone="clear"] { fill: var(--dim); stroke: var(--dim); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Two lines: the move, with the whole width for its longest name (29
