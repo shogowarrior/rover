@@ -333,6 +333,28 @@ test("no look draws a teal: its green, its tints and a clear way's body, as draw
   assert.deepEqual(found, []);
 });
 
+// What the test above cannot see: a green the page itself fades out over
+// whatever is under it (a mix toward transparent, a blur, an animation to
+// transparent). Over Blueprint's navy or pale blue the fade passes through
+// teal, so no stylesheet does it: a halo breathes in its own tint, the
+// running block is edged and not blurred, the chosen toolbox pill is edged
+// and not tinted, and a link that goes greys the scan's clear ways
+// (panel.test.js).
+test("no stylesheet fades a colour out over a ground it cannot know", () => {
+  const found = [];
+  for (const file of fs.readdirSync(path.join(PANEL_ROOT, "css")).filter((name) => name.endsWith(".css") && name !== "looks.css")) {
+    const css = stylesheet(file);
+    for (const { selector, body } of cssRules(css)) {
+      if (/color-mix\(/.test(body)) found.push(`a colour mixed in css/${file}'s ${selector}`);
+      if (/drop-shadow\([^)]*var\(--(ok|live|warn|stop)/.test(body)) found.push(`a signal blurred in css/${file}'s ${selector}`);
+    }
+    for (const [, name, frames] of css.matchAll(/@keyframes\s+([\w-]+)\s*\{([\s\S]*?\})\s*\}/g)) {
+      if (/shadow:[^;}]*transparent/.test(frames)) found.push(`a shadow faded to transparent in css/${file}'s @keyframes ${name}`);
+    }
+  }
+  assert.deepEqual(found, []);
+});
+
 // Colour difference as the eye sees it: sRGB to CIELAB (D65), then
 // CIEDE2000, and Machado, Oliveira and Fernandes's (2009) simulation of
 // protanopia and deuteranopia at full severity, in linear RGB.

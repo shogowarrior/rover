@@ -615,6 +615,17 @@ test("the scan draws a clear way open: a faint body inside a green edge", () => 
   check(/stroke:\s*var\(--ok\)/.test(clear[0].body) && /stroke-width:/.test(clear[0].body), `its edge in green: ${clear[0].body}`);
   const solid = cssRules(panelCss()).filter((rule) => /\.wedge\b/.test(rule.selector) && rule.selector !== '.wedge[data-zone="clear"]' && /fill-opacity|stroke/.test(rule.body));
   check(solid.length === 0, `nothing else outlines or fades a wedge: ${solid.map((rule) => rule.selector)}`);
+  // A link that goes fades the fan to a quarter: a green that faint over
+  // Blueprint's navy or pale blue mixes to teal, so history's clear way greys.
+  const history = cssRules(panelCss()).filter((rule) => rule.selector === 'body:not([data-link="up"]) .wedge[data-zone="clear"]');
+  check(history.length === 1 && /filter:\s*grayscale\(1\)/.test(history[0].body), `a stale clear way greyed: ${history.map((rule) => rule.body)}`);
+});
+
+test("look: Blockly's own rules do not outrank the look's ink on a flyout button", () => {
+  // The renderer injects .zelos-renderer.rover-theme .blocklyText (white),
+  // which a plainer selector loses to: white on a light look's button.
+  const rule = cssRules(stylesheet("program.css")).find((r) => /\.blocklyFlyoutButton \.blocklyText$/.test(r.selector));
+  check(rule && rule.selector.startsWith(".zelos-renderer.rover-theme ") && /fill:\s*var\(--readout\)/.test(rule.body), `outranks the renderer: ${rule && rule.selector}`);
 });
 
 test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", () => {

@@ -1118,8 +1118,10 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 .tick.go { fill: var(--warn); }
 
 /* Without a live link the fan is history: the wedges fade and the numbers
-   grey, still legible. */
+   grey, still legible. A clear way greys too: its green, faded that far
+   over Blueprint's navy or pale blue, mixed to teal. */
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
+body:not([data-link="up"]) .wedge[data-zone="clear"] { filter: grayscale(1); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Two lines: the move, with the whole width for its longest name (29
@@ -2210,9 +2212,10 @@ body:not([data-target="simulator"]) #driveSimSlot { display: none; }
   #auto .icon { display: none; }
 }
 
-/* On its side, under about 570 px wide, the pivot stick is at its 112 px
-   floor: each family segment is 55 px and its chip 49, and "sideways" at
-   --t-sm ran past the chip, onto the frame, where the chip's ink vanished. */
+/* On its side, under about 570 px wide, the pivot stick is at or near its
+   112 px floor: each family segment is 55 to 63 px wide and its chip 6 px
+   less, and "sideways" at --t-sm (54.5 px) ran past a chip under about
+   55 px, onto the frame, where the chip's ink vanished. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
   .family .segmented button {
     font-size: var(--t-xs);

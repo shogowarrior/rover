@@ -20,8 +20,9 @@
 }
 
 /* On the open tab the dot sits on the chosen chip, where green fell under
-   3:1 in the dark looks: it takes the chip's ink, as the tab's word does,
-   with no halo (the state line under it says the program runs). */
+   3:1 in every look but Field Light: it takes the chip's ink, as the tab's
+   word does, with no halo (the state line under it says the program
+   runs). */
 .tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
   background: var(--on-chosen);
   box-shadow: none;
@@ -385,7 +386,9 @@
 .programState[data-tone="stopped"],
 .programState[data-tone="failed"] { color: var(--warn); }
 
-@keyframes programPulse { to { box-shadow: 0 0 0 7px transparent; } }
+/* The halo breathes in rather than fades out: a green tint faded over a
+   Blueprint look's blue passes through teal. */
+@keyframes programPulse { to { box-shadow: 0 0 0 0 var(--ok-soft); } }
 
 .programLog {
   list-style: none;
@@ -478,9 +481,12 @@
   .blocklyToolboxCategory.roverCategory:hover { background: var(--raised) !important; }
 }
 
+/* The chosen pill is edged in its category's colour on a raised ground,
+   not tinted: a faint green over Blueprint's navy or pale blue mixes to
+   the teal F7 took out (Math's was 182 degrees). */
 .blocklyToolboxCategory.roverCategory.blocklyToolboxSelected {
-  background: color-mix(in srgb, var(--dot) 26%, transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dot) 55%, transparent);
+  background: var(--raised-hi) !important;
+  box-shadow: inset 0 0 0 1px var(--dot);
 }
 
 /* Along the top on a phone: a row of pills that scrolls sideways. */
@@ -506,17 +512,21 @@
   .blocklyFlyoutButton:hover { fill: var(--faint); }
 }
 
-.blocklyFlyoutButton .blocklyText { fill: var(--readout); }
+/* The renderer's own rule (.zelos-renderer.rover-theme .blocklyText,
+   white) outranks a plainer selector, and white is lost on a light look's
+   button. */
+.zelos-renderer.rover-theme .blocklyFlyoutButton .blocklyText { fill: var(--readout); }
 .blocklyFlyoutLabelText { fill: var(--dim); }
 
-/* A selected block is outlined in the text colour; the running one glows
-   in the green of the rover doing well, whatever its own. */
+/* A selected block is outlined in the text colour; the running one is
+   edged in the green of the rover doing well, whatever its own, and with
+   no glow: a blurred green fades through teal over a Blueprint look's
+   blue. */
 .blocklySelected > .blocklyPath { stroke: var(--readout); stroke-width: 2px; }
 
 .blocklyHighlighted > .blocklyPath {
   stroke: var(--ok);
   stroke-width: 3px;
-  filter: drop-shadow(0 0 6px var(--ok));
 }
 
 /* Menus: the context menu and dropdowns. */
