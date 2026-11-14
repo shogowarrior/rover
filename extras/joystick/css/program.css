@@ -1,12 +1,12 @@
-/* The Program tab: its toolbar, the block editor and the simulator's place
-   beside it, the console under them, and the look's dress for Blockly's own
-   parts. joystick.html links this after looks.css and panel.css, whose
-   tokens it uses; programtab.js and blocks.js set the attributes it keys
-   on.
+/* The Program tab: its toolbar, the block editor and the console under it,
+   and the look's dress for Blockly's own parts. joystick.html links this
+   after looks.css and panel.css, whose tokens it uses; programtab.js and
+   blocks.js set the attributes it keys on.
 
-   The tab sits where the Drive tab does (panel.css): under the top on a
-   phone, scrolling with the page under the top stuck over it; in the left
-   pane on a wide screen, scrolling inside it, beside the rail. */
+   The tab is the hands pane, where the Drive tab's dock is (panel.css),
+   beside the view or under it: under the top on a phone, scrolling with
+   the page under the top stuck over it; on the right on a wide screen,
+   scrolling inside its pane. */
 
 /* --- the Program tab's name, while a program drives the rover -------------- */
 
@@ -33,25 +33,45 @@
   container: program / inline-size;
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 #programTab[hidden] { display: none; }
 
 /* --- the toolbar ----------------------------------------------------------- */
 
+/* One line of controls the top's size (32 px, 13 px words): Run and Stop
+   program, then at the far end the File menu and the View toggle. Each
+   button's touch target reaches over the line above and below it, to
+   44 px, as the top's do. */
 .programBar {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  flex-wrap: wrap;
+  gap: 6px;
+  min-height: var(--tap);
+  white-space: nowrap;
 }
 
-/* The File menu at the end of whatever row it lands on, so its list,
-   which hangs from the button's right edge, always opens over the page. */
-.programBar .menuHolder { margin-left: auto; }
+.programBar button {
+  position: relative;
+  flex: none;
+  gap: 6px;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-3);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
 
-.programBar > button { flex: none; }
+.programBar button::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--ctl) - var(--tap)) / 2) 0;
+}
+
+/* The File menu and the View toggle at the end of the row, so the menu's
+   list, which hangs from the button's right edge, opens over the page. */
+.programBar .menuHolder { margin-left: auto; }
 
 .programBar > button:disabled,
 .programBar .menuButton:disabled {
@@ -91,39 +111,43 @@
   filter: none;
 }
 
-/* It stops a program, so it says so in the stop red, but outlined: the
-   panel's filled red Stop is the one that stops the rover. */
-.programBar .halt:not(:disabled) {
-  color: var(--stop-ink);
-  border-color: var(--stop);
-  background: var(--stop-soft);
+/* Stop program is plain, never red: the top's red Stop is the one that
+   stops the rover, and the page's one red control. */
+
+/* The View toggle: shown, it is lit as the simulator's own toggles are, a
+   raised ground over a line in the controls' blue. */
+.viewToggle[aria-pressed="true"] {
+  color: var(--readout);
+  background: var(--raised-hi);
+  box-shadow: inset 0 -2px 0 var(--live);
 }
 
-.programBar .segmented[hidden] { display: none; }
+.viewToggle[aria-pressed="false"] { color: var(--dim); }
 
-.programBar .segmented button { flex: none; padding-inline: var(--s-4); }
+/* A narrow tab (a phone): the words alone on Run and Stop program, and
+   the View toggle its icon alone, its title saying the rest; at 375 px
+   the row with every icon ran 36 px past the tab. */
+@container program (max-width: 459.98px) {
+  .programBar .run .icon,
+  .programBar .halt .icon,
+  .viewWord { display: none; }
 
-/* A phone: the switch across the top, then Run and Stop program, then the
-   File menu. */
-@container program (max-width: 560px) {
-  .programBar .segmented { flex: 1 1 100%; }
-  .programBar .segmented button { flex: 1 1 0; }
-  .programBar .run { flex: 1; }
+  .programBar button { padding-inline: 10px; }
+
+  .viewToggle { width: var(--ctl); padding: 0; }
 }
 
-/* --- the stage: the editor, the simulator's view, the console -------------- */
+/* --- the stage: the editor, then the console -------------------------------- */
 
-/* Stacked on a phone and in the one-column layout; side by side in the wide
-   layout's left pane (below). #simSlot is the simulator's (sim.js): a box
-   it fills with one element.
-
-   Stacked, the editor is most of a phone's height and the view 360 px under
-   it: below about 300 px the view no longer fits its own controls. */
+/* The editor takes the tab's height less the toolbar and the console, down
+   to a floor under which the page (a phone) or the pane (a wide screen)
+   scrolls. */
 .programStage {
-  --stage-h: clamp(360px, 62 * var(--svh), 560px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-3);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 0;
 }
 
 .programEditor {
@@ -131,157 +155,23 @@
   /* Blockly's toolbox, flyout and scrollbars carry z-indexes of their own;
      kept inside this box, they stay under the top stuck over the page. */
   isolation: isolate;
-  height: var(--stage-h);
+  flex: 1 1 auto;
+  min-height: 280px;
   overflow: hidden;
   background: var(--case);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
 }
 
+/* A phone on its side has under 300 px under the top: a lower floor, so
+   less of the editor scrolls away under it. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .programEditor { min-height: 200px; }
+}
+
 #programWorkspace { position: absolute; inset: 0; }
 
-.programSim[hidden] { display: none; }
-
-/* clip, not hidden: a scroll container would swallow the settings' scroll
-   margin, and they would open under the top stuck over the page
-   (panel.css). hidden stays for a browser without clip. */
-#simSlot {
-  position: relative;
-  height: 360px;
-  overflow: hidden;
-  overflow: clip;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-}
-
-/* The view folds away under its own heading: across the top of it where
-   the stage is stacked, down its side beside the editor. */
-.programSim .simToggle {
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: var(--s-2);
-  color: var(--dim);
-  background: var(--panel);
-}
-
-/* A chevron: down to unfold, up to fold. */
-.simToggle::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: translateY(1px) rotate(-135deg);
-  transition: transform 150ms ease;
-}
-
-.simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
-
-.programSim[data-collapsed="yes"] #simSlot { display: none; }
-
-/* The wide layout's left pane: the page no longer scrolls, the pane does.
-   The stage takes what the toolbar leaves of it, down to a floor under
-   which the pane scrolls. The editor fills its height on the left. On the
-   right, the view's heading as a strip down its side, and the view as tall
-   as its room needs at its width (sim.css), up to the stage's height; the
-   console goes under the editor. Folded, only the strip stays, at the
-   stage's right edge, and the editor takes the width; with no simulator at
-   all, the same without the strip. The view takes 44% of the pane, about
-   half with its strip. The toolbar's buttons are a step narrower, so it
-   keeps to one row beside the rail. */
-@media (min-width: 960px) and (min-height: 521px) {
-  .programStage {
-    /* The settings popover hangs from the view's bar over whatever is
-       under the room, not only over the room (sim.css): this is its
-       containing block. */
-    position: relative;
-    flex: 1 1 0;
-    min-height: 380px;
-    grid-template-columns: minmax(0, 1fr) var(--tap) clamp(260px, 44cqw, 560px);
-    grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "editor  toggle sim"
-      "console toggle sim";
-  }
-
-  .programStage:not([data-sim="no"]):has(> .programSim[data-collapsed="yes"]) {
-    grid-template-columns: minmax(0, 1fr) var(--tap);
-    grid-template-areas:
-      "editor  toggle"
-      "console toggle";
-  }
-
-  .programStage[data-sim="no"] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "editor" "console";
-  }
-
-  .programEditor { grid-area: editor; height: auto; }
-
-  .programSim { display: contents; }
-
-  .programSim .simToggle {
-    grid-area: toggle;
-    justify-content: flex-start;
-    width: auto;
-    margin: 0;
-    padding: var(--s-4) 0;
-    writing-mode: vertical-rl;
-  }
-
-  /* Right to fold the view away toward the edge, left to bring it back. */
-  .simToggle::after { transform: translateX(-1px) rotate(-45deg); }
-  .simToggle[aria-expanded="false"]::after { transform: translateX(2px) rotate(135deg); }
-
-  #simSlot {
-    grid-area: sim;
-    align-self: start;
-    position: static;
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    max-height: 100%;
-  }
-
-  .programConsole {
-    grid-area: console;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .programBar > button,
-  .programBar .menuButton,
-  .programBar .segmented button { padding-inline: var(--s-3); }
-
-  /* A pane under 600 px (the narrowest windows) takes them a step further. */
-  @container program (max-width: 599.98px) {
-    .programBar > button,
-    .programBar .menuButton,
-    .programBar .segmented button { padding-inline: var(--s-2); }
-  }
-}
-
-/* Tall enough for the view at its width and a console under it: the console
-   moves under the view and takes the rest of that column, its log as tall
-   as that leaves, and the editor the stage's whole height. Shorter, the
-   console under the view squeezed the room to a strip across a wide
-   column, at the laptop and iPad heights the panel is mostly used at. */
-@media (min-width: 960px) and (min-height: 861px) {
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) {
-    grid-template-rows: minmax(0, auto) minmax(min-content, 1fr);
-    grid-template-areas:
-      "editor toggle sim"
-      "editor toggle console";
-  }
-
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programConsole { min-height: 120px; }
-
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programLog {
-    flex: 1 1 auto;
-    max-height: none;
-  }
-}
+.programConsole { flex: none; }
 
 /* Over the workspace while it is empty. */
 .programHint {
@@ -573,6 +463,5 @@
 @media (prefers-reduced-motion: reduce) {
   .programState[data-tone="running"]::before,
   .tabs [role="tab"][data-running="yes"]::after { animation: none; }
-  .blocklyToolboxCategory.roverCategory,
-  .simToggle::after { transition: none; }
+  .blocklyToolboxCategory.roverCategory { transition: none; }
 }

@@ -7,19 +7,11 @@
  * the readouts.
  *
  *   new SimView(slot, target)
- *     slot     the empty element the view fills (#simSlot, which the Program
- *              tab sizes). The view puts the room's shape on it, for a
- *              layout that sizes the slot to the room (css/sim.css):
- *              --room-aspect, the room's width over its depth, and
- *              --room-pad-x and --room-pad-y, the margins kept clear
- *              around it (PAD).
+ *     slot     the empty element the view fills (#simSlot, in the page's
+ *              view pane, beside both tabs, which the layout sizes): the
+ *              room is fitted to what the controls and the status leave
+ *              of it, with PAD kept clear around it.
  *     target   the SimTarget it shows, and whose clock it runs.
- *
- *   moveTo(slot)
- *       Draw the view in another empty slot instead, with everything it
- *       shows and its settings: one view serves both tabs (app.js moves it
- *       to the Drive tab's slot and back). The room's shape goes onto the
- *       new slot.
  *
  *   holdPlayback(why)
  *       Hold the playback at 1x, the faster speeds disabled with why as
@@ -34,11 +26,10 @@
  * playback speed (the target steps it in fixed steps of its own), and it
  * draws at the display's rate with requestAnimationFrame. While the page is
  * hidden it does nothing at all, and the preview simply waits; while only
- * the view is out of sight (the Drive tab showing on the rover target, or
- * the view folded away to watch the blocks) a preview in progress runs on,
- * undrawn,
- * and an idle one asks for no frames at all until it is shown or a program
- * starts on it.
+ * the view is out of sight (the rover the target, or the view pane hidden
+ * on the Program tab to watch the blocks) a preview in progress runs on,
+ * undrawn, and an idle one asks for no frames at all until it is shown or a
+ * program starts on it.
  *
  * The rover can be dragged to set where it starts, and turned by the handle
  * ahead of its nose; focused, the arrow keys move it and Q and E turn it.
@@ -90,13 +81,12 @@ class SimView {
     this.#slot = slot;
     this.#target = target;
     this.#chosen = target.playback;
-    this.#shape(slot);
     this.#build();
     this.#drawRoom();
     this.#render();
 
     document.addEventListener("visibilitychange", () => this.#wake());
-    // Shown again (the Program tab chosen, the view unfolded), or resized.
+    // Shown again (the simulator the target, the view pane shown), or resized.
     // The root too: a view too short for the room hides the stage and still
     // shows the rover's wheels.
     if (this.#canRest) {
@@ -108,15 +98,6 @@ class SimView {
       observer.observe(this.#ui.stage);
     }
     target.onWake(() => this.#wake());
-    this.#wake();
-  }
-
-  moveTo(slot) {
-    if (slot === this.#slot) return;
-    this.#slot = slot;
-    this.#shape(slot);
-    slot.appendChild(this.#ui.root);
-    this.#fit();
     this.#wake();
   }
 
@@ -138,16 +119,6 @@ class SimView {
   static #offer(control, rate, held) {
     control.disabled = Boolean(held) && rate !== 1;
     control.setAttribute("title", control.disabled ? held : `Play at ${rate} times real speed`);
-  }
-
-  // The room's shape, on the slot that sizes the view to it (css/sim.css):
-  // its margins here, its aspect as each room is drawn.
-  #shape(slot) {
-    const { PAD } = SimView;
-    slot.style.setProperty("--room-pad-x", `${PAD.left + PAD.right}px`);
-    slot.style.setProperty("--room-pad-y", `${PAD.top + PAD.bottom}px`);
-    const room = this.#target.room;
-    slot.style.setProperty("--room-aspect", (room.width / room.height).toFixed(4));
   }
 
   /* --- the loops --------------------------------------------------------- */
@@ -186,8 +157,8 @@ class SimView {
     return this.#ui.root.getClientRects().length > 0;
   }
 
-  // Out of sight with nothing to run -- the Drive tab showing on the rover
-  // target, and no program on the simulator -- both loops rest, rather than keep a phone
+  // Out of sight with nothing to run -- the rover the target, and no
+  // program on the simulator -- both loops rest, rather than keep a phone
   // busy through a whole drive. Being shown (the ResizeObserver) or a program
   // starting (the target's onWake) wakes them, timing afresh.
   #canIdle() {
@@ -477,7 +448,6 @@ class SimView {
     this.#drawn = { room };
     for (const mark of this.#bumpMarks) mark.remove();
     this.#bumpMarks = [];
-    this.#shape(this.#slot);
     this.#fit();
   }
 
@@ -510,11 +480,14 @@ class SimView {
     }
     const s = this.#pxPerCm;
     // The viewBox spans the whole stage, so the padding is in pixels whatever
-    // the room's shape; the floor sits centred in it.
+    // the room's shape; the floor sits centred in what PAD leaves. A larger
+    // pad on one side moves the floor away from it: with the sign the other
+    // way round the floor sat 18 px under the stage's top and 22 over its
+    // foot, and the badge over the room ran onto the floor's edge.
     const vw = Math.max(width, 1) / s;
     const vh = Math.max(height, 1) / s;
-    const left = -(vw - w) / 2 + (PAD.left - PAD.right) / (2 * s);
-    const top = -h - (vh - h) / 2 + (PAD.top - PAD.bottom) / (2 * s);
+    const left = -(vw - w) / 2 - (PAD.left - PAD.right) / (2 * s);
+    const top = -h - (vh - h) / 2 - (PAD.top - PAD.bottom) / (2 * s);
     ui.map.setAttribute("viewBox", `${left.toFixed(2)} ${top.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
 
     for (const label of ui.labels.children || []) {

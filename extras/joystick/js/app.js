@@ -76,6 +76,7 @@ const link = new Link({
   linkState: byId("linkState"),
   linkHost: byId("linkHost"),
   note: byId("note"),
+  proxy: byId("connectGo"),
   storageKey: "rover.host",
 });
 
@@ -83,6 +84,14 @@ const link = new Link({
 // note. It hangs below the top's cells, never over them (panel.css), and
 // is not modal, so Stop stays one press while it is open.
 new Popover(byId("linkChip"), byId("linkPanel"));
+
+// The connect card, over the faint scan while the rover target has no
+// link: its button is a press of Connect (Link), and Change address opens
+// the link's popover, as the chip does, with the focus in the address.
+byId("changeAddress").addEventListener("click", () => {
+  if (byId("linkPanel").hidden) byId("linkChip").click();
+  byId("host").focus();
+});
 
 const scanView = new ScanView(byId("scan"));
 
@@ -286,8 +295,9 @@ const runner = new ProgramRunner();
 
 /* --- the simulator ------------------------------------------------------- */
 
-// A simulated rover, drawn in #simSlot: a program previews on it, and the
-// Drive tab's controls can drive it (the target's block, next). The
+// A simulated rover, drawn in #simSlot, in the view pane beside both tabs:
+// a program previews on it, and the Drive tab's controls can drive it (the
+// target's block, next). The
 // simulator holds no Link and no Driver, so nothing done to it reaches the
 // rover whatever the link is doing, and its telemetry reaches only a program
 // and its view, never the scan fan or the readouts. Only the rover's scheme
@@ -346,6 +356,10 @@ function driveTarget(kind) {
   schemeToggle.bind(driven.simulator);
   autoToggle.bind(driven.simulator);
   document.body.dataset.target = kind;
+  // The view pane shows the target: the simulated room on the simulator,
+  // the rover's scan otherwise (panel.css). Hidden, not only undrawn, so
+  // the view knows it is out of sight and an idle one draws nothing.
+  byId("simSlot").hidden = !driven.simulator;
   chipFor.hidden = !driven.simulator;
   markExploring();
   autoButton.setAttribute("title", driven.simulator
@@ -367,18 +381,16 @@ driver.onManualInput(() => {
   if (driven.simulator) Promise.resolve().then(() => runner.abort("the simulated rover was driven by hand."));
 });
 
-// The one view: the Program tab's, or beside the Drive tab's controls while
-// they drive the simulator. Driven from there it runs at 1x: the Driver
-// re-sends a held move every 200 ms of real time, each lasting 400 ms of the
-// simulator's (SimView.holdPlayback). Without a simulator the Drive tab
-// keeps no place for one.
+// The one view of the simulator, in the view pane beside both tabs. While
+// the Drive tab's controls drive it, it runs at 1x: the Driver re-sends a
+// held move every 200 ms of real time, each lasting 400 ms of the
+// simulator's (SimView.holdPlayback). On the Program tab it plays at the
+// operator's speed. Out of sight (the rover target, or the view hidden on
+// the Program tab) an idle view draws nothing (SimView).
 const driveTab = byId("driveTab");
-const driveView = byId("driveView");
-driveView.hidden = !simView;
-function placeSimView() {
+function holdSimPlayback() {
   if (!simView) return;
   const driving = !driveTab.hidden && targetSwitch.kind === "simulator";
-  simView.moveTo(byId(driving ? "driveSimSlot" : "simSlot"));
   simView.holdPlayback(driving
     ? "Driven from the Drive tab, the simulator runs in real time: 2× and 4× are for previews on the Program tab."
     : null);
@@ -395,11 +407,16 @@ const ask = new AskDialog({
   yes: byId("askYes"),
   no: byId("askNo"),
 });
+// The view pane shows beside the editor at first where the screen is wide
+// enough for both (panel.css's side by side), and on a phone only for a
+// preview; the tab's View toggle shows or hides it.
+const sideBySide = typeof matchMedia === "function" && matchMedia("(min-width: 960px) and (min-height: 521px)").matches;
 const programTab = new ProgramTab({
   runner,
   targetSwitch,
   examples: RoverBlocks.EXAMPLES,
   ask,
+  showView: sideBySide,
   ui: {
     run: byId("programRun"),
     runLabel: byId("programRunLabel"),
@@ -411,12 +428,11 @@ const programTab = new ProgramTab({
     importButton: byId("programImport"),
     importFile: byId("programFile"),
     clear: byId("programClear"),
-    stage: byId("programStage"),
+    tab: byId("programTab"),
     workspace: byId("programWorkspace"),
     hint: byId("programHint"),
     offline: byId("programOffline"),
-    simPane: byId("programSim"),
-    simToggle: byId("simToggle"),
+    viewToggle: byId("viewToggle"),
     state: byId("programState"),
     log: byId("programLog"),
   },
@@ -459,21 +475,21 @@ runner.onState((state, { kind }) => {
 // button carries on, as it has nothing to steer and its release still
 // arrives; a program or an exploring rover is left alone. On the simulator
 // it goes too: off the Drive tab the view plays at the operator's speed,
-// and at 4x each re-sent move ran out before the next (placeSimView).
+// and at 4x each re-sent move ran out before the next (holdSimPlayback).
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
 // size: fit it again whenever the tab is shown. So with the sticks, whose
 // look or size may have changed while they were hidden (Driver.shown). The
-// simulator's view goes with the tab that shows it.
+// simulator's playback is held at 1x on the Drive tab alone.
 tabs.onChange((tab) => {
   if (tab.id === "tabDrive") driver.shown();
   else if (driven.simulator) driver.standDown("tab");
   else driver.releaseSticks();
-  placeSimView();
+  holdSimPlayback();
   if (tab.id === "tabProgram") programTab.shown();
 });
-targetSwitch.onChange(placeSimView);
-placeSimView();
+targetSwitch.onChange(holdSimPlayback);
+holdSimPlayback();
 
 // Blockly is deferred (joystick.html): once the page is parsed, it has run,
 // or failed to load. Only then is the editor built. Without Blockly the tab

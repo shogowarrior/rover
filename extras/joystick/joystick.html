@@ -19,15 +19,17 @@
 </head>
 
 <body data-link="down">
-  <!-- The shell is a grid of the top, the open tab and the rail (the
-       fault, the scan and the readouts). The top is two cells, every
-       control the page has but the open tab's own: what the controls drive
-       and its state, then how they drive it, Stop and the gear (F8). On a
-       phone they stack: the cells, the scan, and the Drive tab as a dock
-       under the thumbs. On a wide screen the cells are one row, the rail's
-       parts a column on the right beside the Program tab, and the Drive tab
-       puts the scan (or the simulator's view) on the left and its dock over
-       the readouts on the right. css/panel.css lays out both. -->
+  <!-- The shell is a grid of three parts: the top, the view and the open
+       tab. The top is two cells, every control the page has but the open
+       tab's own: what the controls drive and its state, then how they drive
+       it, Stop and the gear (F8). Under it two panes, never three: the view,
+       what the controls drive (the rover's scan, or the simulated room), the
+       same pane beside both tabs; and the hands, the open tab (the Drive
+       tab's sticks, or the Program tab's editor). On a wide screen the view
+       is on the left and the hands on the right, on both tabs; upright, the
+       view is on top and the hands under it; on a phone on its side the
+       sticks run down the two edges with the top and the view between
+       them. css/panel.css lays out each. -->
   <main class="shell">
 
     <!-- The top: two cells of one height, whatever they say, stuck to the
@@ -180,6 +182,69 @@
       </div>
     </header>
 
+    <!-- The view: what the controls drive, beside (or above) both tabs, so
+         that a tab switch moves nothing but the split. On the rover target
+         the rover's scan, the motor fault over it while there is one, and
+         what else it reports in a line at its foot; with no link, a card
+         over the faint scan to connect. On the simulator target the
+         simulated room (simview.js fills #simSlot). Its size is the shell's
+         grid's, never its content's: the fault, the card and the line only
+         trade height inside it. A sibling of the tabs, never an ancestor of
+         a stick, so it may be positioned: on a phone on its side it lies over
+         the middle of the Drive tab, between the sticks. -->
+    <section class="view" id="view" aria-label="What the controls drive">
+      <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
+           it again when the rover says true, says nothing, or the link goes.
+           It says what a reset does because a power-on or EN reset starts
+           exploration: once the shield answers, the wheels turn straight
+           away, likely with the operator's hands still on the wiring.
+           data-ready says what the rover last said. -->
+      <p class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
+        <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
+        It did not answer when the rover booted. Check its I2C wiring and power,
+        then reset the rover with its wheels off the ground: after a power-on or
+        the EN button it starts exploring.
+      </p>
+
+      <!-- The rover perceives the world as five ultrasonic returns, taken
+           straight ahead and at 35 and 70 degrees to either side. Drawing
+           them at those bearings, rather than as a neutral row of numbers, is
+           the whole point: the panel shows what the machine actually sees.
+
+           scan.js draws the fan -- range rings at the firmware's STOP and GO
+           distances, at 100 cm and at full reach, and a wedge and a reading
+           per bearing -- from the constants protocol.js mirrors, so nothing
+           here is a hand-computed arc that could drift from them. -->
+      <section class="scan" aria-label="Ultrasonic scan">
+        <svg id="scan" role="img" aria-labelledby="scanDesc">
+          <title id="scanDesc">Live ultrasonic scan at five bearings</title>
+        </svg>
+        <!-- With no link (panel.css says when), over the faint fan: the next
+             thing to do. Its button is a press of Connect, in the link's
+             popover, and says what that press does (link.js); Change address
+             opens that popover with the focus in the address (app.js). -->
+        <div class="connectCard" role="group" aria-labelledby="connectTitle">
+          <p class="connectTitle" id="connectTitle">No rover connected</p>
+          <button type="button" class="connectGo" id="connectGo">Connect</button>
+          <button type="button" class="connectAddress" id="changeAddress"
+                  title="Change address: open the link's popover, with the rover's address ready to type.">Change address</button>
+        </div>
+      </section>
+
+      <!-- The simulator's one view, on both tabs while the simulator is the
+           target. simview.js fills it; nothing else is ever put in it. -->
+      <div class="simSlot" id="simSlot" hidden></div>
+
+      <!-- What else the rover reports, in one line under its scan: the
+           move, the chip's temperature, and the phase while it explores. -->
+      <div class="readouts" role="group" aria-label="What the rover reports">
+        <span class="cell"><span class="label">Move</span><output id="move">—</output></span>
+        <span class="cell"><span class="label">Chip</span><output id="temp">—</output></span>
+        <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
+        <span class="cell" id="phaseCell" hidden><span class="label">Phase</span><output id="phase">—</output></span>
+      </div>
+    </section>
+
     <!-- The dock: two sticks, as on a gamepad, the translate stick under
          the left thumb and the pivot stick under the right; the rotate
          buttons and the speed under them.
@@ -235,26 +300,12 @@
       </div>
     </section>
 
-    <!-- The Drive tab's view of the simulator, where its controls drive the
-         simulated rover while the target is Simulator: app.js moves the
-         simulator's one view (simview.js) into #driveSimSlot then, and back
-         to the Program tab's #simSlot otherwise. It shows only on the
-         simulator: on a wide screen as the left side of the page, beside
-         the dock's column, where the rover's scan is on the rover, so a
-         switch never moves a stick; on a phone in the scan's place
-         (panel.css). Beside the dock, never around it: the simulator's
-         boxes are positioned and contained, and no ancestor of the stick may
-         be. -->
-    <section class="driveView" id="driveView" aria-label="Simulator">
-      <div id="driveSimSlot"></div>
-    </section>
-
     <!-- Block programs: built here, previewed on the simulator if the
          operator likes, run on the rover. programtab.js runs the tab. The
          block editor needs Blockly, which loads from cdn.jsdelivr.net; when
          it cannot, the tab says so in the editor's place and everything else
          works on. -->
-    <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" hidden>
+    <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" data-view="shown" hidden>
       <div class="programBar" role="toolbar" aria-label="Program">
         <button type="button" class="run" id="programRun" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.1v9.8L12.8 8z"/></svg>
@@ -268,12 +319,12 @@
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
           <span>Stop program</span>
         </button>
-        <!-- The File menu, at the end of its row: what is used now and then
-             and moves nothing. popover.js opens and closes it, programtab.js
-             adds the examples and keeps each item's disabled and title. Run
-             and Stop program stay out of it, one press each, as does the
-             target switch, in the header. Its keys are its own while it has
-             the focus (data-keys, keys.js). -->
+        <!-- The File menu, at the far end of its row with the View toggle:
+             what is used now and then and moves nothing. popover.js opens
+             and closes it, programtab.js adds the examples and keeps each
+             item's disabled and title. Run and Stop program stay out of it,
+             one press each, as does the target switch, in the top. Its keys
+             are its own while it has the focus (data-keys, keys.js). -->
         <div class="menuHolder">
           <button type="button" class="menuButton" id="programMenu" disabled>
             <span>File</span>
@@ -299,16 +350,21 @@
             </button>
           </div>
         </div>
+        <!-- Shows or hides the view pane (the scan, or the simulated room)
+             beside the editor, on this tab alone: hidden, the pane is gone
+             and the editor takes its room. programtab.js keeps it, and the
+             tab's data-view, which panel.css keys on. -->
+        <button type="button" class="viewToggle" id="viewToggle" aria-pressed="true" aria-controls="view">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M7 3v10"/></svg>
+          <span class="viewWord">View</span>
+        </button>
         <input type="file" id="programFile" accept=".json,application/json" hidden>
       </div>
 
-      <!-- The editor, and beside it (below it, on a phone) the simulator's
-           view, then the console: under the view on a wide screen, under
-           the editor otherwise. #simSlot is the simulator's to fill:
-           program.css gives it a definite size, and nothing else is ever
-           put in it. The editor keeps its keys to itself (data-keys,
-           keys.js): Space and T there are Blockly's. -->
-      <div class="programStage" id="programStage" data-sim="yes">
+      <!-- The editor, and the console under it. The editor keeps its keys
+           to itself (data-keys, keys.js): Space and T there are
+           Blockly's. -->
+      <div class="programStage" id="programStage">
         <div class="programEditor">
           <div id="programWorkspace" data-keys="own"></div>
           <p class="programHint" id="programHint" hidden>Drag blocks in from the toolbox, or start from an example in the File menu.</p>
@@ -317,11 +373,6 @@
             <span>It loads Blockly from cdn.jsdelivr.net, so it needs the internet the first time.
               Driving works without it.</span>
           </div>
-        </div>
-        <div class="programSim" id="programSim">
-          <button type="button" class="simToggle" id="simToggle" aria-expanded="true"
-                  aria-controls="simSlot">Simulator</button>
-          <div id="simSlot"></div>
         </div>
 
         <!-- What is running and why it stopped, then everything the program
@@ -332,53 +383,6 @@
         </div>
       </div>
     </section>
-
-    <!-- The rail: what the rover reports. Its parts are cells of the
-         shell's grid: on a phone the scan above the open tab; on a wide
-         screen a column beside the Program tab, the scan on the left of
-         the Drive tab and the readouts under its dock. -->
-    <div class="rail">
-      <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
-           it again when the rover says true, says nothing, or the link goes.
-           It says what a reset does because a power-on or EN reset starts
-           exploration: once the shield answers, the wheels turn straight
-           away, likely with the operator's hands still on the wiring.
-           data-ready says what the rover last said. -->
-      <p class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
-        <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
-        It did not answer when the rover booted. Check its I2C wiring and power,
-        then reset the rover with its wheels off the ground: after a power-on or
-        the EN button it starts exploring.
-      </p>
-
-      <!-- The rover perceives the world as five ultrasonic returns, taken
-           straight ahead and at 35 and 70 degrees to either side. Drawing
-           them at those bearings, rather than as a neutral row of numbers, is
-           the whole point: the panel shows what the machine actually sees.
-
-           scan.js draws the fan -- range rings at the firmware's STOP and GO
-           distances, at 100 cm and at full reach, and a wedge and a reading
-           per bearing -- from the constants protocol.js mirrors, so nothing
-           here is a hand-computed arc that could drift from them. -->
-      <section class="scan" aria-label="Ultrasonic scan">
-        <svg id="scan" role="img" aria-labelledby="scanDesc">
-          <title id="scanDesc">Live ultrasonic scan at five bearings</title>
-        </svg>
-        <!-- Until the rover's first frame (panel.css says when): the column
-             keeps its size and says what will be in it. -->
-        <p class="scanEmpty">No rover connected: its scan shows here</p>
-      </section>
-
-      <section class="readouts">
-        <div class="cell"><span class="label">Move</span><output id="move">—</output></div>
-        <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
-        <div class="cell" id="phaseCell" hidden>
-          <span class="label">Phase</span><output id="phase">—</output>
-        </div>
-        <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
-      </section>
-
-    </div>
   </main>
 
   <!-- The page's one question (ask.js): Run on the rover asks first when

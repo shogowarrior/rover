@@ -1,20 +1,25 @@
 /**
- * The Program tab: its toolbar, the block editor's place, the simulator's
- * place, and the console under them. It compiles the editor's program and
- * hands it to a ProgramRunner, on the target the switch picks, and shows what
- * the runner says.
+ * The Program tab: its toolbar, the block editor's place, and the console
+ * under it; and whether the page's view pane (the scan, or the simulated
+ * room) shows beside it. It compiles the editor's program and hands it to a
+ * ProgramRunner, on the target the switch picks, and shows what the runner
+ * says.
  *
- *   new ProgramTab({ runner, targetSwitch, examples, ask, ui })
+ *   new ProgramTab({ runner, targetSwitch, examples, ask, showView, ui })
  *     runner        a ProgramRunner (program.js).
  *     targetSwitch  the TargetSwitch that picks the target (targetswitch.js).
  *     examples      [{id, name, state}] for the File menu (blocks.js).
  *     ask           the page's AskDialog (ask.js), for every question here.
- *     ui            the tab's elements, by name: run, runLabel, stop, the
- *                   File menu's button and list (menu, menuList), examples
- *                   (the group its examples go in), exportButton,
- *                   importButton, importFile, clear, stage, workspace (the
- *                   block editor's box), hint, offline, simPane, simToggle,
- *                   state, log.
+ *     showView      whether the view pane shows beside the tab at first; it
+ *                   shows on the simulator target whatever this says, and
+ *                   once the target is switched to the simulator.
+ *     ui            the tab's elements, by name: tab (the tab itself, whose
+ *                   data-view, "shown" or "hidden", the page's CSS keys on),
+ *                   run, runLabel, stop, the File menu's button and list
+ *                   (menu, menuList), examples (the group its examples go
+ *                   in), exportButton, importButton, importFile, clear,
+ *                   workspace (the block editor's box), hint, offline,
+ *                   viewToggle (the toolbar's View toggle), state, log.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
  *   editorUnavailable(why)  there will be no editor: say why in its place and
@@ -61,7 +66,10 @@ class ProgramTab {
     example: "Load this example into the editor",
     run: { rover: "Run the program on the rover", simulator: "Preview the program on the simulator" },
     running: "A program is running: Stop program ends it",
-    fold: { open: "Fold the simulator's view away", folded: "Show the simulator's view" },
+    view: {
+      shown: "View: hide the scan, or the simulated room, and give the editor its room",
+      hidden: "View: show the scan, or the simulated room, beside the editor",
+    },
     import: "Open a program saved with Export",
     clear: "Remove every block",
     busy: "Stop the program first",
@@ -78,23 +86,19 @@ class ProgramTab {
   #outcome = null; // how the last run ended: {tone, text}, until something changes
   #scheme = null; // the scheme the toggle shows: the rover's on the rover target
 
-  constructor({ runner, targetSwitch, examples, ask, ui }) {
+  constructor({ runner, targetSwitch, examples, ask, showView = true, ui }) {
     this.#runner = runner;
     this.#targetSwitch = targetSwitch;
     this.#ask = ask;
     this.#ui = ui;
 
-    // The simulator's view has a place only if there is a simulator. It
-    // starts folded away, leaving the editor the room, unless a preview is
-    // what the operator last chose.
-    const simulator = targetSwitch.kinds.includes("simulator");
-    ui.simPane.hidden = !simulator;
-    ui.stage.dataset.sim = simulator ? "yes" : "no";
-    this.#expandSim(targetSwitch.kind === "simulator");
+    // The view pane beside the editor: where the page says there is room,
+    // and wherever a preview is what the operator last chose.
+    this.#showView(showView || targetSwitch.kind === "simulator");
     targetSwitch.onChange((kind) => {
       this.#outcome = null;
-      // Previewing is when the view is wanted: unfold it.
-      if (kind === "simulator") this.#expandSim(true);
+      // Previewing is when the view is wanted: show it.
+      if (kind === "simulator") this.#showView(true);
       this.#update();
     });
 
@@ -112,9 +116,9 @@ class ProgramTab {
     ui.importButton.addEventListener("click", () => ui.importFile.click());
     ui.importFile.addEventListener("change", () => this.#import().catch(reportFault));
     ui.clear.addEventListener("click", () => this.#clear().catch(reportFault));
-    ui.simToggle.addEventListener("click", () => this.#expandSim(ui.simToggle.getAttribute("aria-expanded") !== "true"));
-    // Blockly refits itself only to a window's resize. On a wide screen its
-    // box also changes as the view folds, or as the console under it grows.
+    ui.viewToggle.addEventListener("click", () => this.#showView(ui.viewToggle.getAttribute("aria-pressed") !== "true"));
+    // Blockly refits itself only to a window's resize. Its box also changes
+    // as the view pane shows or hides, or as the console under it grows.
     if (typeof ResizeObserver === "function") {
       new ResizeObserver(() => {
         if (this.#editor) this.#editor.resize();
@@ -167,10 +171,11 @@ class ProgramTab {
     this.#appendLog({ text, tone });
   }
 
-  #expandSim(open) {
-    this.#ui.simToggle.setAttribute("aria-expanded", String(open));
-    this.#ui.simToggle.title = ProgramTab.TITLES.fold[open ? "open" : "folded"];
-    this.#ui.simPane.dataset.collapsed = open ? "no" : "yes";
+  #showView(shown) {
+    const { tab, viewToggle } = this.#ui;
+    viewToggle.setAttribute("aria-pressed", String(shown));
+    viewToggle.title = ProgramTab.TITLES.view[shown ? "shown" : "hidden"];
+    tab.dataset.view = shown ? "shown" : "hidden";
   }
 
   /* --- running ----------------------------------------------------------- */

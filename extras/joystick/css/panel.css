@@ -9,12 +9,14 @@
    scheme, Stop and the gear). One row where the top is 900 px wide, a cell
    a row elsewhere, never taller than that whatever they say, and stuck to
    the top of the screen, so Stop is on screen on every layout and tab.
-   Under them, thumb-first: on a phone the Drive tab is a dock at the foot
-   of the screen and the scan sits above it where a glance finds it; on a
-   wide screen the same parts side by side, beside the Program tab the rail
-   of what the rover reports on the right, and the Drive tab split in two,
-   what it drives on the left (the simulator's view, or the rover's scan)
-   and the dock with the readouts on the right.
+   Under them two panes, never three: the view, what the controls drive
+   (the rover's scan with its readouts, or the simulated room), the same
+   pane beside both tabs; and the hands, the open tab (the Drive tab's
+   dock of sticks, or the Program tab's editor). On a wide screen the view
+   is on the left and the hands on the right; upright the view is on top
+   and the hands under it, the dock at the foot of the screen under the
+   thumbs; on a phone on its side the sticks run down the two edges, and
+   the top and the view sit between them.
 
    One rule shapes the layout: nothing that contains the stick may be
    positioned, transformed, filtered or contained. joy.js places a touch by
@@ -22,7 +24,7 @@
    offsetParent and put every touch off by the ancestor's offset (a test
    reads every stylesheet for it). So the dock is at the foot of the screen
    because it is the last row of a grid as tall as the screen, never because
-   it is fixed there. The top is never an ancestor of a stick. */
+   it is fixed there. The top and the view are never ancestors of a stick. */
 
 /* --- tokens -------------------------------------------------------------- */
 
@@ -113,13 +115,7 @@
      two sticks: the widest each can be side by side, upright. */
   --stick-w: calc(min(50vw, var(--shell-max) / 2) - var(--gutter) - var(--s-2));
   --gutter: var(--s-4);
-  --cell-y: var(--s-2); /* a readout line's padding above and below */
-  --scan-strip: 132px;
-  /* The rail, the right-hand column on a wide screen: one width beside
-     both tabs, used by every part of it, so the tab switch moves nothing.
-     Its floor keeps the fan's labels legible; a function of the viewport
-     only, because --stick is computed from it. */
-  --rail: clamp(320px, 30vw, 460px);
+  --readouts-h: 28px; /* the view's line of what the rover reports */
   --shell-max: 720px;
 }
 
@@ -613,38 +609,32 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- the shell: a phone first ---------------------------------------------- */
 
-/* One column, as tall as the screen at least. The scan's row takes what the
-   others leave, down to nothing, so on the Drive tab the dock lands at the
-   foot of the screen and nothing needs scrolling. And because the scan is
-   the one row that gives way, a row above the dock that grows or shrinks
-   (a fault) shrinks or grows the scan instead of moving the stick under a
-   thumb that has not moved: joy.js reads the canvas's place afresh on
-   every move, so a stick that moved 13 px sent another move. Rows are
-   spaced by margins, not gap: an empty row (the fault, most of the time)
-   would still take a gap. The height is a minimum rather than exact, so
-   that a fault too long for the room lengthens the page instead of
-   spilling over the dock; the scan's own content counts for nothing
-   (.scan's size containment), so until then it gives way as if exact.
-   --shell-top is the room above the top's cells, which the top takes into
-   itself (.bar). */
+/* One column, as tall as the screen at least: the top, the view, and the
+   open tab. The view's row takes what the others leave, down to nothing,
+   so on the Drive tab the dock lands at the foot of the screen and nothing
+   needs scrolling. And because the view is the one row that gives way,
+   nothing in it (a fault, the connect card, its readouts) can grow it and
+   move the stick under a thumb that has not moved: joy.js reads the
+   canvas's place afresh on every move, so a stick that moved 13 px sent
+   another move. The view's content counts for nothing (min-height: 0, and
+   its parts give way inside it). The Program tab takes the rest under the
+   view, its editor growing to fill it, and the page scrolls past a short
+   screen under the top stuck over it. --shell-top is the room above the
+   top's cells, which the top takes into itself (.bar). */
 .shell {
   --edge-l: calc(var(--gutter) + env(safe-area-inset-left, 0px));
   --edge-r: calc(var(--gutter) + env(safe-area-inset-right, 0px));
   --shell-top: calc(var(--s-3) + env(safe-area-inset-top, 0px));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas: "head" "fault" "scan" "read" "main";
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "head" "view" "main";
   min-height: 100vh;
   min-height: 100dvh;
   max-width: var(--shell-max);
   margin-inline: auto;
   padding: var(--shell-top) var(--edge-r) 0 var(--edge-l);
 }
-
-/* The rail is not a box of its own: its parts are rows of the shell, placed
-   by each layout. */
-.rail { display: contents; }
 
 .shell > [role="tabpanel"] {
   grid-area: main;
@@ -1161,13 +1151,44 @@ body[data-link="down"] #connect {
   .optionsButton { width: var(--seg); }
 }
 
-/* --- what the rover reports: fault, scan, readouts ------------------------- */
+/* --- the view: what the controls drive ---------------------------------- */
 
-/* A fault the rover reports about itself. Amber, not red: nothing is moving
-   that should stop; the rover simply cannot move. */
+/* One pane beside (or above) both tabs: on the rover target the rover's
+   scan, the motor fault over it while there is one and the readouts line
+   at its foot; on the simulator target the simulated room. Its size is the
+   shell grid's alone, never its content's (size containment: a fault, the
+   connect card or a switch of target cannot grow its row, and so move the
+   dock under a held stick): what it holds trades height inside it.
+   Positioned: on a phone on its side it lies over the dock's empty middle,
+   between the sticks, and takes its own presses there. Being neither
+   positioned nor contained matters only to a stick's ancestors, and it is
+   never one. */
+.view {
+  grid-area: view;
+  position: relative;
+  contain: size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-bottom: var(--s-3);
+}
+
+/* What the other target shows takes no room: the rover's parts here, the
+   simulator's slot by its hidden attribute (app.js), which tells the view
+   it is out of sight. */
+body[data-target="simulator"] .view > :is(.fault, .scan, .readouts) { display: none; }
+
+/* A fault the rover reports about itself, over its scan. Amber, not red:
+   nothing is moving that should stop; the rover simply cannot move. It
+   takes height from the scan, at most half the pane, and scrolls the rest:
+   at its own height on a short phone it ran past the pane. */
 .fault {
-  grid-area: fault;
-  margin: 0 0 var(--s-3);
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 50%;
+  overflow-y: auto;
+  margin: 0 0 var(--s-2);
   padding: var(--s-2) var(--s-3);
   font-size: var(--t-xs);
   line-height: var(--lh-body);
@@ -1188,13 +1209,14 @@ body[data-link="down"] #connect {
 .fault[hidden] { display: none; }
 
 /* The scan and the readouts under it read as one card. Its size
-   containment lets the scan's row shrink below the drawing's own height
-   when the screen is short, to nothing if need be; the drawing then fits
-   the card rather than the card the drawing, and the queries below thin it
-   out as it shrinks. */
+   containment lets it shrink below the drawing's own height when the pane
+   is short, to nothing if need be; the drawing then fits the card rather
+   than the card the drawing, and the queries below thin it out as it
+   shrinks. */
 .scan {
-  grid-area: scan;
   container: scan / size;
+  flex: 1 1 0;
+  min-height: 0;
   display: grid;
   padding: var(--s-3) var(--s-1) var(--s-1);
   background:
@@ -1211,33 +1233,93 @@ body[data-link="down"] #connect {
   min-height: 0;
 }
 
-/* The fan and, until there is something to draw, the empty state, in one
-   cell: the state over the fan's empty rings, the card at its full size.
-   The cell is the card's own size: hidden in a small card, the state still
-   sized an auto row, and the fan spilled out of the card. */
+/* The fan and, with no link, the connect card, in one cell: the card over
+   the fan's faint rings, the card at its full size. */
 .scan { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
 .scan > * { grid-area: 1 / 1; }
 
-/* Before the rover's first frame, whatever the tab, the width or the
-   target: what will be here, so an empty column does not read as a fault.
-   Not while a link is up (or stale) and its first frame is still to come:
-   the link chip says so. A link that goes keeps its last scan, dimmed. */
-.scanEmpty {
+/* With no link, whatever the tab or the width, over the faint fan: the
+   next thing to do, rather than an empty pane that reads as a fault. Not
+   while a link is up (or stale): the link chip says how it is. A link
+   that goes keeps its last scan, dimmed, under the card. */
+.connectCard {
   display: none;
   place-self: center;
-  max-width: 24ch;
-  margin: 0;
-  padding: var(--s-2) var(--s-3);
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
+  justify-items: center;
+  gap: var(--s-2);
+  max-width: calc(100% - 2 * var(--s-3));
+  padding: var(--s-3) var(--s-4);
   text-align: center;
-  text-wrap: balance;
-  color: var(--dim);
   background: var(--panel);
-  border-radius: var(--r-md);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-pop);
 }
 
-body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + .scanEmpty { display: block; }
+body:is([data-link="down"], [data-link="connecting"]) .connectCard { display: grid; }
+
+.connectTitle {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: var(--fw-semi);
+  color: var(--readout);
+}
+
+/* Connecting is the next thing to do: the card's one filled button, in the
+   controls' blue. While connecting it cancels, which is no next thing:
+   plain. */
+.connectGo {
+  max-width: 100%;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-4);
+  overflow: hidden;
+  font-size: var(--t-ctl);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--on-live);
+  background: var(--live);
+  border-color: transparent;
+  border-radius: var(--r-full);
+}
+
+@media (hover: hover) {
+  .connectGo:hover { background: var(--live); filter: brightness(1.1); }
+}
+
+body[data-link="connecting"] .connectGo {
+  color: var(--readout);
+  background: var(--raised);
+  border-color: var(--edge);
+  filter: none;
+}
+
+.connectAddress {
+  min-height: 0;
+  height: var(--seg);
+  padding: 0 var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: var(--fw-medium);
+  color: var(--dim);
+  background: none;
+  border-color: transparent;
+  border-radius: var(--r-full);
+}
+
+@media (hover: hover) {
+  .connectAddress:hover { color: var(--readout); background: none; }
+}
+
+/* A card too short for all of it (a phone on its side, a short screen):
+   the button first. */
+@container scan (max-height: 139.98px) {
+  .connectTitle { display: none; }
+}
+
+@container scan (max-height: 99.98px) {
+  .connectAddress { display: none; }
+  .connectCard { padding: var(--s-2); }
+}
 
 /* The fan draws at min(width / 420, height / 200) of its own size in the
    card's room. Below about 7 px a label is a smudge, so the ring and
@@ -1250,9 +1332,6 @@ body:is([data-link="down"], [data-link="connecting"]) #scan[data-empty="yes"] + 
 
 @container scan (max-width: 188.98px) or (max-height: 89.98px) {
   .reading { display: none; }
-  /* No room to say it in (a phone on its side, a short screen): the card
-     is only a glance at the wedges. */
-  .scanEmpty { visibility: hidden; }
 }
 
 @container scan (max-height: 31.98px) {
@@ -1324,50 +1403,81 @@ body:not([data-link="up"]) .wedge { opacity: 0.25; }
 body:not([data-link="up"]) .wedge[data-zone="clear"] { fill: var(--dim); stroke: var(--dim); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
 
-/* Two lines: the move, with the whole width for its longest name (29
-   characters, which then fits at 320 px), and under it the phase and the
-   chip. Squeezed beside the chip, the move broke mid-word. */
+/* The readouts: one line at the scan's foot, ending its card: the move,
+   the chip's temperature, and the phase while the rover explores, each a
+   caption and its value. One height whatever it says: a value too long
+   for the line is cut short, never wrapped, and the phase comes and goes
+   at its end. */
 .readouts {
-  grid-area: read;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "move move" "phase chip";
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--readouts-h);
+  padding: 0 var(--s-4);
+  overflow: hidden;
+  white-space: nowrap;
   background: var(--panel);
   border-top: 1px solid var(--rule);
   border-radius: 0 0 var(--r-xl) var(--r-xl);
 }
 
-/* A label and its value on a line. A value too long to sit beside its label
-   takes the next line whole rather than breaking mid-word, and breaks only
-   if it is wider than the line itself (the longest pivot's name, on a
-   phone on its side). */
 .cell {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: baseline;
-  column-gap: var(--s-2);
+  gap: 6px;
   min-width: 0;
-  padding: var(--cell-y) var(--s-3);
 }
 
-.cell:first-child { grid-area: move; border-bottom: 1px solid var(--rule); }
-#phaseCell { grid-area: phase; }
-.cell:last-child { grid-area: chip; border-left: 1px solid var(--rule); }
+/* The move and the phase give way, the chip's few figures never. */
+.cell:first-child,
+#phaseCell { flex: 0 1 auto; }
 
-/* Narrower than 360 px, a step smaller, so the longest move still fits. */
+.cell + .cell::before {
+  content: "\00b7";
+  margin-right: calc(var(--s-3) - 6px);
+  color: var(--dim);
+}
+
+.cell .label { flex: none; }
+
 .cell output {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--gauge);
-  font-size: clamp(var(--t-sm), 3.8vw, var(--t-md));
+  font-size: var(--t-ctl);
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: break-word;
 }
 
 /* .cell's display: flex would otherwise override the hidden attribute. */
 .cell[hidden] { display: none; }
 
 #phase[data-tone="warn"] { color: var(--warn); }
+
+/* The simulator's one view (simview.js fills it): a card the pane's size,
+   which the view inside fills (sim.css). clip, not hidden: a scroll
+   container would swallow the settings' scroll margin, and they would
+   open under the top stuck over the page. hidden stays for a browser
+   without clip. */
+.simSlot {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xl);
+}
+
+.simSlot[hidden] { display: none; }
+
+/* The pane sets the height here, whatever the view's floor elsewhere. */
+.simSlot .sim { min-height: 0; }
 
 /* --- the dock: the Drive tab ------------------------------------------------- */
 
@@ -1616,154 +1726,50 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 #speed { grid-area: slider; }
 
-/* --- the Drive tab's view of the simulator ---------------------------------- */
-
-/* Beside the dock, never around it (joystick.html says why), and only on
-   the simulator: on a phone in the scan's place (below), on a wide screen
-   the left side of the page (F3i). #driveSimSlot is the simulator's
-   view's while the Drive tab drives it (app.js). */
-.driveView {
-  grid-area: scan;
-  display: none;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* clip, as #simSlot's (program.css): the settings' scroll margin. */
-#driveSimSlot {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
-  overflow: clip;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-}
-
-/* The slot sets the height here, whatever the view's floor elsewhere. */
-#driveSimSlot .sim { min-height: 0; }
-
-/* A row shorter than the view's bar (a short phone): half the padding, so
-   the motion keeps a line (sim.css drops the rest). */
-@container driveview (max-height: 63.98px) {
-  #driveSimSlot .sim { padding-block: var(--s-1); }
-}
-
 /* --- the other layouts ------------------------------------------------------- */
 
-/* Every layout but the side-by-side one (the media query below, negated). */
+/* Every layout but the side-by-side one (the media query below, negated):
+   the top stuck over a page that may scroll. */
 @media (max-width: 959.98px), (max-height: 520.98px) {
   /* A popup scrolls into view (popover.js) clear of the top stuck over the
      page, two rows of cells and its padding, rather than hide under it. */
   .menu,
   .sim-more { scroll-margin-top: calc(2 * var(--cell-h) + 6px + 2 * var(--s-3) + env(safe-area-inset-top, 0px)); }
 
-  .shell > [role="tabpanel"] { margin-top: var(--s-3); }
+  /* The Program tab: the view, when shown, a band over the editor about a
+     third of the screen tall, and the tab the rest, its editor growing to
+     fill it down to the foot of the screen, clear of the home bar. */
+  .shell:has(> #programTab:not([hidden])) { grid-template-rows: auto auto minmax(0, 1fr); }
 
-  /* While the rover is driven the phase is hidden but keeps its line, so a
-     takeover (exploring, then manual) moves nothing above the stick. */
-  #phaseCell[hidden] {
-    display: flex;
-    visibility: hidden;
-  }
+  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(180px, 35 * var(--svh), 480px); }
 
-  /* The Program tab scrolls as a page does; the scan becomes a strip above
-     it. */
-  .shell:has(> #programTab:not([hidden])) {
-    grid-template-rows: auto auto auto auto 1fr;
-  }
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
 
-  .shell:has(> #programTab:not([hidden])) .scan { height: var(--scan-strip); }
+  #programTab { padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px)); }
 
-  /* A motor fault takes the scan's place. With no wheel able to turn, why
-     matters more than what is near, and the scan, squeezed into what the
-     fault left of a phone, was a strip too small to read. The readouts
-     stay: the Move the rover reports while no wheel turns is what the fault
-     explains. */
-  .shell:has(#motorsFault:not([hidden])) .scan { display: none; }
-
-  /* On the simulator the Drive tab's view takes the scan's place, and the
-     readouts stay, the rover's as ever. Its size is the row's, never its
-     content's (a size container), so as the scan does it gives way rather
-     than move the dock. A motor fault still wins the place: it is about
-     the rover, which Stop still reaches. */
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) .scan { display: none; }
-
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])):not(:has(#motorsFault:not([hidden]))) > .driveView:not([hidden]) {
-    display: flex;
-    container: driveview / size;
-  }
-
-  .shell:has(#motorsFault:not([hidden])) .fault {
-    grid-area: scan;
-    display: grid;
-    align-content: center;
-    padding: var(--s-4);
-    font-size: var(--t-sm);
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-  }
-
-  /* On the Drive tab the card asks for no height of its own (size
-     containment): it fills the row the dock leaves, as the scan does, and
-     scrolls the rest. At its own height its text ran the page past a short
-     phone (79 px of row at 375 x 667) and the stick off the screen, and
-     beside a landscape stick (see its block) slid the stick half off the
-     screen. The Program tab has no stick and scrolls as a page, so there
-     the card keeps its own height. The "No motors" badge at the top says
-     it too.
-     Centred when it fits, from the top when it scrolls, where centring
-     would put its first lines out of reach; start where safe is unknown. */
-  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
-    contain: size;
-    overflow-y: auto;
-    align-content: start;
-    align-content: safe center;
-  }
+  /* On the Drive tab a fault gives way to the scan at the pane's foot
+     rather than run past it: a short phone's pane is under 300 px. */
+  .shell:has(> #driveTab:not([hidden])) .fault { max-height: 45%; }
 }
 
 /* A short phone screen (its browser's bars showing), 760 px or less: most
-   phones in a browser. The readouts' lines and the sticks a step smaller,
-   so both sticks fit at the foot of the screen with the scan still
-   showing. */
+   phones in a browser. The sticks a step smaller, so both fit at the foot
+   of the screen with the view still showing. */
 @media (max-width: 959.98px) and (max-height: 760px) {
   :root {
     --stick: clamp(112px, min(var(--stick-w), 18 * var(--svh)), 236px);
-    --cell-y: calc(var(--s-1) + var(--s-0));
   }
 
   .bar { padding-bottom: var(--s-2); }
 
-  .shell:has(#motorsFault:not([hidden])) .fault {
-    padding: var(--s-3);
-    font-size: var(--t-xs);
-  }
-
-  /* On the Drive tab the fault in the scan's place gives way as the scan
-     does, its text centred while the row has room: with its padding and
-     margin it held more than the row, and a fault ran the page past the
-     screen and moved both sticks (360 x 640 by 2 px, 360 x 560 under
-     ADVANCED). */
-  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
-    margin-bottom: 0;
-    padding-block: 0;
-  }
+  .view { margin-bottom: var(--s-2); }
 }
 
 /* Shorter still, 600 px or less: a 16:9 phone under its browser's bars
    (375 x 548, 360 x 560), and every phone on its side. Here the stick ran
    off the screen: everything around it a step smaller again. */
 @media (max-width: 959.98px) and (max-height: 600px) {
-  :root {
-    --stick: clamp(112px, min(var(--stick-w), 18 * var(--svh)), 236px);
-    --cell-y: var(--s-1);
-  }
-
   .shell { --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
-
-  .shell > [role="tabpanel"] { margin-top: var(--s-2); }
 
   /* The scan gives way to the dock down to nothing: with its padding it
      could not, and a row opening above the dock moved the stick (360 x 560,
@@ -1782,55 +1788,60 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   :root { --gutter: var(--s-6); }
 }
 
-/* Side by side: the open tab on the left, the rail on the right, the page
-   exactly as tall as the screen, under the top's cells in one row (F8).
-   The top is the same beside both tabs, so the tab switch moves nothing
-   in it. The Drive tab splits the rest its own way (F3i, at this block's
-   end). The Program tab scrolls inside its own pane. */
+/* Side by side: the view on the left and the hands on the right, on both
+   tabs, under the top's cells in one row (F8), the page exactly as tall as
+   the screen. The top and the view's side are the same beside both tabs,
+   so the tab switch moves nothing but the line between the panes. The
+   Drive tab's column is as wide as its two sticks need (--drive), the view
+   the rest: the owner asked for the view to be the larger. The Program
+   tab gives the view about 40% (from 320 to 560 px) and the editor the
+   rest, and the editor all of it with the view hidden. The Program tab
+   scrolls inside its own pane. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
-    /* The Drive tab's column (F3i, below): the two sticks as large as the
-       height leaves them, the column as wide as they need, but never
-       narrower than the rail, nor wider than 45% of the screen, which
-       leaves the simulator's view the larger side. Of the height, 362 px is
-       the rest of the column: the shell's padding above and below (16 and
-       20), the top's cells and the padding under them (40 and 16), the
-       dock's padding (48), the family's row over the sticks and the rotate
-       buttons' row under them with their gaps (156), the readouts under
-       the dock (57), and 9 to spare. Of the width, 72 px is the dock's
-       padding (48) and the gap between the sticks (24): 672 px is two
-       sticks at their largest. */
-    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 362px) + 72px, min(45vw, 672px));
-    --stick: clamp(120px, min(100 * var(--svh) - 362px, (var(--drive) - 72px) / 2), 300px);
+    /* The sticks as large as the height leaves them, up to 240 px, and no
+       wider together than 45% of the screen. Of the height, 260 px is the
+       rest of the dock's column: the shell's padding above and below (12
+       and 16), the top's cells and the padding under them (40 and 12), the
+       dock's padding (32), the family's row over the sticks and the rotate
+       buttons' row under them with their gaps (140), and 8 to spare. Of
+       the width, 56 px is the dock's padding (32) and the gap between the
+       sticks (24): the column is the two sticks and that. */
+    --stick: clamp(120px, min(100 * var(--svh) - 260px, (45vw - 56px) / 2), 240px);
+    --drive: calc(2 * var(--stick) + 56px);
     --shell-max: 1600px;
   }
 
   .shell {
     height: 100vh;
     height: 100dvh;
-    grid-template-columns: minmax(0, 1fr) var(--rail);
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) var(--drive);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "head head"
-      "main fault"
-      "main scan"
-      "main read";
-    column-gap: var(--s-5);
-    --shell-top: var(--s-4);
-    padding-bottom: var(--s-5);
+      "view main";
+    column-gap: var(--s-4);
+    --shell-top: var(--s-3);
+    padding-bottom: var(--s-4);
   }
 
-  /* As tall as its room needs at its width (sim.css), up to its place's
-     height, as on the Program tab. */
-  #driveSimSlot {
-    flex: 0 1 auto;
-    border-radius: var(--r-xl);
+  .shell:has(> #programTab:not([hidden])) {
+    grid-template-columns: clamp(320px, 40%, 560px) minmax(0, 1fr);
   }
 
-  .bar { padding-bottom: var(--s-4); }
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "main";
+  }
+
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
+
+  .view { margin-bottom: 0; }
 
   .fault {
-    margin-bottom: var(--s-4);
+    margin-bottom: var(--s-3);
     padding: var(--s-3) var(--s-4);
     font-size: var(--t-sm);
   }
@@ -1839,33 +1850,12 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
   .scan { padding: var(--s-4) var(--s-3); }
 
-  /* A column of readouts, label and value on a line, as an instrument's;
-     a value too long for the line goes under its label, at the right. */
-  .readouts {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "move" "phase" "chip";
-  }
-
-  .cell {
-    column-gap: var(--s-4);
-    padding: var(--s-3) var(--s-5);
-  }
-
-  #phaseCell { border-bottom: 1px solid var(--rule); }
-
-  .cell:last-child { border-left: none; }
-
-  .cell output {
-    margin-left: auto;
-    font-size: var(--t-lg);
-    text-align: right;
-  }
-
   .dock {
     display: grid;
     place-content: center;
+    min-height: 0;
     margin: 0;
-    padding: var(--s-6);
+    padding: var(--s-4);
     border-radius: var(--r-xl);
     box-shadow: none;
     background: radial-gradient(70% 60% at 30% 55%, var(--glow), transparent), var(--panel);
@@ -1874,7 +1864,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   /* The two sticks at their size, the grid as tall as its content. */
   .controls {
     grid-template-columns: repeat(2, var(--stick));
-    gap: var(--s-3) var(--s-6);
+    gap: var(--s-3) var(--s-5);
   }
 
   .spin button {
@@ -1896,117 +1886,12 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     overflow-y: auto;
     min-height: 0;
   }
-
-  /* The Drive tab split in two (F3i): on the left, at the page's full
-     height, what the controls drive, the simulator's view on the simulator
-     and the rover's scan on the rover; on the right one column, the dock
-     with the readouts joined under it, as wide as the sticks need
-     (--drive). The owner asked for it: beside the dock and the rail the
-     view had been the smallest pane. The dock keeps its place on either
-     target, so a switch moves no stick: the target picks only what fills
-     the left. A motor fault goes over that, never over the dock, so it
-     moves no stick either: the dock spans the fault's row and the one the
-     view takes, and a fault only moves the line between the two. */
-  .shell:has(> #driveTab:not([hidden])) {
-    grid-template-columns: minmax(0, 1fr) var(--drive);
-    grid-template-areas:
-      "head  head"
-      "fault main"
-      "view  main"
-      "view  read";
-  }
-
-  /* One card with the readouts under it. */
-  .shell:has(> #driveTab:not([hidden])) .dock { border-radius: var(--r-xl) var(--r-xl) 0 0; }
-
-  /* The readouts on one line, the phase last, each label over its value,
-     so the move has the line less two short cells: beside their labels a
-     halt's phase left "STOP" no room at 960 px wide. Nothing in them
-     changes their height while a stick is held: a phase coming or going
-     (a takeover, exploring and then manual, is a press of the stick) only
-     moves the cells beside it, and every value keeps to its line, cut
-     short rather than wrapped. A move name wrapping as the stick drove it
-     grew the readouts, and moved the dock above them. */
-  .shell:has(> #driveTab:not([hidden])) .readouts {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "move chip phase";
-  }
-
-  .shell:has(> #driveTab:not([hidden])) .cell {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    row-gap: var(--s-1);
-    padding: var(--s-2) var(--s-4);
-  }
-
-  .shell:has(> #driveTab:not([hidden])) .cell:first-child { border-bottom: none; }
-
-  .shell:has(> #driveTab:not([hidden])) .cell:last-child,
-  .shell:has(> #driveTab:not([hidden])) #phaseCell {
-    border-bottom: none;
-    border-left: 1px solid var(--rule);
-  }
-
-  .shell:has(> #driveTab:not([hidden])) .cell output {
-    margin-left: 0;
-    font-size: var(--t-md);
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .shell:has(> #driveTab:not([hidden])) .scan {
-    grid-area: view;
-    border-radius: var(--r-xl);
-  }
-
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .scan { display: none; }
-
-  /* The settings hang from the view's bar over whatever is under the room
-     (sim.css), as on the Program tab: this is their containing block, and
-     the view as wide as the place, so they hang under the bar's gear. */
-  body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden]) {
-    grid-area: view;
-    display: flex;
-    position: relative;
-  }
-}
-
-/* Side by side on a short screen, 640 px or less (a laptop's browser):
-   everything around the sticks a step smaller, so they keep what size the
-   height allows. 302 px is the rest of the Drive tab's column: the shell's
-   padding above and below (12 and 12), the top's cells and the padding
-   under them (40 and 12), the dock's padding (32), the family's row and
-   the rotate buttons' with their gaps (128), the readouts (57), and 9 to
-   spare. Of
-   the width, 56 px is the dock's padding (32) and the gap between the
-   sticks (24). */
-@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {
-  :root {
-    --drive: clamp(var(--rail), 2 * (100 * var(--svh) - 302px) + 56px, min(45vw, 656px));
-    --stick: clamp(120px, min(100 * var(--svh) - 302px, (var(--drive) - 56px) / 2), 300px);
-  }
-
-  .shell {
-    --shell-top: var(--s-3);
-    padding-bottom: var(--s-3);
-  }
-
-  .bar { padding-bottom: var(--s-3); }
-
-  .dock { padding: var(--s-4); }
-
-  .controls { gap: var(--s-2) var(--s-6); }
-
-  .spin button { min-height: var(--tap); }
 }
 
 /* A phone on its side, held like a gamepad: the translate stick down the
    left edge with the rotate buttons under it, the pivot stick down the
    right with the speed under it, and between them the top's two cells,
-   Stop among them, the scan and the readouts, in reach of either thumb.
+   Stop among them, and the view under them, in reach of either thumb.
    The dock spans the screen behind them, on the same three columns, with
    its middle left empty for them. Of the height, 150 px is the family's
    row over the pivot stick (68 at most), the row of the rotate buttons and
@@ -2023,28 +1908,43 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
   .shell {
     grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      ". head ."
+      ". view .";
     column-gap: var(--s-5);
     --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px));
     padding-bottom: 0;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      ". head  ."
-      ". fault ."
-      ". scan  ."
-      ". read  .";
   }
 
-  /* The Program tab takes the three columns, under the top. The top keeps
-     to the middle column, as beside the sticks: a switch of tab moves
-     neither Stop nor anything else in its two cells. */
+  /* The view ends the middle column, clear of the home bar. */
+  .view { margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
+
+  /* The Program tab takes the screen's width under the top, and the view,
+     when shown, the left column down the screen's height beside it. The
+     top keeps to the middle column, as beside the sticks: a switch of tab
+     moves neither Stop nor anything else in its two cells. */
   .shell:has(> #programTab:not([hidden])) {
-    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
-      ".     head  ."
-      "fault fault fault"
-      "scan  scan  scan"
-      "read  read  read"
-      "main  main  main";
+      "view head ."
+      "view main main";
+  }
+
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
+    grid-template-areas:
+      ".    head ."
+      "main main main";
+  }
+
+  /* The editor's floor runs the page past a screen this short: the view
+     keeps to the screen's height and stays on it as the page scrolls, as
+     the top does. Not a stick's ancestor, so it may stick. */
+  .shell:has(> #programTab:not([hidden])) > .view {
+    position: sticky;
+    top: var(--shell-top);
+    align-self: start;
+    height: calc(100 * var(--svh) - var(--shell-top) - var(--s-2) - env(safe-area-inset-bottom, 0px));
   }
 
   /* Not while hidden: this display would outrank the hidden attribute's,
@@ -2076,32 +1976,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     column-gap: var(--s-5);
   }
 
-  /* The readouts end the middle column, clear of the home bar. */
-  .readouts { margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
-
-  /* Beside the sticks rather than above them, the middle column cannot
-     move them: the phase need not hold its line here. */
-  #phaseCell[hidden] { display: none; }
-
-  /* The motor fault takes the scan's place (the rule for every phone,
-     above), and beside the stick that place is only what the top and the
-     readouts leave: 88 px at 568 x 320. At the card's own height the page
-     grew by 120 px, and the stick, centred in the dock that spans every
-     row, slid half below the screen. So on the Drive tab the card fills
-     what the dock leaves and scrolls the rest (above), and here keeps at
-     least its headline's line and one more, with its padding and borders
-     on top (content-box). All of it shows at 667 x 375 and up, and while
-     the dock leaves that much the stick does not move. A two-line clamp,
-     before, cut the text mid-sentence wherever the row held more, with the
-     lines after its ellipsis still showing. A halt reason wrapping in the
-     readouts as well still moves the stick (up to 19 px at 568 x 320), and
-     the Driver lets go of a stick held through that (js/drive.js). */
-  .shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault {
-    box-sizing: content-box;
-    min-height: calc(var(--t-sm) * var(--lh-tight) + var(--s-0) + var(--lh-body) * 1em);
-    padding: var(--s-2) var(--s-3);
-  }
-
   /* The speed's caption over its value, which leaves the slider 82 px of
      the stick's column at 568 x 320 rather than 51. */
   .speed {
@@ -2113,8 +1987,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* On its side and narrower than about 780 px (640 x 360, 732 x 412), the
    columns close up (the shell's and the dock's together, as they must),
    and the sticks give the middle column the 288 px the cells need at their
-   tightest (Adv for Advanced, the gear a step smaller: panel.css's top).
-   The readouts take the type size a portrait phone of this width would. */
+   tightest (Adv for Advanced, the gear a step smaller: panel.css's top). */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {
   /* 180 px: half of the gutters (48), the gaps (24) and the 288 px the
      middle column keeps for the cells. */
@@ -2124,8 +1997,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
   .shell,
   .controls { column-gap: var(--s-3); }
-
-  .cell output { font-size: var(--t-sm); }
 }
 
 /* On its side, under about 570 px wide, the pivot stick is at or near its

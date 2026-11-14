@@ -1094,9 +1094,11 @@ test("in the page, a throttled display does not stall the preview", async () => 
 
 // The page, with the map given a screen transform, since nothing here lays it
 // out: a pixel is a centimetre, y down the screen as on a screen. A world
-// point (x, y) m is under the pointer at (100 x, -100 y).
-function pageWithView(options) {
-  const page = loadPage(options);
+// point (x, y) m is under the pointer at (100 x, -100 y). On the Program tab
+// and the simulator target, where the view pane shows the view at the
+// operator's speed, unless stored says otherwise.
+function pageWithView(options = {}) {
+  const page = loadPage({ ...options, stored: { "rover.target": "simulator", "rover.tab": "tabProgram", ...options.stored } });
   page.evalIn(`globalThis.DOMPoint = class {
     constructor(x, y) { this.x = x; this.y = y; }
     matrixTransform() { return { x: this.x, y: this.y }; }
@@ -1284,8 +1286,14 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
   assert.match(rule(row.rules, ".sim-room"), /flex-basis:\s*100%/, "the room's own row");
   assert.match(rule(row.rules, ".sim-more"), /--sim-bar-h:\s*calc\(2 \* var\(--sim-tool\)/, "the settings below both rows");
   assert.ok(row.px < list_.px, "the row only narrower than the list");
+  // The tools the panel's one control height, the top's, on every layout,
+  // each reaching over the bar's edges to a full touch target's height.
   const tools = cssRules(css).filter((r) => /--sim-tool:/.test(r.body)).map((r) => r.body.match(/--sim-tool:\s*([^;]+);/)[1]);
-  assert.deepEqual(tools, ["var(--tap)"], "the tools a full touch target everywhere");
+  assert.deepEqual(tools, ["var(--ctl)"], "the tools one height everywhere");
+  const reach = rule(cssRules(css), ".sim-tool::before");
+  assert.match(reach, /position:\s*absolute/, "a touch target over the tool");
+  assert.match(reach, /inset:\s*calc\(\(var\(--sim-tool\) - var\(--tap\)\) \/ 2\) 0;/, "as tall as a full touch target");
+  assert.match(rule(cssRules(css), ".sim-tool"), /position:\s*relative/, "hung from its tool");
   // The list's own rule, ahead of the container queries that override it.
   assert.match(rule(cssRules(css), ".sim-speed-pick"), /display:\s*none/, "otherwise the buttons alone");
   const settings = cssRules(css).find((r) => r.selector === ".sim-more" && /position:\s*absolute/.test(r.body));
@@ -1293,50 +1301,49 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
   assert.deepEqual(page.errors, []);
 });
 
-// Beside the editor the view is as tall as its room needs at its width
-// (F3e), which only CSS can know: the view gives it each room's shape.
-test("the view: each room's shape goes on the slot, for a stage sized to the room", () => {
+// The view fills its slot, the view pane, on every layout and beside either
+// tab: the pane's size is the shell grid's (panel.css), never the room's,
+// so a room picked moves nothing on the page. The room is fitted inside
+// the stage it is given, SimView.PAD kept clear around it.
+test("the view: it fills its slot on every layout, and each room fits whatever stage it is given", () => {
   const { page, byClass } = pageWithView();
   const slot = page.$("simSlot");
-  const { PAD } = page.evalIn("({ PAD: SimView.PAD })");
-  assert.equal(slot.style.getPropertyValue("--room-pad-x"), `${PAD.left + PAD.right}px`, "the margins kept clear across");
-  assert.equal(slot.style.getPropertyValue("--room-pad-y"), `${PAD.top + PAD.bottom}px`, "and down");
-  const room = byClass("sim-room")[0];
-  for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
-    room.value = key;
-    page.fire(room, "change");
-    const { width, height } = page.evalIn("targets.simulator.room");
-    assert.equal(Number(slot.style.getPropertyValue("--room-aspect")).toFixed(3), (width / height).toFixed(3), `${key}: ${width} x ${height} m`);
+  for (const name of ["--room-aspect", "--room-pad-x", "--room-pad-y"]) {
+    assert.equal(slot.style.getPropertyValue(name), "", `${name} set on nothing`);
   }
-  // What uses them: the stage beside the editor, from the view's width.
   const css = stylesheet("sim.css");
-  const wide = blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {") || [];
-  const stage = (wide.find((r) => r.selector === ".sim-stage") || {}).body || "";
-  for (const name of ["--room-aspect", "--room-pad-x", "--room-pad-y"]) assert.match(stage, new RegExp(`var\\(${name}\\)`), `the stage's height uses ${name}`);
-  // Worked out for a view 400 px wide, each room fills the stage's width
-  // and height at once, inside its 1 px border and SimView's margins: no
-  // bands either way.
-  const calc = (stage.match(/height:\s*calc\(([^;]*)\);/) || [])[1] || "";
-  const padX = PAD.left + PAD.right;
-  const padY = PAD.top + PAD.bottom;
-  for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
-    room.value = key;
-    page.fire(room, "change");
-    const { width, height } = page.evalIn("targets.simulator.room");
-    const expression = calc.replace(/var\(--room-pad-x\)/g, padX).replace(/var\(--room-pad-y\)/g, padY)
-      .replace(/var\(--room-aspect\)/g, width / height).replace(/100cqw/g, 400).replace(/px/g, "");
-    assert.match(expression, /^[\d.\s+\-*/()]+$/, `${key}: the height is plain arithmetic once filled in: ${expression}`);
-    const tall = Function(`return ${expression};`)();
-    assert.ok(Math.abs((400 - 2 - padX) / width - (tall - 2 - padY) / height) < 1e-9, `${key}: ${tall.toFixed(1)} px tall fits it both ways`);
+  assert.ok(!/--room-/.test(css + stylesheet("panel.css") + stylesheet("program.css")), "and read by nothing");
+  assert.equal(blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {"), null, "no layout of its own: one view on every layout");
+  const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  const view = rule(".sim");
+  assert.match(view, /container:\s*sim \/ size/, "a size container, so its height queries apply wherever the pane is short");
+  assert.match(view, /width:\s*100%/, "the slot's width");
+  assert.match(view, /height:\s*100%/, "and its height");
+  assert.match(view, /position:\s*relative/, "the settings' containing block");
+  assert.match(rule(".sim-stage"), /flex:\s*1 1 auto/, "the stage takes what the bar and the status leave");
+
+  const stage = byClass("sim-stage")[0];
+  const map = byClass("sim-map")[0];
+  const room = byClass("sim-room")[0];
+  const { PAD, CM } = page.evalIn("({ PAD: SimView.PAD, CM: SimView.CM })");
+  for (const [w, h] of [[400, 300], [720, 260], [300, 520]]) {
+    stage._clientWidth = w;
+    stage._clientHeight = h;
+    for (const key of Object.keys(page.evalIn("Room.PRESETS"))) {
+      room.value = key;
+      page.fire(room, "change");
+      page.resized();
+      const [left, top, vw] = map.getAttribute("viewBox").split(" ").map(Number);
+      const { width, height } = page.evalIn("targets.simulator.room");
+      // The floor spans 0 to width across and -height to 0 down, in cm.
+      const px = w / vw;
+      const edges = { left: -left * px, right: w - (width * CM - left) * px, top: (-height * CM - top) * px, bottom: h - -top * px };
+      const at = `${key} in ${w} x ${h}: ${JSON.stringify(edges)}`;
+      for (const side of ["left", "right", "top", "bottom"]) assert.ok(edges[side] >= PAD[side] - 0.5, `${at}: PAD clear on the ${side}`);
+      const tight = (a, b) => Math.abs(edges[a] - PAD[a]) < 1 && Math.abs(edges[b] - PAD[b]) < 1;
+      assert.ok(tight("left", "right") || tight("top", "bottom"), `${at}: as large as fits`);
+    }
   }
-  // The view sizes from its width, its content sets its height, and the
-  // settings hang from the stage (program.css), not from the view.
-  const view = (wide.find((r) => r.selector === ".sim") || {}).body || "";
-  assert.match(view, /container-type:\s*inline-size/, "a width container, not a size one");
-  assert.match(view, /position:\s*static/, "not the settings' containing block");
-  const programStage = (blockRules(stylesheet("program.css"), "@media (min-width: 960px) and (min-height: 521px) {") || [])
-    .find((r) => r.selector === ".programStage") || {};
-  assert.match(programStage.body || "", /position:\s*relative/, "the stage is");
   assert.deepEqual(page.errors, []);
 });
 
@@ -1414,15 +1421,15 @@ test("the view: one mark per bump, gone with the trail; and where the next previ
 });
 
 test("the view's frames: none while hidden or idle out of sight, and no jump after", async () => {
-  const { page, sim } = pageWithView({ frames: true });
+  const { page, sim } = pageWithView({ frames: true, stored: { "rover.target": "rover", "rover.tab": "tabDrive" } });
   const pumps = [];
   const pump = sim.pump.bind(sim);
   sim.pump = (ms) => {
     pumps.push(ms);
     return pump(ms);
   };
-  // The Drive tab showing and nothing on the simulator: after one frame to
-  // look, the view rests.
+  // The rover the target, so the view pane shows its scan, and nothing on
+  // the simulator: after one frame to look, the view rests.
   await pageFrames(page, 1000);
   assert.deepEqual(pumps, [], "idle and out of sight");
 
@@ -1455,13 +1462,14 @@ test("the view's frames: none while hidden or idle out of sight, and no jump aft
   const restedAt = pumps.length;
   await pageFrames(page, 1000);
   assert.equal(pumps.length, restedAt, "resting");
-  // ...until the view is shown, idle or not...
-  page.fire(page.$("tabProgram"), "click");
+  // ...until the view is shown, the simulator the target, idle or not...
+  page.fire(page.$("target").children[1], "click");
   page.resized();
   await pageFrames(page, 320);
   assert.ok(pumps.length >= restedAt + 15, "drawn while shown");
   // ...or a sleep is waiting on it.
-  page.fire(page.$("tabDrive"), "click");
+  page.fire(page.$("target").children[0], "click");
+  page.resized();
   await pageFrames(page, 100);
   const hiddenTab = pumps.length;
   await pageFrames(page, 500);
@@ -1496,7 +1504,7 @@ test("the view's frames: with the room hidden, the view still draws the motion",
 // (panel.test.js, "target: ..."); while the rover is the target it takes the
 // rover's, so a switch to the simulator starts from it.
 test("on the rover target the preview reports the rover's scheme, and sends the rover nothing", async () => {
-  const { page, sim } = pageWithView();
+  const { page, sim } = pageWithView({ stored: { "rover.target": "rover" } });
   const ws = connectOpen(page);
   assert.equal(sim.scheme, protocol.SCHEME_NORMAL, "NORMAL until the rover says");
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: protocol.SCHEME_ADVANCED }));

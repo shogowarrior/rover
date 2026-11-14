@@ -946,46 +946,68 @@ test("a new link starts the scan and readouts from nothing; a link that went kee
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The right column is the rover's at all times (F3c): with nothing to show
-// yet it says so, in its own place and at its full size, rather than look
-// broken. Only before a frame: a link that goes leaves its scan, dimmed.
-test("the scan says no rover is connected until the first frame, and not after a link goes", () => {
+// The view is the rover's while it is the target (F3c, F8): with no link it
+// says so and offers the next thing to do, over the faint fan, in its own
+// place and at its full size, rather than look broken. The scan itself
+// still knows when it has nothing to draw: a link that goes leaves its
+// scan, dimmed, as history.
+test("the scan: a connect card over it while no link is up, and the scan empty until the first frame", () => {
   const page = loadPage();
   const empty = () => page.$("scan").dataset.empty;
+  const go = page.$("connectGo");
   check(empty() === "yes", `at load: ${empty()}`);
+  check(go.textContent === "Connect to 192.168.0.115" && /192\.168\.0\.115/.test(go.title), `the card names the address: ${go.textContent} | ${go.title}`);
+  // The card's button is a press of Connect, whatever Connect does now.
+  page.fire(go, "click");
+  check(page.sockets.length === 1 && page.doc.body.dataset.link === "connecting", "a press connects");
+  check(go.textContent === "Cancel", `connecting, it cancels: ${go.textContent}`);
+  page.fire(go, "click");
+  check(page.doc.body.dataset.link === "down" && go.textContent === "Connect to 192.168.0.115", `cancelled: ${go.textContent}`);
   let ws = connectOpen(page);
   check(empty() === "yes", "up, before a frame: still nothing to draw");
   ws.serverMsg(FRAMES.manualBeforeScan);
   check(empty() === "no", "a frame without distances is a frame: the rover is there");
   ws.serverDrop();
   check(page.doc.body.dataset.link === "down" && empty() === "no", "gone: its last scan stays, as history");
+  check(go.textContent === "Reconnect" && /again/.test(go.title), `after a lost link: ${go.textContent} | ${go.title}`);
   ws = connectOpen(page);
   check(empty() === "yes", "a new link starts from nothing");
   ws.serverMsg(telemetry({ distanceFront: 80 }));
   check(empty() === "no", "until its first frame");
   page.fire(page.$("host"), "keydown", { key: "Enter" });
   check(page.doc.body.dataset.link === "connecting" && empty() === "yes", "replaced: nothing again");
+  page.fire(page.$("connect"), "click");
+  // The card names the address Connect would use: the field's, as typed.
+  page.$("host").value = "rover.local";
+  page.fire(page.$("host"), "input");
+  check(go.textContent === "Connect to rover.local", `the field's address: ${go.textContent}`);
 
-  // panel.css shows the words while the scan is empty and no link is up:
-  // with a link up and its first frame still to come, the link chip says so.
-  const shown = cssRules(panelCss()).filter((r) => /\.scanEmpty\b/.test(r.selector) && /display:\s*block/.test(r.body));
+  // Change address opens the link's popover, as the chip does, with the
+  // focus in the address; pressed with it open, it leaves it open.
+  check(page.$("linkPanel").hidden, "the popover closed");
+  for (let i = 0; i < 2; i++) {
+    page.fire(page.$("changeAddress"), "pointerdown");
+    page.fire(page.$("changeAddress"), "click");
+    check(!page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "true", `open (${i})`);
+    check(page.doc.activeElement === page.$("host"), `the focus in the address (${i})`);
+  }
+
+  // panel.css shows the card while no link is up, on either tab: with a
+  // link up and its first frame still to come, the link chip says so.
+  const shown = cssRules(panelCss()).filter((r) => /\.connectCard\b/.test(r.selector) && /display:\s*grid/.test(r.body));
   check(shown.length === 1, `one rule shows it: ${shown.map((r) => r.selector)}`);
   const selector = shown.length ? shown[0].selector : "";
-  check(/#scan\[data-empty="yes"\]/.test(selector), `only while empty: ${selector}`);
   const states = (selector.match(/data-link="(\w+)"/g) || []).map((m) => m.slice(11, -1)).sort().join();
   check(states === "connecting,down", `only with no link up: ${states}`);
-  // One cell the card's own size: an auto row, sized by the hidden words
-  // in a small card, let the fan spill out of it.
+  check(!/data-tab|tabpanel|#(drive|program)Tab/.test(selector), `on either tab: ${selector}`);
+  // One cell the card's own size: an auto row, sized by the card in a small
+  // scan, let the fan spill out of it.
   const card = cssRules(panelCss()).find((r) => r.selector === ".scan" && /grid-template:/.test(r.body));
   check(card && /grid-template:\s*minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
-  const own = cssRules(panelCss()).find((r) => r.selector === ".scanEmpty");
+  const own = cssRules(panelCss()).find((r) => r.selector === ".connectCard");
   check(own && /display:\s*none/.test(own.body), "otherwise not shown");
-  check(page.$("scan").parentNode.querySelectorAll(".scanEmpty").length === 1, "in the scan's own card");
-  // The rule reaches the words only as the scan's next sibling.
-  check(/#scan\[data-empty="yes"\]\s*\+\s*\.scanEmpty$/.test(selector), `the words right after the scan: ${selector}`);
-  const cardKids = page.$("scan").parentNode.children;
-  const next = cardKids[cardKids.indexOf(page.$("scan")) + 1];
-  check(next && /\bscanEmpty\b/.test(next.getAttribute("class") || ""), "and so they are, in the page");
+  check(page.$("scan").parentNode.querySelectorAll(".connectCard").length === 1, "in the scan's own card");
+  check(page.$("connectGo").title && page.$("changeAddress").getAttribute("title"), "both its buttons titled");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2508,37 +2530,38 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   ]) check(!caught(css), `flagged harmless: ${css}`);
 });
 
-// Layout the fake DOM cannot lay out, held by the stylesheet's words. On a
-// phone the motor-fault card takes the scan's place; at its own height the
-// page grew and the stick slid half off a 568 x 320 screen, or under the
-// Stop bar there was at 375 x 667. And a line clamp in a card the grid
-// stretches cut the text mid-sentence and still showed the lines after its
-// ellipsis. Measured in a browser at 375 x 667 and 480 x 320 to 812 x 375
-// (css/panel.css says what it found).
-test("motorsReady: the fault beside a phone's stick takes no height of its own, and no fault card clamps its lines", () => {
-  const besideStick = (selector) =>
-    /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(selector.trim());
-  // In the block for every phone, upright or on its side.
-  const phone = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || []).filter((r) => r.selector.split(",").some(besideStick));
-  check(phone.length === 1, `the Drive tab's fault card, in the phone block: ${phone.map((r) => r.selector)}`);
-  const body = phone.length === 1 ? phone[0].body : "";
-  check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
-  // On its side the row is what the head and readouts leave: the card keeps
-  // its headline and a line more, whatever that is.
-  const beside = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(",").some(besideStick));
-  const floor = beside.length === 1 ? beside[0].body : "";
-  check(/\bmin-height:\s*calc\(/.test(floor) && /box-sizing:\s*content-box/.test(floor), `on its side, a floor of two lines: ${floor}`);
-  // And only beside the stick: the Program tab's card, contained, fell to its
-  // floor and scrolled inside a page that scrolls.
-  const rules = cssRules(panelCss());
-  const contained = rules.filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:(?!\s*none\b)/.test(r.body));
-  check(contained.every((r) => r.selector.split(",").every(besideStick)), `contained beyond the Drive tab: ${contained.map((r) => r.selector)}`);
-  const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
+// Layout the fake DOM cannot lay out, held by the stylesheet's words. The
+// motor-fault card is in the view pane, over the scan (F8): it takes
+// height from the scan inside the pane, never from the shell. At its own
+// height the page grew and the stick slid half off a 568 x 320 screen, or
+// under the Stop bar there was at 375 x 667. And a line clamp in a card the
+// grid stretches cut the text mid-sentence and still showed the lines after
+// its ellipsis.
+test("motorsReady: the fault trades height with the scan inside the view, never moving the dock, and no fault card clamps its lines", () => {
+  const page = loadPage();
+  check(page.$("motorsFault").parentNode === page.$("view"), "the fault is in the view pane");
+  const base = cssRules(outside(panelCss(), "@media"));
+  const rule = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  // The pane's size is the grid's: its content counts for nothing.
+  check(/min-height:\s*0;/.test(rule(".view")) && /grid-area:\s*view;/.test(rule(".view")), `the pane sized by its grid area: ${rule(".view")}`);
+  const fault = rule(".fault");
+  check(/flex:\s*0 1 auto;/.test(fault) && /min-height:\s*0;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault gives way and scrolls: ${fault}`);
+  const cap = (fault.match(/max-height:\s*(\d+)%;/) || [])[1];
+  check(cap && Number(cap) <= 50, `at most half the pane: ${cap}`);
+  check(/flex:\s*1 1 0;/.test(rule(".scan")) && /min-height:\s*0;/.test(rule(".scan")), `the scan takes what it leaves: ${rule(".scan")}`);
+  // No row of the shell's is the fault's, on any layout: it never opens one
+  // above a stick.
+  const rows = cssRules(panelCss()).filter((r) => /grid-template-areas:[^;]*\bfault\b/.test(r.body) || /grid-area:\s*fault/.test(r.body));
+  check(rows.length === 0, `no row of its own: ${rows.map((r) => r.selector)}`);
+  const contained = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:(?!\s*none\b)/.test(r.body));
+  check(contained.length === 0, `no fault contained to its floor: ${contained.map((r) => r.selector)}`);
+  const clamped = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
 // A phone on its side, held like a gamepad: a stick down each edge, and
-// between them the header, the scan, and Stop and Autonomous at the foot.
+// between them the top's two cells, Stop and Autonomous among them, and
+// the view under them.
 // Layout itself is measured in a browser (568 x 320 to 1000 x 500); this
 // holds the shape, and the rules that keep the sticks where they are.
 test("on its side: a stick down each edge, Stop between them, and nothing in the middle moves a stick", () => {
@@ -2547,16 +2570,24 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   const body = (rules, selector) => rules.filter((r) => r.selector.replace(/\s+/g, " ") === selector).map((r) => r.body).join("");
   const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
   // The shell's columns and the dock's are the same three, the dock's
-  // middle left empty for the header, the scan and Stop.
+  // middle left empty for the top and the view.
   const columns = "grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);";
   check(body(side, ".shell").includes(columns) && body(side, ".controls").includes(columns), "the shell's columns are the dock's");
-  check(areas(body(side, ".shell")) === '". head ." ". fault ." ". scan ." ". read ."', `the middle column: ${areas(body(side, ".shell"))}`);
+  check(areas(body(side, ".shell")) === '". head ." ". view ."', `the middle column: ${areas(body(side, ".shell"))}`);
+  // The view lies over the dock's empty middle: positioned, so it is over
+  // the dock spanning the screen behind it, and takes its own presses. It
+  // is no stick's ancestor (the stick-ancestor test reads every rule).
+  check(/position:\s*relative;/.test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".view").map((r) => r.body).join("")), "the view over the dock");
   check(areas(body(side, ".controls")) === '"label . family" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
   // Stop is in the top's second cell. Beside the Program tab the top keeps
   // to the middle column, as on the Drive tab, so a switch of tab moves
-  // neither Stop nor anything beside it.
-  const program = areas(body(side, ".shell:has(> #programTab:not([hidden]))")).split('" "').map((row) => row.replace(/"/g, "").trim().split(/\s+/));
-  check(program[0] && program[0].join() === ".,head,.", `beside the Program tab the top in the middle column: ${program.map((row) => row.join(" ")).join(" / ")}`);
+  // neither Stop nor anything beside it, with the view shown (down the
+  // left column) or hidden; the editor takes the width under it.
+  for (const selector of [".shell:has(> #programTab:not([hidden]))", '.shell:has(> #programTab[data-view="hidden"]:not([hidden]))']) {
+    const program = areas(body(side, selector)).split('" "').map((row) => row.replace(/"/g, "").trim().split(/\s+/));
+    check(program[0] && program[0][1] === "head" && program[0].length === 3, `${selector}: the top in the middle column: ${program.map((row) => row.join(" ")).join(" / ")}`);
+    check(program[1] && program[1].slice(1).join() === "main,main", `${selector}: the editor under it, to the right edge: ${program.map((row) => row.join(" ")).join(" / ")}`);
+  }
   for (const rules of [side, narrow]) {
     const shell = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
     const dockGap = (body(rules, ".shell, .controls") + body(rules, ".controls")).match(/column-gap:\s*([^;]+);/);
@@ -3108,16 +3139,21 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(page.errors.length === 0, `errors ${page.errors}`);
 
   // The switch offers what the registry holds: the rover, and the simulator
-  // when its scripts registered one; its view's places show only then.
+  // when its scripts registered one; the simulator's view is drawn only
+  // then, in its one slot in the view pane, beside both tabs. The view pane
+  // is there either way (the rover's scan), and the View toggle shows and
+  // hides it.
   for (const without of [false, true]) {
-    const p = without ? loadPage({ leaveOut: ["js/sim.js", "js/simview.js"] }) : page;
+    const p = without ? loadPage({ leaveOut: ["js/sim.js", "js/simview.js"], stored: { "rover.tab": "tabProgram" } }) : page;
     const sim = p.evalIn("'simulator' in targets");
     check(sim === !without, `the simulator registered: ${sim}`);
     check(segments(p).length === (sim ? 2 : 1), `segments ${segments(p).map((b) => b.textContent)}`);
-    check(p.$("target").hidden === !sim && p.$("programSim").hidden === !sim && p.$("driveView").hidden === !sim,
-      `the switch and both places for the view follow the registry, ${without ? "without" : "with"} the simulator`);
-    check(p.$("programStage").dataset.sim === (sim ? "yes" : "no"), "stage layout follows it");
-    check(p.$("simSlot") !== null && all(p.$("programTab")).includes(p.$("simSlot")), "#simSlot is in the Program tab");
+    check(p.$("target").hidden === !sim, `the switch follows the registry, ${without ? "without" : "with"} the simulator`);
+    const slot = p.$("simSlot");
+    check(slot.parentNode === p.$("view") && p.$("view").parentNode === p.$("programTab").parentNode, "#simSlot is in the view pane, a sibling of the tabs");
+    check((slot.children.length > 0) === sim, `the simulator's view drawn in it only with a simulator: ${slot.children.length}`);
+    p.fire(p.$("viewToggle"), "click");
+    p.fire(p.$("viewToggle"), "click");
     check(p.errors.length === 0, `errors ${p.errors}`);
   }
 });
@@ -3277,7 +3313,7 @@ test("program: switching the target mid-run stops the program, and the choice is
   // Each segment's word (a narrow cell shows Sim in Simulator's place).
   const words = (b) => all(b).filter((n) => n.getAttribute && n.getAttribute("class") === "segWord").map((n) => n.textContent).join("");
   check(segments(page).map(words).join() === "Rover,Simulator", `segments ${segments(page).map(words)}`);
-  check(!page.$("target").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
+  check(!page.$("target").hidden && page.$("simSlot").children.length > 0, "both offered, and the simulator's view drawn");
   check(segments(page)[0].getAttribute("aria-pressed") === "true", "the rover chosen");
 
   startProgram(page);
@@ -3325,53 +3361,49 @@ test("program: switching the target mid-run stops the program, and the choice is
   page.fire(segments(page)[0], "click");
   check(page.$("programState").textContent === "Ready to run on the rover.", `after a switch: ${page.$("programState").textContent}`);
 
-  // The view starts folded away under the rover, on every layout, giving
-  // the editor the room; switching to the simulator unfolds it, since
-  // previewing is when it is wanted. Its heading folds it either way.
+  // The view pane beside the editor: hidden at first on a phone under the
+  // rover, giving the editor the room; switching to the simulator shows
+  // it, since previewing is when it is wanted. The View toggle shows and
+  // hides it either way, and says so (aria-pressed, its title).
   const folded = loadPage();
-  check(folded.$("programSim").dataset.collapsed === "yes", "folded under the rover");
+  const view = () => `${folded.$("programTab").dataset.view} ${folded.$("viewToggle").getAttribute("aria-pressed")}`;
+  check(view() === "hidden false", `hidden under the rover, with no room for both: ${view()}`);
+  check(/show/i.test(folded.$("viewToggle").title), `its title says what a press does: ${folded.$("viewToggle").title}`);
   folded.fire(segments(folded)[1], "click");
-  check(folded.$("programSim").dataset.collapsed === "no", "unfolded on the simulator");
-  folded.fire(folded.$("simToggle"), "click");
-  check(folded.$("programSim").dataset.collapsed === "yes" && folded.$("simToggle").getAttribute("aria-expanded") === "false", "its heading folds it");
-  // The fold is no layout's alone (beside the editor it once always
-  // showed): its rule is outside every @media.
-  const programCss = stylesheet("program.css");
-  const foldRule = '.programSim[data-collapsed="yes"] #simSlot';
-  check(cssRules(outside(programCss, "@media")).some((r) => r.selector === foldRule && /display:\s*none/.test(r.body)), "folded on every layout");
-  // Wide, the view takes its column's height, the console under the
-  // editor; tall enough, the console goes under the view. Folded, or with
-  // no simulator, the editor takes the width, the console under it.
-  const stageRules = (opening) => (blockRules(programCss, opening) || []).filter((r) => /^\.programStage\b/.test(r.selector));
-  const wideStage = stageRules("@media (min-width: 960px) and (min-height: 521px) {");
-  const areas = (rules, find) => ((rules.find(find) || {}).body || "").match(/grid-template-areas:([^;]*);/);
-  const unfolded = areas(wideStage, (r) => r.selector === ".programStage");
-  // Only with the view there and unfolded: folded, the editor's row would
-  // be as tall as its content, which is nothing.
-  const unfoldedOnly = '.programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"]))';
-  const tallStage = stageRules("@media (min-width: 960px) and (min-height: 861px) {");
-  check(tallStage.every((r) => r.selector.startsWith(unfoldedOnly)), `wide and tall: the view unfolded only: ${tallStage.map((r) => r.selector)}`);
-  const tall = areas(tallStage, (r) => r.selector === unfoldedOnly);
-  const foldedRule = wideStage.find((r) => r.selector.includes(':has(> .programSim[data-collapsed="yes"])'));
-  const foldedAreas = areas(wideStage, (r) => r === foldedRule);
-  const noSim = areas(wideStage, (r) => r.selector === '.programStage[data-sim="no"]');
-  check(unfolded && /"editor\s+toggle sim"\s*"console toggle sim"/.test(unfolded[1]), `wide: the view the column's height: ${unfolded && unfolded[1]}`);
-  check(tall && /"editor toggle sim"\s*"editor toggle console"/.test(tall[1]), `wide and tall: the console under the view: ${tall && tall[1]}`);
-  check(foldedAreas && /"editor\s+toggle"\s*"console toggle"/.test(foldedAreas[1]), `wide, folded: under the editor, the heading still there: ${foldedAreas && foldedAreas[1]}`);
-  // A hidden view counts as folded: the no-simulator rule must win.
-  check(foldedRule && foldedRule.selector.includes(':not([data-sim="no"])'), `folded, never with no simulator: ${foldedRule && foldedRule.selector}`);
-  check(noSim && /^\s*"editor"\s*"console"\s*$/.test(noSim[1]), `no simulator: the editor the width: ${noSim && noSim[1]}`);
-  // The heading and the view take their areas only as the stage's own grid
-  // items, which they are through .programSim.
-  const wide = blockRules(programCss, "@media (min-width: 960px) and (min-height: 521px) {") || [];
-  check(wide.some((r) => r.selector === ".programSim" && /display:\s*contents/.test(r.body)), "the view's parts are the stage's grid items");
-  check(folded.$("simToggle").parentNode === folded.$("programSim") && folded.$("simSlot").parentNode === folded.$("programSim") &&
-    folded.$("programSim").parentNode === folded.$("programStage"), "the heading and the view in .programSim, in the stage");
+  check(view() === "shown true", `shown on the simulator: ${view()}`);
+  folded.fire(folded.$("viewToggle"), "click");
+  check(view() === "hidden false" && /show/i.test(folded.$("viewToggle").title), `the toggle hides it: ${view()}`);
+  folded.fire(segments(folded)[0], "click");
+  check(view() === "hidden false", `back on the rover, as it was: ${view()}`);
+  folded.fire(folded.$("viewToggle"), "click");
+  check(view() === "shown true" && /hide/i.test(folded.$("viewToggle").title), `shown again: ${view()} ${folded.$("viewToggle").title}`);
+  // Where the screen has room for both side by side, it starts shown.
+  const roomy = loadPage();
+  roomy.evalIn(`globalThis.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });`);
+  check(roomy.evalIn(`new ProgramTab({ runner, targetSwitch, examples: [], ask, showView: true, ui: {
+    ...Object.fromEntries(["run", "runLabel", "stop", "menu", "menuList", "examples", "exportButton", "importButton", "importFile", "clear", "workspace", "hint", "offline", "state", "log"].map((k) => [k, document.createElement(k === "importFile" ? "input" : "div")])),
+    tab: document.createElement("section"), viewToggle: document.createElement("button") } }) && true`), "a tab told there is room");
+  const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/showView:\s*sideBySide/.test(app) && /matchMedia\("\(min-width: 960px\) and \(min-height: 521px\)"\)/.test(app), "shown at first where the layout is side by side");
+  // Hidden is no layout's alone: the pane is gone on every layout, with no
+  // strip left, and the editor takes its room.
+  const panel = panelCss();
+  const gone = '.shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view';
+  for (const opening of ["@media (max-width: 959.98px), (max-height: 520.98px) {", "@media (min-width: 960px) and (min-height: 521px) {"]) {
+    check((blockRules(panel, opening) || []).some((r) => r.selector === gone && /display:\s*none/.test(r.body)), `${opening}: hidden, the pane is gone`);
+  }
+  const wideRules = blockRules(panel, "@media (min-width: 960px) and (min-height: 521px) {") || [];
+  const hiddenWide = wideRules.find((r) => r.selector === '.shell:has(> #programTab[data-view="hidden"]:not([hidden]))');
+  check(hiddenWide && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(hiddenWide.body) && /"head"\s*"main"/.test(hiddenWide.body), `wide, hidden: the editor the width: ${hiddenWide && hiddenWide.body}`);
+  const shownWide = wideRules.find((r) => r.selector === ".shell:has(> #programTab:not([hidden]))");
+  check(shownWide && /grid-template-columns:\s*clamp\(320px, 40%, 560px\) minmax\(0, 1fr\);/.test(shownWide.body), `wide, shown: the view about 40%, the editor the rest: ${shownWide && shownWide.body}`);
+  // The editor and the console are the stage's; nothing of the simulator's.
   check(folded.$("programState").parentNode.parentNode === folded.$("programStage"), "the console is in the stage");
-  // The narrowest wide pane (960 px windows) keeps the toolbar to one row
-  // on either target: the buttons a step narrower again.
-  const narrowPane = blockRules(programCss, "@container program (max-width: 599.98px) {") || [];
-  check(narrowPane.some((r) => /\.programBar > button/.test(r.selector) && /padding-inline:\s*var\(--s-2\)/.test(r.body)), "a narrow pane's toolbar a step narrower");
+  check(!all(folded.$("programTab")).includes(folded.$("simSlot")), "no view of its own in the Program tab");
+  // The toolbar keeps to one row in a phone's tab: its icons go first.
+  const programCss = stylesheet("program.css");
+  const narrowPane = blockRules(programCss, "@container program (max-width: 459.98px) {") || [];
+  check(narrowPane.some((r) => /\.viewWord/.test(r.selector) && /display:\s*none/.test(r.body)), "a narrow tab's View toggle its icon alone");
 
   const again = loadPage({ stored: { "rover.target": "simulator" } });
   check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
@@ -3769,20 +3801,32 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   const css = panelCss();
   const rules = cssRules(css);
   const root = rules.filter((r) => r.selector === ":root").map((r) => r.body).join("");
-  check(/--rail:\s*clamp\(320px, 30vw, 460px\);/.test(root), "one rail, from the viewport alone");
-  const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
-  check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
+  // The panes: the view and the hands. On a wide screen the Drive tab's
+  // column is as wide as its two sticks need, from the viewport alone (the
+  // sticks' budget), and nothing narrows it per tab or per state.
   const wide = mediaRules(WIDE) || [];
-  // A grid set on the shell itself, per tab: not on something inside it.
+  const wideRoot = wide.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `the Drive tab's column from the sticks alone: ${wideRoot}`);
+  const setsDrive = rules.filter((r) => r.selector !== ":root" && /--drive\s*:/.test(r.body));
+  check(setsDrive.length === 0, `nothing narrows it per tab: ${setsDrive.map((r) => r.selector)}`);
+  check(!rules.some((r) => /--rail\s*:/.test(r.body)) && !/var\(--rail\)/.test(css), "no rail left");
+  // A grid set on the shell itself, per tab: the Program tab's alone (the
+  // view shown, and hidden), the Drive tab's the shell's own.
   const perTab = wide.filter((r) => /^\.shell:has\(> #(programTab|driveTab)[^ ]*\)$/.test(r.selector) && /grid-template/.test(r.body));
-  check(perTab.length === 1 && perTab[0].selector === DRIVE_SHELL, `a grid of its own beside the Drive tab alone: ${perTab.map((r) => r.selector)}`);
+  check(perTab.length === 2 && perTab.every((r) => /^\.shell:has\(> #programTab/.test(r.selector)), `a grid of its own beside the Program tab alone: ${perTab.map((r) => r.selector)}`);
   const body = (selector, from = wide) => (from.find((r) => r.selector === selector) || {}).body || "";
   const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((a) => a.replace(/\s+/g, " "));
-  check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(".shell")), `the left pane, then the rail: ${body(".shell")}`);
-  check(areas(body(".shell")).join(" ") === '"head head" "main fault" "main scan" "main read"', `no bar across the foot: ${areas(body(".shell"))}`);
+  check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--drive\);/.test(body(".shell")), `the view, then the hands: ${body(".shell")}`);
+  check(areas(body(".shell")).join(" ") === '"head head" "view main"', `the top across both, and no bar across the foot: ${areas(body(".shell"))}`);
+  // The top spans the page beside either tab, so a tab switch moves none of
+  // its cells: the Program tab changes only where the panes meet.
+  const programShown = body(".shell:has(> #programTab:not([hidden]))");
+  check(/grid-template-columns:\s*clamp\(320px, 40%, 560px\) minmax\(0, 1fr\);/.test(programShown) && !/grid-template-areas/.test(programShown), `beside the Program tab, the view about 40%: ${programShown}`);
+  const programHidden = body('.shell:has(> #programTab[data-view="hidden"]:not([hidden]))');
+  check(areas(programHidden).join(" ") === '"head" "main"' && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(programHidden), `the view hidden, the editor the page's width: ${programHidden}`);
   const base = cssRules(outside(css, "@media"));
   const baseBody = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
-  check(areas(baseBody(".shell")).join(" ") === '"head" "fault" "scan" "read" "main"', `a phone: the top, then the rest, and no foot bar: ${areas(baseBody(".shell"))}`);
+  check(areas(baseBody(".shell")).join(" ") === '"head" "view" "main"', `a phone: the top, the view, then the hands, and no foot bar: ${areas(baseBody(".shell"))}`);
 
   // The top: stuck to the screen's top when the page scrolls, over
   // Blockly's widgets, and the container its cells are laid out by.
@@ -3866,8 +3910,10 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   check(page.$("note").title === page.$("note").textContent && page.$("note").textContent !== "", `the whole note on hover: ${page.$("note").title}`);
 
   // Nothing makes the cells taller or shorter on a short screen.
-  const short = mediaRules(WIDE_SHORT) || [];
-  check(!short.some((r) => /\.hcell|\.cells|#stop|#auto/.test(r.selector) && /(grid-template-rows|min-height|height)\s*:/.test(r.body)), "short: the cells keep their 40 px");
+  check(mediaRules(WIDE_SHORT) === null, "no short layout of its own: the sticks' budget takes the height");
+  const baseKeys = new Set(cssRules(outside(css, "@media")).map((r) => `${r.selector}{${r.body}`));
+  const inMedia = rules.filter((r) => !baseKeys.has(`${r.selector}{${r.body}`));
+  check(!inMedia.some((r) => /\.hcell|\.cells|#stop|#auto/.test(r.selector) && /(grid-template-rows|min-height|(^|[\s;{])height)\s*:/.test(r.body)), "no layout makes the cells taller or shorter");
   check(mediaRules(WIDE_LAMPS) === null, "no layout of its own for the pills' lamps");
   // The scan fills its place beside both tabs: no card sized to its drawing.
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
@@ -3909,9 +3955,17 @@ test("every button titled with what it does, in every state of the link and of a
   await liveForAsync(page, ws, 2000);
   check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the run: ${untitled()}, tab '${page.$("tabProgram").getAttribute("title")}'`);
 
-  // The simulator target: its view unfolded, a preview, and after it.
+  // The view's toggle, both ways, titled with what a press does.
+  // The fake page has no matchMedia, so it starts as a phone does: hidden.
+  const view = page.$("viewToggle");
+  check(view.getAttribute("aria-pressed") === "false" && /^View: show/.test(view.title), `the view hidden: '${view.title}'`);
+  page.fire(view, "click");
+  check(view.getAttribute("aria-pressed") === "true" && /^View: hide/.test(view.title) && untitled().length === 0, `the view shown: '${view.title}' ${untitled()}`);
+  page.fire(view, "click");
+  check(view.getAttribute("aria-pressed") === "false" && /^View: show/.test(view.title) && untitled().length === 0, `hidden again: '${view.title}' ${untitled()}`);
+  // The simulator target: its view shown, a preview, and after it.
   page.fire(segments(page)[1], "click");
-  check(page.$("simToggle").getAttribute("aria-expanded") === "true" && /Fold/.test(page.$("simToggle").title), `the fold open: ${page.$("simToggle").title}`);
+  check(view.getAttribute("aria-pressed") === "true" && /^View: hide/.test(view.title), `the view shown with the simulator: ${view.title}`);
   check(untitled().length === 0 && page.$("programRun").title === "Preview the program on the simulator", `the simulator: ${untitled()}, Run '${page.$("programRun").title}'`);
   page.fire(page.$("programRun"), "click");
   await flush();
@@ -3969,139 +4023,140 @@ test("badges: on the simulator target a rover still exploring is badged, and No 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The Drive tab's view of the simulator (F1) sits beside the dock, never
-// around it: joy.js places a touch by its canvas's offsetParent, and the
-// view's box is positioned (wide) or a size container (phone). On a wide
-// screen the tab is split (F3i): the view, or on the rover the scan, the
-// left side at the page's height, and the dock in a column on the right
-// with the readouts joined under it; the same on either target, so a
-// switch moves no stick. On a phone the view takes the scan's row on the
-// simulator, and shows the motion there when the row is too short for the
-// room. Layout itself is measured in a browser.
-test("drive view: the left side of a wide screen, in the scan's place on a phone, never around the stick", () => {
+// The view (F8): one pane, a sibling of both tabs, showing what the
+// controls drive: the scan, with its fault card and its readouts line, on
+// the rover target, and the simulated room on the simulator target, on
+// either tab. Never around a stick: joy.js places a touch by its canvas's
+// offsetParent, and the view is positioned. Its size is the shell grid's
+// alone, so nothing it holds, and no switch of target, moves the dock under
+// a held stick. Layout itself is measured in a browser.
+test("the view: one pane beside both tabs, its content picked by the target, never around a stick", () => {
   const page = loadPage();
-  const view = page.$("driveView");
-  check(view.parentNode === page.$("driveTab").parentNode, "the dock's sibling, a cell of the shell's grid");
-  check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
-  check(view.children.filter((n) => n.tagName).length === 1, "nothing in it but the slot: no card stands in on the rover");
+  const view = page.$("view");
+  const shell = page.$("driveTab").parentNode;
+  check(view.parentNode === shell && page.$("programTab").parentNode === shell, "a sibling of both tabs, a cell of the shell's grid");
+  const kids = view.children.filter((n) => n.tagName && n.tagName !== "#TEXT").map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
+  check(kids.join() === "motorsFault,scan,simSlot,readouts", `the fault, the scan, the simulator's slot and the readouts: ${kids}`);
   for (const canvas of [page.canvas, page.pivotCanvas]) {
     for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
   }
-
-  // Wide: the split, the dock spanning the fault's row and the view's, so a
-  // fault moves only the line between the fault and the view.
-  const wide = mediaRules(WIDE) || [];
-  const split = (wide.find((r) => r.selector === DRIVE_SHELL) || {}).body || "";
-  check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--drive\);/.test(split), `the left side, then the Drive tab's column: ${split}`);
-  const areas = (body) => ((body.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((a) => a.replace(/\s+/g, " "));
-  check(areas(split).join(" ") === '"head head" "fault main" "view main" "view read"', `the view, the dock over the readouts: ${areas(split)}`);
-  const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
-  check(/grid-area:\s*view;/.test(rule(wide, `${DRIVE_SHELL} .scan`)), "the scan on the left on the rover");
-  check(/display:\s*none;/.test(rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} .scan`)), "the scan gives way on the simulator");
-  const shown = rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} > .driveView:not([hidden])`);
-  check(/grid-area:\s*view;/.test(shown) && /display:\s*flex;/.test(shown) && /position:\s*relative;/.test(shown), `the view in its place on the simulator, the settings' containing block: ${shown}`);
-  // The target picks only what fills the left: never the dock, the
-  // readouts or the top's cells, so a switch moves no stick. (What the
-  // first cell says for the rover on the simulator target, app.js shows
-  // and hides: it takes width there, never height.)
-  const onTarget = [...wide, ...(mediaRules(WIDE_SHORT) || [])].filter((r) => /data-target/.test(r.selector));
-  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `wide: the target picks the scan or the view alone: ${onTarget.map((r) => r.selector)}`);
-  // Bar paint: the Autonomous switch's track dashes the edge of a mode a
-  // lost link last reported, which on the simulator is always known. A
-  // border's style keeps its width, so it moves nothing.
-  const paintOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^(color|background|border-style)\s*:/.test(d));
-  const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector) && !paintOnly(r.body));
-  check(anywhere.length === 0, `outside every @media, nothing follows the target but a colour: ${anywhere.map((r) => r.selector)}`);
-  check(!panelCss().includes("@media (min-width: 1180px)"), "one split from 960 px wide: no layout of its own from 1180");
-  // The readouts keep one height while a stick is held: one line, each
-  // label over its value, the phase coming and going at its end, and no
-  // value wrapping.
-  check(areas(rule(wide, `${DRIVE_SHELL} .readouts`)).join(" ") === '"move chip phase"', `one line, the phase last: ${rule(wide, `${DRIVE_SHELL} .readouts`)}`);
-  const cell = rule(wide, `${DRIVE_SHELL} .cell`);
-  check(/flex-direction:\s*column;/.test(cell) && /flex-wrap:\s*nowrap;/.test(cell), `each label over its value, leaving the move the line less two short cells: ${cell}`);
-  const value = rule(wide, `${DRIVE_SHELL} .cell output`);
-  check(/white-space:\s*nowrap;/.test(value) && /overflow:\s*hidden;/.test(value) && /text-overflow:\s*ellipsis;/.test(value), `a value cut short, never wrapped: ${value}`);
-  const shows = wide.filter((r) => /#phaseCell\[hidden\]/.test(r.selector));
-  check(shows.length === 0, `a hidden phase takes no room on the line: ${shows.map((r) => r.selector)}`);
-  // The column as wide as two sticks as large as the height leaves, never
-  // narrower than the rail nor wider than 45% of the screen, and the
-  // sticks as large as it and the height allow. The pixels are the sums
-  // css/panel.css lists: the readouts under the dock take 57 of them.
-  check(!/max-height: 738\.98px|read  main/.test(panelCss()), "the readouts under the dock at every height");
-  for (const [opening, height, width] of [[WIDE, 362, 72], [WIDE_SHORT, 302, 56]]) {
-    const root = rule(mediaRules(opening) || [], ":root");
-    const drive = (root.match(/--drive:([^;]*);/) || [])[1] || "";
-    const stick = (root.match(/--stick:([^;]*);/) || [])[1] || "";
-    check(drive.trim() === `clamp(var(--rail), 2 * (100 * var(--svh) - ${height}px) + ${width}px, min(45vw, ${2 * 300 + width}px))`, `${opening}: the column: ${drive}`);
-    check(stick.trim() === `clamp(120px, min(100 * var(--svh) - ${height}px, (var(--drive) - ${width}px) / 2), 300px)`, `${opening}: the sticks: ${stick}`);
+  // One view of the simulator, in one slot: none of the slots and folds it
+  // used to move between.
+  for (const gone of ["driveView", "driveSimSlot", "programSim", "simToggle", "scanEmpty"]) {
+    check(page.doc.getElementById(gone) === null, `no #${gone} left`);
   }
-  // The dock's grid is the same at every height: no block for tall screens
-  // stacks its controls, which would put the family under the stick.
-  check(!/min-height: 761px/.test(panelCss()), "no tall-screen layout of its own");
-  // The cells step down by their own width (@container bar), never by the
-  // window's between 960 and 999 px.
-  check(!panelCss().includes("@media (min-width: 960px) and (max-width: 999.98px)"), "no narrower switches from 960 to 999 px");
+  const slots = all(page.doc.documentElement).filter((n) => n.getAttribute && /(^|\s)(simSlot|driveView|programSim)(\s|$)/.test(n.getAttribute("class") || ""));
+  check(slots.length === 1 && slots[0] === page.$("simSlot"), `one slot: ${slots.length}`);
+  check(!/moveTo/.test(page.evalIn("String(SimView.prototype.constructor)")), "SimView never moves");
+  // The readouts are the view's, not a card of their own beside the dock.
+  check(page.doc.documentElement.querySelectorAll(".readouts").length === 1 && page.$("move").parentNode.parentNode.parentNode === view, "the readouts at the view's foot");
 
-  // A phone: on the simulator, the Drive tab's view in place of the scan,
-  // sized by its row (a size container), a motor fault still winning the
-  // place. On the rover, the scan as ever.
+  const css = panelCss();
+  const base = cssRules(outside(css, "@media"));
+  const rule = (rules, selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  // Its size the grid's alone: size containment, and every part of it
+  // giving way inside it but the readouts' one line.
+  const v = rule(base, ".view");
+  check(/grid-area:\s*view;/.test(v) && /min-height:\s*0;/.test(v) && /contain:\s*size;/.test(v) && /display:\s*flex;/.test(v), `the grid's size, never its content's: ${v}`);
+  for (const part of [".scan", ".simSlot"]) {
+    const body = rule(base, part);
+    check(/flex:\s*1 1 0;/.test(body) && /min-height:\s*0;/.test(body), `${part} takes what is left, down to nothing: ${body}`);
+  }
+  const fault = rule(base, ".fault");
+  check(/min-height:\s*0;/.test(fault) && /max-height:\s*50%;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault takes height from the scan, at most half: ${fault}`);
+  // The connect card shares the scan's one cell, over its fan, and the scan
+  // is size-contained: the card coming and going with the link moves
+  // nothing.
+  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > *")), "the connect card over the fan, in its one cell");
+
+  // The target picks only what fills the view: one rule, outside every
+  // @media, hiding the rover's parts on the simulator, and the simulator's
+  // slot hidden on the rover (app.js), so its view knows it is out of
+  // sight. Never the view itself, the dock or the top's cells, so a switch
+  // moves no stick; anything else that follows the target is a colour.
+  // (What the first cell says for the rover on the simulator target, app.js
+  // shows and hides: it takes width there, never height.)
+  const paintOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^(color|background|border-style)\s*:/.test(d));
+  const onTarget = cssRules(css).filter((r) => /data-target/.test(r.selector) && !paintOnly(r.body));
+  const picks = 'body[data-target="simulator"] .view > :is(.fault, .scan, .readouts)';
+  check(onTarget.length === 1 && onTarget[0].selector.replace(/\s+/g, " ") === picks && /^\s*display:\s*none;\s*$/.test(onTarget[0].body), `the target picks what fills the view, and nothing else: ${onTarget.map((r) => r.selector)}`);
+  check(base.some((r) => r.selector.replace(/\s+/g, " ") === picks), "outside every @media: the same on every layout");
+  check(/display:\s*none;/.test(rule(base, ".simSlot[hidden]")), "the slot's hidden attribute outranks its display");
+  check(page.$("simSlot").hidden && page.doc.body.dataset.target === "rover", "the rover target: the slot hidden");
+  page.fire(page.$("target").children[1], "click");
+  check(!page.$("simSlot").hidden && page.doc.body.dataset.target === "simulator", "the simulator target: shown");
+  page.fire(page.$("target").children[0], "click");
+  check(page.$("simSlot").hidden, "and hidden again on the rover");
+  for (const file of ["program.css", "sim.css"]) {
+    check(!/data-target/.test(stylesheet(file)), `${file}: nothing follows the target`);
+  }
+
+  // The readouts keep one height while a stick is held: one line, a value
+  // too long cut short, never wrapped, the phase coming and going at its end.
+  const line = rule(base, ".readouts");
+  check(/height:\s*var\(--readouts-h\);/.test(line) && /white-space:\s*nowrap;/.test(line) && /overflow:\s*hidden;/.test(line) && /flex:\s*none;/.test(line) && !/flex-wrap:\s*wrap/.test(line), `one line: ${line}`);
+  const value = rule(base, ".cell output");
+  check(/overflow:\s*hidden;/.test(value) && /text-overflow:\s*ellipsis;/.test(value), `a value cut short: ${value}`);
+  const cells = page.$("move").parentNode.parentNode.children.filter((n) => n.tagName && n.tagName !== "#TEXT");
+  check(cells[cells.length - 1] === page.$("phaseCell"), "the phase last");
+  check(!cssRules(css).some((r) => /#phaseCell\[hidden\]/.test(r.selector)) && /display:\s*none;/.test(rule(base, ".cell[hidden]")), "a hidden phase takes no room on the line");
+  const baseKeys = new Set(base.map((r) => `${r.selector}{${r.body}`));
+  const inMedia = cssRules(css).filter((r) => !baseKeys.has(`${r.selector}{${r.body}`));
+  check(!inMedia.some((r) => /\.readouts|\.cell\b/.test(r.selector) && /(^|[\s;{])(min-|max-)?height\s*:/.test(r.body)), "no layout changes the line's height");
+
+  // Wide: the sticks' budget from the viewport alone, the Drive tab's
+  // column as wide as they need, and no layout of its own for a short,
+  // tall or narrower wide screen.
+  const wideRoot = rule(mediaRules(WIDE) || [], ":root");
+  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 260px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
+  check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `wide: the column: ${wideRoot}`);
+  check(mediaRules(WIDE_SHORT) === null && !css.includes("@media (min-width: 1180px)") && !/min-height: 761px|max-height: 738\.98px/.test(css), "no layout of its own for a short, a tall or a wider wide screen");
+  check(!css.includes("@media (min-width: 960px) and (max-width: 999.98px)"), "no narrower switches from 960 to 999 px");
+
+  // A phone: the view between the top and the dock on the Drive tab; on
+  // the Program tab a band over the editor, or gone with its toggle off.
   const phone = mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
-  const onSim = phone.filter((r) => /^body\[data-target="simulator"\] \.shell:has\(> #driveTab:not\(\[hidden\]\)\):not\(:has\(#motorsFault:not\(\[hidden\]\)\)\)/.test(r.selector));
-  const hidesScan = onSim.find((r) => / \.scan$/.test(r.selector));
-  const showsView = onSim.find((r) => / > \.driveView:not\(\[hidden\]\)$/.test(r.selector));
-  check(hidesScan && /display:\s*none;/.test(hidesScan.body), `phone: the scan gives way on the simulator: ${onSim.map((r) => r.selector)}`);
-  check(showsView && /display:\s*flex;/.test(showsView.body) && /container:\s*driveview \/ size;/.test(showsView.body), `phone: the view in its place, sized by the row: ${showsView && showsView.body}`);
-  const base = cssRules(outside(panelCss(), "@media"));
-  // The row sets the view's height: sim.css's floor for the view elsewhere
-  // would hold it at 280 px, past the row, and no short step would apply.
-  const floor = base.find((r) => r.selector === "#driveSimSlot .sim");
-  check(floor && /min-height:\s*0;/.test(floor.body), `the row's height, not the view's floor: ${floor && floor.body}`);
+  check(/height:\s*clamp\(180px, 35 \* var\(--svh\), 480px\);/.test(rule(phone, ".shell:has(> #programTab:not([hidden])) > .view")), "phone: the Program tab's view a band a third of the screen");
+  check(/display:\s*none;/.test(rule(phone, '.shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view')), "phone: gone with its toggle off, no strip");
+  check(!phone.some((r) => /#driveTab/.test(r.selector) && /\.view\b/.test(r.selector)), "phone: the Drive tab's view never hidden or sized by the tab");
   // The target is the first cell's first control on every phone, on both
   // tabs: the cell is there anyway, one height whatever it holds, so no
   // layout leaves the target out. (A row of its own, before, left the scan
   // nothing to give on a short phone and moved a stick at 375 x 548.)
-  const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
-  const hidesTarget = cssRules(panelCss()).filter((r) => r.selector.split(",").some((part) => /(\.target|#target)$/.test(part.trim())) && /display:\s*none/.test(r.body));
+  const hidesTarget = cssRules(css).filter((r) => r.selector.split(",").some((part) => /(\.target|#target)$/.test(part.trim())) && /display:\s*none/.test(r.body));
   check(hidesTarget.length === 0, `the target never hidden: ${hidesTarget.map((r) => r.selector)}`);
-  // Under 600 px tall the scan's row gives way to nothing: with its padding
-  // it could not, and the family's slot opening moved the stick.
-  const scan = short600.find((r) => r.selector === ".scan");
-  check(scan && /padding-block:\s*var\(--s-1\) 0;/.test(scan.body), `short phone: the scan's padding cut: ${scan && scan.body}`);
-  // And the fault in its place on the Drive tab, on every phone 760 px tall
-  // or less: its padding and margin held more than the row, and a fault
-  // moved the sticks (360 x 560, and 360 x 640 by 2 px).
-  const short760 = mediaRules("@media (max-width: 959.98px) and (max-height: 760px) {") || [];
-  const fault = short760.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
-  check(fault && /margin-bottom:\s*0;/.test(fault.body) && /padding-block:\s*0;/.test(fault.body), `short phone: the fault card gives way as the scan does: ${fault && fault.body}`);
+  // Under 600 px tall the scan gives way to nothing: with its padding it
+  // could not, and the family's slot opening moved the stick.
+  const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
+  check(/padding-block:\s*var\(--s-1\) 0;/.test(rule(short600, ".scan")), `short phone: the scan's padding cut: ${rule(short600, ".scan")}`);
   // A lost link must not move the simulator's sticks: the address, Connect
   // and the note hang in the chip's popover, over the page and in no row,
   // and the chip's word keeps the width of the longest it says.
   check((page.$("linkPanel").getAttribute("class") || "").split(/\s+/).includes("menu"), "the link's popover a .menu");
-  const menu = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".menu");
-  check(menu && /position:\s*absolute;/.test(menu.body), `a .menu over the page, in no row: ${menu && menu.body}`);
+  check(/position:\s*absolute;/.test(rule(base, ".menu")), `a .menu over the page, in no row: ${rule(base, ".menu")}`);
   const sizer = all(page.$("linkChip")).find((n) => n.getAttribute && n.getAttribute("class") === "chipSizer");
   const labels = Object.values(page.evalIn("Link.LABEL"));
   check(sizer && labels.every((label) => label.length <= sizer.textContent.length) && labels.includes(sizer.textContent), `the chip as wide as its longest word: ${sizer && sizer.textContent} of ${labels}`);
-  const hidesLink = cssRules(panelCss()).filter((r) => /data-(link|target)/.test(r.selector) && /\.(linkChip|linkPanel|hcell|cells)\b|#(host|connect|note)\b/.test(r.selector) && /display:/.test(r.body));
-  check(hidesLink.length === 0, `nothing of the link shown or hidden by its state or the target: ${hidesLink.map((r) => r.selector)}`);
+  const hidesLink = cssRules(css).filter((r) => /data-(link|target)/.test(r.selector) && /\.(linkChip|linkPanel|hcell|cells|view|dock)\b|#(host|connect|note|view|driveTab)\b/.test(r.selector) && /display:/.test(r.body) && !/\.view > /.test(r.selector));
+  check(hidesLink.length === 0, `nothing of the link, the view or the dock shown or hidden by the link's state or the target: ${hidesLink.map((r) => r.selector)}`);
 
-  // The view too short for its room: height queries on the view itself,
-  // outside every @media so a phone's and the rail's apply, while a wide
-  // view's container elsewhere measures width only, so they never apply
-  // there.
+  // The room too short for itself: height queries on the simulator's view,
+  // outside every @media, so they apply wherever the pane is short.
   const sim = stylesheet("sim.css");
-  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 299.98px) {") || [];
+  check(!/@media \(min-width: 960px\)/.test(sim), "sim.css: no layout of its own, the pane's size alone");
+  const simBase = cssRules(outside(sim, "@media"));
+  check(/container:\s*sim \/ size;/.test(rule(simBase, ".sim")) && /height:\s*100%;/.test(rule(simBase, ".sim")), `the view fills its slot, a size container: ${rule(simBase, ".sim")}`);
+  check(/min-height:\s*0;/.test(rule(base, ".simSlot .sim")), `the pane's height, not the view's floor: ${rule(base, ".simSlot .sim")}`);
+  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 199.98px) {") || [];
   const hidden = short.find((r) => /display:\s*none;/.test(r.body));
   check(hidden && [".sim-stage", ".sim-room", ".sim-settings"].every((c) => hidden.selector.includes(c)), `short: the room and what only it needs go: ${hidden && hidden.selector}`);
   check(!short.some((r) => /\.sim-(foot|inset|move|bar)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
   const shorter = blockRules(outside(sim, "@media"), "@container sim (max-height: 119.98px) {") || [];
   const goes = (shorter.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
   check([".sim-bar", ".sim-log"].every((c) => goes.includes(c)), `shorter: the bar goes, and the log, whose lines ran over the motion: ${goes}`);
-  const line = blockRules(outside(sim, "@media"), "@container sim (max-height: 31.98px) {") || [];
-  const gone = (line.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
+  const oneLine = blockRules(outside(sim, "@media"), "@container sim (max-height: 31.98px) {") || [];
+  const gone = (oneLine.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
   check([".sim-inset", ".sim-twist", ".sim-said"].every((c) => gone.includes(c)) && !/\.sim-move/.test(gone), `a line: the move alone: ${gone}`);
-  const wideSim = (blockRules(sim, "@media (min-width: 960px) and (min-height: 521px) {") || []).find((r) => r.selector === ".sim");
-  check(wideSim && /container-type:\s*inline-size;/.test(wideSim.body), `wide: the view's container measures width only: ${wideSim && wideSim.body}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4123,8 +4178,10 @@ test("program: the File menu opens over the page but under the top, and on a pho
   check(bottom.length === 0, `no foot bar to clear: ${bottom.map((r) => r.selector)}`);
   // The simulator's box clips its room without being a scroll container,
   // which would swallow the settings' margin before the window scrolled.
-  const slot = cssRules(stylesheet("program.css")).filter((r) => r.selector === "#simSlot").map((r) => r.body).join("");
-  check(/overflow:\s*clip\s*;/.test(slot), `#simSlot clips, not scrolls: ${slot}`);
+  const slot = cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".simSlot").map((r) => r.body).join("");
+  check(/overflow:\s*clip\s*;/.test(slot), `.simSlot clips, not scrolls: ${slot}`);
+  const view = cssRules(panelCss()).filter((r) => /(^|[\s,])\.view$/.test(r.selector)).map((r) => r.body).join("");
+  check(!/overflow(-[xy])?:\s*(auto|scroll|hidden)/.test(view), `nor is the view a scroll container: ${view}`);
 });
 
 test("program: an example, Import and Clear ask in the page before they replace a program, never with confirm()", async () => {
@@ -4730,22 +4787,30 @@ test("target: a drive press takes the simulated rover over from a preview, and o
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: one view of the simulator, on the Drive tab while it is driven, held at 1x there", () => {
+// One view of the simulator, in the view pane's one slot whatever the tab
+// and the target: it never moves. On the Drive tab with the simulator the
+// target, the Driver re-sends in real time, so the view plays at 1x there,
+// and a pause left on the Program tab is lifted.
+test("target: one view of the simulator, in one slot, held at 1x while the Drive tab drives it", () => {
   const page = loadPage();
   const view = () => page.doc.documentElement.querySelectorAll(".sim")[0];
-  const slot = () => view().parentNode.id;
+  const slot = () => view().parentNode;
+  const home = page.$("simSlot");
   const sim = page.evalIn("targets.simulator");
   const speeds = () => all(view()).filter((n) => n.parentNode && n.parentNode.getAttribute("class") === "segmented sim-speed");
   const options = () => all(view()).filter((n) => n.tagName === "OPTION" && n.parentNode.getAttribute("class") === "sim-speed-pick");
   check(page.doc.documentElement.querySelectorAll(".sim").length === 1, "one view");
-  check(slot() === "simSlot", "on the Program tab's slot, at first");
+  check(slot() === home && home.parentNode === page.$("view"), "in the view pane's slot");
+  page.fire(page.$("tabProgram"), "click");
   page.fire(speeds()[2], "click");
-  check(sim.playback === 4, "4x chosen on the Program tab's view");
+  check(sim.playback === 4, "4x chosen on the Program tab");
 
   toSimulator(page);
-  check(slot() === "driveSimSlot", `beside the Drive tab's controls: ${slot()}`);
-  check(sim.playback === 1, `held at 1x: ${sim.playback}`);
-  check(page.$("driveSimSlot").style.getPropertyValue("--room-aspect") === (4 / 3).toFixed(4), "the room's shape went with it");
+  check(slot() === home && page.doc.documentElement.querySelectorAll(".sim").length === 1, "the same slot on the simulator");
+  check(sim.playback === 4, `the Program tab keeps its speed on the simulator: ${sim.playback}`);
+  page.fire(page.$("tabDrive"), "click");
+  check(slot() === home, "and on the Drive tab");
+  check(sim.playback === 1, `held at 1x while the Drive tab drives it: ${sim.playback}`);
   for (const list of [speeds(), options()]) {
     const [one, two, four] = list;
     check(!one.disabled && two.disabled && four.disabled, `2x and 4x disabled: ${list.map((b) => b.disabled)}`);
@@ -4761,10 +4826,10 @@ test("target: one view of the simulator, on the Drive tab while it is driven, he
   check(sim.playback === 1, `a choice past the hold does nothing: ${sim.playback}`);
 
   page.fire(page.$("tabProgram"), "click");
-  check(slot() === "simSlot" && sim.playback === 4, `back on the Program tab, at the speed chosen there: ${slot()} ${sim.playback}`);
+  check(slot() === home && sim.playback === 4, `back on the Program tab, at the speed chosen there: ${sim.playback}`);
   check(!speeds()[2].disabled && /Play at 4 times/.test(speeds()[2].getAttribute("title")), "4x offered again");
   page.fire(page.$("tabDrive"), "click");
-  check(slot() === "driveSimSlot" && sim.playback === 1, "and held again on the Drive tab");
+  check(slot() === home && sim.playback === 1, "and held again on the Drive tab");
   // A pause left on the Program tab would freeze what the Drive tab drives,
   // on a phone with no bar to resume it from: driven, the view plays.
   page.fire(page.$("tabProgram"), "click");
@@ -4772,8 +4837,10 @@ test("target: one view of the simulator, on the Drive tab while it is driven, he
   check(sim.paused, "paused on the Program tab");
   page.fire(page.$("tabDrive"), "click");
   check(!sim.paused && sim.playback === 1, `playing at 1x on the Drive tab: paused ${sim.paused}`);
+  // On the rover target the Drive tab drives the rover, not the view: the
+  // hold lifts, and the view keeps its own speed for a preview.
   toRover(page);
-  check(slot() === "simSlot" && sim.playback === 4, "on the rover, the Program tab's view keeps it");
+  check(slot() === home && sim.playback === 4, `on the rover, the speed chosen: ${sim.playback}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

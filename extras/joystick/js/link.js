@@ -4,7 +4,7 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, chip, linkState, linkHost, note, storageKey })
+ *   new Link({ body, host, connect, chip, linkState, linkHost, note, proxy, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
  *     host        the address field (host or host:port), in the link
  *                 popover; Enter connects, and leaves the field, so the
@@ -20,6 +20,10 @@
  *     linkState   the state's word, in it; linkHost: the address, in it (a
  *                 wide screen shows it);
  *     note        the status line, in the popover;
+ *     proxy       the connect card's button, in the view pane while there
+ *                 is no link: a press of it is a press of connect. It says
+ *                 what that press does: "Connect to" the address, "Cancel"
+ *                 while connecting, and "Reconnect" after a lost link;
  *     storageKey  where the address is remembered.
  *
  *   send(obj)          serialise obj and send it as one frame. Returns false,
@@ -71,6 +75,23 @@ class Link {
     up: (address) => `Connected to the rover at ${address}: its telemetry is arriving.`,
     stale: (address) => `No data: the rover at ${address} has stopped sending telemetry.`,
   });
+  // The connect card's button, in each state but up and stale, where the
+  // card is not shown: what a press does. "lost" is "down" after a link
+  // that went under the panel.
+  static PROXY = Object.freeze({
+    down: (address) => address ? `Connect to ${address}` : "Connect",
+    lost: () => "Reconnect",
+    connecting: () => "Cancel",
+    up: () => "Disconnect",
+    stale: () => "Disconnect",
+  });
+  static PROXY_TITLE = Object.freeze({
+    down: (address) => `Connect to the rover at ${address || "the address in the link's popover"}.`,
+    lost: (address) => `Reconnect: try the rover at ${address} again.`,
+    connecting: () => Link.CONNECT_TITLE.connecting,
+    up: () => Link.CONNECT_TITLE.up,
+    stale: () => Link.CONNECT_TITLE.stale,
+  });
   // What a press of the Connect button does, in each state.
   static CONNECT_TITLE = Object.freeze({
     down: "Connect to the rover at this address (Enter in the address does too).",
@@ -92,9 +113,17 @@ class Link {
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, chip, linkState, linkHost, note, storageKey }) {
-    this.#ui = { body, host, connect, chip, linkState, linkHost, note };
+  constructor({ body, host, connect, chip, linkState, linkHost, note, proxy, storageKey }) {
+    this.#ui = { body, host, connect, chip, linkState, linkHost, note, proxy };
     this.#storageKey = storageKey;
+
+    // The card's button does what Connect does, whatever that is now, and
+    // names the address Connect would use: the field's, while there is no
+    // socket to name.
+    proxy.addEventListener("click", () => connect.click());
+    host.addEventListener("input", () => {
+      if (!this.#socket) this.#name(host.value.trim());
+    });
 
     connect.addEventListener("click", () => {
       if (this.#socket) this.disconnect();
@@ -232,12 +261,14 @@ class Link {
   }
 
   // The chip: its word, data-say for its colour, and the whole of it, with
-  // the address, as its title.
+  // the address, as its title. The connect card's button with it.
   #say(said) {
-    const { chip, linkState } = this.#ui;
+    const { chip, linkState, proxy } = this.#ui;
     chip.dataset.say = said;
     linkState.textContent = Link.LABEL[said];
     chip.title = Link.TITLE[said](this.#address || "no address yet");
+    proxy.textContent = Link.PROXY[said](this.#address);
+    proxy.title = Link.PROXY_TITLE[said](this.#address);
   }
 
   // The address the chip names, where the top has room (panel.css) and in
