@@ -121,13 +121,15 @@
  *       onStandDown and not assume its program is still held.
  *
  *   resumeAutonomous({ byProgram })
- *       What the Autonomous button does: forget every held input, stop
- *       repeating, and send RESUME_AUTONOMOUS.
+ *       What the Autonomous toggle does turned on: forget every held input,
+ *       stop repeating, and send RESUME_AUTONOMOUS.
  *
- *   stopRover({ byProgram })
+ *   stopRover({ byProgram, reason })
  *       What the Stop button does: forget every held input and send STOP,
  *       whether or not this panel was driving. It is how to stop an
- *       exploring rover.
+ *       exploring rover. The Autonomous toggle turned off does the same
+ *       with reason "autonomous", so its stand-down names the control
+ *       that was pressed; reason is "stop" otherwise.
  *
  *       With byProgram true, a program's own "stop" or "start exploring"
  *       block: the same frames go out, but neither event below is raised.
@@ -161,7 +163,7 @@
  *       anything was held: "blur", "hidden", "pagehide", "target" and
  *       "tab" (from app.js), "disconnect" and "linkLost" (the link went down),
  *       "stale" (linkStale), "stop" (stopRover) and "autonomous"
- *       (resumeAutonomous). Not on an ordinary release of a control, nor on
+ *       (resumeAutonomous, or stopRover from the toggle). Not on an ordinary release of a control, nor on
  *       a program's own stop or start exploring.
  *
  *   driving
@@ -314,12 +316,12 @@ class Driver {
     this.#standDownListeners.emit("autonomous");
   }
 
-  stopRover({ byProgram = false } = {}) {
+  stopRover({ byProgram = false, reason = "stop" } = {}) {
     this.#releaseInputs();
     this.#halt();
     if (byProgram) return;
     this.#manualInputListeners.emit();
-    this.#standDownListeners.emit("stop");
+    this.#standDownListeners.emit(reason);
   }
 
   standDown(reason) {

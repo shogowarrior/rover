@@ -24,6 +24,16 @@
  */
 class TargetSwitch {
   static LABELS = Object.freeze({ rover: "Rover", simulator: "Simulator" });
+  // The header's icons (labelSegment): the chassis on its four wheels, and
+  // a screen.
+  static ICONS = Object.freeze({
+    rover: ["M9 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M3 5.5h1v4H3zM20 5.5h1v4h-1zM3 14.5h1v4H3zM20 14.5h1v4h-1z", "M10.5 8h3"],
+    simulator: ["M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 20h8M12 16v4"],
+  });
+  static HINTS = Object.freeze({
+    rover: "Rover: the controls drive the rover, and programs run on it.",
+    simulator: "Simulator: the controls drive a simulated rover, and programs preview on it. Nothing goes to the rover but Stop.",
+  });
 
   #targets;
   #storageKey;
@@ -39,8 +49,11 @@ class TargetSwitch {
     if (remembered === null && formerKey !== null) remembered = memory.recall(formerKey);
     this.#kind = kinds.includes(remembered) ? remembered : kinds[0];
     for (const kind of kinds) {
-      const button = segment(group, () => this.#choose(kind));
-      button.textContent = TargetSwitch.LABELS[kind] || kind;
+      const button = labelSegment(segment(group, () => this.#choose(kind)), {
+        word: TargetSwitch.LABELS[kind] || kind,
+        paths: TargetSwitch.ICONS[kind] || [],
+        hint: TargetSwitch.HINTS[kind] || "",
+      });
       this.#segments.set(kind, button);
     }
     group.hidden = kinds.length < 2;

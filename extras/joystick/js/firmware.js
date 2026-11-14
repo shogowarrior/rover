@@ -302,10 +302,10 @@ class FirmwareUpdate {
     const focused = [ui.choose, ui.start, ui.cancel].find((button) => button === document.activeElement);
     ui.build.textContent = running === undefined ? "—" : running === null ? "an older firmware" : running.slice(0, 8);
     ui.choose.disabled = this.#busy;
-    ui.choose.title = this.#busy ? FirmwareUpdate.WHY_NOT.busy : "";
+    ui.choose.title = this.#busy ? FirmwareUpdate.WHY_NOT.busy : "Choose a firmware.bin built for this rover";
     const why = this.#whyNot();
     ui.start.disabled = why !== "";
-    ui.start.title = why;
+    ui.start.title = why || "Send the file to the rover, which restarts on it once at rest, in manual";
     ui.cancel.disabled = !job || job.phase !== "sending";
     ui.cancel.title = ui.cancel.disabled ? "No update to cancel." : "Stop the update. The rover keeps the firmware it had.";
     // A disabled button drops the focus to the page, where the drive keys

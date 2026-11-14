@@ -315,13 +315,13 @@ class SimView {
     // its own while it has the focus, not the panel's drive keys (keys.js).
     ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings", "data-keys": "own" }, root);
     const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
-    ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
+    ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true", title: "Draw each ping's ray from where the rover was" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {
       this.#showRays = !this.#showRays;
       ui.rays.setAttribute("aria-pressed", String(this.#showRays));
       this.#render();
     });
-    ui.clearTrail = dom.html("button", { type: "button", class: "sim-switch" }, toggles, "Clear trail");
+    ui.clearTrail = dom.html("button", { type: "button", class: "sim-switch", title: "Forget the path the rover has drawn" }, toggles, "Clear trail");
     ui.clearTrail.addEventListener("click", () => {
       this.#target.clearTrail();
       this.#render();
@@ -329,7 +329,7 @@ class SimView {
 
     const drag = dom.html("label", { class: "sim-drag" }, ui.panel);
     dom.html("span", { class: "label" }, drag, "Released-wheel drag");
-    ui.drag = dom.html("input", { type: "range", min: "0", max: "1", step: "0.05", "aria-describedby": "simDragWhat" }, drag);
+    ui.drag = dom.html("input", { type: "range", min: "0", max: "1", step: "0.05", "aria-describedby": "simDragWhat", title: "How hard a released wheel resists turning: 0 turns freely, 1 holds like a driven one" }, drag);
     ui.drag.value = String(this.#target.releasedDrag);
     ui.dragOut = dom.html("output", { class: "sim-value" }, drag, this.#target.releasedDrag.toFixed(2));
     ui.drag.addEventListener("input", () => {

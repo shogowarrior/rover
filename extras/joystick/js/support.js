@@ -9,8 +9,9 @@
  *                   an angle in degrees as radians, and back
  *   abortableWait   a wait an AbortSignal ends at once
  *   dom             HTML and SVG elements, built from attribute tables
- *   segment, pressSegment
- *                   a segmented control's buttons, and which one is pressed
+ *   segment, pressSegment, labelSegment
+ *                   a segmented control's buttons, which one is pressed,
+ *                   and a segment's icon, word and hint
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -138,6 +139,19 @@ function segment(group, onPick) {
 // Mark the segment keyed `pressed` as pressed, and every other as not.
 function pressSegment(buttons, pressed) {
   for (const [key, button] of buttons) button.setAttribute("aria-pressed", String(key === pressed));
+}
+
+// A segment's content: an icon, drawn from paths on a 24 px grid, and its
+// word, which names it. On a wide screen the header shows the icon alone
+// (panel.css), so the word stays the button's name to a screen reader and
+// the hint, its title, says on hover what it does. On a phone the word
+// shows and the icon does not.
+function labelSegment(button, { word, paths, hint }) {
+  const icon = dom.svg("svg", { class: "icon segIcon", viewBox: "0 0 24 24", "aria-hidden": "true" }, button);
+  for (const d of paths) dom.svg("path", { d }, icon);
+  dom.html("span", { class: "segWord" }, button, word);
+  button.title = hint;
+  return button;
 }
 
 // A press is the primary button alone. Right-click, middle-click and a Mac's

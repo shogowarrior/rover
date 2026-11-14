@@ -4,13 +4,17 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, linkState, note, storageKey })
+ *   new Link({ body, host, connect, linkPill, linkState, note, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
  *     host        the address field (host or host:port); Enter connects,
  *                 and leaves the field, so the keyboard's Space and T (keys.js)
  *                 stop and explore rather than type into it;
- *     connect     the Connect / Cancel / Disconnect button;
- *     linkState   the state's label; note: the status line;
+ *     connect     the Connect / Cancel / Disconnect button, titled with what
+ *                 a press does;
+ *     linkPill    the header's link pill, titled with the state in full:
+ *                 up to 1280 px wide a wide screen's header shows its icon
+ *                 alone;
+ *     linkState   the state's label, in it; note: the status line;
  *     storageKey  where the address is remembered.
  *
  *   send(obj)          serialise obj and send it as one frame. Returns false,
@@ -36,7 +40,8 @@
  *                      its own socket, the listeners run before it is closed,
  *                      so a STOP sent from one still goes out on it.
  *   state              the current state, as above.
- *   note(text, tone)   show text in the status line; tone "bad" marks trouble.
+ *   note(text, tone)   show text in the status line, and as its title; tone
+ *                      "bad" marks trouble.
  */
 class Link {
   // Telemetry arrives every TELEMETRY_MS (protocol.js). Three intervals with
@@ -46,6 +51,19 @@ class Link {
   static STALE_MS = 3 * TELEMETRY_MS + 300;
 
   static LABEL = Object.freeze({ down: "No link", connecting: "Connecting", up: "Link", stale: "No data" });
+  static TITLE = Object.freeze({
+    down: "No link to the rover.",
+    connecting: "Connecting to the rover.",
+    up: "Linked: the rover's telemetry is arriving.",
+    stale: "No data: the rover's telemetry has stopped.",
+  });
+  // What a press of the Connect button does, in each state.
+  static CONNECT_TITLE = Object.freeze({
+    down: "Connect to the rover at this address (Enter in the address does too).",
+    connecting: "Cancel: stop trying to reach the rover.",
+    up: "Disconnect: close the link to the rover, stopping what this panel drives on it. A rover exploring keeps exploring: press Stop for that.",
+    stale: "Disconnect: close the link to the rover, stopping what this panel drives on it. A rover exploring keeps exploring: press Stop for that.",
+  });
 
   #ui;
   #storageKey;
@@ -59,8 +77,8 @@ class Link {
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, linkState, note, storageKey }) {
-    this.#ui = { body, host, connect, linkState, note };
+  constructor({ body, host, connect, linkPill, linkState, note, storageKey }) {
+    this.#ui = { body, host, connect, linkPill, linkState, note };
     this.#storageKey = storageKey;
 
     connect.addEventListener("click", () => {
@@ -108,8 +126,10 @@ class Link {
     return true;
   }
 
+  // The whole note is its title too: a wide screen's header cuts it short.
   note(text, tone) {
     this.#ui.note.textContent = text;
+    this.#ui.note.title = text;
     this.#ui.note.dataset.tone = tone || "";
   }
 
@@ -184,11 +204,13 @@ class Link {
   #setState(state, cause) {
     if (state === this.#state) return;
     this.#state = state;
-    const { body, linkState, connect } = this.#ui;
+    const { body, linkPill, linkState, connect } = this.#ui;
     body.dataset.link = state;
     linkState.textContent = Link.LABEL[state];
+    linkPill.title = Link.TITLE[state];
     connect.textContent =
       state === "down" ? "Connect" : state === "connecting" ? "Cancel" : "Disconnect";
+    connect.title = Link.CONNECT_TITLE[state];
     this.#stateListeners.emit(state, cause);
   }
 
