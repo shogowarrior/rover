@@ -100,7 +100,10 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.doc.body.dataset.link === "down", "link down");
   check(page.$("connect").textContent === "Connect", "button Connect");
-  check(page.$("linkState").textContent === "No link", "label");
+  check(page.$("linkState").textContent === "Not connected", `the chip says ${page.$("linkState").textContent}`);
+  check(page.$("linkChip").dataset.say === "down", `the chip's colour: ${page.$("linkChip").dataset.say}`);
+  check(/^Not connected to the rover \(192\.168\.0\.115\)/.test(page.$("linkChip").title), `the chip's title names the address: ${page.$("linkChip").title}`);
+  check(page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "false", "the link's popover closed at load");
   check(page.$("note").textContent === "Enter the rover's address and connect.", "help note");
   check(page.$("phaseCell").hidden === true, "phase hidden at load");
   const wedges = all(page.$("scan")).filter((n) => n.getAttribute("class") === "wedge");
@@ -254,7 +257,8 @@ test("Connect is Cancel while connecting, and cancel is a neutral disconnect", (
   page.$("host").value = "10.0.0.7";
   page.fire(page.$("connect"), "click");
   check(page.$("connect").textContent === "Cancel", "Cancel label");
-  check(page.$("linkState").textContent === "Connecting", "Connecting label");
+  check(page.$("linkState").textContent === "Connecting…", `Connecting label: ${page.$("linkState").textContent}`);
+  check(/^Connecting to the rover at 10\.0\.0\.7/.test(page.$("linkChip").title), `the chip's title names the address being tried: ${page.$("linkChip").title}`);
   page.fire(page.$("connect"), "click");
   check(page.sockets.length === 1, "no second socket");
   check(page.sockets[0].closeCalls === 1, "closed");
@@ -820,7 +824,7 @@ test("blocked localStorage does not stop the panel", () => {
     const page = loadPage({ storage });
     check(page.errors.length === 0, `${storage}: errors ${page.errors}`);
     check(page.$("host").value === "192.168.0.115", `${storage}: default host`);
-    check(page.$("linkState").textContent === "No link", `${storage}: initial state rendered`);
+    check(page.$("linkState").textContent === "Not connected", `${storage}: initial state rendered`);
     page.$("host").value = "10.1.1.1";
     page.fire(page.$("connect"), "click");
     check(page.sockets.length === 1 && page.sockets[0].url === "ws://10.1.1.1:81", `${storage}: connected`);
@@ -833,8 +837,8 @@ test("blocked localStorage does not stop the panel", () => {
 
 /* --- motorsReady ----------------------------------------------------------- */
 
-// The shield warning, and its data-ready, which the header's motors pill
-// keys on: "shown/no", "hidden/yes" or "hidden/unknown".
+// The shield warning, and its data-ready, which the page's CSS keys on:
+// "shown/no", "hidden/yes" or "hidden/unknown".
 const shield = (fault) => `${fault.hidden ? "hidden" : "shown"}/${fault.dataset.ready}`;
 
 test("motorsReady: false shows the shield warning; missing or true does not", () => {
@@ -963,7 +967,7 @@ test("the scan says no rover is connected until the first frame, and not after a
   check(page.doc.body.dataset.link === "connecting" && empty() === "yes", "replaced: nothing again");
 
   // panel.css shows the words while the scan is empty and no link is up:
-  // with a link up and its first frame still to come, the pill says so.
+  // with a link up and its first frame still to come, the link chip says so.
   const shown = cssRules(panelCss()).filter((r) => /\.scanEmpty\b/.test(r.selector) && /display:\s*block/.test(r.body));
   check(shown.length === 1, `one rule shows it: ${shown.map((r) => r.selector)}`);
   const selector = shown.length ? shown[0].selector : "";
@@ -1440,10 +1444,13 @@ test("tabs: switching leaves a held control driving, and Stop and Autonomous on 
   page.fire(page.$("stop"), "click"); // from the Program tab
   check(names(ws, mark).join() === "STOP", `Stop on the Program tab ${names(ws, mark)}`);
 
-  // The scheme toggle sits outside the tabs, in the header; both sticks,
-  // and the family selector that belongs to the pivot stick, on the Drive
-  // tab.
-  check(page.$("schemeSlot") !== null && !inside("schemeSlot", "driveTab") && !inside("schemeSlot", "programTab"), "#schemeSlot outside the tabs");
+  // The scheme toggle sits outside the tabs, in the header's cell beside
+  // them, as Stop does; both sticks, and the family selector that belongs to
+  // the pivot stick, on the Drive tab.
+  const bar = page.doc.documentElement.querySelector(".bar");
+  for (const id of ["scheme", "stop", "auto", "target", "linkChip"]) {
+    check(page.$(id) !== null && bar && all(bar).includes(page.$(id)) && !inside(id, "driveTab") && !inside(id, "programTab"), `#${id} in the header, outside the tabs`);
+  }
   for (const id of ["family", "movePad", "pivotPad"]) check(page.$(id) !== null && inside(id, "driveTab"), `#${id} on the Drive tab`);
   check(page.$("programTab").tagName === "SECTION", "#programTab is a section");
 });
@@ -2089,27 +2096,38 @@ test("schemes: scheme.js and family.js load after what they use, before app.js",
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("schemes: the toggle is disabled and unknown until telemetry names a scheme", () => {
+// Unknown is not broken: the owner read a greyed toggle with no rover as
+// a fault (docs/features.md, F8). So both segments take a press, and a press
+// is a wish the next frame that names a scheme settles; until then nothing
+// is pressed, nothing is sent, and the pivots stay off.
+test("schemes: until telemetry names a scheme nothing is pressed, both segments take a wish, and nothing is sent", () => {
   const page = loadPage();
   const group = page.$("scheme");
   const unknown = (when) => {
     check(shownScheme(page) === "unknown", `${when}: shows ${shownScheme(page)}`);
-    check(SCHEMES.every((s) => schemeButton(page, s).disabled === true), `${when}: both disabled`);
+    check(SCHEMES.every((s) => schemeButton(page, s).disabled === false), `${when}: both take a press`);
     check(group.dataset.state === "unknown", `${when}: state ${group.dataset.state}`);
+    check(page.evalIn("schemeToggle.scheme") === null, `${when}: no scheme, a wish is not one`);
     check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT", `${when}: pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
   };
   check(SCHEMES.every((s) => schemeButton(page, s) !== undefined), "two segments built");
   unknown("at load");
+  check(/has not reported its control scheme/.test(schemeButton(page, "NORMAL").title), `the segments say why neither is lit: ${schemeButton(page, "NORMAL").title}`);
 
   const ws = connectOpen(page);
   unknown("connected, no telemetry yet");
-  // Firmware from before schemes, a scheme this panel does not know, junk.
+  // Firmware from before schemes, a scheme this panel does not know, junk:
+  // a wish waits through each, and is replaced or dropped as pressed.
   for (const scheme of [undefined, "EXPERT", "advanced", 1, null, { name: "ADVANCED" }]) {
     ws.serverMsg(telemetry({ scheme }));
     unknown(`scheme ${JSON.stringify(scheme)}`);
     for (const s of SCHEMES) page.fire(schemeButton(page, s), "click");
+    check(page.evalIn("schemeToggle.wanted") === "ADVANCED" && pendingScheme(page) === "ADVANCED", `scheme ${JSON.stringify(scheme)}: the later press replaced the wish: ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}`);
+    unknown(`scheme ${JSON.stringify(scheme)}, wishing`);
+    page.fire(schemeButton(page, "ADVANCED"), "click");
+    check(page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === null, `scheme ${JSON.stringify(scheme)}: a press on the wish dropped it`);
   }
-  check(count(ws) === 0, `a disabled toggle sent ${ws.sent}`);
+  check(count(ws) === 0, `a wish sent ${ws.sent}`);
 
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
   check(shownScheme(page) === "NORMAL" && group.dataset.state === "known", `NORMAL: ${shownScheme(page)} ${group.dataset.state}`);
@@ -2122,6 +2140,77 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
   ws.serverMsg(telemetry({ scheme: undefined })); // a frame that names none says nothing is known
   unknown("a frame without scheme");
   check(count(ws) === 0, `sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a wish made before connecting goes to the rover with its first frame, once, and the rover explores on", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  const wished = schemeButton(page, "ADVANCED");
+  check(pendingScheme(page) === "ADVANCED" && shownScheme(page) === "unknown", `wished: marked ${pendingScheme(page)}, shown ${shownScheme(page)}`);
+  check(/^Advanced: .* Sent to the rover as soon as it reports its scheme/.test(wished.title), `the wished segment says what will happen: ${wished.title}`);
+  check(!/Sent to the rover/.test(schemeButton(page, "NORMAL").title), `the other does not: ${schemeButton(page, "NORMAL").title}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "true", "busy while wished");
+  check(page.sockets.length === 0 && pivotsState(page) === "off", `a wish connects nothing and turns no pivot on: ${pivotsState(page)}`);
+
+  const ws = connectOpen(page);
+  const heard = listen(page);
+  check(count(ws) === 0, `sent before any frame: ${ws.sent}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" })); // exploring, on NORMAL
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the first frame sent ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === null, "the wish is spent");
+  check(pendingScheme(page) === "ADVANCED" && shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "pending", `pending as a press's: ${pendingScheme(page)}, shown ${shownScheme(page)}`);
+  check(!/Sent to the rover as soon/.test(wished.title), `no longer titled as a wish: ${wished.title}`);
+  liveFor(page, ws, 500, { scheme: "NORMAL" });
+  check(count(ws) === 1, `a frame before the rover's answer sent ${ws.sent}`);
+  liveFor(page, ws, 1000, { scheme: "ADVANCED" });
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && pivotsState(page) === "on", `confirmed: ${shownScheme(page)}, pivots ${pivotsState(page)}`);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent ${ws.sent}`);
+  check(heard.presses() === 0 && heard.downs() === "", `a wish is no manual input: ${heard.presses()}, stand-downs '${heard.downs()}'`);
+  check(page.$("auto").getAttribute("aria-pressed") === "true", "the rover explores on");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a wish the rover's first frame already meets sends nothing, and a wish waits through a link going", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  let ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(count(ws) === 0, `sent ${ws.sent}`);
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === null, `met: ${shownScheme(page)}, marked ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false", "not busy");
+
+  // The link goes, the scheme is unknown again, and a wish made then goes
+  // out on the next link's first frame.
+  ws.serverDrop();
+  check(shownScheme(page) === "unknown", `lost: ${shownScheme(page)}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(pendingScheme(page) === "NORMAL", `wished with no link: ${pendingScheme(page)}`);
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(ws.sent.join() === '{"scheme":"NORMAL"}', `the next link's first frame sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a press on the other segment replaces a wish, and a press on the wished one drops it", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(pendingScheme(page) === "ADVANCED" && page.evalIn("schemeToggle.wanted") === "ADVANCED", `replaced: marked ${pendingScheme(page)}`);
+  check(!/Sent to the rover/.test(schemeButton(page, "NORMAL").title), "the replaced one no longer titled as the wish");
+  let ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "NORMAL", mode: "MANUAL" }));
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the replacement went: ${ws.sent}`);
+  ws.serverDrop();
+
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === null, `dropped: marked ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false" && !/Sent to the rover/.test(schemeButton(page, "NORMAL").title), "not busy, and titled as unknown again");
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED", mode: "MANUAL" }));
+  liveFor(page, ws, 2000, { scheme: "ADVANCED" });
+  check(count(ws) === 0, `a dropped wish sent ${ws.sent}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2240,16 +2329,16 @@ test("schemes: the pivot stick and its family are off under NORMAL and on under 
   const CAVEAT = `${page.evalIn("FamilySelector.CAVEAT")}/caveat`;
   check(familyButton(page, "PIVOT") && familyButton(page, "PIVOT_SIDEWAYS") && !familyButton(page, "TRANSLATE"), "two segments built, the pivots'");
 
-  // Each segment shows its family's icon as the up-and-right corner draws
-  // it, so the segment and the corner it lights up cannot disagree. Drawn,
-  // not typed: the arrow characters fell back to fonts of different weights.
+  // Each segment is its family's word alone, a sleek segment as every
+  // switch on the page is (F8), titled with what the family does. The
+  // corners draw the family's icon: drawn, not typed, since the arrow
+  // characters fell back to fonts of different weights.
   ICONS = page.evalIn("FamilySelector.ICONS");
   check(Object.keys(ICONS).join() === "PIVOT,PIVOT_SIDEWAYS" && new Set(Object.values(ICONS)).size === 2 && Object.values(ICONS).every((d) => /^M[\d. ]/.test(d)), `two icons ${JSON.stringify(ICONS)}`);
-  for (const family of ["PIVOT", "PIVOT_SIDEWAYS"]) {
-    const [icon, name] = familyButton(page, family).children;
-    const drawn = icon.children[0];
-    check(icon.getAttribute("aria-hidden") === "true" && name.textContent.length > 0, `${family}: icon hidden, name read`);
-    check(drawn.getAttribute("d") === ICONS[family] && drawn.getAttribute("transform") === MIRROR.upRight, `${family}: segment drew ${drawn.getAttribute("d")}`);
+  for (const [family, word] of [["PIVOT", "Pivot"], ["PIVOT_SIDEWAYS", "Sideways"]]) {
+    const button = familyButton(page, family);
+    check(button.children.length === 1 && button.children[0].textContent === word, `${family}: the word ${word} alone, got ${button.children.map((n) => n.tagName + ":" + n.textContent)}`);
+    check(new RegExp(`^${family === "PIVOT" ? "Pivot" : "Pivot sideways"}: `).test(button.title), `${family}: titled with what it does: ${button.title}`);
   }
 
   const want = {
@@ -2316,7 +2405,8 @@ const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px)
 // by 521 px, its Drive tab where the height limits the sticks (F3i), and
 // 640 px or less.
 const WIDE = "@media (min-width: 960px) and (min-height: 521px) {";
-// The pills their lamps alone, where the header's row is short of room.
+// Where the pills were their lamps alone, before the top's two cells: no
+// block of its own now (the top's test checks it is gone).
 const WIDE_LAMPS = "@media (min-width: 960px) and (max-width: 1279.98px) and (min-height: 521px) {";
 const WIDE_SHORT = "@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {";
 // The shell with the Drive tab showing, as the wide blocks select it.
@@ -2421,9 +2511,9 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
 // Layout the fake DOM cannot lay out, held by the stylesheet's words. On a
 // phone the motor-fault card takes the scan's place; at its own height the
 // page grew and the stick slid half off a 568 x 320 screen, or under the
-// Stop bar at 375 x 667. And a line clamp in a card the grid stretches cut
-// the text mid-sentence and still showed the lines after its ellipsis.
-// Measured in a browser at 375 x 667 and 480 x 320 to 812 x 375
+// Stop bar there was at 375 x 667. And a line clamp in a card the grid
+// stretches cut the text mid-sentence and still showed the lines after its
+// ellipsis. Measured in a browser at 375 x 667 and 480 x 320 to 812 x 375
 // (css/panel.css says what it found).
 test("motorsReady: the fault beside a phone's stick takes no height of its own, and no fault card clamps its lines", () => {
   const besideStick = (selector) =>
@@ -2460,32 +2550,40 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // middle left empty for the header, the scan and Stop.
   const columns = "grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);";
   check(body(side, ".shell").includes(columns) && body(side, ".controls").includes(columns), "the shell's columns are the dock's");
-  check(areas(body(side, ".shell")) === '". head ." ". fault ." ". scan ." ". read ." ". act ."', `the middle column: ${areas(body(side, ".shell"))}`);
+  check(areas(body(side, ".shell")) === '". head ." ". fault ." ". scan ." ". read ."', `the middle column: ${areas(body(side, ".shell"))}`);
   check(areas(body(side, ".controls")) === '"label . family" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
+  // Stop is in the top's second cell. Beside the Program tab the top keeps
+  // to the middle column, as on the Drive tab, so a switch of tab moves
+  // neither Stop nor anything beside it.
+  const program = areas(body(side, ".shell:has(> #programTab:not([hidden]))")).split('" "').map((row) => row.replace(/"/g, "").trim().split(/\s+/));
+  check(program[0] && program[0].join() === ".,head,.", `beside the Program tab the top in the middle column: ${program.map((row) => row.join(" ")).join(" / ")}`);
   for (const rules of [side, narrow]) {
-    const gap = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
-    const pad = body(rules, ".shell:has(> #driveTab[hidden]) .actions").match(/padding-inline:\s*calc\(var\(--stick\) \+ ([^)]+\))\);/);
-    check(gap && pad && gap[1].trim() === pad[1].trim(), `beside the Program tab, Stop keeps to the middle column, as on the Drive tab: gap ${gap && gap[1]}, padding ${pad && pad[1]}`);
+    const shell = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
+    const dockGap = (body(rules, ".shell, .controls") + body(rules, ".controls")).match(/column-gap:\s*([^;]+);/);
+    check(shell && dockGap && shell[1].trim() === dockGap[1].trim(), `the shell's columns and the dock's close up together: ${shell && shell[1]}, ${dockGap && dockGap[1]}`);
   }
   // The dock spans every row, and the middle column outgrows a short screen
   // with no rover connected (568 x 320): the dock stops at the screen's
-  // height, less the shell's padding above, so the sticks centred in it stay
+  // height, less the shell's padding above (the top's, --shell-top, which
+  // the sticky top takes as its own), so the sticks centred in it stay
   // where they are as lines come and go.
   const dock = body(side, ".shell > .dock:not([hidden])");
   check(/grid-row:\s*1 \/ -1;/.test(dock), `the dock spans every row: ${dock}`);
-  const top = (body(side, ".shell").match(/padding-top:\s*calc\(([^;]+)\);/) || [])[1];
+  const top = (body(side, ".shell").match(/--shell-top:\s*calc\(([^;]+)\);/) || [])[1];
   const cap = (dock.match(/max-height:\s*calc\(100 \* var\(--svh\) - ([^;]+)\);/) || [])[1];
   check(top === "var(--s-2) + env(safe-area-inset-top, 0px)" && cap === "var(--s-2) - env(safe-area-inset-top, 0px)", `the dock as tall as the screen less the padding above it: padding ${top}, cap ${cap}`);
   check(/align-content:\s*center;/.test(body(side, ".controls")), "the sticks centred in it");
   // Each stick takes what the height leaves (150 px and the home bar's
-  // inset) and what the width leaves the middle column (320 px, where the
-  // tabs and the scheme share a row; 240 px under 780 px wide, a row each).
+  // inset) and what the width leaves the middle column: 336 px for the two
+  // cells, a row each (212 px of half the width with the gutters and gaps),
+  // and 288 px at their tightest under 780 px wide (180 px).
   const stick = (rules) => (body(rules, ":root").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(stick(side).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 204px"), `on its side: ${stick(side)}`);
-  check(stick(narrow).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 156px"), `under 780 px wide: ${stick(narrow)}`);
+  check(stick(side).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
+  check(stick(narrow).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
   check(/padding:\s*0 0 env\(safe-area-inset-bottom, 0px\);/.test(dock), `the home bar's inset clear under the sticks: ${dock}`);
-  // Stop and Autonomous share the middle column evenly.
-  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(body(side, ".actions")), `Stop and Autonomous: ${body(side, ".actions")}`);
+  // No foot bar: Stop and Autonomous are in the top's cells, in the middle
+  // column on both tabs.
+  check(!/\.actions\b/.test(panelCss()), "no .actions rule left in panel.css");
 });
 
 // The rotate buttons share their stick's column and never outgrow it: at
@@ -2716,7 +2814,7 @@ test("schemes: losing the link makes the scheme unknown and turns the pivots off
   page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
   check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && pivotsState(page) === "on", "pivoting sideways");
   ws.serverDrop();
-  check(shownScheme(page) === "unknown" && SCHEMES.every((s) => schemeButton(page, s).disabled), `lost: ${shownScheme(page)}`);
+  check(shownScheme(page) === "unknown" && SCHEMES.every((s) => !schemeButton(page, s).disabled), `lost: ${shownScheme(page)}, still taking a wish`);
   check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT_SIDEWAYS", `pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
   check(page.$("pivotNote").textContent === page.evalIn("FamilySelector.OFF"), `note '${page.$("pivotNote").textContent}'`);
 
@@ -2797,9 +2895,13 @@ test("schemes: a pivot stick a scheme change let go of asks for a fresh press on
 // browser measured it; this keeps the two rules that made it so.
 test("schemes: the caption and the pivot stick's line change nothing's height above the sticks", () => {
   const page = loadPage();
+  // The caption's request fits the stick's narrowest column on one line, as
+  // the pivot stick's line below does: no longer than the caveat measured
+  // there. (A family's name was the bound while the longest was "Pivot
+  // sideways"; its segment now says "Sideways".)
   const request = page.evalIn("FamilySelector.PRESS_AGAIN");
-  const longest = Math.max(...page.evalIn("FamilySelector.OPTIONS").map((option) => option.label.length));
-  check(request.length <= longest, `the press-again request '${request}' is no longer than a family's name (${longest}): it wrapped`);
+  const caveatWords = page.evalIn("FamilySelector.CAVEAT");
+  check(request.length <= caveatWords.length && request.length <= 17, `the press-again request '${request}' is no longer than the caveat '${caveatWords}' (17 at most): it wrapped`);
 
   // The pivot stick's line says one of three things, each on one line: none
   // longer than the caveat, which fits the stick's narrowest column (112 px
@@ -3172,7 +3274,8 @@ test("program: start exploring hands over, its own stop is obeyed, and neither s
 test("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   standInEditor(page);
-  const words = (b) => all(b).map((n) => n.textContent).join("");
+  // Each segment's word (a narrow cell shows Sim in Simulator's place).
+  const words = (b) => all(b).filter((n) => n.getAttribute && n.getAttribute("class") === "segWord").map((n) => n.textContent).join("");
   check(segments(page).map(words).join() === "Rover,Simulator", `segments ${segments(page).map(words)}`);
   check(!page.$("target").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
   check(segments(page)[0].getAttribute("aria-pressed") === "true", "the rover chosen");
@@ -3512,7 +3615,7 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   page.fire(button, "click");
   check(!menu.hidden && button.getAttribute("aria-expanded") === "true" && focused() === "Square", `opened on the first item: ${focused()}`);
   check(menu.scrolledIntoView === 1 && menu.scrollOptions && menu.scrollOptions.block === "nearest",
-    "scrolled into view as it opened, clear of the Stop bar on a phone, and no further: the button stays in sight");
+    "scrolled into view as it opened, clear of the top stuck over a phone's page, and no further: the button stays in sight");
   check(key(page.doc.activeElement, "ArrowDown").defaultPrevented, "Down moves in the menu, not the page");
   check(focused() === "Strafe box", `Down: ${focused()}`);
   key(page.doc.activeElement, "End");
@@ -3650,16 +3753,19 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The wide layout's header is one row beside both tabs (F3j, the owner's
-// ask: it had taken two, and Stop and Autonomous a bar across the foot):
-// the mark, Autonomous, the status, the three switches as icons, the
-// address, the note, and Stop beside the gear. The note, which takes no
-// press, is Stop's neighbour: Disconnect there left an exploring rover
-// exploring, and the panel no link to stop it. Beside the Program tab the rail
-// is a column, the scan and the readouts, one width from the viewport
-// alone; the Drive tab is split for the simulator's view (F3i, the next
-// test). Layout itself is measured in a browser; this holds the shape.
-test("wide: the header one row, Stop beside the gear and Autonomous at the other end, beside both tabs", () => {
+// The top is two cells on every layout and beside both tabs (F8, the
+// owner's ask: "squeeze all this in 2 cells at the top"): what the controls
+// drive and its state (the target first, Autonomous, the link chip, the
+// badges), then how they drive it (the tabs, the scheme, and Stop beside
+// the gear at its far end). One row where the top is 900 px wide, a cell a
+// row below. Autonomous and Stop are in different cells, so a hand reaching
+// for Stop cannot start the rover exploring, and nothing of the link sits
+// beside Stop: Disconnect there left an exploring rover exploring, and the
+// panel no link to stop it. Beside the Program tab the rail is a column,
+// the scan and the readouts, one width from the viewport alone; the Drive
+// tab is split for the simulator's view (F3i, the next test). Layout itself
+// is measured in a browser; this holds the shape.
+test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomous in the other cell, beside both tabs", () => {
   const css = panelCss();
   const rules = cssRules(css);
   const root = rules.filter((r) => r.selector === ":root").map((r) => r.body).join("");
@@ -3674,75 +3780,103 @@ test("wide: the header one row, Stop beside the gear and Autonomous at the other
   const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((a) => a.replace(/\s+/g, " "));
   check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(".shell")), `the left pane, then the rail: ${body(".shell")}`);
   check(areas(body(".shell")).join(" ") === '"head head" "main fault" "main scan" "main read"', `no bar across the foot: ${areas(body(".shell"))}`);
+  const base = cssRules(outside(css, "@media"));
+  const baseBody = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(areas(baseBody(".shell")).join(" ") === '"head" "fault" "scan" "read" "main"', `a phone: the top, then the rest, and no foot bar: ${areas(baseBody(".shell"))}`);
 
-  // One row, a touch target tall, its parts in their columns.
-  const bar = body(".bar");
-  check(/grid-template-rows:\s*var\(--tap\);/.test(bar), `one row, 44 px: ${bar}`);
-  check(areas(bar).join(" ") === '"mark auto status switches link note stop gear"', `the row's order: ${areas(bar)}`);
-  check(/grid-template-columns:\s*var\(--mark\) var\(--tap\) auto auto auto minmax\(var\(--s-6\), 1fr\) var\(--stop-w\) var\(--pill-h\);/.test(bar),
-    `Autonomous's and Stop's places their own widths, the note what is left, never under 24 px between Connect and Stop: ${bar}`);
-  check(/display:\s*contents;/.test(body(".masthead")), "the masthead's parts are cells of the row");
-  for (const [selector, area] of [[".wordmark", "mark"], [".status", "status"], [".switches", "switches"], ["#note", "note"], [".link", "link"], [".masthead > .menuHolder", "gear"]]) {
-    check(new RegExp(`grid-area:\\s*${area};`).test(body(selector)), `${selector} in ${area}: ${body(selector)}`);
-  }
-  // The note keeps to the row: two lines at most, the rest on hover.
-  const note = body("#note");
-  check(/line-clamp:\s*2;/.test(note) && /max-height:\s*calc\(2 \* var\(--lh-body\) \* var\(--t-sm\)\);/.test(note) && /overflow:\s*hidden;/.test(note), `the note two lines at most: ${note}`);
+  // The top: stuck to the screen's top when the page scrolls, over
+  // Blockly's widgets, and the container its cells are laid out by.
+  const bar = baseBody(".bar");
+  check(/grid-area:\s*head;/.test(bar) && /position:\s*sticky;/.test(bar) && /top:\s*0;/.test(bar) && /container:\s*bar \/ inline-size;/.test(bar), `the top stuck, and a container: ${bar}`);
+  check(Number((bar.match(/z-index:\s*(\d+);/) || [])[1]) > 100000, `over Blockly's widgets (100000): ${bar}`);
+  check(/grid-template-columns:\s*minmax\(0, 1fr\);/.test(baseBody(".cells")), `a cell a row below 900 px: ${baseBody(".cells")}`);
+  // One row from 900 px: the second cell, Stop's, never squeezed below its
+  // own content, so nothing the first gains (a badge, the address, a wider
+  // font) pushes Stop off the screen; at worst the first cell's end is
+  // clipped. Both badges worded on the simulator target once ran Stop past
+  // a 1024 px screen's edge.
+  const oneRow = blockRules(outside(css, "@media"), "@container bar (min-width: 900px) {") || [];
+  const cellsRow = oneRow.find((r) => r.selector === ".cells");
+  check(cellsRow && /grid-template-columns:\s*minmax\(0, max-content\) auto;/.test(cellsRow.body), `one row from 900 px, the second cell never squeezed: ${cellsRow && cellsRow.body}`);
+  check(oneRow.some((r) => r.selector === ".drives" && /overflow-x:\s*clip;/.test(r.body)), "the first cell clips what it cannot hold, rather than spill over Stop's");
+  // Words only where all of them fit: the badges' from 1160 px of top, the
+  // address from 1280, Sim and Auto from 900 to 960 as on a phone.
+  const atLeast = (width) => blockRules(outside(css, "@media"), `@container bar (min-width: ${width}) {`) || [];
+  check(atLeast("1160px").some((r) => r.selector === ".badgeWord" && /display:\s*inline;/.test(r.body)), "the badges' words from 1160 px of top");
+  check(atLeast("1280px").some((r) => r.selector === ".chipHost" && /display:\s*inline;/.test(r.body)), "the address from 1280 px of top");
+  const between = blockRules(outside(css, "@media"), "@container bar (min-width: 900px) and (max-width: 959.98px) {") || [];
+  check(between.some((r) => /\.target \.segShort/.test(r.selector) && /\.autoShort/.test(r.selector) && /display:\s*inline;/.test(r.body)), "Sim and Auto from 900 to 960 px of top");
+  const shownElsewhere = cssRules(outside(css, "@container")).filter((r) => /\.(badgeWord|chipHost)\b/.test(r.selector) && /display:\s*inline/.test(r.body));
+  check(shownElsewhere.length === 0, `no viewport rule shows them where the top may not hold them: ${shownElsewhere.map((r) => r.selector)}`);
+  // A cell is one line of controls, 40 px tall whatever they say: nothing
+  // in it wraps, and no layout changes its height.
+  check(/--cell-h:\s*40px;/.test(root) && /--ctl:\s*32px;/.test(root) && /--seg:\s*28px;/.test(root) && /--t-ctl:\s*13px;/.test(root), "40 px cells, 32 px controls, 28 px segments, 13 px words");
+  const cell = baseBody(".hcell");
+  check(/height:\s*var\(--cell-h\);/.test(cell) && /white-space:\s*nowrap;/.test(cell) && /display:\s*flex;/.test(cell) && !/flex-wrap:\s*wrap/.test(cell), `one line, 40 px: ${cell}`);
+  const cellItself = (selector) => selector.split(",").some((part) => /^\.(hcell|cells)(\.[\w-]+)*$/.test(part.trim()));
+  const sized = rules.filter((r) => cellItself(r.selector) && /(^|[\s;{])(min-|max-)?height\s*:/.test(r.body));
+  check(sized.length === 1 && sized[0].selector === ".hcell", `nothing but the base rule sets a cell's height: ${sized.map((r) => r.selector)}`);
+  check(/height:\s*var\(--ctl\);/.test(baseBody(".hcell button")), `its controls 32 px: ${baseBody(".hcell button")}`);
+
+  // The page: two cells, in order, and none of what they replaced.
   const page = loadPage();
+  const html = page.doc.documentElement;
+  const cells = html.querySelector(".cells");
+  const kids = (el) => el.children.filter((n) => !(n.tagName === "OUTPUT" && n.hidden)).map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
+  check(cells && cells.children.length === 2, `two cells: ${cells && cells.children.length}`);
+  const [drives, hands] = cells ? cells.children : [];
+  check(drives && kids(drives).join() === "target,auto,linkChip,linkPanel,motorsBadge,exploringBadge", `the first cell: the target first, Autonomous, the link chip and its popover, the badges: ${drives && kids(drives)}`);
+  check(hands && kids(hands).join() === "tabs,scheme,stop,menuHolder", `the second: the tabs, the scheme, Stop and the gear: ${hands && kids(hands)}`);
+  for (const gone of [".wordmark", ".masthead", ".status", ".pill", ".link", ".actions", ".switches", ".segIcon", ".actionWord"]) {
+    check(html.querySelectorAll(gone).length === 0, `no ${gone} left`);
+  }
+  check(!rules.some((r) => /\.(wordmark|masthead|pill|actions|switches|segIcon|actionWord)\b/.test(r.selector)), "and no rule for any of them");
+
+  // Stop: red, its square alone, named and titled with its key, as wide as
+  // a key and the cell's height; nothing of the link beside it.
+  const stop = page.$("stop");
+  check(stop.getAttribute("aria-label") === "Stop" && /\(Space\)/.test(stop.getAttribute("title") || "") && stop.children.length === 1 && stop.children[0].tagName === "SVG", "Stop: an icon, named Stop, titled with its key");
+  const stopCss = baseBody("#stop");
+  check(/width:\s*40px;/.test(stopCss) && /background:\s*var\(--stop\);/.test(stopCss) && /(^|[^-])color:\s*var\(--on-stop\);/.test(stopCss), `Stop 40 x 32, red: ${stopCss}`);
+  check(!all(hands).some((n) => ["connect", "host", "linkChip", "auto"].includes(n.id)), "neither the link nor Autonomous in Stop's cell");
+  check(/\(T\)/.test(page.$("auto").getAttribute("title") || "") && page.$("auto").getAttribute("aria-label") === "Autonomous", "Autonomous named, and titled with its key");
+
+  // Sleek segments, words only: a pill track 2 px inset, segments 28 px
+  // tall in 13 px words, the chosen one inverted; the tabs words over an
+  // underline. Each titled with what it does.
+  const track = baseBody(".segmented");
+  check(/padding:\s*2px;/.test(track) && /border-radius:\s*var\(--r-full\);/.test(track) && /background:\s*var\(--raised\);/.test(track), `the track: ${track}`);
+  const seg = base.find((r) => r.selector.split(",").map((x) => x.trim()).includes(".segmented button"));
+  check(seg && /height:\s*var\(--seg\);/.test(seg.body) && /font-size:\s*var\(--t-ctl\);/.test(seg.body) && /border-radius:\s*var\(--r-full\);/.test(seg.body), `a segment: ${seg && seg.body}`);
+  const segs = [page.$("tabDrive"), page.$("tabProgram"), ...page.$("schemeChoice").children, ...page.$("target").children];
+  check(segs.length === 6, `six segments: ${segs.length}`);
+  for (const one of segs) {
+    const words = all(one).filter((n) => n !== one && n.tagName !== "#TEXT");
+    check(!words.some((n) => n.tagName === "SVG") && (one.getAttribute("title") || one.title || "").length > 0, `${one.id || one.dataset.scheme || one.dataset.target}: words alone, and a hint`);
+  }
+  check(segs.slice(2).every((one) => all(one).some((n) => n.getAttribute && n.getAttribute("class") === "segWord")), "each switch's segment its word");
+
+  // The link's address, Connect and note in the chip's popover; the whole
+  // note on hover too.
+  const panel = page.$("linkPanel");
+  check(["host", "connect", "note"].every((id) => all(panel).includes(page.$(id))), "the address, Connect and the note in the chip's popover");
+  check(page.$("linkChip").getAttribute("aria-controls") === "linkPanel", "the chip opens it");
   page.$("host").value = "";
   page.fire(page.$("connect"), "click");
   check(page.$("note").title === page.$("note").textContent && page.$("note").textContent !== "", `the whole note on hover: ${page.$("note").title}`);
 
-  // Stop and Autonomous stay the rail's, last in the focus order, and are
-  // drawn into their places in the header's row: cells of the shell's head
-  // over the bar's, at its two ends.
-  check(/display:\s*contents;/.test(body(".actions")), "the bar across the foot is gone");
-  const key = body(".actions button");
-  check(/grid-area:\s*head;/.test(key) && /align-self:\s*start;/.test(key) && /min-height:\s*var\(--tap\);/.test(key), `in the head's row, as tall: ${key}`);
-  const stop = body("#stop");
-  check(/justify-self:\s*end;/.test(stop) && /width:\s*var\(--stop-w\);/.test(stop) && /margin-right:\s*calc\(var\(--pill-h\) \+ var\(--head-gap\)\);/.test(stop), `Stop beside the gear: ${stop}`);
-  const auto = body("#auto");
-  check(/justify-self:\s*start;/.test(auto) && /width:\s*var\(--tap\);/.test(auto) && /margin-left:\s*calc\(var\(--mark\) \+ var\(--head-gap\)\);/.test(auto), `Autonomous by the mark, far from Stop: ${auto}`);
-  check(page.$("rail") === null && page.doc.documentElement.querySelectorAll(".rail")[0].children.slice(-1)[0].getAttribute("class") === "actions", "Stop and Autonomous the rail's last");
-  for (const id of ["stop", "auto"]) {
-    const word = all(page.$(id)).find((n) => n.getAttribute("class") === "actionWord");
-    check(word && /\((Space|T)\)/.test(page.$(id).getAttribute("title") || ""), `${id}: its word, and its title with its key`);
-  }
-
-  // The switches' segments their icons alone, each with its word for a
-  // screen reader and a hint on hover; elsewhere the word and no icon.
-  const hidden = wide.find((r) => /\.segWord/.test(r.selector) && /\.actionWord/.test(r.selector));
-  check(hidden && /clip-path:\s*inset\(50%\);/.test(hidden.body), "the words read, not shown");
-  check(/display:\s*block;/.test(body(".segIcon")), "the icons shown");
-  const elsewhere = cssRules(outside(css, "@media")).find((r) => r.selector.split(",").map((x) => x.trim()).includes(".segIcon"));
-  check(elsewhere && /display:\s*none;/.test(elsewhere.body), "and only there");
-  const segs = [page.$("tabDrive"), page.$("tabProgram"), ...page.$("schemeChoice").children, ...page.$("target").children];
-  check(segs.length === 6, `six segments: ${segs.length}`);
-  for (const seg of segs) {
-    const kinds = all(seg).map((n) => n.getAttribute("class"));
-    check(kinds.includes("icon segIcon") && kinds.includes("segWord") && (seg.getAttribute("title") || seg.title || "").length > 0, `${seg.id || seg.dataset.scheme || "a target"}: an icon, a word and a hint`);
-  }
-  // Every pill titled with what it says, its lamp alone where the row is
-  // short of room.
-  const lamps = mediaRules(WIDE_LAMPS) || [];
-  check(lamps.some((r) => r.selector === ".pill > :not(.lamp, .pillIcon)" && /clip-path:\s*inset\(50%\);/.test(r.body)), "up to 1280 px, the pills' words read, not shown");
-  check(lamps.some((r) => r.selector === ".pill .pillIcon" && /display:\s*block;/.test(r.body)), "and their icons shown");
-  for (const id of ["linkPill", "modePill", "motorsPill"]) {
-    check(all(page.$(id)).some((n) => n.getAttribute("class") === "icon pillIcon"), `${id} has its icon`);
-  }
-  check(/No link/.test(page.$("linkPill").title), `the link pill titled: ${page.$("linkPill").title}`);
-
-  // Nothing makes the row taller or shorter on a short screen.
+  // Nothing makes the cells taller or shorter on a short screen.
   const short = mediaRules(WIDE_SHORT) || [];
-  check(!short.some((r) => /\.bar|\.actions|#stop|#auto/.test(r.selector) && /(grid-template-rows|min-height|height)\s*:/.test(r.body)), "short: the row keeps its 44 px");
+  check(!short.some((r) => /\.hcell|\.cells|#stop|#auto/.test(r.selector) && /(grid-template-rows|min-height|height)\s*:/.test(r.body)), "short: the cells keep their 40 px");
+  check(mediaRules(WIDE_LAMPS) === null, "no layout of its own for the pills' lamps");
   // The scan fills its place beside both tabs: no card sized to its drawing.
   check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 // Every button says on hover what it does, the owner's ask with Stop's
-// icon ("all buttons should have that"): the header's icons above all,
-// whose words are shown to a screen reader alone, and every other button
+// icon ("all buttons should have that"): Stop and the link chip above all,
+// whose words a narrow cell drops or never shows, and every other button
 // on the page, in each state of the link, of the editor and of a program,
 // on either target. The question dialog's answers, which say what they do
 // in full, are its own.
@@ -3788,20 +3922,51 @@ test("every button titled with what it does, in every state of the link and of a
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// On a phone the mode pill gives way to the Autonomous toggle at the foot,
-// lit while the rover explores. On the simulator target the toggle shows
-// the simulated rover's mode, so there the pill keeps the rover's, in the
-// motors pill's place: nothing else said a rover sent exploring before the
-// switch was still moving by itself.
-test("phones: on the simulator target the mode pill keeps the rover's mode, in the motors pill's place", () => {
-  for (const opening of ["@media (max-width: 439.98px) {", LANDSCAPE_PHONE]) {
-    const rules = mediaRules(opening) || [];
-    const hides = (pill) => rules.filter((r) => /display:\s*none;/.test(r.body))
-      .flatMap((r) => r.selector.split(",").map((x) => x.trim().replace(/\s+/g, " ")))
-      .filter((selector) => selector.endsWith(pill));
-    check(hides(".modePill").join() === 'body:not([data-target="simulator"]) .modePill', `${opening} the mode pill hidden off the simulator target alone: ${hides(".modePill")}`);
-    check(hides(".motorsPill").join() === 'body[data-target="simulator"] .motorsPill', `${opening} the motors pill on it alone: ${hides(".motorsPill")}`);
+// On the simulator target the Autonomous switch shows the simulated rover's
+// mode, so a "Rover exploring" badge in the first cell keeps the rover's,
+// and the link chip says "Rover:": nothing else said a rover sent exploring
+// before the switch was still moving by itself. The "No motors" badge
+// speaks for the rover on either target. Each is there only while it is
+// so, takes width and never height, and is titled in full.
+test("badges: on the simulator target a rover still exploring is badged, and No motors on either, only while so", () => {
+  const { page, ws } = connected(telemetry({ mode: "AUTONOMOUS" }));
+  const exploring = page.$("exploringBadge");
+  const motors = page.$("motorsBadge");
+  const toSim = () => page.fire(page.$("target").children[1], "click");
+  const toRover = () => page.fire(page.$("target").children[0], "click");
+  check(exploring.hidden && page.$("chipFor").hidden, "on the rover target the switch says it itself: no badge, no Rover: on the chip");
+  check(page.$("auto").getAttribute("aria-pressed") === "true", "the switch on, the rover's");
+  toSim();
+  check(!exploring.hidden && !page.$("chipFor").hidden && page.$("chipFor").textContent === "Rover:", "on the simulator: the badge, and the chip the rover's");
+  check(page.$("auto").getAttribute("aria-pressed") === "false", "the switch the simulator's, off");
+  const titleOf = (el) => el.getAttribute("title") || el.title || "";
+  check(/^Rover exploring: /.test(titleOf(exploring)) && exploring.getAttribute("aria-label") === "Rover exploring", `titled and named: ${titleOf(exploring)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(exploring.hidden, "gone once the rover reports manual");
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(!exploring.hidden, "back as it explores again");
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale" && !exploring.hidden, "kept while the link is only stale: the last word was exploring");
+  ws.serverDrop();
+  check(exploring.hidden, "gone with the link: nothing says so now");
+  const again = connectOpen(page);
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(!exploring.hidden, "back with a new link's first frame");
+  toRover();
+  check(exploring.hidden && page.$("chipFor").hidden, "gone on the rover target");
+
+  check(motors.hidden && /motor shield/i.test(titleOf(motors)) && motors.getAttribute("aria-label") === "No motors", `No motors hidden while the shield answered, titled: ${titleOf(motors)}`);
+  for (const go of [toRover, toSim]) {
+    go();
+    again.serverMsg(telemetry({ motorsReady: false }));
+    check(!motors.hidden, `No motors shown on the ${page.evalIn("targetSwitch.kind")} target`);
+    again.serverMsg(telemetry({ motorsReady: true }));
+    check(motors.hidden, `and gone when it answers, on the ${page.evalIn("targetSwitch.kind")} target`);
   }
+  // Width, never height: 28 px in a 40 px cell, nothing wrapping.
+  const badge = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".badge");
+  check(badge && /height:\s*var\(--seg\);/.test(badge.body) && /flex:\s*none;/.test(badge.body), `a badge 28 px: ${badge && badge.body}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 // The Drive tab's view of the simulator (F1) sits beside the dock, never
@@ -3835,14 +4000,15 @@ test("drive view: the left side of a wide screen, in the scan's place on a phone
   check(/display:\s*none;/.test(rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} .scan`)), "the scan gives way on the simulator");
   const shown = rule(wide, `body[data-target="simulator"] ${DRIVE_SHELL} > .driveView:not([hidden])`);
   check(/grid-area:\s*view;/.test(shown) && /display:\s*flex;/.test(shown) && /position:\s*relative;/.test(shown), `the view in its place on the simulator, the settings' containing block: ${shown}`);
-  // The target picks only what fills the left, and in the header's row,
-  // which keeps one height, whether the mode pill shows: never the dock or
-  // the readouts, so a switch moves no stick.
-  const onTarget = [...wide, ...(mediaRules(WIDE_LAMPS) || []), ...(mediaRules(WIDE_SHORT) || [])].filter((r) => /data-target/.test(r.selector));
-  check(onTarget.length === 3 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\)| \.modePill)$/.test(r.selector)), `wide: the target picks the scan or the view, and the mode pill: ${onTarget.map((r) => r.selector)}`);
-  // Bar paint: the Autonomous toggle's dashes the edge of a mode a lost
-  // link last reported, which on the simulator is always known. A border's
-  // style keeps its width, so it moves nothing.
+  // The target picks only what fills the left: never the dock, the
+  // readouts or the top's cells, so a switch moves no stick. (What the
+  // first cell says for the rover on the simulator target, app.js shows
+  // and hides: it takes width there, never height.)
+  const onTarget = [...wide, ...(mediaRules(WIDE_SHORT) || [])].filter((r) => /data-target/.test(r.selector));
+  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `wide: the target picks the scan or the view alone: ${onTarget.map((r) => r.selector)}`);
+  // Bar paint: the Autonomous switch's track dashes the edge of a mode a
+  // lost link last reported, which on the simulator is always known. A
+  // border's style keeps its width, so it moves nothing.
   const paintOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^(color|background|border-style)\s*:/.test(d));
   const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector) && !paintOnly(r.body));
   check(anywhere.length === 0, `outside every @media, nothing follows the target but a colour: ${anywhere.map((r) => r.selector)}`);
@@ -3872,8 +4038,8 @@ test("drive view: the left side of a wide screen, in the scan's place on a phone
   // The dock's grid is the same at every height: no block for tall screens
   // stacks its controls, which would put the family under the stick.
   check(!/min-height: 761px/.test(panelCss()), "no tall-screen layout of its own");
-  // The switches' segments a touch target square at every wide width:
-  // icons need no narrower step.
+  // The cells step down by their own width (@container bar), never by the
+  // window's between 960 and 999 px.
   check(!panelCss().includes("@media (min-width: 960px) and (max-width: 999.98px)"), "no narrower switches from 960 to 999 px");
 
   // A phone: on the simulator, the Drive tab's view in place of the scan,
@@ -3890,15 +4056,13 @@ test("drive view: the left side of a wide screen, in the scan's place on a phone
   // would hold it at 280 px, past the row, and no short step would apply.
   const floor = base.find((r) => r.selector === "#driveSimSlot .sim");
   check(floor && /min-height:\s*0;/.test(floor.body), `the row's height, not the view's floor: ${floor && floor.body}`);
-  // A phone's switch row has room for two switches: the target goes under.
-  const row = base.find((r) => r.selector === ".switches > .target");
-  check(row && /grid-column:\s*1 \/ -1;/.test(row.body), `the target a row of its own on a phone: ${row && row.body}`);
-  // 600 px tall or less its row left the scan nothing to give (a pivot
-  // moved the stick at 375 x 548) or ran the head past a phone on its side:
-  // the Drive tab leaves the target to the Program tab there.
+  // The target is the first cell's first control on every phone, on both
+  // tabs: the cell is there anyway, one height whatever it holds, so no
+  // layout leaves the target out. (A row of its own, before, left the scan
+  // nothing to give on a short phone and moved a stick at 375 x 548.)
   const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
-  const side = short600.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) .switches > .target");
-  check(side && /display:\s*none;/.test(side.body), `a short phone: no target on the Drive tab: ${side && side.body}`);
+  const hidesTarget = cssRules(panelCss()).filter((r) => r.selector.split(",").some((part) => /(\.target|#target)$/.test(part.trim())) && /display:\s*none/.test(r.body));
+  check(hidesTarget.length === 0, `the target never hidden: ${hidesTarget.map((r) => r.selector)}`);
   // Under 600 px tall the scan's row gives way to nothing: with its padding
   // it could not, and the family's slot opening moved the stick.
   const scan = short600.find((r) => r.selector === ".scan");
@@ -3909,11 +4073,17 @@ test("drive view: the left side of a wide screen, in the scan's place on a phone
   const short760 = mediaRules("@media (max-width: 959.98px) and (max-height: 760px) {") || [];
   const fault = short760.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
   check(fault && /margin-bottom:\s*0;/.test(fault.body) && /padding-block:\s*0;/.test(fault.body), `short phone: the fault card gives way as the scan does: ${fault && fault.body}`);
-  // There too the address waits on the Program tab while the simulator is
-  // driven, whatever the link: its row coming as the rover's link went
-  // moved both sticks, which a lost link must not do to the simulator's.
-  const address = short760.find((r) => r.selector === 'body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .link');
-  check(address && /display:\s*none;/.test(address.body), `short phone: no address on the Drive tab on the simulator: ${address && address.body}`);
+  // A lost link must not move the simulator's sticks: the address, Connect
+  // and the note hang in the chip's popover, over the page and in no row,
+  // and the chip's word keeps the width of the longest it says.
+  check((page.$("linkPanel").getAttribute("class") || "").split(/\s+/).includes("menu"), "the link's popover a .menu");
+  const menu = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".menu");
+  check(menu && /position:\s*absolute;/.test(menu.body), `a .menu over the page, in no row: ${menu && menu.body}`);
+  const sizer = all(page.$("linkChip")).find((n) => n.getAttribute && n.getAttribute("class") === "chipSizer");
+  const labels = Object.values(page.evalIn("Link.LABEL"));
+  check(sizer && labels.every((label) => label.length <= sizer.textContent.length) && labels.includes(sizer.textContent), `the chip as wide as its longest word: ${sizer && sizer.textContent} of ${labels}`);
+  const hidesLink = cssRules(panelCss()).filter((r) => /data-(link|target)/.test(r.selector) && /\.(linkChip|linkPanel|hcell|cells)\b|#(host|connect|note)\b/.test(r.selector) && /display:/.test(r.body));
+  check(hidesLink.length === 0, `nothing of the link shown or hidden by its state or the target: ${hidesLink.map((r) => r.selector)}`);
 
   // The view too short for its room: height queries on the view itself,
   // outside every @media so a phone's and the rail's apply, while a wide
@@ -3935,24 +4105,22 @@ test("drive view: the left side of a wide screen, in the scan's place on a phone
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {
-  // Nothing may cover Stop. The menu hangs over the editor and the
-  // simulator, and opened near the foot of a phone it scrolls up clear of
-  // the bar stuck there rather than hide under it.
+test("program: the File menu opens over the page but under the top, and on a phone scrolls clear of it", () => {
+  // Nothing may cover Stop, in the top's second cell. The menu hangs over
+  // the editor and the simulator, and opened under the top stuck over a
+  // scrolled phone it scrolls down clear of the top rather than hide under
+  // it. Nothing sticks to the foot now, so nothing needs clearing there.
   const zIndex = (selector) => {
     const rule = cssRules(panelCss()).find((r) => r.selector === selector && /z-index/.test(r.body));
     return rule && Number(/z-index:\s*(\d+)/.exec(rule.body)[1]);
   };
-  check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".actions"), `the menu at ${zIndex(".menu")}, the Stop bar at ${zIndex(".actions")}`);
+  check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".bar"), `the menu at ${zIndex(".menu")}, the top at ${zIndex(".bar")}`);
   const margin = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [])
-    .find((r) => /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
+    .find((r) => /scroll-margin-top:[^;]*2 \* var\(--cell-h\)/.test(r.body));
   const popups = margin ? margin.selector.split(",").map((part) => part.trim()) : [];
-  check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot: ${popups}`);
-  // A phone on its side is too short for one: a margin there pushed the
-  // File button off the top of the screen as its menu opened.
-  const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) {") || []).find((r) => /scroll-margin-bottom/.test(r.body));
-  const sidePopups = side ? side.selector.split(",").map((part) => part.trim()) : [];
-  check(sidePopups.includes(".menu") && sidePopups.includes(".sim-more") && /scroll-margin-bottom:\s*0\s*;/.test(side.body), `no margin on a phone on its side: ${side && side.body}`);
+  check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the top's two rows of cells, wherever the top sticks over the page: ${popups}`);
+  const bottom = cssRules(panelCss()).filter((r) => /scroll-margin-bottom/.test(r.body));
+  check(bottom.length === 0, `no foot bar to clear: ${bottom.map((r) => r.selector)}`);
   // The simulator's box clips its room without being a scroll container,
   // which would swallow the settings' margin before the window scrolled.
   const slot = cssRules(stylesheet("program.css")).filter((r) => r.selector === "#simSlot").map((r) => r.body).join("");
@@ -4150,7 +4318,10 @@ test("program: the two Stops are named apart", () => {
   const words = all(page.$("programStop")).map((n) => n.textContent).join(" ");
   check(/Stop program/.test(words), `the Program tab's: ${words}`);
   check(/End the program/.test(page.$("programStop").getAttribute("title") || ""), "its title says what it does");
-  check(all(page.$("stop")).map((n) => n.textContent).join("").trim() === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the bar's always stops the rover, and says so");
+  // The top's is its square alone, named Stop, and its title says it
+  // always stops the rover.
+  check(page.$("stop").getAttribute("aria-label") === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the top's always stops the rover, and says so");
+  check(page.$("programStop").getAttribute("aria-label") !== "Stop", "the Program tab's is not named Stop alone");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4176,11 +4347,13 @@ function simCommands(page) {
 const toSimulator = (page) => page.fire(segments(page)[1], "click");
 const toRover = (page) => page.fire(segments(page)[0], "click");
 
-test("target: one switch in the header, after the tabs and the scheme, for both tabs", () => {
+// The owner's ask (F8): "Rover or simulator should be the first option".
+test("target: one switch, the first thing in the top's first cell, for both tabs", () => {
   const page = loadPage();
-  const switches = page.doc.documentElement.querySelectorAll(".switches")[0];
-  const order = switches.children.map((n) => n.id || n.getAttribute("class"));
-  check(order.join() === "tabs,schemeSlot,target", `the switch row: ${order}`);
+  const first = page.doc.documentElement.querySelector(".cells").children[0];
+  check(first.children[0] === page.$("target"), `the first cell starts with the target: ${first.children.map((n) => n.id)}`);
+  const word = (b) => all(b).filter((n) => n.getAttribute && n.getAttribute("class") === "segWord").map((n) => n.textContent).join("");
+  check(page.$("target").children.map(word).join(" | ") === "Rover | Simulator", `Rover | Simulator, the rover first: ${page.$("target").children.map(word)}`);
   check(page.$("target").getAttribute("role") === "group" && /Drive and run programs on/.test(page.$("target").getAttribute("aria-label")),
     "named for what it picks");
   check(!all(page.$("programTab")).some((n) => n.getAttribute("class") === "segmented" && n.parentNode.getAttribute("role") === "toolbar"),
@@ -4336,8 +4509,11 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   // With no socket a send goes nowhere, so the Link is watched instead.
   page.evalIn("globalThis.__linkSent = []; const send = link.send.bind(link); link.send = (frame) => (__linkSent.push(frame), send(frame));");
   const scheme = () => page.evalIn("targets.simulator.scheme");
-  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => schemeButton(page, x).disabled), "the rover's, unknown, at first");
+  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => !schemeButton(page, x).disabled), "the rover's, unknown, at first, taking a wish");
+  page.fire(schemeButton(page, "ADVANCED"), "click"); // a wish for the rover, kept unseen on the simulator
+  check(pendingScheme(page) === "ADVANCED", `the wish marked: ${pendingScheme(page)}`);
   toSimulator(page);
+  check(pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === "ADVANCED", `the rover's wish unseen on the simulator, and kept: ${pendingScheme(page)}`);
   check(shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "known", `the simulator's: ${shownScheme(page)} ${page.$("scheme").dataset.state}`);
   check(SCHEMES.every((x) => !schemeButton(page, x).disabled), "offered");
   check(/simulator/i.test(page.$("scheme").title), `its title says whose: ${page.$("scheme").title}`);
@@ -4355,6 +4531,8 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(scheme() === "NORMAL" && pivotsState(page) === "off" && sim().slice(-1)[0] === "STOP", `NORMAL: pivots ${pivotsState(page)}, ${sim()}`);
   s.end();
+  toRover(page);
+  check(shownScheme(page) === "unknown" && pendingScheme(page) === "ADVANCED", `back on the rover, its wish again: ${shownScheme(page)}, ${pendingScheme(page)}`);
   check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
   check(page.evalIn("__linkSent.length") === 0, `the Link was handed ${page.evalIn("JSON.stringify(__linkSent)")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -4726,8 +4904,16 @@ test("look: what else marks the chosen chip is drawn in its ink, not in blue or 
   const pending = rule("panel.css", '.segmented button[aria-pressed="true"][data-pending="yes"]');
   check(/(^|[^-])color:\s*var\(--on-chosen\)/.test(pending) && /outline-color:\s*var\(--on-chosen\)/.test(pending),
     `a chosen scheme also asked for: its word and frame in --on-chosen: ${pending}`);
-  const dot = rule("program.css", '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
-  check(/background:\s*var\(--on-chosen\)/.test(dot), `the open Program tab's running dot in --on-chosen: ${dot}`);
+  // The tabs are words on the cell's panel, not chips: the open tab is its
+  // ink over an underline in --chosen, and the running dot stays green on
+  // the panel, open or not (paired in looks.test.js), with nothing chosen
+  // under it to take its ink from.
+  const open = rule("panel.css", '.hcell .tabs [role="tab"][aria-selected="true"]');
+  check(/(^|[^-])color:\s*var\(--readout\)/.test(open) && /box-shadow:\s*inset 0 -2px 0 var\(--chosen\)/.test(open) && !/background:\s*var\(--chosen\)/.test(open),
+    `the open tab: its word in the ink over a --chosen underline, no chip: ${open}`);
+  const dots = cssRules(stylesheet("program.css")).filter((r) => /data-running="yes"\]::after/.test(r.selector) && /background:/.test(r.body));
+  check(dots.length === 1 && /background:\s*var\(--ok\)/.test(dots[0].body) && !/aria-selected/.test(dots[0].selector),
+    `the running dot green on either tab, no override for the open one: ${dots.map((r) => `${r.selector} { ${r.body.trim()} }`)}`);
 });
 
 test("look: a disabled Run keeps the edge its filled state drops", () => {
@@ -4736,36 +4922,70 @@ test("look: a disabled Run keeps the edge its filled state drops", () => {
   check(/border-color:\s*var\(--edge\)/.test(rule(".programBar .run:disabled")), "disabled, unfilled, it is edged as every other control");
 });
 
-test("look: on a phone on its side the all-well pills keep their green lamp, the only colour they have", () => {
-  // The block drops the pills' lamps to keep "No link" whole at 480 x 320;
-  // a tinted pill's colour shows without one, an all-well pill's does not.
-  const block = blockRules(panelCss(), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
-  check(block.some((r) => r.selector.split(",").map((x) => x.trim()).includes(".pill > .lamp") && /display:\s*none/.test(r.body)), "the lamps dropped there");
-  const keeps = (selector) => block.find((r) => r.selector.split(",").map((each) => each.trim()).includes(selector) && /display:\s*block/.test(r.body));
-  const link = keeps('body[data-link="up"] .linkPill > .lamp');
-  check(link, "Link's lamp kept while the link is up");
-  check(keeps('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), "Motors OK's lamp kept");
+// The link chip is quiet when all is well: its lamp is the only colour it
+// has, so no width may drop it, and a link that went is told by more than
+// hue: tinted, edged and worded (its title where the word gives way).
+test("look: the link chip keeps its lamp at every width, and a link that went is tinted and edged, not told by hue alone", () => {
+  const css = panelCss();
+  const rules = cssRules(css.replace(/@(media|container)[^{]*\{/g, ""));
+  const dropped = rules.filter((r) => r.selector.split(",").some((each) => /\.lamp\b/.test(each)) && /display:\s*none/.test(r.body));
+  check(dropped.length === 0, `a lamp dropped somewhere: ${dropped.map((r) => r.selector)}`);
+  const up = rules.find((r) => r.selector === '.linkChip[data-say="up"] .lamp');
+  check(up && /background:\s*var\(--ok\)/.test(up.body), `up: the lamp green: ${up && up.body}`);
   // A browser without :has() drops a whole selector list that holds one.
-  check(link && !/:has\(/.test(link.selector), `Link's lamp in a rule with no :has(): ${link && link.selector}`);
+  check(rules.filter((r) => /\.linkChip/.test(r.selector)).every((r) => !/:has\(/.test(r.selector)), "no chip rule leans on :has()");
+  const went = rules.find((r) => r.selector === '.linkChip:is([data-say="lost"], [data-say="stale"])');
+  check(went && /background:\s*var\(--warn-soft\)/.test(went.body) && /border-color:\s*var\(--warn\)/.test(went.body) && /(^|[^-])color:\s*var\(--warn\)/.test(went.body),
+    `lost or stale: tinted, edged and worded in amber: ${went && went.body}`);
+  // Narrow, the chip is its lamp and caret: the word goes, the lamp stays.
+  const narrow = blockRules(css, "@container bar (max-width: 479.98px) {") || [];
+  const hides = narrow.filter((r) => /display:\s*none/.test(r.body)).flatMap((r) => r.selector.split(",").map((each) => each.trim()));
+  check(hides.includes(".linkChip .chipWord") && !hides.some((each) => /\.lamp|\.caret/.test(each)), `under 480 px the chip's word goes, its lamp and caret stay: ${hides}`);
+  const page = loadPage();
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry());
+  ws.serverDrop();
+  check(page.$("linkChip").dataset.say === "lost" && /^Link lost/.test(page.$("linkChip").title), `a link lost under the panel: ${page.$("linkChip").dataset.say}, '${page.$("linkChip").title}'`);
+  const again = connectOpen(page);
+  again.serverMsg(telemetry());
+  page.fire(page.$("connect"), "click");
+  check(page.$("linkChip").dataset.say === "down" && /^Not connected/.test(page.$("linkChip").title), `put down by the panel: ${page.$("linkChip").dataset.say}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 test("look: the chosen segment's word stays on its chip, the only ground its ink reads on, at the narrowest layouts", () => {
-  // Measured headless: at 320 px upright "Advanced" at --t-md ran past its
-  // chip, and on a phone on its side under about 570 px "sideways" at
-  // --t-sm; the part past the chip lay on its frame in --on-chosen.
-  const narrow = mediaRules("@media (max-width: 359.98px) {") || [];
-  const smaller = narrow.find((r) => /font-size:\s*var\(--t-sm\)/.test(r.body));
+  // Measured headless: at 375 px upright the second cell's words at 13 px
+  // ran past it, at 414 px the first cell's at their widest, and on a phone
+  // on its side under about 570 px "sideways" at --t-sm ran past its chip;
+  // the part past a chip lay on its frame in --on-chosen. So the cells step
+  // down by their own width, wherever they are: the long words short under
+  // 560 px, a size down under 400, the scheme's short too under 300.
+  const css = panelCss();
+  const tier = (width) => blockRules(css, `@container bar (max-width: ${width}) {`) || [];
+  const smaller = tier("399.98px").find((r) => /font-size:\s*var\(--t-sm\)/.test(r.body));
   const selectors = smaller ? smaller.selector.split(",").map((each) => each.trim()) : [];
-  check(selectors.includes('.tabs [role="tab"]') && selectors.includes(".segmented button"), `the tabs and every switch a size down under 360 px: ${selectors}`);
+  check(selectors.includes(".hcell button") && selectors.includes(".hcell .segmented button"), `the tabs and every switch in a cell a size down under 400 px: ${selectors}`);
+  const shows = (rules) => rules.filter((r) => /display:\s*inline/.test(r.body)).flatMap((r) => r.selector.split(",").map((each) => each.trim()));
+  check(shows(tier("559.98px")).includes(".target .segShort") && shows(tier("559.98px")).includes(".autoShort"), `Sim and Auto under 560 px: ${shows(tier("559.98px"))}`);
+  check(shows(tier("299.98px")).includes(".scheme .segShort"), `Adv under 300 px: ${shows(tier("299.98px"))}`);
+  const bar = cssRules(outside(css, "@media")).find((r) => r.selector === ".bar");
+  check(bar && /container:\s*bar \/ inline-size;/.test(bar.body), `the top a container the cells ask: ${bar && bar.body}`);
   const side = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
   check(side.some((r) => r.selector === ".family .segmented button" && /font-size:\s*var\(--t-xs\)/.test(r.body)), "the family's words a size down on a narrow phone on its side");
+  // The short words stand in for the long ones, and are never what is read.
+  const page = loadPage();
+  const sim = page.$("target").children[1];
+  check(sim.getAttribute("aria-label") === "Simulator" && all(sim).some((n) => n.getAttribute && n.getAttribute("class") === "segShort" && n.textContent === "Sim" && n.getAttribute("aria-hidden") === "true"),
+    "Sim, hidden from a reader, in the segment named Simulator");
 });
 
-test("look: on an upright phone the open Program tab's running dot sits in its chip's corner, not past the word", () => {
-  const phone = blockRules(stylesheet("program.css"), "@media (max-width: 439.98px) {") || [];
-  const dot = phone.find((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
-  check(dot && /position:\s*absolute/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
-  check(phone.some((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]' && /position:\s*relative/.test(r.body)), "placed by its own tab");
+test("look: the Program tab's running dot sits in its tab's corner, so it widens nothing as it comes and goes", () => {
+  const dot = cssRules(stylesheet("program.css")).find((r) => r.selector === '.tabs [role="tab"][data-running="yes"]::after');
+  check(dot && /position:\s*absolute/.test(dot.body) && /top:/.test(dot.body) && /right:/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
+  const button = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".hcell button");
+  check(button && /position:\s*relative/.test(button.body), `placed by its own tab: ${button && button.body}`);
+  const page = loadPage();
+  check(all(page.doc.documentElement.querySelector(".hands")).includes(page.$("tabProgram")), "the tab in a cell");
 });
 
 test("look: a tile's preview is painted only in the tokens every look declares for it", () => {
@@ -4829,11 +5049,15 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   check(gear.getAttribute("aria-controls") === "optionsPanel" && gear.getAttribute("aria-expanded") === "false" && panel.hidden, "closed at first");
   check(!gear.hasAttribute("aria-haspopup") && panel.getAttribute("role") === "group" && panel.tagName === "DIV" && !panel.hasAttribute("aria-modal"),
     `a group, not a menu or a dialog: ${panel.tagName} role=${panel.getAttribute("role")}`);
-  check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, under the Stop bar");
+  check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, hanging below the top");
   const layered = cssRules(panelCss()).filter((rule) => /\.options\b|#optionsPanel\b/.test(rule.selector) && /z-index/.test(rule.body));
   check(layered.length === 0, `.menu's layer, never one of its own over Stop: ${layered.map((rule) => rule.selector)}`);
-  check(gear.parentNode.parentNode.getAttribute("class") === "masthead" && gear.parentNode.parentNode.children.at(-1) === gear.parentNode,
-    "at the end of the masthead's row");
+  // The last thing in the top's second cell, beside Stop: the hand that
+  // reaches for the gear lands, at worst, on Stop.
+  const holder = gear.parentNode;
+  const cell = holder.parentNode;
+  check(/\bhands\b/.test(cell.getAttribute("class") || "") && cell.children.at(-1) === holder && cell.children.at(-2) === page.$("stop"),
+    `at the end of the second cell, after Stop: ${cell.children.map((n) => n.id || n.getAttribute("class"))}`);
   const key = (target, k) => page.fire(target, "keydown", { key: k });
 
   page.fire(gear, "click");

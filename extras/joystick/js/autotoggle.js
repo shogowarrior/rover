@@ -1,7 +1,9 @@
 /**
- * The Autonomous toggle: beside Stop on a phone, at the other end of the
- * header's row from it on a wide screen. On while the target explores, off
- * while it waits for the controls. A press turns it the other way, through
+ * The Autonomous toggle: a labelled switch in the top's first cell, the
+ * other cell from Stop, so that a press that misses Stop can never land on
+ * it and start the rover exploring (F8). On while the target explores, off
+ * while it waits for the controls; its track and knob show which
+ * (panel.css). A press turns it the other way, through
  * the Driver: turned on it sends RESUME_AUTONOMOUS
  * (Driver.resumeAutonomous()), turned off STOP (Driver.stopRover(), with
  * the reason "autonomous", so a program it stops says Autonomous was

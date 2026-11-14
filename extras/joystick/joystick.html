@@ -19,140 +19,170 @@
 </head>
 
 <body data-link="down">
-  <!-- The shell is a grid of the header, the open tab and the rail (the
-       fault, the scan, the readouts, and Stop and Autonomous). On a phone
-       they stack: the scan under the header, the Drive tab as a dock under
-       the thumbs, Stop at the foot of the screen. On a wide screen the
-       header is one row, and Stop and Autonomous are drawn into it, at its
-       two ends; the rail's other parts make a column on the right beside
-       the Program tab, and the Drive tab puts the scan (or the simulator's
-       view) on the left and its dock over the readouts on the right.
-       css/panel.css lays out both. -->
+  <!-- The shell is a grid of the top, the open tab and the rail (the
+       fault, the scan and the readouts). The top is two cells, every
+       control the page has but the open tab's own: what the controls drive
+       and its state, then how they drive it, Stop and the gear (F8). On a
+       phone they stack: the cells, the scan, and the Drive tab as a dock
+       under the thumbs. On a wide screen the cells are one row, the rail's
+       parts a column on the right beside the Program tab, and the Drive tab
+       puts the scan (or the simulator's view) on the left and its dock over
+       the readouts on the right. css/panel.css lays out both. -->
   <main class="shell">
 
+    <!-- The top: two cells of one height, whatever they say, stuck to the
+         top of the screen when the page scrolls, so Stop is on screen on
+         every layout and both tabs. One row where the top is 900 px wide,
+         and a cell a row elsewhere. Every popover hangs below the cells,
+         never over them: the link's from the top itself, the gear's from
+         the gear in the second cell. Never an ancestor of a stick. -->
     <header class="bar">
-      <div class="masthead">
-        <span class="wordmark"><span class="word">Rover</span></span>
+      <div class="cells">
+        <!-- What the controls drive, and its state: the target first, as
+             the owner asked; Autonomous, the other cell from Stop, so that
+             a press that misses Stop cannot start the rover exploring; the
+             link; and what needs the operator, only while it is so. -->
+        <div class="hcell drives" role="group" aria-label="What the controls drive">
+          <!-- Rover | Simulator: what the Drive tab's controls drive and
+               what a program runs on, for the whole page. targetswitch.js
+               builds its segments; without the simulator's scripts it
+               offers the rover alone, and hides. -->
+          <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
 
-        <!-- What the operator must know at a glance: whether the link is up,
-             whether the rover is driving itself, and whether its motors
-             answered. Each is titled with what it says in full (link.js,
-             readouts.js); where a wide screen's header is short of room
-             it shows its icon alone. The pills take their colour from body[data-link],
-             which link.js keeps, and #mode's data-mode and #motorsFault's
-             data-ready, which readouts.js keeps; the motors pill shows the
-             one of its words that data-ready picks. -->
-        <div class="status" role="group" aria-label="Rover status">
-          <span class="pill linkPill" id="linkPill" title="No link to the rover.">
-            <span class="lamp" aria-hidden="true"></span>
-            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10a11 11 0 0 1 15 0M7.5 13.5a6.5 6.5 0 0 1 9 0M12 17.5h.01"/></svg>
-            <span id="linkState">No link</span>
-          </span>
-          <span class="pill modePill" id="modePill">
-            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
-            <span class="srOnly">Mode</span>
-            <output id="mode">—</output>
-          </span>
-          <span class="pill motorsPill" id="motorsPill">
-            <span class="lamp" aria-hidden="true"></span>
-            <svg class="icon pillIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/></svg>
-            <span data-say="unknown">Motors</span>
-            <span data-say="yes">Motors OK</span>
-            <span data-say="no">No motor shield</span>
-          </span>
-        </div>
-
-        <!-- Options, under the gear: the page's look, Dark or Light and a
-             theme, which look.js fills in and remembers, the keys, which keys.js lists, and a firmware
-             update over the link, which firmware.js runs. popover.js opens
-             and closes it. It is not modal, and not a dialog: nothing behind
-             it is made inert and nothing holds the focus, so Stop stays one
-             press while it is open, and that press closes it. An update
-             carries on with it closed. data-keys="own": the arrows and Space
-             are its while the focus is in it, not the keyboard's drive keys
-             (keys.js). -->
-        <div class="menuHolder">
-          <button type="button" class="optionsButton" id="options" aria-label="Options" title="Options">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.33 9.63 21.88 10.45V13.55L19.33 14.37 18.86 15.51 20.08 17.89 17.89 20.08 15.51 18.86 14.37 19.33 13.55 21.88H10.45L9.63 19.33 8.49 18.86 6.11 20.08 3.92 17.89 5.14 15.51 4.67 14.37 2.12 13.55V10.45L4.67 9.63 5.14 8.49 3.92 6.11 6.11 3.92 8.49 5.14 9.63 4.67 10.45 2.12H13.55L14.37 4.67 15.51 5.14 17.89 3.92 20.08 6.11 18.86 8.49Z"/><circle cx="12" cy="12" r="3.4"/></svg>
+          <!-- A switch, on while the target explores (autotoggle.js): its
+               knob and track say which. Named by its word; "Auto" where the
+               cell is narrow. -->
+          <button type="button" class="autoSwitch" id="auto" aria-pressed="false" aria-keyshortcuts="T" aria-label="Autonomous"
+                  title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
+            <span class="autoWord" aria-hidden="true">Autonomous</span>
+            <span class="autoShort" aria-hidden="true">Auto</span>
+            <span class="track" aria-hidden="true"></span>
           </button>
-          <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" data-keys="own" hidden>
-            <h2 class="menuLabel" id="lookLabel">Theme</h2>
-            <div class="segmented flavours" id="flavourChoice" role="group" aria-label="Dark or light"></div>
-            <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
-            <h2 class="menuLabel" id="keysLabel">Keys</h2>
-            <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>
-            <p class="keysNote">Driving and speed on the Drive tab; Stop and Autonomous on both.</p>
-            <h2 class="menuLabel" id="firmwareLabel">Firmware</h2>
-            <div class="firmware" role="group" aria-labelledby="firmwareLabel">
-              <p class="firmwareRunning"><span class="label">Rover runs</span><output id="firmwareBuild">—</output></p>
-              <div class="firmwareFile">
-                <button type="button" id="firmwareChoose">Choose file…</button>
-                <span id="firmwareChosen">No file chosen</span>
-                <input type="file" id="firmwareFile" accept=".bin" hidden>
-              </div>
-              <label class="label" for="firmwarePassword">The rover's OTA password</label>
-              <input type="password" id="firmwarePassword" autocomplete="off" spellcheck="false">
-              <div class="firmwareButtons">
-                <button type="button" id="firmwareStart" disabled>Update</button>
-                <button type="button" id="firmwareCancel" disabled>Cancel</button>
-              </div>
-              <progress id="firmwareProgress" aria-label="Sent to the rover" hidden></progress>
-              <p id="firmwareStatus" aria-live="polite"></p>
+
+          <!-- The link: its lamp and its word (link.js), the rover's link
+               on the simulator target too, so it says whose; the address
+               where the top has room for it. It opens the link's popover,
+               which hangs from the top (panel.css): the address, Connect,
+               and what link.js has to say. Not modal: Stop stays one press
+               while it is open, and the keys stay the panel's (Space is
+               Stop, even with Connect focused). -->
+          <button type="button" class="linkChip" id="linkChip" data-say="down">
+            <span class="lamp" aria-hidden="true"></span>
+            <span class="chipFor" id="chipFor" hidden>Rover:</span>
+            <span class="chipWord"><span id="linkState">Not connected</span><span class="chipSizer" aria-hidden="true">Not connected</span></span>
+            <span class="chipHost" id="linkHost"></span>
+            <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
+          </button>
+          <div class="menu linkPanel" id="linkPanel" role="group" aria-label="The link to the rover" hidden>
+            <label class="menuLabel" for="host">Rover address</label>
+            <div class="linkRow">
+              <input id="host" value="192.168.0.115" spellcheck="false"
+                     title="The rover's address: host, or host:port. Enter connects.">
+              <button type="button" id="connect">Connect</button>
             </div>
+            <!-- How to connect, and why the link went. -->
+            <p id="note" aria-live="polite"></p>
           </div>
-        </div>
-      </div>
 
-      <div class="switches">
-        <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden in
-             step. The Drive tab is the one shown until the scripts run:
-             joy.js sizes the stick from its container as it is built, and
-             needs it laid out. -->
-        <div class="tabs" role="tablist" aria-label="Controls">
-          <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true"
-                  title="Drive: the sticks, the rotate buttons and the speed.">
-            <svg class="icon segIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 7h9a4.5 4.5 0 0 1 4.4 5.5l-.9 4a2.6 2.6 0 0 1-4.5 1.2L14 16h-4l-1.5 1.7A2.6 2.6 0 0 1 4 16.5l-.9-4A4.5 4.5 0 0 1 7.5 7z"/><path d="M8 10v3M6.5 11.5h3M15.5 10.5h.01M17 12.5h.01"/></svg>
-            <span class="segWord">Drive</span>
-          </button>
-          <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
-                  tabindex="-1" title="Program: build a program from blocks, and run it on the target.">
-            <svg class="icon segIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
-            <span class="segWord">Program</span>
-          </button>
+          <!-- What needs the operator, each shown only while it is so, amber,
+               titled in full: the motor shield that did not answer
+               (readouts.js), and on the simulator target a rover still
+               exploring (app.js), which must not move unseen. The word
+               where the top has room for it, the glyph alone below. -->
+          <span class="badge" id="motorsBadge" role="img" aria-label="No motors" hidden>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/></svg>
+            <span class="badgeWord" aria-hidden="true">No motors</span>
+          </span>
+          <span class="badge" id="exploringBadge" role="img" aria-label="Rover exploring" hidden
+                title="Rover exploring: the rover reports that it is driving itself. The simulator target leaves it be; Stop stops it.">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
+            <span class="badgeWord" aria-hidden="true">Rover exploring</span>
+          </span>
+          <!-- The rover's mode, as telemetry last reported it (readouts.js). -->
+          <output id="mode" hidden>—</output>
         </div>
 
-        <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports it.
-             scheme.js builds the two segments, and keeps them disabled until
-             a frame names a scheme: firmware from before schemes never does. -->
-        <div id="schemeSlot">
+        <!-- How the controls drive: the tabs, the scheme, and at the cell's
+             far end Stop and the gear. -->
+        <div class="hcell hands" role="group" aria-label="How the controls drive">
+          <!-- tabs.js keeps aria-selected, tabindex and the panels' hidden
+               in step. Words, drawn as tabs rather than a switch, so that
+               moving between them never looks like a setting. The Drive tab
+               is the one shown until the scripts run: joy.js sizes the
+               stick from its container as it is built, and needs it laid
+               out. -->
+          <div class="tabs" role="tablist" aria-label="Controls">
+            <button role="tab" id="tabDrive" aria-controls="driveTab" aria-selected="true"
+                    title="Drive: the sticks, the rotate buttons and the speed.">Drive</button>
+            <button role="tab" id="tabProgram" aria-controls="programTab" aria-selected="false"
+                    tabindex="-1" title="Program: build a program from blocks, and run it on the target.">Program</button>
+          </div>
+
+          <!-- The control scheme, NORMAL or ADVANCED, as telemetry reports
+               it (scheme.js builds the two segments). Until a frame names
+               one, neither is pressed and a press is a wish, sent as soon
+               as one does. -->
           <div class="scheme" id="scheme" role="group" aria-labelledby="schemeLabel">
             <span class="label" id="schemeLabel">Scheme</span>
             <div class="segmented" id="schemeChoice"></div>
           </div>
+
+          <!-- Stop, outside the tabs: in reach whatever tab is showing and
+               wherever the page is scrolled, and switching tabs does not
+               move it. The page's one red control, its icon alone; its
+               title says the rest. -->
+          <button type="button" id="stop" aria-label="Stop" aria-keyshortcuts="Space"
+                  title="Stop (Space): stop the rover now, whatever is driving it, even its own exploring.">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+
+          <!-- Options, under the gear: the page's look, Dark or Light and a
+               theme, which look.js fills in and remembers, the keys, which
+               keys.js lists, and a firmware update over the link, which
+               firmware.js runs. popover.js opens and closes it. It is not
+               modal, and not a dialog: nothing behind it is made inert and
+               nothing holds the focus, so Stop stays one press while it is
+               open, and that press closes it. An update carries on with it
+               closed. data-keys="own": the arrows and Space are its while
+               the focus is in it, not the keyboard's drive keys
+               (keys.js). -->
+          <div class="menuHolder">
+            <button type="button" class="optionsButton" id="options" aria-label="Options" title="Options">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.33 9.63 21.88 10.45V13.55L19.33 14.37 18.86 15.51 20.08 17.89 17.89 20.08 15.51 18.86 14.37 19.33 13.55 21.88H10.45L9.63 19.33 8.49 18.86 6.11 20.08 3.92 17.89 5.14 15.51 4.67 14.37 2.12 13.55V10.45L4.67 9.63 5.14 8.49 3.92 6.11 6.11 3.92 8.49 5.14 9.63 4.67 10.45 2.12H13.55L14.37 4.67 15.51 5.14 17.89 3.92 20.08 6.11 18.86 8.49Z"/><circle cx="12" cy="12" r="3.4"/></svg>
+            </button>
+            <div class="menu options" id="optionsPanel" role="group" aria-labelledby="options" data-keys="own" hidden>
+              <h2 class="menuLabel" id="lookLabel">Theme</h2>
+              <div class="segmented flavours" id="flavourChoice" role="group" aria-label="Dark or light"></div>
+              <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
+              <h2 class="menuLabel" id="keysLabel">Keys</h2>
+              <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>
+              <p class="keysNote">Driving and speed on the Drive tab; Stop and Autonomous on both.</p>
+              <h2 class="menuLabel" id="firmwareLabel">Firmware</h2>
+              <div class="firmware" role="group" aria-labelledby="firmwareLabel">
+                <p class="firmwareRunning"><span class="label">Rover runs</span><output id="firmwareBuild">—</output></p>
+                <div class="firmwareFile">
+                  <button type="button" id="firmwareChoose">Choose file…</button>
+                  <span id="firmwareChosen">No file chosen</span>
+                  <input type="file" id="firmwareFile" accept=".bin" hidden>
+                </div>
+                <label class="label" for="firmwarePassword">The rover's OTA password</label>
+                <input type="password" id="firmwarePassword" autocomplete="off" spellcheck="false">
+                <div class="firmwareButtons">
+                  <button type="button" id="firmwareStart" disabled>Update</button>
+                  <button type="button" id="firmwareCancel" disabled>Cancel</button>
+                </div>
+                <progress id="firmwareProgress" aria-label="Sent to the rover" hidden></progress>
+                <p id="firmwareStatus" aria-live="polite"></p>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <!-- Rover | Simulator: what the Drive tab's controls drive and what
-             a program runs on, for the whole page. targetswitch.js builds
-             its segments; without the simulator's scripts it offers the
-             rover alone, and hides. -->
-        <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
       </div>
-
-      <div class="link">
-        <input id="host" value="192.168.0.115" aria-label="Rover address" spellcheck="false"
-               title="The rover's address: host, or host:port. Enter connects.">
-        <button id="connect">Connect</button>
-      </div>
-
-      <!-- What link.js has to say, under the address (beside it, in a wide
-           screen's one row, where its title holds it whole): how to
-           connect, and why the link went. Empty while all is well. -->
-      <p id="note" aria-live="polite"></p>
     </header>
 
     <!-- The dock: two sticks, as on a gamepad, the translate stick under
          the left thumb and the pivot stick under the right; the rotate
-         buttons and the speed under them, with Stop below on a phone.
+         buttons and the speed under them.
          .controls is the grid they sit on, its own box so that on a wide
          screen it can take its content's height and sit centred in the
          dock. Each stick and what lies over it share one grid cell rather
@@ -303,21 +333,17 @@
       </div>
     </section>
 
-    <!-- The rail: what the rover reports, and Stop. Its parts are cells of
-         the shell's grid: on a phone the scan above the open tab and Stop at
-         the foot of the screen; on a wide screen a column beside the
-         Program tab, the scan on the left of the Drive tab and the readouts
-         under its dock, with Stop and Autonomous in the header's row, which
-         the tab switch never moves.
-         It comes after the tabs so that Stop is the last control in the
-         focus order. -->
+    <!-- The rail: what the rover reports. Its parts are cells of the
+         shell's grid: on a phone the scan above the open tab; on a wide
+         screen a column beside the Program tab, the scan on the left of
+         the Drive tab and the readouts under its dock. -->
     <div class="rail">
       <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
            it again when the rover says true, says nothing, or the link goes.
            It says what a reset does because a power-on or EN reset starts
            exploration: once the shield answers, the wheels turn straight
            away, likely with the operator's hands still on the wiring.
-           data-ready says what the rover last said, for the motors pill. -->
+           data-ready says what the rover last said. -->
       <p class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
         <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
         It did not answer when the rover booted. Check its I2C wiring and power,
@@ -352,24 +378,6 @@
         <div class="cell"><span class="label">Chip</span><output id="temp">—</output></div>
       </section>
 
-      <!-- Outside the tabs, at the foot of a phone's screen and in a wide
-           screen's header: Stop is in reach whatever tab is showing and
-           wherever the page is scrolled, and switching tabs does not move
-           it. Autonomous is a toggle, on while the target explores
-           (autotoggle.js). Each word is the button's name; a wide screen
-           shows the icons alone, and the titles say the rest. -->
-      <div class="actions">
-        <button id="auto" aria-pressed="false" aria-keyshortcuts="T"
-                title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
-          <span class="actionWord">Autonomous</span>
-        </button>
-        <button id="stop" aria-keyshortcuts="Space"
-                title="Stop (Space): stop the rover now, whatever is driving it, even its own exploring.">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          <span class="actionWord">Stop</span>
-        </button>
-      </div>
     </div>
   </main>
 

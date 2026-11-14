@@ -11,7 +11,7 @@
  *   dom             HTML and SVG elements, built from attribute tables
  *   segment, pressSegment, labelSegment
  *                   a segmented control's buttons, which one is pressed,
- *                   and a segment's icon, word and hint
+ *                   and a segment's word, its short form and its hint
  *   isPrimaryPress  whether a press is the primary button alone
  */
 
@@ -141,15 +141,17 @@ function pressSegment(buttons, pressed) {
   for (const [key, button] of buttons) button.setAttribute("aria-pressed", String(key === pressed));
 }
 
-// A segment's content: an icon, drawn from paths on a 24 px grid, and its
-// word, which names it. On a wide screen the header shows the icon alone
-// (panel.css), so the word stays the button's name to a screen reader and
-// the hint, its title, says on hover what it does. On a phone the word
-// shows and the icon does not.
-function labelSegment(button, { word, paths, hint }) {
-  const icon = dom.svg("svg", { class: "icon segIcon", viewBox: "0 0 24 24", "aria-hidden": "true" }, button);
-  for (const d of paths) dom.svg("path", { d }, icon);
+// A segment's content: its word, which names it, and the hint, its title,
+// which says on hover what it does. No icon: the cells at the top are words
+// (F8). A segment with a short form (`short`, "Sim" for "Simulator") shows
+// it where its cell is narrow (panel.css); the button is then named by its
+// word alone (aria-label), whichever of the two shows.
+function labelSegment(button, { word, short = null, hint }) {
   dom.html("span", { class: "segWord" }, button, word);
+  if (short) {
+    dom.html("span", { class: "segShort", "aria-hidden": "true" }, button, short);
+    button.setAttribute("aria-label", word);
+  }
   button.title = hint;
   return button;
 }

@@ -72,22 +72,27 @@ const link = new Link({
   body: document.body,
   host: byId("host"),
   connect: byId("connect"),
-  linkPill: byId("linkPill"),
+  chip: byId("linkChip"),
   linkState: byId("linkState"),
+  linkHost: byId("linkHost"),
   note: byId("note"),
   storageKey: "rover.host",
 });
 
+// The link chip opens the link's popover: the address, Connect and the
+// note. It hangs below the top's cells, never over them (panel.css), and
+// is not modal, so Stop stays one press while it is open.
+new Popover(byId("linkChip"), byId("linkPanel"));
+
 const scanView = new ScanView(byId("scan"));
 
 const readouts = new Readouts({
-  modePill: byId("modePill"),
   mode: byId("mode"),
   move: byId("move"),
   phaseCell: byId("phaseCell"),
   phase: byId("phase"),
   temp: byId("temp"),
-  motorsPill: byId("motorsPill"),
+  motorsBadge: byId("motorsBadge"),
   motorsFault: byId("motorsFault"),
 });
 
@@ -166,7 +171,8 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 
 /* --- Stop and Autonomous ------------------------------------------------- */
 
-// Outside the tabs, so both are in reach whatever tab is showing. Stop always
+// In the top's cells, outside the tabs, so both are in reach whatever tab
+// is showing. Stop always
 // sends STOP, driving or not: it is also how to stop an exploring rover. On
 // the simulator the Driver's STOP goes there, and Stop sends one to a
 // connected rover too, since Stop means everything: first, so that nothing
@@ -317,6 +323,20 @@ const targetSwitch = new TargetSwitch({
 });
 const autoButton = byId("auto");
 const autoTitle = autoButton.getAttribute("title");
+// On the simulator target the toggles are the simulator's, and two things
+// in the top's first cell still speak for the rover: the link chip, its
+// word prefixed "Rover:" so it never reads as the simulator's, and the
+// "Rover exploring" badge, shown while the rover's link says it explores,
+// since a rover sent exploring before the switch must not move unseen. On
+// the rover target the Autonomous toggle says so itself.
+const chipFor = byId("chipFor");
+const exploringBadge = byId("exploringBadge");
+function markExploring() {
+  const reporting = link.state === "up" || link.state === "stale";
+  exploringBadge.hidden = !(driven.simulator && reporting && readouts.mode === MODE_AUTONOMOUS);
+}
+link.onTelemetry(markExploring);
+link.onState(markExploring);
 // The scheme toggle shows and sets the target's scheme: the simulator's is
 // its own, so Normal | Advanced work with no rover, and the Drive tab's
 // family follows it as it follows the rover's. The Autonomous toggle shows
@@ -326,6 +346,8 @@ function driveTarget(kind) {
   schemeToggle.bind(driven.simulator);
   autoToggle.bind(driven.simulator);
   document.body.dataset.target = kind;
+  chipFor.hidden = !driven.simulator;
+  markExploring();
   autoButton.setAttribute("title", driven.simulator
     ? "Autonomous (T), on the simulator: on, the simulated rover takes the mode, but exploring is not simulated, so it stands still; off, it stops. The rover is left alone."
     : autoTitle);
@@ -417,8 +439,7 @@ schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 // A program driving the rover from the Program tab goes on while the Drive
 // tab shows, and nothing there said so: the tab itself is marked while one
 // runs, and says so on hover. A press of any drive control takes over, as
-// ever. Its own title, what the tab is, comes back after: on a wide screen
-// the tab is its icon alone.
+// ever. Its own title, what the tab is, comes back after.
 const programTabButton = byId("tabProgram");
 const programTabTitle = programTabButton.getAttribute("title");
 runner.onState((state, { kind }) => {

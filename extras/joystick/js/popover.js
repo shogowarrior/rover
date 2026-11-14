@@ -1,6 +1,7 @@
 /**
  * A button and the popup it opens: the Program tab's File menu, the
- * simulator's settings, and the page's Options. While it is open its button
+ * simulator's settings, the page's Options, and the link chip's address and
+ * Connect. While it is open its button
  * says so (aria-expanded); Escape closes it with the focus back on its
  * button, and a press anywhere outside it closes it.
  *
@@ -67,8 +68,8 @@ class Popover {
 
   // One popup open at a time: opening one closes any other. It scrolls into
   // view, clear of anything its stylesheet's scroll margins keep it from (the
-  // Stop bar on a phone). A menu takes the focus to the item `at` ("first"
-  // or "last"); any other popup leaves it on the button.
+  // top stuck over a phone's page). A menu takes the focus to the item `at`
+  // ("first" or "last"); any other popup leaves it on the button.
   #open(at) {
     if (Popover.#current && Popover.#current !== this) Popover.#current.#show(false);
     Popover.#current = this;

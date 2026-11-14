@@ -54,6 +54,12 @@ function focus(page, element) {
   element.focus();
   return page.doc.activeElement === element;
 }
+// The address and Connect live in the link chip's popover, so a press on the
+// chip comes first, as it does for the operator.
+function openLink(page) {
+  if (page.$("linkPanel").hidden) page.fire(page.$("linkChip"), "click");
+  return !page.$("linkPanel").hidden;
+}
 
 const toSimulator = (page) => page.fire(page.$("target").children[1], "click");
 const toProgram = (page) => page.fire(page.$("tabProgram"), "click");
@@ -215,6 +221,7 @@ test("keys: Space stops and T toggles Autonomous, on either tab, as the buttons 
 
 test("keys: with Autonomous, Run or Connect focused, Space sends one STOP and clicks nothing", () => {
   const { page, ws } = connected(telemetry());
+  check(openLink(page), "the link chip opened its popover");
   for (const id of ["auto", "connect"]) {
     const from = count(ws);
     check(focus(page, page.$(id)), `${id} took the focus`);
@@ -288,6 +295,7 @@ test("keys: a keydown is not the panel's where the focus has keys of its own", (
     check(!events[1][0].defaultPrevented && !events[1][1].defaultPrevented, `${what}: Space is left alone`);
   };
 
+  check(openLink(page), "the link chip opened its popover");
   check(focus(page, page.$("host")), "the address took the focus");
   tryAll("the address");
 
@@ -431,6 +439,7 @@ test("keys: a key is let go by where it is on the keyboard, whatever its keyup t
 test("keys: a keyup counts wherever the focus has gone", () => {
   const { page, ws } = connected();
   down(page, "w");
+  openLink(page);
   focus(page, page.$("host"));
   up(page, "w");
   page.clock.advance(1000);
@@ -455,6 +464,7 @@ test("keys: a context menu lets go of every held key, but not the sticks' and ro
 
 test("keys: Enter connects and leaves the address, so Space then stops an exploring rover", () => {
   const page = loadPage();
+  check(openLink(page), "the link chip opened its popover");
   check(focus(page, page.$("host")), "the address took the focus");
   page.$("host").value = "10.0.0.7";
   page.fire(page.$("host"), "keydown", { key: "Enter" });

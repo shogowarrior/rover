@@ -1,8 +1,10 @@
 /**
  * The Rover | Simulator switch: what the page drives, the Drive tab's
- * controls and a program alike. A segmented control with one segment per
- * target the registry holds; with only the rover there is nothing to
- * switch, and it is hidden. The choice is remembered.
+ * controls and a program alike, first in the top's first cell, as the
+ * owner asked (F8). A segmented control with one segment per target the
+ * registry holds, each its word ("Sim" where the cell is narrow); with only
+ * the rover there is nothing to switch, and it is hidden. The choice is
+ * remembered.
  *
  *   new TargetSwitch({ group, targets, storageKey, formerKey })
  *     group       the empty .segmented element it fills.
@@ -24,12 +26,8 @@
  */
 class TargetSwitch {
   static LABELS = Object.freeze({ rover: "Rover", simulator: "Simulator" });
-  // The header's icons (labelSegment): the chassis on its four wheels, and
-  // a screen.
-  static ICONS = Object.freeze({
-    rover: ["M9 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M3 5.5h1v4H3zM20 5.5h1v4h-1zM3 14.5h1v4H3zM20 14.5h1v4h-1z", "M10.5 8h3"],
-    simulator: ["M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 20h8M12 16v4"],
-  });
+  // Where its cell is narrow (panel.css): the word it shows instead.
+  static SHORT = Object.freeze({ simulator: "Sim" });
   static HINTS = Object.freeze({
     rover: "Rover: the controls drive the rover, and programs run on it.",
     simulator: "Simulator: the controls drive a simulated rover, and programs preview on it. Nothing goes to the rover but Stop.",
@@ -51,7 +49,7 @@ class TargetSwitch {
     for (const kind of kinds) {
       const button = labelSegment(segment(group, () => this.#choose(kind)), {
         word: TargetSwitch.LABELS[kind] || kind,
-        paths: TargetSwitch.ICONS[kind] || [],
+        short: TargetSwitch.SHORT[kind] || null,
         hint: TargetSwitch.HINTS[kind] || "",
       });
       this.#segments.set(kind, button);

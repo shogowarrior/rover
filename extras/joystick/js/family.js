@@ -4,7 +4,8 @@
  * The Drive tab has two sticks, as a gamepad does. The left stick always
  * translates, under either scheme. The right stick drives the pivots, which
  * the ADVANCED scheme adds: its quadrant picks the move (moveForStick in
- * mecanum.js), in the family chosen here, Pivot or Pivot sideways, as the
+ * mecanum.js), in the family chosen here, Pivot or Pivot sideways (its
+ * segment says Sideways), as the
  * gamepad picks them by holding L1 or R1. The four moves are shown at the
  * stick's corners: what each quadrant sends is not something to learn by
  * driving. Under NORMAL, and while the scheme is unknown, the pivot stick
@@ -43,13 +44,13 @@
 class FamilySelector {
   static OPTIONS = Object.freeze([
     Object.freeze({ family: FAMILY_PIVOT, label: "Pivot", title: "Pivot: the right stick turns the rover about the wheels on one side (L1 on the pad)." }),
-    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Pivot sideways", title: "Pivot sideways: the right stick swings the front or the rear about the other axle (R1 on the pad)." }),
+    Object.freeze({ family: FAMILY_PIVOT_SIDEWAYS, label: "Sideways", title: "Pivot sideways: the right stick swings the front or the rear about the other axle (R1 on the pad)." }),
   ]);
 
   // Each family's icon, as an SVG path in a 16-unit box, drawn for the
   // stick pushed up and to the right; a corner mirrors it into its own
-  // quadrant, as the moves mirror, and the family's segment shows it
-  // unmirrored, so the segment and the corner it lights up draw alike. Drawn
+  // quadrant, as the moves mirror. The family's segment is its word alone,
+  // as every segment at the top is (F8): Pivot | Sideways. Drawn
   // rather than typed: no one font has every arrow these need, and the
   // fallbacks drew a family's four corners in two different weights. They
   // match the arrows MOTIONS gives the pivots for text (↱ ↰ ↳ ↲ and ↷ ↶),
@@ -103,7 +104,6 @@ class FamilySelector {
     for (const { family, label: name } of FamilySelector.OPTIONS) {
       const button = segment(choice, () => this.#choose(family));
       button.dataset.family = family;
-      button.appendChild(FamilySelector.#icon(family, 1, 1).svg);
       dom.html("span", { class: "name" }, button, name);
       this.#buttons.set(family, button);
     }
@@ -111,7 +111,7 @@ class FamilySelector {
     for (const { corner, x, yUp } of FamilySelector.CORNERS) {
       const hint = dom.html("span", { class: "hint" }, hints);
       hint.dataset.corner = corner;
-      const { svg, path } = FamilySelector.#icon(null, x, yUp);
+      const { svg, path } = FamilySelector.#icon(x, yUp);
       hint.appendChild(svg);
       const text = dom.html("span", { class: "name" }, hint, "");
       this.#corners.push({ x, yUp, hint, path, text });
@@ -192,13 +192,13 @@ class FamilySelector {
   // exactly on an axis counts as right and forward, as it does in
   // moveForStick(). Hidden from assistive technology: the words beside it
   // say it.
-  static #icon(family, x, yUp) {
+  static #icon(x, yUp) {
     const sx = x < 0 ? -1 : 1;
     const sy = yUp < 0 ? -1 : 1;
     const svg = dom.svg("svg", { class: "glyph", viewBox: "0 0 16 16", "aria-hidden": "true" });
     const path = dom.svg("path", {
       transform: `matrix(${sx} 0 0 ${sy} ${sx < 0 ? 16 : 0} ${sy < 0 ? 16 : 0})`,
-      d: family ? FamilySelector.ICONS[family] : "",
+      d: "",
     }, svg);
     return { svg, path };
   }

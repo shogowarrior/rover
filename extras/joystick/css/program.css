@@ -4,42 +4,27 @@
    tokens it uses; programtab.js and blocks.js set the attributes it keys
    on.
 
-   The tab sits where the Drive tab does (panel.css): above the Stop bar on
-   a phone, scrolling with the page; in the left pane on a wide screen,
-   scrolling inside it, beside the rail. */
+   The tab sits where the Drive tab does (panel.css): under the top on a
+   phone, scrolling with the page under the top stuck over it; in the left
+   pane on a wide screen, scrolling inside it, beside the rail. */
 
 /* --- the Program tab's name, while a program drives the rover -------------- */
 
 /* app.js marks the tab while a program runs on the rover, so that the Drive
    tab, where nothing else says so, shows it too. A status dot (panel.css
-   draws them all). */
+   draws them all): the tabs are words over the cell's panel (F8), open or
+   not, so the dot is green with its halo on either. In the tab's top right
+   corner, over its padding and above the word's capitals, not after the
+   word: there it widened the tab as it came and went, and at 320 px the
+   cell had no room for it. A tab is no stick's ancestor, and every button
+   in a cell is positioned already (panel.css), for its touch target. */
 .tabs [role="tab"][data-running="yes"]::after {
+  position: absolute;
+  top: 3px;
+  right: 1px;
   background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
+  box-shadow: 0 0 0 2px var(--ok-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
-}
-
-/* On the open tab the dot sits on the chosen chip, where green fell under
-   3:1 in every look but Field Light: it takes the chip's ink, as the tab's
-   word does, with no halo (the state line under it says the program
-   runs). */
-.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
-  background: var(--on-chosen);
-  box-shadow: none;
-}
-
-/* On an upright phone "Program" all but fills the chip, and the dot beside
-   it fell off onto the frame (two thirds of it at 320 px), where the chip's
-   ink does not read: there it sits in the chip's corner instead. A tab is
-   no stick's ancestor, so it may be positioned. */
-@media (max-width: 439.98px) {
-  .tabs [role="tab"][aria-selected="true"][data-running="yes"] { position: relative; }
-
-  .tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
-    position: absolute;
-    top: 5px;
-    right: 6px;
-  }
 }
 
 /* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar
@@ -144,7 +129,7 @@
 .programEditor {
   position: relative;
   /* Blockly's toolbox, flyout and scrollbars carry z-indexes of their own;
-     kept inside this box, they stay under the sticky Stop bar. */
+     kept inside this box, they stay under the top stuck over the page. */
   isolation: isolate;
   height: var(--stage-h);
   overflow: hidden;
@@ -158,8 +143,8 @@
 .programSim[hidden] { display: none; }
 
 /* clip, not hidden: a scroll container would swallow the settings' scroll
-   margin, and they would open under the Stop bar (panel.css). hidden stays
-   for a browser without clip. */
+   margin, and they would open under the top stuck over the page
+   (panel.css). hidden stays for a browser without clip. */
 #simSlot {
   position: relative;
   height: 360px;
@@ -324,8 +309,8 @@
 }
 
 /* In the editor's place when Blockly could not load. Top-aligned: on a
-   phone the editor's box runs on under the Stop bar, and centred, only the
-   headline showed, and not that driving works without the editor. */
+   phone the editor's box runs on past the screen's foot, and centred, only
+   the headline showed, and not that driving works without the editor. */
 .programOffline {
   position: absolute;
   inset: 0;

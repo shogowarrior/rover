@@ -4,17 +4,22 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, linkPill, linkState, note, storageKey })
+ *   new Link({ body, host, connect, chip, linkState, linkHost, note, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
- *     host        the address field (host or host:port); Enter connects,
- *                 and leaves the field, so the keyboard's Space and T (keys.js)
- *                 stop and explore rather than type into it;
- *     connect     the Connect / Cancel / Disconnect button, titled with what
- *                 a press does;
- *     linkPill    the header's link pill, titled with the state in full:
- *                 up to 1280 px wide a wide screen's header shows its icon
- *                 alone;
- *     linkState   the state's label, in it; note: the status line;
+ *     host        the address field (host or host:port), in the link
+ *                 popover; Enter connects, and leaves the field, so the
+ *                 keyboard's Space and T (keys.js) stop and explore rather
+ *                 than type into it;
+ *     connect     the Connect / Cancel / Disconnect button beside it, titled
+ *                 with what a press does;
+ *     chip        the link chip in the top's first cell, which opens the
+ *                 popover: it gets data-say = the word it shows ("down",
+ *                 "lost", "connecting", "up", "stale"), and is titled with
+ *                 the state and the address in full, since a narrow cell
+ *                 shows its lamp alone;
+ *     linkState   the state's word, in it; linkHost: the address, in it (a
+ *                 wide screen shows it);
+ *     note        the status line, in the popover;
  *     storageKey  where the address is remembered.
  *
  *   send(obj)          serialise obj and send it as one frame. Returns false,
@@ -50,12 +55,21 @@ class Link {
   // a change to the firmware's interval cannot leave it under two frames.
   static STALE_MS = 3 * TELEMETRY_MS + 300;
 
-  static LABEL = Object.freeze({ down: "No link", connecting: "Connecting", up: "Link", stale: "No data" });
+  // The chip's word for each state: "down" splits into the link never made
+  // or put down by the panel, and the link lost under it.
+  static LABEL = Object.freeze({
+    down: "Not connected",
+    lost: "Link lost",
+    connecting: "Connecting…",
+    up: "Connected",
+    stale: "No data",
+  });
   static TITLE = Object.freeze({
-    down: "No link to the rover.",
-    connecting: "Connecting to the rover.",
-    up: "Linked: the rover's telemetry is arriving.",
-    stale: "No data: the rover's telemetry has stopped.",
+    down: (address) => `Not connected to the rover (${address}). Press for the address and Connect.`,
+    lost: (address) => `Link lost: the rover at ${address} stopped answering. Press for the address and Connect.`,
+    connecting: (address) => `Connecting to the rover at ${address}.`,
+    up: (address) => `Connected to the rover at ${address}: its telemetry is arriving.`,
+    stale: (address) => `No data: the rover at ${address} has stopped sending telemetry.`,
   });
   // What a press of the Connect button does, in each state.
   static CONNECT_TITLE = Object.freeze({
@@ -68,6 +82,7 @@ class Link {
   #ui;
   #storageKey;
   #state = null;
+  #address = ""; // the address the chip names: the last connected to, or the field's
   // The one current socket. Every listener checks it first: a socket that has
   // been replaced or closed on purpose must not touch the page, or its late
   // 'close' would halt the new session and show the link as down.
@@ -77,8 +92,8 @@ class Link {
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, linkPill, linkState, note, storageKey }) {
-    this.#ui = { body, host, connect, linkPill, linkState, note };
+  constructor({ body, host, connect, chip, linkState, linkHost, note, storageKey }) {
+    this.#ui = { body, host, connect, chip, linkState, linkHost, note };
     this.#storageKey = storageKey;
 
     connect.addEventListener("click", () => {
@@ -92,6 +107,7 @@ class Link {
     });
 
     host.value = memory.recall(storageKey) || host.value;
+    this.#name(host.value.trim());
     this.#setState("down");
     this.note("Enter the rover's address and connect.");
   }
@@ -140,6 +156,7 @@ class Link {
       return;
     }
     memory.remember(this.#storageKey, host);
+    this.#name(host);
 
     // One socket at a time. An old one left open would hold one of the rover's
     // five client slots, and pressing Enter or Connect again must replace the
@@ -200,18 +217,35 @@ class Link {
 
   // The state is "down" exactly when there is no socket, so the button always
   // offers to get rid of one that exists -- including one still connecting to
-  // a slow or wrong host.
+  // a slow or wrong host. The chip says "Link lost" for a link that went down
+  // under the panel, and "Not connected" otherwise.
   #setState(state, cause) {
     if (state === this.#state) return;
     this.#state = state;
-    const { body, linkPill, linkState, connect } = this.#ui;
+    const { body, connect } = this.#ui;
     body.dataset.link = state;
-    linkState.textContent = Link.LABEL[state];
-    linkPill.title = Link.TITLE[state];
+    this.#say(state === "down" && cause === "linkLost" ? "lost" : state);
     connect.textContent =
       state === "down" ? "Connect" : state === "connecting" ? "Cancel" : "Disconnect";
     connect.title = Link.CONNECT_TITLE[state];
     this.#stateListeners.emit(state, cause);
+  }
+
+  // The chip: its word, data-say for its colour, and the whole of it, with
+  // the address, as its title.
+  #say(said) {
+    const { chip, linkState } = this.#ui;
+    chip.dataset.say = said;
+    linkState.textContent = Link.LABEL[said];
+    chip.title = Link.TITLE[said](this.#address || "no address yet");
+  }
+
+  // The address the chip names, where the top has room (panel.css) and in
+  // its title: the one connected to, or about to be.
+  #name(address) {
+    this.#address = address;
+    this.#ui.linkHost.textContent = address;
+    if (this.#ui.chip.dataset.say) this.#say(this.#ui.chip.dataset.say);
   }
 
   // Close the current socket, open or still connecting. The state goes down
