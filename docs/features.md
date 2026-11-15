@@ -419,8 +419,10 @@ under NORMAL is 143 px at 375 x 812, 131 at 375 x 667 and 132 at 360 x 560:
 too short for a room anyone could read. Under 300 px the view shows the
 wheels and the motion, larger, with the bar's playback, pause and reset;
 under 120 px without the bar or the log; under 32 px the move alone
-(`css/sim.css`). A tablet upright gets the whole view under NORMAL (321 px
-at 768 x 1024), and the wheels and the motion under ADVANCED (263 px). The switch's own row costs a phone 54 px, and the scan
+(`css/sim.css`). F8 since put the view's controls in one row that always
+stays, with the room under it down to a view about 113 px tall (100 px
+inside its padding), and the row alone under that. A tablet upright gets
+the whole view under NORMAL (321 px at 768 x 1024), and the wheels and the motion under ADVANCED (263 px). The switch's own row costs a phone 54 px, and the scan
 pays for it on the rover target too (143 px at 375 x 812 against 197
 before). On a phone 600 px tall or less, every phone on its side among
 them, the Drive tab leaves the switch to the Program tab: at 375 x 548 its
@@ -1798,9 +1800,13 @@ panel", says how each part works; this says what changed and why.
   - Autonomous and Stop are in different cells, so that a press that
     misses Stop can never start the rover exploring.
   - Each cell says as much as its width allows, measured
-    (`fitTheTop()`, `data-fit`): the chip's address on a wide screen, then
-    every word, then Sim, Auto and the chip's short word, then a smaller
-    size, and last the chip's lamp alone. The step follows the cell's width
+    (`fitTheTop()`, `data-fit`): in the first, the chip's address after
+    its word from 1280 px wide, then every word, then Sim, Auto and the
+    chip's short word ("Connect", or "Connected"), then its controls closer
+    together, a smaller size, and last the chip's lamp alone; in the
+    second, every word, then its segments closer together, keeping 13 px
+    words down to a 375 px phone, then a smaller size, and on a 320 px
+    phone alone Adv for Advanced. The step follows the cell's width
     alone, and each control is a slot as wide whatever it says, so nothing
     in either cell moves on a switch of target, a change of link or an
     alert.
@@ -1810,7 +1816,9 @@ panel", says how each part works; this says what changed and why.
 - **The link chip and its popover.** The chip is a lamp, the link's state
   in a word ("Rover:" before it on the simulator target), and a caret. It
   opens the link's popover, which holds the address, Connect and the note,
-  and hangs below the cells, not modal, like Options. With no link the
+  and hangs below the cells, not modal, like Options; each scrolls inside
+  where the screen is too short for it, the end with more past it faded.
+  With no link the
   view shows a connect card over the faint scan: "Connect to" the address
   (Cancel while connecting, Reconnect after a lost link), a press of the
   popover's Connect, and Change address, which opens the popover with the
@@ -1830,16 +1838,23 @@ panel", says how each part works; this says what changed and why.
   drops it. Stale is as before: dimmed, and the title says why. The wish
   is configuration, never a command.
 - **The view pane**, one element beside both tabs: on the rover target the
-  scan's fan, the motor fault on one line at the top of its card, and the
-  readouts (the move, the chip's temperature, the phase while exploring) in
-  one line at its foot, where a card of their own used to stand; on the
-  simulator target the one simulator view, its controls in one row and the
-  room taking the rest. Its size comes from the shell's grid, never from
-  what it holds.
+  scan's fan, in a wide or a tall shape, whichever draws it the larger,
+  with its rings' key in a corner, the motor fault on one line at the top
+  of its card, and the readouts (the move, the chip's temperature, the
+  phase while exploring) in one line at its foot, where a card of their
+  own used to stand, giving up their captions, then a size, then the
+  temperature before a value is cut; on the simulator target the one
+  simulator view, its controls in one row (the colours' key, and on a
+  narrow row the room's list, in its settings) and the room taking the
+  rest. Its size comes from the shell's grid, never from what it holds.
 - **The hands pane**: the Drive tab's dock, or the Program tab's editor
-  under its toolbar (Run, Stop program, neutral and never red, the File
-  menu, and a View toggle that shows or hides the view pane on that tab,
-  with no strip left behind), and the console's line under the editor.
+  card, its toolbar one slim row at its head on every layout (Run, Stop
+  program, neutral and never red, the File menu, and a View toggle that
+  shows or hides the view pane on that tab, with no strip left behind),
+  and the console's line under the editor, or with the view shown under
+  the view on a wide screen and beside it on a tablet. Blockly's
+  categories run along the editor's top on a phone either way up,
+  wrapping rather than scrolling.
 - **The layouts.** On a wide screen the view is on the left and the hands
   on the right, on both tabs. Upright the view is on top and the hands
   under it. On a phone on its side the sticks run down the two edges, with
@@ -1867,8 +1882,10 @@ to these:
   half the pane empty: "so much wasted space". Stacked, the dock fills its
   column, the view takes the rest of the width, and that is the owner's
   "tile them vertically with a side split for the preview". Only one stick
-  drives at a time, so stacking costs no thumb anything. A shorter wide
-  screen keeps them side by side.
+  drives at a time, so stacking costs no thumb anything. They stack from
+  564 px tall, where each stick keeps 120 px, so a laptop's browser
+  (1366 x 657, or 1280 x 595 on a 1080p screen at 150%) stacks them too; a
+  shorter wide screen keeps them side by side.
 - Side by side, each cell is as wide as what it holds, not the first sized
   to its content and the second taking the rest: two halves left dead
   ground inside both.
@@ -1881,9 +1898,9 @@ to these:
   at its width (the fan's shape, or the room's), and the console sits
   under it, where a view as tall as the screen was mostly empty ground
   over a letterboxed fan or room.
-- The pivot stick's line under NORMAL says the pivots need Advanced in the
-  "top bar", not the "top right": the scheme is in the second cell, but
-  Stop and the gear are at its right end.
+- The pivot stick's line under NORMAL says "Advanced: top bar", one
+  wording on every layout, not the "top right": the scheme is in the
+  second cell, but Stop and the gear are at its right end.
 
 **Coverage.** Each clause, and what answers it now:
 
@@ -1933,9 +1950,10 @@ alone; the view's size from the grid alone, one simulator view held at
 scheme wish (made before connecting, sent with the first frame, not sent
 when the frame matches, replaced, dropped, and across a lost link), the
 chip's lamp, words and alert, the connect card, the View toggle's
-defaults, and the readouts' fit. The contrast audit gained the chip and
-its alert on their tint, the tab's underline and the switch's knob. The
-counts are in the PR.
+defaults, the readouts' fit, the scan's two shapes and its fit, the
+popovers' height caps and their faded ends. The contrast audit gained the
+chip and its alert on their tint, the address on the alert's tint, the
+tab's underline and the switch's knob. The counts are in the PR.
 
 **Checks for the owner,** which need real screens and fingers:
 
@@ -1949,7 +1967,10 @@ counts are in the PR.
   connect, and the rover should come up on ADVANCED;
 - Stop by touch and by Space with the link's popover or Options open;
 - on the simulator target with the rover exploring, the chip saying
-  "Exploring" in amber.
+  "Exploring" in amber;
+- on an iPhone, a tap into the address or the OTA password: their words
+  are 13 px, and Safari zooms the page into a field whose text is under
+  16 px, which no headless check shows.
 
 ## Menu or explicit: every control
 

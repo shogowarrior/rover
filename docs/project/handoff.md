@@ -434,7 +434,9 @@ and the next thread's task names that branch.
   controls (the segments, the link chip and its caret, Autonomous, Stop
   and the gear, 32 px tall with touch targets reaching 44 px); the scheme
   wish with the rover (press Advanced before connecting, then connect);
-  and Stop by touch and by Space with a popover open.
+  Stop by touch and by Space with a popover open; and on an iPhone a tap
+  into the address or the OTA password, whose 13 px words Safari may zoom
+  the page for (it zooms into a field under 16 px).
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): the top's cells overflowing a phone on its
   side at 480 x 320 (Stop and the gear spill over the pivot stick's

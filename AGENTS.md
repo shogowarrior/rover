@@ -447,9 +447,13 @@ Stop cannot start the rover exploring, and the gear, Stop's one neighbour,
 only opens Options. Every switch is the same segmented control, words only,
 the chosen segment inverted. Each cell is one line of controls and says as
 much as its width allows: `fitTheTop()` in `js/app.js` measures its
-`data-fit` steps from the most words to the fewest (the chip's address on a
-wide screen, then the short words, Sim, Auto and the chip's, then a smaller
-size, and last the chip's lamp alone). The step follows the cell's width
+`data-fit` steps from the most words to the fewest. The first cell: the
+chip's address after its word on a screen 1280 px wide or more, every word,
+the short words (Sim, Auto and the chip's), its controls closer together, a
+smaller size, and last the chip's lamp alone. The second: every word, its
+segments closer together (two steps, keeping the first cell's size of word
+down to a 375 px phone), a smaller size, and only where nothing else fits
+(a 320 px phone) Adv for Advanced. The step follows the cell's width
 alone, never the link, the target or the rover's state, and each control is
 a slot as wide whatever it says (the chip holds sizers for its longest
 words), so nothing in either cell moves as they change, and no word, state
@@ -457,16 +461,19 @@ or alert ever adds a line. Every button on the page is titled with what it
 does, and every one that is an icon alone has an `aria-label`: the owner
 asked for an icon and "hover to see more info" on all of them.
 
-**The link chip** (`Link` keeps it) is a lamp, the link's state in a word,
-"Rover:" before it on the simulator target so that it never reads as the
-simulator's, the address where the cell is widest, and a caret. It opens
+**The link chip** (`Link` keeps it) is a lamp, the link's state in a word
+(in a narrow cell a short one that reads as the button it is, "Connect" with
+no link and "Connected" while up), "Rover:" before it on the simulator
+target where the cell has room, so that it never reads as the simulator's,
+the address after the word where the cell is widest, and a caret. It opens
 the link's popover: the address, Connect (Cancel while connecting,
 Disconnect while up) and the note, which says how to connect or why the
 link went. With no link the connect card over the faint scan is a press of
 that Connect, saying what the press does ("Connect to" the address,
 Cancel, or Reconnect after a lost link), and its Change address opens the
-popover with the focus in the address. The card gives way while the
-popover is open, so two Connect buttons never show at once. In its word's
+popover with the focus in the address. The card, and the Connect beside
+the Program tab's console line, give way while the popover is open, so two
+Connect buttons never show at once. In its word's
 place, amber, the chip also says what needs the operator about the rover
 while nothing else on screen does (`markAlert()` in `js/app.js`): "No
 motors" while the rover reports that its motor shield did not answer and
@@ -475,20 +482,29 @@ where the scan shows, its fault line says it), and on the simulator target
 "Exploring" while the rover reports that it explores, since a rover sent
 exploring before the switch must not move unseen. The popover says why in
 words, as the chip's title does: a touch screen cannot hover. The link's
-popover, Options and the Program tab's File menu hang below the cells,
-never over them, and none is modal: Stop stays one press while one is
-open, and that press closes it.
+popover and Options hang from the foot of the top and the Program tab's
+File menu from its button, below the cells, never over them, and none is
+modal: Stop stays one press while one is open, and that press closes it.
+Each stops short of the screen's foot and scrolls inside past it, and
+`Popover` (`js/popover.js`) marks the ends with more of it past the edge
+(`data-more`), which the stylesheet fades, so a list cut by a short screen
+reads as one that scrolls.
 
 **The view** (`#view`) is a sibling of both tabs, never an ancestor of a
-stick. On the rover target it holds the scan's fan (`ScanView`), the motor
-fault on one line at the top of its card while the rover reports one (what
-to do behind a disclosure), and the readouts on one line at its foot: the
-move, the chip's temperature, and the phase while the rover explores, a
-halt in amber. The readouts give way a step at a time, their captions
-first, before a value is cut short. On the simulator target it holds the
-one `SimView`, in `#simSlot`, which is hidden by its attribute on the
-rover target so that an idle view knows it is out of sight and draws
-nothing; its controls take one row and the room the rest. The view's size
+stick. On the rover target it holds the scan's fan (`ScanView`), drawn in
+whichever of its two shapes, wide or tall, draws it the larger in the pane,
+its rings' key in a corner; the motor fault on one line at the top of its
+card while the rover reports one (what to do behind a disclosure); and the
+readouts on one line at its foot: the move, the chip's temperature, and the
+phase while the rover explores, a halt in amber. The readouts give way a
+step at a time, their captions first, then a smaller size, then the chip's
+temperature (each still read out), so the move and the phase are never cut
+short. On the simulator target it holds the one `SimView`, in `#simSlot`,
+which is hidden by its attribute on the rover target so that an idle view
+knows it is out of sight and draws nothing; its controls take one row and
+the room the rest (where the row is narrow, the room's list goes into the
+settings, where the colours' key is too), and a view too short for the room
+shows the row alone. The view's size
 is the shell grid's, never its content's (size containment): a fault, the
 connect card, the readouts or a switch of target only trade height inside
 it, so none of them can grow its row and move the dock under a held
@@ -500,7 +516,8 @@ stick.
   the view on the left and the hands on the right, the same sides on both
   tabs. The Drive tab's column is as wide as its sticks need (`--drive`)
   and the view takes the rest: the owner asked for the view to be the
-  larger. Where the screen is tall enough the sticks stack in that column,
+  larger. Where the screen is tall enough (564 px and up, where each
+  stick keeps 120 px) the sticks stack in that column,
   the translate stick with the rotate buttons under it over the pivot
   stick with the speed under it (the owner's "tile them vertically with a
   side split for the preview"; only one stick drives at a time, so stacking
@@ -515,7 +532,7 @@ stick.
   screen: the translate stick on the left, the pivot stick on the right
   with its family's row over it, and the rotate buttons and the speed
   under the two. On the Program tab the view, when shown, is a band over
-  the editor.
+  the editor, with the console beside the view on a tablet.
 - A phone on its side, held like a gamepad: the translate stick down the
   left edge with the rotate buttons under it, the pivot stick down the
   right with the speed under it, and between them the two cells and the
@@ -540,10 +557,13 @@ scrolling, lets go at joy.js's next report, before it can drive. So
 nothing above or beside a held stick changes size or place on a scheme
 change, a link lost or stale, a fault, the chip's alert or a switch of
 target: the cells are one height whatever they say, the view absorbs its
-own changes, and each of the dock's rows is one line of a fixed height.
+own changes, and each of the dock's rows is one line of a fixed height (the
+stacked column's one flexible row, between the two sticks' groups, holds
+nothing).
 The family's row is there under either scheme, and the translate stick's
 caption and the pivot stick's line keep to one line whatever they say
-(`FamilySelector` keeps their words short), which keeps a family chosen
+(`FamilySelector` has one wording for every layout, short enough for the
+narrowest), which keeps a family chosen
 under a held pivot stick a re-steer. joy.js sizes its canvas once, as it
 is built, so when the boxes settle at a new size (a turned phone's, say)
 the Driver builds the sticks again; it paints them once too, so it builds
@@ -651,7 +671,8 @@ tabs: held at 1x while the Drive tab shows, because the Driver re-sends in
 real time, and at the operator's speed on the Program tab.
 
 **The Program tab** runs a block program on the rover, or previews it on the
-simulator. Its toolbar, over the editor, holds Run (Run on rover, or
+simulator. Its toolbar, one slim row that heads the editor's card on every
+layout, holds Run (Run on rover, or
 Preview), Stop program (neutral, never red: it ends the program, and sends
 STOP only if the program was driving, where the top's Stop always stops the
 rover), the File menu, and the View toggle (`js/programtab.js`), which
@@ -659,8 +680,13 @@ shows or hides the view pane on this tab alone: hidden, the pane is gone,
 no strip left behind, and the editor takes its room. The view starts shown
 where the screen has room for both (a wide screen, or a tablet upright),
 and a switch to the simulator shows it there again; on a phone it starts
-hidden on either target, where it squeezed the editor to a strip. Under the
-editor the console's line says what is running and why Run is off; with
+hidden on either target, where it squeezed the editor to a strip.
+Blockly's categories run down the editor's left, or along its top on a
+phone either way up (`BlockEditor.NARROW`), wrapping to a second row rather
+than scrolling; a short editor drops Blockly's zoom buttons, and a shorter
+one its trash can. The console's line, under the editor (with the view
+shown, under the view on a wide screen and beside it on a tablet), says
+what is running and why Run is off; with
 no link on the rover target, while the view's connect card is out of
 sight, a Connect beside that line presses the popover's. On the rover a
 program needs a live link, and drives only through `Driver.program()`:
