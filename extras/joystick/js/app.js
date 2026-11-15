@@ -13,7 +13,7 @@
  *
  *   support.js       what the parts share: Listeners, memory, dom, segment,
  *                    pressSegment, labelSegment, clamp, radians, degrees,
- *                    abortableWait, isPrimaryPress, reportFault
+ *                    abortableWait, isPrimaryPress, reportFault, fitSteps
  *   look.js          LookPicker, lookToken: the page's looks, the one in
  *                    force, and the Dark | Light toggle and theme tiles
  *                    that pick one
@@ -104,6 +104,14 @@ const readouts = new Readouts({
   motorsBadge: byId("motorsBadge"),
   motorsFault: byId("motorsFault"),
 });
+
+// Each badge in the top's first cell opens its reason, its title in words:
+// a touch screen cannot hover, and a badge where the cell is narrow is its
+// glyph alone. It hangs below the cells, as the link's popover does.
+for (const [badge, note, why] of [["motorsBadge", "motorsNote", "motorsWhy"], ["exploringBadge", "exploringNote", "exploringWhy"]]) {
+  byId(why).textContent = byId(badge).getAttribute("title");
+  new Popover(byId(badge), byId(note));
+}
 
 // Where the Driver's commands go: over the Link to the rover, or, while the
 // target switch says Simulator, to the simulator in its place, so that
@@ -408,16 +416,18 @@ const ask = new AskDialog({
   yes: byId("askYes"),
   no: byId("askNo"),
 });
-// The view pane shows beside the editor at first where the screen is wide
-// enough for both (panel.css's side by side), and on a phone only for a
-// preview; the tab's View toggle shows or hides it.
-const sideBySide = typeof matchMedia === "function" && matchMedia("(min-width: 960px) and (min-height: 521px)").matches;
+// The view pane shows with the editor at first where the screen has room
+// for both: wide enough to put them side by side (panel.css), or a tablet
+// upright, tall enough for its band over the editor. On a phone it starts
+// folded on either target (it squeezed the editor to a strip); the tab's
+// View toggle shows or hides it.
+const roomForView = typeof matchMedia === "function" && matchMedia("(min-width: 960px) and (min-height: 521px), (min-width: 720px) and (min-height: 900px)").matches;
 const programTab = new ProgramTab({
   runner,
   targetSwitch,
   examples: RoverBlocks.EXAMPLES,
   ask,
-  showView: sideBySide,
+  showView: roomForView,
   ui: {
     run: byId("programRun"),
     runLabel: byId("programRunLabel"),
@@ -591,3 +601,38 @@ link.onOta((message) => firmwareUpdate.reply(message));
 firmwareUpdate.onStart(() => {
   if (runner.target === targets.rover) runner.abort("the rover's firmware is being updated.");
 });
+
+/* --- the top's words, where they fit -------------------------------------- */
+
+// Each of the top's cells says as much as it can hold: fitSteps tries its
+// steps of data-fit (panel.css) from the most words to the fewest, measured,
+// so it follows what the cell holds now (a badge, "Rover:" on the chip, the
+// link's word) and the fonts the device has. Again whenever a cell changes
+// size or what the first cell holds comes or goes. Neither cell's height
+// can change: a cell is one line whatever it says.
+const firstCell = document.querySelector(".hcell.drives");
+const secondCell = document.querySelector(".hcell.hands");
+// The second cell first: where the two share a row, the first takes what
+// the second leaves.
+function fitTheTop() {
+  fitSteps(secondCell, ["words", "short", "tight", "small"]);
+  fitSteps(firstCell, ["host", "words", "short", "glyphs", "snug", "lamp"]);
+}
+if (typeof ResizeObserver === "function") new ResizeObserver(fitTheTop).observe(firstCell);
+if (typeof MutationObserver === "function") {
+  new MutationObserver(fitTheTop).observe(firstCell, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
+}
+fitTheTop();
+
+// The readouts' line the same way: its captions go before a value is cut
+// short (each cell titled with its caption), as each frame changes what it
+// says. One line, one height, whatever it holds.
+const readoutsLine = document.querySelector(".readouts");
+// Its values shrink to fit, cut short: the line overflows where one is.
+const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.scrollWidth > value.clientWidth);
+const fitReadouts = () => fitSteps(readoutsLine, ["words", "bare"], cutShort);
+if (typeof ResizeObserver === "function") new ResizeObserver(fitReadouts).observe(readoutsLine);
+if (typeof MutationObserver === "function") {
+  new MutationObserver(fitReadouts).observe(readoutsLine, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
+}
+fitReadouts();

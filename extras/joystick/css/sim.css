@@ -1,9 +1,9 @@
 /* The simulator's view (js/simview.js). It fills #simSlot, the page's view
    pane on the simulator target, beside both tabs, which the shell's grid
-   sizes (css/panel.css): the room takes whatever height is left after the
-   controls and two lines of status (three, in a narrow view with a message
-   to show), and the key under them where the pane is tall enough. The rest
-   folds into a panel.
+   sizes (css/panel.css): one row of controls, and the room under it taking
+   every pixel left. What the view says lies in the room's margins, a line
+   above the floor and a line below it, never over the floor. The rest (the
+   key, the drag, what "idealised" leaves out) folds into the settings.
 
    The palette is the look's (css/looks.css), the room's own colours (its
    grid, the rover's plate and deck) included: green for a clear way and a
@@ -25,13 +25,12 @@
      on every layout; each reaches over the bar's edges to a full touch
      target (.sim-tool::before). */
   --sim-tool: var(--ctl);
-  --sim-bar-h: var(--sim-tool);
 
   position: relative;
   container: sim / size;
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: 6px;
   width: 100%;
   height: 100%;
   /* The slot sets the height (panel.css); this is only a floor, should it
@@ -43,20 +42,21 @@
 
 /* --- controls --------------------------------------------------------- */
 
+/* One row, never two, of the panel's 32 px controls: the room, the
+   playback speed, pause and reset, and the settings at the far end. */
 .sim-bar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1);
   flex: none;
+  min-width: 0;
 }
 
 .sim-room,
 .sim-speed-pick {
-  flex: 1 1 90px;
   min-width: 0;
   height: var(--sim-tool);
-  padding: 0 var(--s-3);
+  padding: 0 var(--s-2) 0 var(--s-3);
   font: inherit;
   font-size: var(--t-ctl);
   color: var(--readout);
@@ -69,42 +69,37 @@
 .sim-room option,
 .sim-speed-pick option { background: var(--panel); color: var(--readout); }
 
-/* The playback speed as a list where its buttons would leave the room's
-   name too little of the bar, and the room on a row of its own where even
-   the list would. The widths are the bar's: the room's list as wide as its
-   longest name ("Obstacle course", 147 px with its pill's padding) beside
-   the buttons (112 px) or the speed's list (62 px), the three tools (96
-   px) and the four gaps (16 px), as measured in Chromium, with 2 px to
-   spare. */
+/* The room's list as wide as its longest name ("Obstacle course"), and no
+   wider: the bar is not a form. */
+.sim-bar .sim-room { flex: 0 1 10.5rem; }
+
+/* The playback speed: one list at every width, its figures in the mono
+   face. Held at 1x while the Drive tab drives the view (simview.js), it
+   leaves the bar: one speed is no choice, and greyed-out ones read as
+   broken. The settings say why. */
 .sim-speed-pick {
-  display: none;
   flex: none;
   font-family: var(--mono);
 }
 
-@container sim (max-width: 372.98px) {
-  .sim-speed { display: none; }
-  .sim-speed-pick { display: block; }
-}
+.sim[data-held="yes"] .sim-bar .sim-speed-pick { display: none; }
 
-@container sim (max-width: 322.98px) {
-  .sim-room { flex-basis: 100%; }
-  .sim-more { --sim-bar-h: calc(2 * var(--sim-tool) + var(--s-1)); }
-}
+/* The settings at the bar's far end. */
+.sim-settings { margin-left: auto; }
 
-.sim-speed { flex: none; }
+/* A bar too narrow for the room's list beside the rest (a phone upright,
+   the middle of one on its side) gives it to the settings, where the same
+   list waits: the speed, pause and reset stay one press. The list in the
+   settings shows only here. The widths are the bar's: the room's list at
+   its narrowest worth having (120 px) beside the speed (52), the three
+   tools (96) and the gaps (16), with a little to spare. */
+.sim-more .sim-room-row { display: none; }
 
-/* Held at 1x while the Drive tab drives the view (simview.js): the faster
-   speeds plainly out of reach, their title saying why. */
-.sim-speed button:disabled { opacity: 0.4; }
+.sim-room-row .sim-room { grid-column: 1 / -1; }
 
-/* A sleek segmented control, as every other (panel.css), its figures in
-   the mono face. */
-.sim-speed button {
-  flex: none;
-  min-width: 36px;
-  font-family: var(--mono);
-  font-size: var(--t-sm);
+@container sim (max-width: 299.98px) {
+  .sim-bar .sim-room { display: none; }
+  .sim-more .sim-room-row { display: grid; }
 }
 
 .sim-tool {
@@ -291,10 +286,12 @@
 .sim-rover[data-dragging] .sim-handle,
 .sim-rover[data-dragging] .sim-handle-line { opacity: 1; }
 
-/* Over the room, in the margin kept clear around it (SimView.PAD). */
+/* The room's top margin (SimView.PAD.top): the tag, and the latest word
+   from the preview in place of its second half once there is one. One
+   line, cut short rather than wrapped. */
 .sim-badge {
   position: absolute;
-  top: var(--s-1);
+  top: calc(3px + var(--floor-y, 0px));
   left: var(--s-2);
   right: var(--s-2);
   display: flex;
@@ -303,51 +300,50 @@
   overflow: hidden;
   white-space: nowrap;
   font-size: var(--t-xs);
+  line-height: 14px;
   color: var(--dim);
   pointer-events: none;
 }
 
 .sim-badge strong {
+  flex: none;
   font-weight: var(--fw-bold);
   color: var(--warn);
 }
 
-.sim-badge span { overflow: hidden; text-overflow: ellipsis; }
+.sim-nosend,
+.sim-log {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-.sim-scale {
+.sim-badge[data-said="yes"] .sim-nosend,
+.sim-log[data-empty="yes"] { display: none; }
+
+.sim-log { font-family: var(--mono); }
+
+.sim-log[data-tone="bump"] { color: var(--stop-ink); }
+
+/* The room's foot margin (SimView.PAD.bottom): the wheels now, the move
+   and how fast, then the scale and the clock at the right. One line. */
+.sim-foot {
   position: absolute;
+  bottom: calc(2px + var(--floor-y, 0px));
   left: var(--s-2);
-  bottom: var(--s-0);
+  right: var(--s-2);
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  font-family: var(--mono);
-  font-size: var(--t-xs);
-  color: var(--dim);
+  height: 22px;
+  white-space: nowrap;
   pointer-events: none;
 }
 
-.sim-scale-bar {
-  display: block;
-  height: 5px;
-  border: 1px solid var(--dim);
-  border-top: none;
-}
-
-/* --- under the room --------------------------------------------------- */
-
-.sim-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  flex: none;
-  min-height: 34px;
-}
-
 .sim-inset {
-  width: 26px;
-  height: 32px;
   flex: none;
+  width: 18px;
+  height: 22px;
 }
 
 .sim-inset .sim-plate { stroke-width: 0.5; }
@@ -357,45 +353,43 @@
 .sim-arrow[data-turn="back"] { transform: rotate(180deg); transform-box: fill-box; transform-origin: center; }
 .sim-arrow[data-turn="free"] { fill: none; }
 
-.sim-motion {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-0);
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
 .sim-move {
+  flex: none;
   font-family: var(--mono);
   font-size: var(--t-sm);
   font-weight: var(--fw-semi);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sim-move[data-stalled="yes"] { color: var(--stop-ink); }
 
-.sim-twist,
-.sim-said {
-  font-size: var(--t-xs);
-  color: var(--dim);
+.sim-twist {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--dim);
 }
 
-.sim-said {
+.sim-scale {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--s-0);
-  flex: 0 1 auto;
-  min-width: 0;
-  text-align: right;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--dim);
+}
+
+.sim-scale-bar {
+  display: block;
+  height: 5px;
+  border: 1px solid var(--dim);
+  border-top: none;
 }
 
 .sim-clock {
+  flex: none;
   font-family: var(--mono);
   font-size: var(--t-sm);
   font-weight: var(--fw-semi);
@@ -405,92 +399,35 @@
 
 .sim-clock[data-paused="yes"] { color: var(--warn); }
 
-.sim-log {
-  max-width: 100%;
-  font-family: var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* A narrow view (a phone) keeps the words that matter: the message's own
+   time goes, then the tag's second half and the scale. */
+@container sim (max-width: 419.98px) {
+  .sim-log-at,
+  .sim-nosend { display: none; }
 }
 
-.sim-log[data-tone="bump"] { color: var(--stop-ink); }
-
-/* A narrow view (a phone, or the column beside the editor) gives each its
-   own line: sharing one, the motion and the latest message were both cut
-   short, and the obstacle's name -- the one new fact in "bumped into the
-   sofa" -- was the part lost. The message, once there is one, takes a line
-   of its own under the rest, and wraps rather than lose its end. */
-@container sim (max-width: 420px) {
-  .sim-foot {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      "inset move clock"
-      "inset twist twist"
-      ". log log";
-    column-gap: var(--s-2);
-    row-gap: var(--s-0);
-  }
-
-  .sim-motion,
-  .sim-said { display: contents; }
-
-  .sim-inset { grid-area: inset; }
-  .sim-move { grid-area: move; }
-  .sim-twist { grid-area: twist; }
-  .sim-clock { grid-area: clock; justify-self: end; }
-
-  .sim-log {
-    grid-area: log;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    white-space: normal;
-    text-align: left;
-  }
-
-  .sim-log[data-empty="yes"] { display: none; }
-}
-
-/* On a phone the clock is just above it: the message's own time can go. */
-@container sim (max-width: 350px) {
-  .sim-log-at { display: none; }
+@container sim (max-width: 259.98px) {
+  .sim-scale { display: none; }
 }
 
 /* --- a view too short for the room ------------------------------------- */
 
-/* The view pane on a phone has what the dock and the top leave, under
-   300 px on most phones held upright or on their side and well under 100
-   on some (panel.css). Under 200 px the room would be a strip: the view
-   shows the wheels and the motion instead, larger, with the bar's
-   playback, pause and reset, and drops what only the room needs (the
-   room's name and the settings: the rays, the trail and the key). Shorter
-   still, the wheels and the motion alone (the log's two lines ran over the
-   motion's), then the move alone. */
-@container sim (max-height: 199.98px) {
-  .sim-stage,
-  .sim-room,
-  .sim-settings,
-  .sim-key.inline { display: none; }
-
-  .sim-foot { flex: 1 1 auto; min-height: 0; }
-
-  .sim-inset { width: 40px; height: 48px; }
-}
-
+/* Where the room would be a strip (a short phone's band over the editor),
+   the view shows the wheels and the motion instead, in the room's place,
+   the wheels larger. Shorter still, the bar goes too: the motion alone. */
 @container sim (max-height: 119.98px) {
-  .sim-bar,
-  .sim-log { display: none; }
-}
+  .sim-map,
+  .sim-badge { display: none; }
 
-@container sim (max-height: 47.98px) {
+  .sim-stage { display: flex; align-items: center; }
+
+  .sim-foot { position: static; flex: 1 1 auto; height: auto; padding-inline: var(--s-2); }
+
   .sim-inset { width: 26px; height: 32px; }
 }
 
-/* One line: what the rover is doing, and nothing else. */
-@container sim (max-height: 31.98px) {
-  .sim-inset,
-  .sim-twist,
-  .sim-said { display: none; }
+@container sim (max-height: 71.98px) {
+  .sim-bar { display: none; }
 }
 
 /* --- the key, and the folded panel ------------------------------------ */
@@ -499,13 +436,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
-}
-
-/* Under the status, only when the view is tall enough to spare it. */
-.sim-key.inline { display: none; flex: none; }
-
-@container sim (min-height: 470px) {
-  .sim-key.inline { display: flex; }
 }
 
 .sim-key-row {
@@ -551,15 +481,14 @@
 .sim-swatch.ray.clear { border-color: var(--ok-body); }
 .sim-swatch.ray.none { border-color: var(--dim); border-top-style: dashed; opacity: 0.8; }
 
-/* Folded open over the room, under the controls that open it, however many
-   rows they take (--sim-bar-h, set where the room takes a row of its own). */
+/* Folded open over the room, under the bar that opens it. */
 .sim-more {
   position: absolute;
   z-index: 2;
-  top: calc(var(--s-2) + var(--sim-bar-h) + var(--s-1));
+  top: calc(var(--s-2) + var(--sim-tool) + var(--s-1));
   right: var(--s-2);
   left: var(--s-2);
-  max-height: calc(100% - var(--sim-bar-h) - 2 * var(--s-3));
+  max-height: calc(100% - var(--sim-tool) - 2 * var(--s-3));
   overflow-y: auto;
   display: flex;
   flex-direction: column;

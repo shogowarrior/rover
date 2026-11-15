@@ -378,13 +378,15 @@ input[type="range"]::-moz-range-thumb {
 /* The popover wears the File menu's .menu, above: under its button, right
    edges together, below the cells and over the page. As wide as a phone on
    its side leaves left of the gear, and never taller than the screen under
-   the cells (two rows of them, 86 px, and the top's padding, at most
-   about 150 px of it in every layout): it scrolls inside rather than
-   scroll the page, which would move the stick. */
+   the cells (two rows of them, 86 px, the top's padding and the gap under
+   the gear, 110 px at most in every layout, and 8 px clear of the foot):
+   it scrolls inside rather than scroll the page, which would move the
+   stick. With 150 px kept, it stopped 52 px over a 667 px screen's foot,
+   its Update row out of sight (the critic's round 1). */
 .options {
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100 * var(--svh) - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100 * var(--svh) - 110px - var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   padding: var(--s-2) var(--s-3) var(--s-3);
 }
@@ -509,6 +511,14 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--t-xs);
   line-height: var(--lh-body);
   color: var(--dim);
+}
+
+/* A short screen: the keys' rows closer, so the whole popover, Update
+   with it, fits a 667 px phone without scrolling. */
+@media (max-height: 760px) {
+  .keys { gap: 2px; }
+
+  .keys kbd { line-height: 18px; }
 }
 
 /* The panel in miniature (look.js builds it), painted only in the tokens
@@ -681,35 +691,20 @@ input[type="range"]::-moz-range-thumb {
   row-gap: 6px;
 }
 
-/* One row, the first cell its content's width and the second the rest,
-   Stop and the gear at its far end: 40 px in all. The second cell is
-   never squeezed below its own content, so nothing the first cell gains
-   (a badge, the address, a wider font than the one measured) can push
-   Stop or the gear off the screen: at worst the first cell's end is
-   clipped. With both badges worded on the simulator target, the first
-   cell outgrew a 1024 px screen and Stop went past its edge. What each
-   word below costs, measured headless in Inter: the second cell takes 388
-   px; the first, at its widest (the simulator target, both badges, the
-   chip at its longest word) 554 px with neither the badges' words (198)
-   nor the address (107). So the words come in as the top widens, each
-   only where all of it fits, with a little to spare. */
+/* One row, the two cells sharing the width, the second never squeezed
+   below its own content: so the second cell's controls (the tabs, the
+   scheme, Stop and the gear) sit where the viewport alone puts them, and
+   nothing the first cell gains or loses (a badge, "Rover:", the address)
+   moves any of them. Before, the first cell took its content's width, and
+   a badge coming moved the tabs and the scheme 47 to 302 px sideways. The
+   first cell clips what it cannot hold, never spills over Stop's. */
 @container bar (min-width: 900px) {
   .cells {
-    grid-template-columns: minmax(0, max-content) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr);
     column-gap: var(--s-2);
   }
 
   .drives { overflow-x: clip; }
-}
-
-/* From 900 to 960 px of top the first cell's long words do not fit
-   beside the second: Sim and Auto, as on a phone. */
-@container bar (min-width: 900px) and (max-width: 959.98px) {
-  .target .segWord:not(:last-child),
-  .autoWord { display: none; }
-
-  .target .segShort,
-  .autoShort { display: inline; }
 }
 
 /* A cell: one rounded box, one line of controls 32 px tall, whatever they
@@ -751,6 +746,14 @@ input[type="range"]::-moz-range-thumb {
 .hands > .scheme { margin-right: auto; }
 
 #stop { margin-left: 10px; }
+
+/* Autonomous at the first cell's far end: whatever comes or goes before it
+   (a badge, "Rover:", the address) takes the gap, never its place. */
+.drives > .autoSwitch { margin-left: auto; }
+
+/* The popovers hung from the cells wrap their words, as the cells' own
+   line does not. */
+.hcell .menu { white-space: normal; }
 
 /* Segmented controls: the target, the scheme, the stick's family, Dark |
    Light. A pill-shaped track, 2 px inset; each segment a word, 28 px tall;
@@ -944,13 +947,13 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 }
 
 /* The link chip: a lamp and the link's word (link.js), "Rover:" before it
-   on the simulator target, the address where the top has room (1280 px of
-   it), and a caret: it opens the link's popover. Its word keeps the width
-   of the longest it says (.chipSizer, under it), so a change of state
-   moves nothing beside it. All well is quiet, a green lamp; a link that
-   went or went quiet is amber, the word saying which. */
+   on the simulator target, the address where the cell has room for it
+   (data-fit, below), and a caret: it opens the link's popover. Its word
+   keeps the width of the longest it says (.chipSizer, under it), so a
+   change of state moves nothing after it. All well is quiet, a green lamp;
+   a link that went or went quiet is amber, the word saying which. */
 .linkChip {
-  gap: 6px;
+  gap: var(--s-2);
   padding: 0 var(--s-2) 0 var(--s-3);
   font-weight: var(--fw-semi);
   color: var(--dim);
@@ -961,6 +964,10 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .chipFor[hidden],
 .chipHost { display: none; }
+
+/* "Rover:" and the word read as one phrase, a word space apart (5 px):
+   4 px looked like none after the colon. */
+.chipFor { margin-right: -3px; }
 
 .chipWord {
   display: inline-grid;
@@ -995,50 +1002,132 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .linkChip:is([data-say="lost"], [data-say="stale"]) .lamp { background: var(--warn); }
 
-/* What needs the operator, only while it is so: amber, its glyph, and
-   where the top has room for both badges' words beside everything else
-   (1160 px of top, the cells' budget above), its word too; titled in full
-   (readouts.js, app.js). */
+/* What needs the operator, only while it is so: amber, a warning's glyph
+   and its word, titled in full (readouts.js, app.js); a press opens the
+   reason in words, for a touch screen, which cannot hover. */
 .badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
   gap: var(--s-1);
-  min-width: var(--seg);
-  height: var(--seg);
-  padding: 0 6px;
-  font-size: var(--t-ctl);
+  padding: 0 var(--s-3) 0 var(--s-2);
   font-weight: var(--fw-semi);
   color: var(--warn);
   background: var(--warn-soft);
+  border-color: transparent;
   border-radius: var(--r-full);
 }
 
+@media (hover: hover) {
+  .badge:hover { background: var(--warn-soft); border-color: var(--warn); }
+}
+
+.badge[aria-expanded="true"] { border-color: var(--warn); }
+
 .badge[hidden] { display: none; }
+
+/* A badge that goes takes its open reason with it: a note with no badge
+   over it spoke of what was no longer so. */
+.badge[hidden] + .badgeNote { display: none; }
 
 .badge .icon {
   width: var(--glyph);
   height: var(--glyph);
 }
 
-.badgeWord { display: none; }
-
-@container bar (min-width: 1160px) {
-  .badge { padding: 0 var(--s-3) 0 var(--s-2); }
-  .badgeWord { display: inline; }
+/* The reason, under the cells as the link's popover hangs. */
+.badgeNote {
+  top: 100%;
+  right: auto;
+  left: 0;
+  width: min(20rem, 100%);
+  padding: var(--s-2) var(--s-3);
 }
 
-/* The address on the chip, where the top has room for it beside both
-   badges' words (1280 px of top). */
-@container bar (min-width: 1280px) {
-  .chipHost {
-    display: inline;
-    font-family: var(--mono);
-    font-weight: var(--fw-medium);
-    color: var(--dim);
-  }
+.badgeNote p {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--readout);
 }
+
+/* The words a cell gives up where it cannot hold them all (app.js,
+   fitSteps: data-fit, measured, so it follows what the cell holds now, a
+   badge or "Rover:" included, and the fonts the device has). The first
+   cell, from the most it says: the address on the chip ("host"); every
+   word; Sim and Auto ("short"); the badges' glyphs alone ("glyphs"); every
+   control closer to its words, and the chip without its caret ("snug");
+   the chip's lamp alone ("lamp"), its title saying the rest, which only a
+   cell under 300 px wide comes to with no badge showing. The second: every word; Adv
+   ("short"); the segments closer to their words ("tight"); and in a cell
+   under 300 px wide alone (a 320 px phone), 12 px words ("small"). Stop
+   stays 16 px from the scheme, and the gear square. */
+.drives[data-fit="host"] .chipHost {
+  display: inline;
+  font-weight: var(--fw-medium);
+  color: var(--dim);
+}
+
+/* With the address beside it, the word takes its own width: kept at the
+   longest word's, it left a dead gap before the address. */
+.drives[data-fit="host"] .chipSizer { display: none; }
+
+.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord) { display: none; }
+
+.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) :is(.target .segShort, .autoShort) { display: inline; }
+
+.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .autoSwitch {
+  gap: 6px;
+  padding-inline: var(--s-2) 6px;
+}
+
+.drives:is([data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .badgeWord { display: none; }
+
+.drives:is([data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .badge {
+  width: var(--ctl);
+  padding: 0;
+}
+
+.drives:is([data-fit="snug"], [data-fit="lamp"]) {
+  --seg-x: 7px;
+  gap: 4px;
+}
+
+.drives:is([data-fit="snug"], [data-fit="lamp"]) .linkChip {
+  gap: 5px;
+  padding: 0 6px;
+}
+
+.drives:is([data-fit="snug"], [data-fit="lamp"]) .chipFor { margin-right: 0; }
+
+.drives:is([data-fit="snug"], [data-fit="lamp"]) .autoSwitch {
+  gap: var(--s-1);
+  padding-inline: var(--s-1) 2px;
+}
+
+/* The chip is a button by its pill and edge: its caret goes before any
+   word does. */
+.drives:is([data-fit="snug"], [data-fit="lamp"]) .linkChip .caret { display: none; }
+
+.drives[data-fit="lamp"] .badge { width: var(--seg); }
+
+.drives[data-fit="lamp"] :is(.chipWord, .chipFor) { display: none; }
+
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) .scheme .segWord:not(:last-child) { display: none; }
+
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) .scheme .segShort { display: inline; }
+
+.hands:is([data-fit="tight"], [data-fit="small"]) {
+  --seg-x: 7px;
+  --tab-x: 5px;
+  gap: 4px;
+}
+
+.hands:is([data-fit="tight"], [data-fit="small"]) #stop { margin-left: 12px; }
+
+.hands[data-fit="small"] {
+  --seg-x: 6px;
+  --tab-x: 3px;
+}
+
+.hands[data-fit="small"] :is(button, .segmented button) { font-size: var(--t-sm); }
 
 /* The link's popover: the address, Connect, and what the link has to say.
    It hangs from the top, below the cells, never over them (a phone's
@@ -1099,67 +1188,6 @@ body[data-link="down"] #connect {
 
 #note[data-tone="bad"] { color: var(--warn); }
 
-/* A cell a row, where the top is narrower, gives up words in steps, each
-   where the first cell at its widest (the simulator target, both badges,
-   the chip at its longest word: 554 px at 13 px) or the second (388 px)
-   no longer fits. Measured headless in Inter.
-
-   Under 560 px of top (a phone, a narrow tablet): Sim for Simulator and
-   Auto for Autonomous, 86 px less. */
-@container bar (max-width: 559.98px) {
-  .target .segWord:not(:last-child),
-  .autoWord { display: none; }
-
-  .target .segShort,
-  .autoShort { display: inline; }
-
-  .autoSwitch { padding-inline: var(--s-2) 6px; gap: 6px; }
-}
-
-/* Under 480 px (every phone upright, and the middle column of one on its
-   side): the link chip its lamp and caret alone, its title saying the
-   rest; at 414 px its word ran the first cell 66 px past its edge. */
-@container bar (max-width: 479.98px) {
-  .linkChip .chipWord,
-  .linkChip .chipFor { display: none; }
-
-  .linkChip { padding: 0 var(--s-1) 0 var(--s-2); }
-}
-
-/* Under 400 px: a step tighter, and 12 px words, for the second cell: at
-   375 px its words at 13 px ran 36 px past it. */
-@container bar (max-width: 399.98px) {
-  .hcell {
-    --seg-x: 8px;
-    --tab-x: 6px;
-    gap: 4px;
-  }
-
-  .hcell button,
-  .hcell .segmented button,
-  .badge { font-size: var(--t-sm); }
-
-  #stop { margin-left: 4px; }
-}
-
-/* Narrower still, under 340 px (a 360 px phone, and the middle column of
-   one on its side): the segments closer to their words. */
-@container bar (max-width: 339.98px) {
-  .hcell {
-    --seg-x: 6px;
-    --tab-x: 4px;
-  }
-}
-
-/* Under 300 px (a 320 px phone, and a narrow one on its side), Adv for
-   Advanced, and the gear a step smaller: the second cell's words ran past
-   it. */
-@container bar (max-width: 299.98px) {
-  .scheme .segWord:not(:last-child) { display: none; }
-  .scheme .segShort { display: inline; }
-  .optionsButton { width: var(--seg); }
-}
-
 /* --- the view: what the controls drive ---------------------------------- */
 
 /* One pane beside (or above) both tabs: on the rover target the rover's
@@ -1207,13 +1235,39 @@ body[data-target="simulator"] .view > :is(.fault, .scan, .readouts) { display: n
   border-radius: var(--r-lg);
 }
 
+/* One line, a caret for the rest: the summary is the fault, the details
+   what to do about it. */
+.fault summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  list-style: none;
+  cursor: pointer;
+}
+
+.fault summary::-webkit-details-marker { display: none; }
+
+.fault summary::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px 2px auto;
+  border-right: 1.5px solid var(--warn);
+  border-bottom: 1.5px solid var(--warn);
+  transform: rotate(45deg);
+}
+
+.fault[open] summary::after { transform: rotate(225deg); margin-bottom: -2px; }
+
 .fault strong {
-  display: block;
-  margin-bottom: var(--s-0);
+  min-width: 0;
   font-size: var(--t-sm);
   line-height: var(--lh-tight);
   color: var(--warn);
 }
+
+.fault p { margin: var(--s-1) 0 0; }
 
 .fault[hidden] { display: none; }
 
@@ -1266,6 +1320,12 @@ body[data-target="simulator"] .view > :is(.fault, .scan, .readouts) { display: n
 }
 
 body:is([data-link="down"], [data-link="connecting"]) .connectCard { display: grid; }
+
+/* With the link's popover open, its Connect is the one: the card's gives
+   way, keeping its place. Two Connect buttons, one over the other, asked
+   which to press (the critic's round 1). A browser without :has() shows
+   both, as before. */
+.shell:has(#linkPanel:not([hidden])) .connectCard { visibility: hidden; }
 
 .connectTitle {
   margin: 0;
@@ -1464,6 +1524,17 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* .cell's display: flex would otherwise override the hidden attribute. */
 .cell[hidden] { display: none; }
 
+/* Where the line cannot hold every caption and value (app.js, fitSteps),
+   the captions go before any value is cut short: out of sight, still
+   read out, and each cell titled with its own. */
+.readouts[data-fit="bare"] .cell .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 #phase[data-tone="warn"] { color: var(--warn); }
 
 /* The simulator's one view (simview.js fills it): a card the pane's size,
@@ -1601,10 +1672,19 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   display: grid;
   grid-template: 1fr 1fr / 1fr 1fr;
   pointer-events: none;
+  container: hints / inline-size;
 }
 
 /* A label wraps within its corner ("Right" over "back") rather than run
-   into its neighbour, on a short phone's smaller stick. */
+   into its neighbour, on a short phone's smaller stick. Under 150 px of
+   corners (a 320 px phone, a phone on its side at the stick's floor)
+   every word wrapped to two lines and crowded the ring: the arrows alone,
+   which say each corner's way, as the gamepad's quadrants do. Not a
+   stick's ancestor, so it may be a container. */
+@container hints (max-width: 149.98px) {
+  .hint .name { display: none; }
+}
+
 .hint {
   display: flex;
   align-items: center;
@@ -1760,6 +1840,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   .spin .icon { display: none; }
 }
 
+/* Narrower still (a 320 px phone, a phone on its side at the stick's
+   floor), the words go and the arrows stay, each button named and titled
+   with its own: the word alone said less than the arrow does. */
+@container spin (max-width: 129.98px) {
+  .spin .icon { display: block; }
+
+  .spin .spinWord { display: none; }
+}
+
 /* No transition on press: a control that moves a robot must feel
    instantaneous, not eased. */
 .spin button:active,
@@ -1775,14 +1864,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    slider is still named by it, and titled. */
 .speed {
   grid-area: speed;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--s-2);
+  align-content: center;
+  column-gap: var(--s-2);
   min-width: 0;
   container: speed / inline-size;
 }
-
-#speedLabel { flex: none; }
 
 #speedOut {
   flex: none;
@@ -1795,13 +1884,33 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 #speed {
-  flex: 1 1 auto;
   min-width: 0;
   height: var(--dock-row);
 }
 
+/* Narrow, the caption over the value, in the row's height, so the slider
+   keeps its room and the row still says what it is (it dropped the
+   caption before: the critic's round 1). */
 @container speed (max-width: 149.98px) {
-  #speedLabel { display: none; }
+  #speedLabel {
+    grid-area: 1 / 1;
+    align-self: end;
+    font-size: var(--t-xs);
+    line-height: 1;
+  }
+
+  #speedOut {
+    grid-area: 2 / 1;
+    align-self: start;
+    font-size: var(--t-ctl);
+    line-height: 1.2;
+  }
+
+  #speed {
+    grid-row: 1 / 3;
+    grid-column: 2 / -1;
+    height: var(--dock-row);
+  }
 }
 
 /* --- the other layouts ------------------------------------------------------- */
@@ -1809,6 +1918,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* Every layout but the side-by-side one (the media query below, negated):
    the top stuck over a page that may scroll. */
 @media (max-width: 959.98px), (max-height: 520.98px) {
+  /* The top 8 px from the screen's edge (or the notch's inset), and 8 px
+     over the view: 102 px in all, where 12 and 12 made it 110 on a tall
+     phone (the critic's round 1). The sticks' budgets keep counting 12
+     above, so the 4 px saved go to the view, and no stick moves. */
+  .shell { --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
+
+  .bar { padding-bottom: var(--s-2); }
+
   /* A popup scrolls into view (popover.js) clear of the top stuck over the
      page, two rows of cells and its padding, rather than hide under it. */
   .menu,
@@ -1884,6 +2001,23 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   :root { --gutter: var(--s-6); }
 }
 
+/* A tablet upright (720 to 959 px wide, over 760 px tall): the shell the
+   screen's width less its gutters, not 720 px between black bands, and
+   the dock a card as wide as the cells and the view over it, a gutter off
+   the screen's foot. Bled to a 720 px shell's edges but not the screen's,
+   the sheet was wider than everything over it and flush to the foot (the
+   critic's round 1, at 820 x 1180). The sticks keep their 240 px cap; the
+   view takes the gutter from its own height. */
+@media (min-width: 720px) and (max-width: 959.98px) and (min-height: 761px) {
+  :root { --shell-max: 960px; }
+
+  .dock {
+    margin: 0 0 calc(var(--s-4) + env(safe-area-inset-bottom, 0px));
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-xl);
+  }
+}
+
 /* Side by side: the view on the left and the hands on the right, on both
    tabs, under the top's cells in one row (F8), the page exactly as tall as
    the screen. The top and the view's side are the same beside both tabs,
@@ -1957,13 +2091,70 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     background: radial-gradient(70% 60% at 30% 55%, var(--glow), transparent), var(--panel);
   }
 
-  /* The grid as tall as its content, centred in the column. */
+  /* The grid as tall as its content, at the foot of its column, under the
+     thumbs on a tablet; the card no taller than the dock, so no empty
+     ground over it (a short wide screen: a tall one stacks the sticks,
+     below). */
   .controls { gap: var(--s-2) var(--s-5); }
 
+  .dock { align-self: end; }
+
+  /* Its toolbar level with the view's, which sits inside the view's card
+     (its edge and padding, 9 px), and the editor's top level with the
+     room's, 6 px under: the two panes' tops were 9 px apart, and the
+     editor's 7 px off the room's (the critic's round 1). */
   #programTab {
     overflow-y: auto;
     min-height: 0;
+    padding-top: calc(1px + var(--s-2));
   }
+
+  /* Over program.css's own gap. */
+  #programTab:not([hidden]) { gap: 6px; }
+}
+
+/* Wide and 700 px tall or more (a laptop, a tablet on its side): the
+   sticks one over the other in a column as wide as one of them, so the
+   dock fills its pane's height and the view takes the rest of the width.
+   Side by side, the dock left half of a tall pane empty card ("so much
+   wasted space") and the view no wider than 680 px at 1280. Only one stick
+   drives at a time (one move code), so stacking costs no thumb anything.
+   Each stick is half of what the column leaves: of the height, 324 px is
+   the rest of it, the shell's padding (12 and 16), the top's cell and the
+   padding under it (40 and 12), the dock's padding (32), its rows but the
+   sticks' (28, 36, 8, 28, 16 and 36) and the gaps between them (56), and 4
+   to spare. The translate stick, its caption over it and the rotate
+   buttons under it; then the pivot stick's family, its line, the stick
+   and the speed. */
+@media (min-width: 960px) and (min-height: 700px) {
+  :root {
+    --stick: clamp(120px, (100 * var(--svh) - 324px) / 2, 300px);
+    --drive: calc(var(--stick) + 32px);
+  }
+
+  .dock {
+    align-self: stretch;
+    place-content: center;
+  }
+
+  .controls {
+    grid-template-columns: var(--stick);
+    grid-template-rows: var(--dock-cap) auto var(--dock-row) var(--s-2) var(--dock-cap) var(--dock-note) auto var(--dock-row);
+    grid-template-areas:
+      "label"
+      "move"
+      "spin"
+      "."
+      "family"
+      "note"
+      "pivot"
+      "speed";
+    row-gap: var(--s-2);
+  }
+
+  .family { justify-self: start; }
+
+  .noteLine { justify-content: flex-start; }
 }
 
 /* A phone on its side, held like a gamepad: the translate stick down the
@@ -1997,32 +2188,48 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   /* The view ends the middle column, clear of the home bar. */
   .view { margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
 
-  /* The Program tab takes the screen's width under the top, and the view,
-     when shown, the left column down the screen's height beside it. The
-     top keeps to the middle column, as beside the sticks: a switch of tab
-     moves neither Stop nor anything else in its two cells. */
+  /* The Program tab: the top keeps to the middle column, as beside the
+     sticks, so a switch of tab moves neither Stop nor anything else in its
+     two cells. The tab spans the screen on the shell's own columns
+     (subgrid): its toolbar takes the bands either side of the top (Run and
+     Stop program on the left, File and View on the right, program.css),
+     and under them the editor takes the screen's width, the console one
+     line under it. Shown, the view takes the left of the screen under the
+     toolbar, about 40% of it, and the editor the rest: two panes, never
+     three columns (the critic's round 1: the view, the editor and the
+     console side by side left the editor 262 px of a 568 px screen, the
+     top's cells floating between black bands). The second column is what
+     makes the 40%, and the top spans it with the third, so its cells stay
+     where the three columns put them. */
   .shell:has(> #programTab:not([hidden])) {
+    grid-template-columns: var(--stick) max(0px, 40% - var(--stick)) minmax(0, 1fr) var(--stick);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
-      "view head ."
-      "view main main";
+      ".    head head ."
+      "view view main main";
   }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
     grid-template-areas:
-      ".    head ."
-      "main main main";
+      ".    head head ."
+      "main main main main";
   }
 
-  /* The editor's floor runs the page past a screen this short: the view
-     keeps to the screen's height and stays on it as the page scrolls, as
-     the top does. Not a stick's ancestor, so it may stick. */
-  .shell:has(> #programTab:not([hidden])) > .view {
-    position: sticky;
-    top: var(--shell-top);
-    align-self: start;
-    height: calc(100 * var(--svh) - var(--shell-top) - var(--s-2) - env(safe-area-inset-bottom, 0px));
+  /* No container here: a container is laid out on its own (layout
+     containment), and a subgrid that is one gets no tracks at all. */
+  #programTab:not([hidden]) {
+    grid-row: 1 / -1;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    gap: normal;
+    container-type: normal;
+    padding-bottom: 0;
   }
+
+  /* The view stops where the editor does, clear of the home bar. */
+  .shell:has(> #programTab:not([hidden])) > .view { height: auto; }
 
   /* Not while hidden: this display would outrank the hidden attribute's,
      and the rotate buttons stayed live beside the Program tab. At most the
@@ -2102,6 +2309,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 #optionsPanel .firmware { gap: var(--s-2); }
+
+/* A short screen: each section a step closer to the one above (the keys'
+   rows closer too, above), so the popover fits a 667 px phone whole. */
+@media (max-height: 760px) {
+  #optionsPanel .menuLabel ~ .menuLabel { margin-top: var(--s-1); }
+
+  #optionsPanel #firmwareLabel { padding-top: var(--s-2); }
+}
 
 #optionsPanel .firmwareRunning {
   display: flex;

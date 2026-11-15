@@ -9,15 +9,17 @@
  *   new SimView(slot, target)
  *     slot     the empty element the view fills (#simSlot, in the page's
  *              view pane, beside both tabs, which the layout sizes): the
- *              room is fitted to what the controls and the status leave
- *              of it, with PAD kept clear around it.
+ *              room takes all of it under one row of controls, fitted with
+ *              PAD kept clear around it for a line of words above and
+ *              below.
  *     target   the SimTarget it shows, and whose clock it runs.
  *
  *   holdPlayback(why)
- *       Hold the playback at 1x, the faster speeds disabled with why as
- *       their title, as buttons and in the playback list alike; null lets
- *       go, back to the speed chosen last. Holding also plays a paused
- *       view. For the Drive tab: its Driver
+ *       Hold the playback at 1x, the faster speeds disabled in the
+ *       playback list with why as their title, and the list off the bar
+ *       (one speed is no choice), the settings saying why; null lets go,
+ *       back to the speed chosen last. Holding also plays a paused view.
+ *       For the Drive tab: its Driver
  *       re-sends a held move every 200 ms of real time, each lasting 400 ms
  *       of simulated time, so at 2x or 4x each ran out before the next
  *       came and the simulated rover drove in jerks.
@@ -40,9 +42,9 @@ class SimView {
   static CM = 100;
   // A stroke as wide on screen at any scale.
   static #THIN = Object.freeze({ "vector-effect": "non-scaling-stroke" });
-  // Room kept clear around the floor, in screen pixels: the badge sits above
-  // it and the scale bar below, never over the room.
-  static PAD = Object.freeze({ top: 22, right: 8, bottom: 18, left: 8 });
+  // Room kept clear around the floor, in screen pixels: the tag's line sits
+  // above it and the motion's below, never over the room.
+  static PAD = Object.freeze({ top: 20, right: 8, bottom: 26, left: 8 });
   // A ray's reading fades over about two sweeps, so an old one looks old.
   static RAY_FADE_MS = 1400;
   // The trail fades over this long, drawn in this many bands of age.
@@ -103,10 +105,13 @@ class SimView {
 
   holdPlayback(why) {
     this.#held = why || null;
-    for (const controls of [this.#ui.speeds, this.#ui.speedOptions]) {
-      for (const [rate, control] of controls) SimView.#offer(control, rate, this.#held);
-    }
+    for (const [rate, option] of this.#ui.speedOptions) SimView.#offer(option, rate, this.#held);
     this.#ui.speedPick.setAttribute("title", this.#held || "Playback speed");
+    // The bar hides the list while held (sim.css): one speed is no choice,
+    // and greyed-out ones read as broken. The settings say why.
+    this.#ui.root.dataset.held = this.#held ? "yes" : "no";
+    this.#ui.heldWhy.textContent = this.#held || "";
+    this.#ui.heldWhy.hidden = !this.#held;
     this.#target.playback = this.#held ? 1 : this.#chosen;
     // A pause left on the Program tab would freeze what the Drive tab
     // drives, where a phone's view has no bar to resume it from.
@@ -199,27 +204,14 @@ class SimView {
     const root = dom.html("div", { class: "sim" }, this.#slot);
     ui.root = root;
 
-    // The controls, in one row.
+    // The controls, in one row of the panel's 32 px controls: the room, the
+    // playback speed, pause and reset, and at the far end the settings. A
+    // narrow view gives the room's list up to the settings (sim.css), where
+    // the same choice waits; a held playback hides its list (holdPlayback).
     const bar = dom.html("div", { class: "sim-bar" }, root);
-    ui.room = dom.html("select", { class: "sim-room", "aria-label": "Room", title: "Room" }, bar);
-    for (const [key, { label }] of Object.entries(Room.PRESETS)) dom.html("option", { value: key }, ui.room, label);
-    ui.room.value = this.#target.roomKey;
-    ui.room.addEventListener("change", () => {
-      this.#target.setRoom(ui.room.value);
-      this.#render();
-    });
-
-    const speed = dom.html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
-    ui.speeds = new Map(SimTarget.PLAYBACKS.map((rate) => {
-      const button = segment(speed, () => this.#play(rate));
-      button.textContent = `${rate}×`;
-      SimView.#offer(button, rate, null);
-      return [rate, button];
-    }));
-    // The same choice as a list, for a bar too narrow to show the buttons
-    // beside the room's name: sim.css shows one or the other. While paused
-    // it shows none, as no button is pressed then, so any choice resumes,
-    // the speed it was at included.
+    ui.rooms = [this.#roomPick(bar)];
+    // One list for the playback speed at every width. While paused it shows
+    // none, so any choice resumes, the speed it was at included.
     ui.speedPick = dom.html("select", { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" }, bar);
     ui.speedOptions = new Map(SimTarget.PLAYBACKS.map((rate) => {
       const option = dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
@@ -233,11 +225,14 @@ class SimView {
       this.#render();
     });
     ui.reset = this.#tool(bar, "Reset: put the rover back where it starts and clear the trail (stops a preview). " +
-      "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6");
+      "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6", "sim-reset");
     ui.reset.addEventListener("click", () => this.#target.reset());
-    ui.more = this.#tool(bar, "Rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
+    ui.more = this.#tool(bar, "Settings: the room, rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
 
-    // The room.
+    // The room, taking every pixel the bar leaves. What it says lies in the
+    // margins kept clear round the floor (SimView.PAD), never over it: along
+    // the top, that this is an idealised preview and the latest word from
+    // it; along the foot, the wheels, the motion, the scale and the clock.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);
     // A group, not an image: an image's contents are presentational, and the
     // rover inside it, a focusable button, would be announced as nothing.
@@ -258,33 +253,38 @@ class SimView {
     this.#buildRover(ui.world);
     ui.labels = dom.svg("g", { class: "sim-labels" }, ui.map);
 
-    const badge = dom.html("div", { class: "sim-badge" }, ui.stage);
-    dom.html("strong", {}, badge, "Idealised preview");
-    dom.html("span", {}, badge, "nothing is sent to the rover");
-    ui.scale = dom.html("div", { class: "sim-scale", "aria-hidden": "true" }, ui.stage);
-    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
-    dom.html("span", {}, ui.scale, "1 m");
-
-    // What the rover is doing, and the latest word from the preview.
-    const foot = dom.html("div", { class: "sim-foot" }, root);
-    this.#buildInset(foot);
-    const motion = dom.html("div", { class: "sim-motion" }, foot);
-    ui.move = dom.html("output", { class: "sim-move" }, motion, "STOP");
-    ui.twist = dom.html("span", { class: "sim-twist" }, motion, "standing still");
-    const said = dom.html("div", { class: "sim-said" }, foot);
-    ui.clock = dom.html("span", { class: "sim-clock" }, said, "0.0 s");
+    // The top margin: a tag, and the latest word from the preview in place
+    // of the tag's second half once there is one.
+    ui.badge = dom.html("div", { class: "sim-badge", title: "Idealised preview: nothing is sent to the rover" }, ui.stage);
+    dom.html("strong", {}, ui.badge, "Idealised preview");
+    dom.html("span", { class: "sim-nosend" }, ui.badge, "nothing is sent to the rover");
     // When it was said, then what: a narrow view drops the time (sim.css).
-    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite" }, said);
+    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite", "data-empty": "yes" }, ui.badge);
     ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
     ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
 
-    // The key, under the rest when the view is tall enough for it (sim.css).
-    ui.key = this.#buildKey(root, "sim-key inline");
+    // The foot margin: what the rover is doing, one line.
+    const foot = dom.html("div", { class: "sim-foot" }, ui.stage);
+    this.#buildInset(foot);
+    ui.move = dom.html("output", { class: "sim-move" }, foot, "STOP");
+    ui.twist = dom.html("span", { class: "sim-twist" }, foot, "standing still");
+    ui.scale = dom.html("span", { class: "sim-scale", "aria-hidden": "true" }, foot);
+    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
+    dom.html("span", {}, ui.scale, "1 m");
+    ui.clock = dom.html("span", { class: "sim-clock" }, foot, "0.0 s");
 
     // Folded away until asked for: the less used controls, what the drag
     // setting means, the key and what "idealised" leaves out. Its keys are
     // its own while it has the focus, not the panel's drive keys (keys.js).
     ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings", "data-keys": "own" }, root);
+    // The room's list again, for a bar too narrow to hold it (sim.css shows
+    // this one only there).
+    const roomRow = dom.html("label", { class: "sim-drag sim-room-row" }, ui.panel);
+    dom.html("span", { class: "label" }, roomRow, "Room");
+    ui.rooms.push(this.#roomPick(roomRow));
+    // Why the playback is held, while it is (holdPlayback).
+    ui.heldWhy = dom.html("p", { class: "sim-about sim-held" }, ui.panel);
+    ui.heldWhy.hidden = true;
     const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
     ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true", title: "Draw each ping's ray from where the rover was" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {
@@ -397,6 +397,19 @@ class SimView {
     });
   }
 
+  // A list of the rooms, in the bar or in the settings: either picks the
+  // room, and #render keeps both showing it.
+  #roomPick(parent) {
+    const pick = dom.html("select", { class: "sim-room", "aria-label": "Room", title: "Room" }, parent);
+    for (const [key, { label }] of Object.entries(Room.PRESETS)) dom.html("option", { value: key }, pick, label);
+    pick.value = this.#target.roomKey;
+    pick.addEventListener("change", () => {
+      this.#target.setRoom(pick.value);
+      this.#render();
+    });
+    return pick;
+  }
+
   #tool(parent, title, path, extraClass = "") {
     const button = dom.html("button", { type: "button", class: `sim-tool ${extraClass}`.trim(), title, "aria-label": title }, parent);
     dom.svg("path", { d: path }, dom.svg("svg", { class: "sim-icon", viewBox: "0 0 16 16", "aria-hidden": "true" }, button));
@@ -489,6 +502,10 @@ class SimView {
     const left = -(vw - w) / 2 - (PAD.left - PAD.right) / (2 * s);
     const top = -h - (vh - h) / 2 - (PAD.top - PAD.bottom) / (2 * s);
     ui.map.setAttribute("viewBox", `${left.toFixed(2)} ${top.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
+    // The lines above and below the floor keep to its edges, where a wide
+    // stage leaves room over and under it (sim.css).
+    const spare = Math.max(0, (height - PAD.top - PAD.bottom - h * s) / 2);
+    ui.stage.style.setProperty("--floor-y", `${Math.floor(spare)}px`);
 
     for (const label of ui.labels.children || []) {
       const size = 10 / s;
@@ -517,7 +534,7 @@ class SimView {
     const ui = this.#ui;
     const { CM } = SimView;
     if (this.#drawn.room !== target.room) {
-      ui.room.value = target.roomKey;
+      for (const pick of ui.rooms) pick.value = target.roomKey;
       this.#drawRoom();
     }
 
@@ -544,7 +561,6 @@ class SimView {
 
     // The playback.
     ui.pause.setAttribute("aria-pressed", String(target.paused));
-    pressSegment(ui.speeds, target.paused ? null : target.playback);
     ui.speedPick.value = target.paused ? "" : String(target.playback);
   }
 
@@ -576,6 +592,7 @@ class SimView {
       ui.logText.textContent = last ? last.text : "";
       ui.log.dataset.tone = last && last.tone === "bump" ? "bump" : "";
       ui.log.dataset.empty = last ? "no" : "yes";
+      ui.badge.dataset.said = last ? "yes" : "no";
     }
   }
 

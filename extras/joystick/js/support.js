@@ -13,6 +13,8 @@
  *                   a segmented control's buttons, which one is pressed,
  *                   and a segment's word, its short form and its hint
  *   isPrimaryPress  whether a press is the primary button alone
+ *   fitSteps        a row of controls fitted to its box, by the steps of
+ *                   its data-fit
  */
 
 // Reported as an uncaught error would be, where the page has reportError,
@@ -164,4 +166,22 @@ function isPrimaryPress(event) {
   return event.button === 0 && !event.ctrlKey;
 }
 
-if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp, radians, degrees, abortableWait };
+// Fit a row of controls to its box in steps, each a value of the box's
+// data-fit that its stylesheet keys on, from the most the row says to the
+// least: the first step at which the row fits the box stands, and the last
+// one if none does. Measured, so it follows what the row holds now and the
+// fonts the device has, where a width threshold has to assume the worst.
+// Run it again whenever the box or what it holds changes. A page that
+// cannot measure (no layout) keeps the first step. overflows(box) says
+// whether the row does not fit: by default, whether it runs past the box;
+// a row whose parts shrink to fit (cut short with an ellipsis) says so
+// by its parts instead.
+function fitSteps(box, steps, overflows = (b) => b.scrollWidth > b.clientWidth) {
+  for (const step of steps) {
+    box.dataset.fit = step;
+    if (!overflows(box)) return step;
+  }
+  return steps[steps.length - 1];
+}
+
+if (typeof module !== "undefined") module.exports = { Listeners, reportFault, memory, clamp, radians, degrees, abortableWait, fitSteps };

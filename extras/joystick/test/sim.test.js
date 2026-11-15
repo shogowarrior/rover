@@ -1107,7 +1107,13 @@ function pageWithView(options = {}) {
   const byClass = (name) => nodes().filter((n) => (n.getAttribute("class") || "").split(" ").includes(name));
   byClass("sim-map")[0].getScreenCTM = () => ({ inverse: () => ({}) });
   const button = (text) => nodes().find((n) => n.tagName === "BUTTON" && n.textContent === text);
-  return { page, sim: page.evalIn("targets.simulator"), byClass, button };
+  // The playback speed's one list, at every width: a choice from it.
+  const play = (rate) => {
+    const list = byClass("sim-speed-pick")[0];
+    list.value = String(rate);
+    page.fire(list, "change");
+  };
+  return { page, sim: page.evalIn("targets.simulator"), byClass, button, play };
 }
 
 test("the view: a tap on the rover leaves a preview running; a drag places it", async () => {
@@ -1192,7 +1198,7 @@ test("the view: the turn handle turns the rover where it stands, and a turned ro
 });
 
 test("the view: a bearing to the rover's left reads, and is drawn, on its left", async () => {
-  const { page, sim, byClass, button } = pageWithView();
+  const { page, sim, byClass, play } = pageWithView();
   // Facing along the top wall of the 2 x 2 m box, 30 cm from it: near on
   // the left, far on the right.
   sim.setRoom("box");
@@ -1203,7 +1209,7 @@ test("the view: a bearing to the rover's left reads, and is drawn, on its left",
   assert.deepEqual([...readings].sort((a, b) => a - b), readings, `nearest on the left, left to right: ${readings}`);
   near(frame.distanceLeft, (0.3 / Math.sin(radians(70))) * 100, 0.1, "distanceLeft: the top wall, 70 degrees left");
 
-  page.fire(button("1×"), "click"); // anything that draws
+  play(1); // anything that draws
   const rays = all(byClass("sim-rays")[0]).filter((n) => n.tagName === "LINE");
   const end = (ray) => ["x1", "y1", "x2", "y2"].map((name) => Number(ray.getAttribute(name)));
   const [, leftFromY, , leftToY] = end(rays[0]);
@@ -1229,63 +1235,63 @@ test("the view: a bearing to the rover's left reads, and is drawn, on its left",
 });
 
 test("the view: paused, Pause is pressed and no playback speed is", () => {
-  const { page, sim, byClass, button } = pageWithView();
+  const { page, sim, byClass, play } = pageWithView();
   const pause = byClass("sim-pause")[0];
-  const pressed = () => SimTarget.PLAYBACKS.filter((rate) => button(`${rate}×`).getAttribute("aria-pressed") === "true");
-  page.fire(button("2×"), "click");
-  assert.deepEqual(pressed(), [2]);
+  const list = byClass("sim-speed-pick")[0];
+  assert.equal(list.tagName, "SELECT");
+  assert.deepEqual(list.children.map((o) => o.getAttribute("value")), SimTarget.PLAYBACKS.map(String));
+  play(2);
+  assert.equal(sim.playback, 2);
+  assert.equal(list.value, "2");
   assert.equal(pause.getAttribute("aria-pressed"), "false");
   page.fire(pause, "click");
   assert.equal(sim.paused, true);
-  assert.deepEqual(pressed(), [], "no speed pressed while paused");
+  // Paused, it shows no speed: any choice is a change, and plays, the
+  // speed it was at included.
+  assert.equal(list.value, "", "no speed shown while paused");
   assert.equal(pause.getAttribute("aria-pressed"), "true");
-  page.fire(button("4×"), "click");
+  play(2);
+  assert.equal(sim.paused, false, "the speed it was at plays again");
+  page.fire(pause, "click");
+  play(4);
   assert.equal(sim.paused, false, "a speed plays");
-  assert.deepEqual(pressed(), [4]);
+  assert.equal(sim.playback, 4);
+  assert.equal(list.value, "4");
   assert.equal(pause.getAttribute("aria-pressed"), "false");
   assert.deepEqual(page.errors, []);
 });
 
-test("the view: a narrow bar offers the playback speed as a list, the same choice as the buttons", () => {
-  const { page, sim, byClass, button } = pageWithView();
-  const list = byClass("sim-speed-pick")[0];
-  assert.equal(list.tagName, "SELECT");
-  assert.deepEqual(list.children.map((o) => o.getAttribute("value")), SimTarget.PLAYBACKS.map(String));
-  page.fire(button("2×"), "click");
-  assert.equal(list.value, "2", "a button's choice shows in the list");
-  // Paused, it shows no speed, as no button is pressed: any choice is a
-  // change, and plays, the speed it was at included.
-  page.fire(byClass("sim-pause")[0], "click");
-  assert.equal(list.value, "", "paused: no speed shown");
-  list.value = "2";
-  page.fire(list, "change");
-  assert.equal(sim.paused, false, "the speed it was at plays again, as its button would");
-  page.fire(byClass("sim-pause")[0], "click");
-  list.value = "4";
-  page.fire(list, "change");
-  assert.equal(sim.playback, 4);
-  assert.equal(sim.paused, false, "a choice from the list plays, as a button's does");
-  assert.equal(button("4×").getAttribute("aria-pressed"), "true", "and the buttons show it");
+// One row of controls on every layout, never two: the room's list, the
+// playback speed as one list at every width (buttons on a wide view and a
+// list on a narrow one were two looks for one choice), pause, reset and
+// the settings at the far end. A bar too narrow for the room's list gives
+// it to the settings, where the same list waits; the speed, pause and
+// reset stay one press. The owner asked for the room to be bigger: no row
+// of the bar ever wraps into it.
+test("the view: one row of controls, one speed list, and a narrow bar gives the room's list to the settings", () => {
+  const { page, sim, byClass } = pageWithView();
+  const bar = byClass("sim-bar")[0];
+  const kinds = bar.children.map((n) => (n.getAttribute("class") || "").split(" ").filter((c) => c !== "sim-tool")[0]);
+  assert.deepEqual(kinds, ["sim-room", "sim-speed-pick", "sim-pause", "sim-reset", "sim-settings"], "the bar, in order");
+  assert.equal(byClass("sim-speed").length, 0, "no buttons for the speed");
+  const [barRoom, panelRoom] = byClass("sim-room");
+  assert.ok(panelRoom && all(page.$("simMore")).includes(panelRoom), "the room's list again, in the settings");
+  panelRoom.value = "corridor";
+  page.fire(panelRoom, "change");
+  assert.equal(sim.roomKey, "corridor", "either list picks the room");
+  assert.equal(barRoom.value, "corridor", "and both show it");
 
-  // The one or the other, by the bar's width; narrower still, the room's
-  // name takes a row of its own, and the settings open below both rows:
-  // the list where the buttons no longer fit beside the room's longest
-  // name, the row where the list no longer does. The tools are one size on
-  // every layout (the panel's one control height), so the widths are too.
   const css = stylesheet("sim.css");
   const rule = (rules, selector) => (rules.find((r) => r.selector === selector) || {}).body || "";
-  // Outside every @media: the same widths on every layout.
+  assert.ok(!/flex-wrap:\s*wrap/.test(rule(cssRules(css), ".sim-bar")), "the bar never wraps");
   const everywhere = outside(css, "@media");
   const queries = [...everywhere.matchAll(/@container sim \(max-width: ([\d.]+)px\) \{/g)]
     .map((m) => ({ px: Number(m[1]), rules: blockRules(everywhere, m[0]) || [] }))
-    .filter((q) => q.rules.some((r) => /^\.sim-(speed|room)/.test(r.selector)));
-  assert.equal(queries.length, 2, `two widths for the bar, for every layout: ${queries.map((q) => q.px)}`);
-  const [list_, row] = queries;
-  assert.match(rule(list_.rules, ".sim-speed"), /display:\s*none/, "no buttons");
-  assert.match(rule(list_.rules, ".sim-speed-pick"), /display:\s*block/, "the list");
-  assert.match(rule(row.rules, ".sim-room"), /flex-basis:\s*100%/, "the room's own row");
-  assert.match(rule(row.rules, ".sim-more"), /--sim-bar-h:\s*calc\(2 \* var\(--sim-tool\)/, "the settings below both rows");
-  assert.ok(row.px < list_.px, "the row only narrower than the list");
+    .filter((q) => q.rules.some((r) => /\.sim-room/.test(r.selector)));
+  assert.equal(queries.length, 1, `one width for the bar, for every layout: ${queries.map((q) => q.px)}`);
+  assert.match(rule(queries[0].rules, ".sim-bar .sim-room"), /display:\s*none/, "narrow: the room's list leaves the bar");
+  assert.match(rule(queries[0].rules, ".sim-more .sim-room-row"), /display:\s*grid/, "for the settings");
+  assert.match(rule(cssRules(css), ".sim-more .sim-room-row"), /display:\s*none/, "shown there only where the bar has no room");
   // The tools the panel's one control height, the top's, on every layout,
   // each reaching over the bar's edges to a full touch target's height.
   const tools = cssRules(css).filter((r) => /--sim-tool:/.test(r.body)).map((r) => r.body.match(/--sim-tool:\s*([^;]+);/)[1]);
@@ -1294,10 +1300,47 @@ test("the view: a narrow bar offers the playback speed as a list, the same choic
   assert.match(reach, /position:\s*absolute/, "a touch target over the tool");
   assert.match(reach, /inset:\s*calc\(\(var\(--sim-tool\) - var\(--tap\)\) \/ 2\) 0;/, "as tall as a full touch target");
   assert.match(rule(cssRules(css), ".sim-tool"), /position:\s*relative/, "hung from its tool");
-  // The list's own rule, ahead of the container queries that override it.
-  assert.match(rule(cssRules(css), ".sim-speed-pick"), /display:\s*none/, "otherwise the buttons alone");
   const settings = cssRules(css).find((r) => r.selector === ".sim-more" && /position:\s*absolute/.test(r.body));
-  assert.match(settings.body, /top:\s*calc\([^;]*var\(--sim-bar-h\)/, "the settings open below the bar's rows");
+  assert.match(settings.body, /top:\s*calc\([^;]*var\(--sim-tool\)/, "the settings open below the bar's one row");
+  // Held at 1x (the Drive tab), the list leaves the bar, and the settings
+  // say why: a list of one speed is no choice, and greyed-out speeds read
+  // as broken.
+  assert.match(rule(cssRules(css), '.sim[data-held="yes"] .sim-bar .sim-speed-pick'), /display:\s*none/, "held: no list on the bar");
+  page.evalIn('simView.holdPlayback("Driven from the Drive tab, the simulator runs in real time.")');
+  const why = byClass("sim-held")[0];
+  assert.equal(byClass("sim")[0].dataset.held, "yes");
+  assert.ok(!why.hidden && /real time/.test(why.textContent), `the settings say why: ${why.textContent}`);
+  page.evalIn("simView.holdPlayback(null)");
+  assert.ok(why.hidden && byClass("sim")[0].dataset.held === "no", "let go: the list back, the line gone");
+  assert.deepEqual(page.errors, []);
+});
+
+// What the view says lies in the room's margins (SimView.PAD), a line above
+// the floor and a line below it, never over it and never in rows of their
+// own that take the room's height: the owner asked twice for the room to
+// be bigger. The key to the colours is in the settings alone.
+test("the view: the tag and the motion in the room's margins, and the key in the settings", () => {
+  const { page, byClass } = pageWithView();
+  const stage = byClass("sim-stage")[0];
+  for (const name of ["sim-badge", "sim-foot"]) {
+    assert.equal(byClass(name)[0].parentNode, stage, `${name} over the stage, in its margin`);
+  }
+  for (const name of ["sim-move", "sim-twist", "sim-clock", "sim-scale", "sim-inset"]) {
+    assert.equal(byClass(name)[0].parentNode, byClass("sim-foot")[0], `${name} on the foot's one line`);
+  }
+  assert.equal(byClass("sim-log")[0].parentNode, byClass("sim-badge")[0], "the latest word on the top line");
+  assert.equal(byClass("sim")[0].children.length, 3, "the view: the bar, the stage, the settings");
+  const keys = byClass("sim-key");
+  assert.equal(keys.length, 1, "one key");
+  assert.ok(all(page.$("simMore")).includes(keys[0]), "in the settings");
+  const css = stylesheet("sim.css");
+  const rule = (selector) => cssRules(outside(css, "@container")).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  for (const selector of [".sim-badge", ".sim-foot"]) {
+    assert.match(rule(selector), /position:\s*absolute/, `${selector} lies over the stage`);
+    assert.match(rule(selector), /white-space:\s*nowrap/, `${selector} one line`);
+  }
+  const { PAD } = page.evalIn("({ PAD: SimView.PAD })");
+  assert.ok(PAD.top >= 18 && PAD.bottom >= 24, `margins for the two lines: ${JSON.stringify(PAD)}`);
   assert.deepEqual(page.errors, []);
 });
 
@@ -1392,30 +1435,30 @@ test("the view: its settings open from their button, and Escape or a press outsi
 });
 
 test("the view: one mark per bump, gone with the trail; and where the next preview starts", async () => {
-  const { page, sim, byClass, button } = pageWithView();
+  const { page, sim, byClass, button, play } = pageWithView();
   const twist = () => byClass("sim-twist")[0].textContent;
   sim.hold(protocol.MOVE_BACKWARD, 255); // into the wall behind the start
   await pageFrames(page, 2000, sim);
   sim.release();
-  page.fire(button("1×"), "click"); // anything that draws
+  play(1); // anything that draws
   assert.equal(sim.state.bumps.length, 1);
   assert.equal(byClass("sim-bump").length, 1, "one mark drawn");
   const caption = byClass("sim-log")[0];
   assert.equal(caption.dataset.tone, "bump", "the caption is in the bump's colour");
   assert.match(twist(), /goes on from here/, "stopped away from its start");
   const listening = sim.onTelemetry(() => {}); // as a running program is
-  page.fire(button("1×"), "click");
+  play(1);
   assert.equal(twist(), "standing still", "mid-run, a wait is only standing still");
   listening();
-  page.fire(button("1×"), "click");
+  play(1);
   assert.match(twist(), /goes on from here/);
   page.fire(button("Clear trail"), "click");
   assert.equal(byClass("sim-bump").length, 0, "removed, not hidden");
   page.fire(byClass("sim-tool").find((b) => (b.getAttribute("title") || "").startsWith("Reset")), "click");
-  page.fire(button("1×"), "click");
+  play(1);
   assert.equal(twist(), "standing still", "back at its start");
   sim.explore(); // said, but not a bump
-  page.fire(button("1×"), "click");
+  play(1);
   assert.equal(caption.dataset.tone, "", `in plain colour: ${byClass("sim-log-text")[0].textContent}`);
   assert.deepEqual(page.errors, []);
 });
@@ -1483,13 +1526,14 @@ test("the view's frames: none while hidden or idle out of sight, and no jump aft
   assert.deepEqual(page.errors, []);
 });
 
-// A view too short for the room (the Drive tab's on a phone) hides the
-// stage and shows the wheels and the motion: shown is the view's, not the
-// stage's, or a drive there drew nothing.
+// A view too short for the room (a short phone's band over the editor)
+// hides the room and shows the wheels and the motion: shown is the view's,
+// not the room's, or a drive there drew nothing.
 test("the view's frames: with the room hidden, the view still draws the motion", async () => {
   const { page, sim, byClass } = pageWithView({ frames: true });
   assert.ok(byClass("sim")[0].resizeObserved, "the view's own box is watched, as well as the room's");
   page.fire(page.$("tabProgram"), "click");
+  byClass("sim-map")[0].hidden = true;
   byClass("sim-stage")[0].hidden = true;
   page.resized();
   await pageFrames(page, 100);

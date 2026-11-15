@@ -41,9 +41,14 @@
     <header class="bar">
       <div class="cells">
         <!-- What the controls drive, and its state: the target first, as
-             the owner asked; Autonomous, the other cell from Stop, so that
-             a press that misses Stop cannot start the rover exploring; the
-             link; and what needs the operator, only while it is so. -->
+             the owner asked; the link; what needs the operator, only while
+             it is so; and Autonomous at the cell's far end, in the other
+             cell from Stop, so that a press that misses Stop cannot start
+             the rover exploring. The cell is as wide on every target and in
+             every state (panel.css), and Autonomous at its end, so nothing
+             in either cell moves as a badge comes or goes. Where the cell
+             cannot hold every word, app.js steps them down (data-fit):
+             Sim and Auto first, then the badges' words, then the link's. -->
         <div class="hcell drives" role="group" aria-label="What the controls drive">
           <!-- Rover | Simulator: what the Drive tab's controls drive and
                what a program runs on, for the whole page. targetswitch.js
@@ -51,19 +56,9 @@
                offers the rover alone, and hides. -->
           <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
 
-          <!-- A switch, on while the target explores (autotoggle.js): its
-               knob and track say which. Named by its word; "Auto" where the
-               cell is narrow. -->
-          <button type="button" class="autoSwitch" id="auto" aria-pressed="false" aria-keyshortcuts="T" aria-label="Autonomous"
-                  title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
-            <span class="autoWord" aria-hidden="true">Autonomous</span>
-            <span class="autoShort" aria-hidden="true">Auto</span>
-            <span class="track" aria-hidden="true"></span>
-          </button>
-
           <!-- The link: its lamp and its word (link.js), the rover's link
                on the simulator target too, so it says whose; the address
-               where the top has room for it. It opens the link's popover,
+               where the cell has room for it. It opens the link's popover,
                which hangs from the top (panel.css): the address, Connect,
                and what link.js has to say. Not modal: Stop stays one press
                while it is open, and the keys stay the panel's (Space is
@@ -90,18 +85,32 @@
                titled in full: the motor shield that did not answer
                (readouts.js), and on the simulator target a rover still
                exploring (app.js), which must not move unseen. The word
-               where the top has room for it, the glyph alone below. -->
-          <span class="badge" id="motorsBadge" role="img" aria-label="No motors" hidden>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/></svg>
+               where the cell has room for it, the glyph alone where not; a
+               press opens the reason, its title, for a touch screen, which
+               has no hover (app.js). -->
+          <button type="button" class="badge" id="motorsBadge" aria-label="No motors" hidden>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8 21.5 20H2.5z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
             <span class="badgeWord" aria-hidden="true">No motors</span>
-          </span>
-          <span class="badge" id="exploringBadge" role="img" aria-label="Rover exploring" hidden
-                title="Rover exploring: the rover reports that it is driving itself. The simulator target leaves it be; Stop stops it.">
+          </button>
+          <div class="menu badgeNote" id="motorsNote" role="note" hidden><p id="motorsWhy"></p></div>
+          <button type="button" class="badge" id="exploringBadge" aria-label="Rover exploring" hidden
+                  title="Rover exploring: the rover reports that it is driving itself. The simulator target leaves it be; Stop stops it.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
             <span class="badgeWord" aria-hidden="true">Rover exploring</span>
-          </span>
+          </button>
+          <div class="menu badgeNote" id="exploringNote" role="note" hidden><p id="exploringWhy"></p></div>
           <!-- The rover's mode, as telemetry last reported it (readouts.js). -->
           <output id="mode" hidden>—</output>
+
+          <!-- A switch, on while the target explores (autotoggle.js): its
+               knob and track say which. Named by its word; "Auto" where the
+               cell is narrow. -->
+          <button type="button" class="autoSwitch" id="auto" aria-pressed="false" aria-keyshortcuts="T" aria-label="Autonomous"
+                  title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
+            <span class="autoWord" aria-hidden="true">Autonomous</span>
+            <span class="autoShort" aria-hidden="true">Auto</span>
+            <span class="track" aria-hidden="true"></span>
+          </button>
         </div>
 
         <!-- How the controls drive: the tabs, the scheme, and at the cell's
@@ -158,7 +167,7 @@
               <div class="looks" id="lookChoice" role="radiogroup" aria-labelledby="lookLabel"></div>
               <h2 class="menuLabel" id="keysLabel">Keys</h2>
               <dl class="keys" id="keyList" aria-labelledby="keysLabel"></dl>
-              <p class="keysNote">Driving and speed on the Drive tab; Stop and Autonomous on both.</p>
+              <p class="keysNote">Stop and Autonomous work on both tabs; the rest on the Drive tab.</p>
               <h2 class="menuLabel" id="firmwareLabel">Firmware</h2>
               <div class="firmware" role="group" aria-labelledby="firmwareLabel">
                 <p class="firmwareRunning"><span class="label">Rover runs</span><output id="firmwareBuild">—</output></p>
@@ -199,12 +208,15 @@
            exploration: once the shield answers, the wheels turn straight
            away, likely with the operator's hands still on the wiring.
            data-ready says what the rover last said. -->
-      <p class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
-        <strong>Motor shield not found &mdash; the wheels cannot move.</strong>
-        It did not answer when the rover booted. Check its I2C wiring and power,
-        then reset the rover with its wheels off the ground: after a power-on or
-        the EN button it starts exploring.
-      </p>
+      <!-- One line, the rest a press away: four lines of it took the scan's
+           height on a phone. The No motors badge in the top opens the same
+           reason. -->
+      <details class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
+        <summary title="What to do"><strong>No motor shield: the wheels can't move</strong></summary>
+        <p>It did not answer when the rover booted. Check its I2C wiring and
+        power, then reset the rover with its wheels off the ground: after a
+        power-on or the EN button it starts exploring.</p>
+      </details>
 
       <!-- The rover perceives the world as five ultrasonic returns, taken
            straight ahead and at 35 and 70 degrees to either side. Drawing
@@ -238,10 +250,10 @@
       <!-- What else the rover reports, in one line under its scan: the
            move, the chip's temperature, and the phase while it explores. -->
       <div class="readouts" role="group" aria-label="What the rover reports">
-        <span class="cell"><span class="label">Move</span><output id="move">—</output></span>
-        <span class="cell"><span class="label">Chip</span><output id="temp">—</output></span>
+        <span class="cell" title="Move"><span class="label">Move</span><output id="move">—</output></span>
+        <span class="cell" title="Chip temperature"><span class="label">Chip</span><output id="temp">—</output></span>
         <!-- Exploration phase, and the halt reason if any. Shown only while autonomous. -->
-        <span class="cell" id="phaseCell" hidden><span class="label">Phase</span><output id="phase">—</output></span>
+        <span class="cell" id="phaseCell" title="Exploration phase" hidden><span class="label">Phase</span><output id="phase">—</output></span>
       </div>
     </section>
 
@@ -290,12 +302,12 @@
           <button id="ccw" aria-label="Rotate counter-clockwise" aria-keyshortcuts="Q"
                   title="Rotate left (Q): counter-clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 3.5v3.7h3.7"/></svg>
-            <span>Left</span>
+            <span class="spinWord">Left</span>
           </button>
           <button id="cw" aria-label="Rotate clockwise" aria-keyshortcuts="E"
                   title="Rotate right (E): clockwise on the spot, while held.">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5v3.7h-3.7"/></svg>
-            <span>Right</span>
+            <span class="spinWord">Right</span>
           </button>
         </div>
 
@@ -323,7 +335,7 @@
         <!-- Named apart from the panel's red Stop: this one ends the
              program, and sends STOP only if the program was driving; that
              one always stops the rover, an exploring one too. -->
-        <button type="button" class="halt" id="programStop" disabled
+        <button type="button" class="halt" id="programStop" disabled aria-label="Stop program"
                 title="End the program. The rover stops if the program was driving it.">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
           <span>Stop program</span>

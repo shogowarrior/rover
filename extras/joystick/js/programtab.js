@@ -10,9 +10,12 @@
  *     targetSwitch  the TargetSwitch that picks the target (targetswitch.js).
  *     examples      [{id, name, state}] for the File menu (blocks.js).
  *     ask           the page's AskDialog (ask.js), for every question here.
- *     showView      whether the view pane shows beside the tab at first; it
- *                   shows on the simulator target whatever this says, and
- *                   once the target is switched to the simulator.
+ *     showView      whether the page has room for the view pane beside the
+ *                   tab (a wide screen): there it shows at first, and again
+ *                   once the target is switched to the simulator. A phone
+ *                   has no room for both: there the view starts folded on
+ *                   either target and stays as the View toggle leaves it,
+ *                   so a preview never squeezes the editor unasked.
  *     ui            the tab's elements, by name: tab (the tab itself, whose
  *                   data-view, "shown" or "hidden", the page's CSS keys on),
  *                   run, runLabel, stop, the File menu's button and list
@@ -92,13 +95,14 @@ class ProgramTab {
     this.#ask = ask;
     this.#ui = ui;
 
-    // The view pane beside the editor: where the page says there is room,
-    // and wherever a preview is what the operator last chose.
-    this.#showView(showView || targetSwitch.kind === "simulator");
+    // The view pane beside the editor, where the page says there is room.
+    // On a phone it squeezed the editor to a strip on the simulator target
+    // (the critic's round 1): folded there, the toggle's to open.
+    this.#showView(showView);
     targetSwitch.onChange((kind) => {
       this.#outcome = null;
-      // Previewing is when the view is wanted: show it.
-      if (kind === "simulator") this.#showView(true);
+      // Previewing is when the view is wanted: show it, where it fits.
+      if (kind === "simulator" && showView) this.#showView(true);
       this.#update();
     });
 
@@ -372,6 +376,8 @@ class ProgramTab {
     else if (empty) status = { tone: "idle", text: ProgramTab.EMPTY };
     else status = { tone: "ready", text: kind === "simulator" ? "Ready to preview on the simulator." : `Ready to run on the ${kind}.` };
     ui.state.textContent = status.text;
+    // Whole on hover, where one line cuts it short (a phone on its side).
+    ui.state.title = status.text;
     ui.state.dataset.tone = status.tone;
   }
 

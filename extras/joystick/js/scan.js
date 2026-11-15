@@ -92,6 +92,10 @@ class ScanView {
   #build() {
     const { VIEW_W, VIEW_H, CY, R_MAX, RANGE_CM, FAN_HALF, CX } = ScanView;
     this.#svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
+    // The rover at the foot of a pane taller than the fan, and what lies
+    // ahead of it above: centred, a tall pane's spare height lay empty both
+    // over the fan and under the rover.
+    this.#svg.setAttribute("preserveAspectRatio", "xMidYMax meet");
 
     // A wedge that stops short of the red STOP ring has a return within STOP_CM
     // along that ray, which makes the threshold legible spatially rather than

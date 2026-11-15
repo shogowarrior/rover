@@ -137,6 +137,17 @@
   .viewToggle { width: var(--ctl); padding: 0; }
 }
 
+/* Narrower still (a 320 px phone), Stop program its square alone, named
+   and titled in full: with "Run on rover" the row ran the View toggle off
+   the tab (the critic's round 1). */
+@container program (max-width: 339.98px) {
+  .programBar .halt .icon { display: block; }
+
+  .programBar .halt span { display: none; }
+
+  .programBar .halt { width: var(--ctl); padding: 0; justify-content: center; }
+}
+
 /* --- the stage: the editor, then the console -------------------------------- */
 
 /* The editor takes the tab's height less the toolbar and the console, down
@@ -172,24 +183,97 @@
   .programLog { max-height: 76px; }
 }
 
-/* A phone on its side has under 300 px under the top: the console beside
-   the editor rather than under it, a narrow column at the right edge, so
-   the editor keeps the height and most of the width. */
+/* A phone on its side has under 300 px under the top. The tab spans the
+   screen on the shell's columns (panel.css), and its toolbar takes the
+   bands beside the top, which were empty: Run over Stop program in the
+   left band, File over View in the right, each the band's width and lined
+   up with a cell's controls (4 px into a 40 px cell, the cells 6 px
+   apart). The editor takes the screen's width under them, the console one
+   line under it: the state, then the last thing the program said, which
+   scrolls back. Beside the editor, the console left it 262 px of a 568 px
+   screen. */
 @media (orientation: landscape) and (max-height: 520px) {
-  .programStage { flex-direction: row; }
+  .programBar {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: var(--ctl) var(--ctl);
+    column-gap: normal;
+    row-gap: calc(var(--cell-h) - var(--ctl) + 6px);
+    align-self: start;
+    padding-top: calc((var(--cell-h) - var(--ctl)) / 2);
+  }
+
+  .programBar > button,
+  .programBar .menuHolder,
+  .programBar .menuButton {
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+  }
+
+  #programRun { grid-area: 1 / 1; }
+  #programStop { grid-area: 2 / 1; }
+  .programBar .menuHolder { grid-area: 1 / -2; margin-left: 0; }
+  #viewToggle { grid-area: 2 / -2; }
+
+  .programStage {
+    grid-row: 2;
+    grid-column: 3 / -1;
+    margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
+  }
+
+  #programTab[data-view="hidden"] .programStage { grid-column: 1 / -1; }
 
   .programEditor { min-height: 0; }
 
   .programConsole {
-    display: flex;
-    flex-direction: column;
-    width: clamp(140px, 24%, 220px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .programLog {
-    flex: 1 1 auto;
-    max-height: none;
+  /* One line, its dot inline: the whole state on hover (programtab.js).
+     Scoped to the console, to outrank the rules below. */
+  .programConsole .programState {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-bottom: none;
+    border-right: 1px solid var(--rule);
   }
+
+  .programConsole .programState::before {
+    display: inline-block;
+    margin-right: var(--s-2);
+    vertical-align: 1px;
+  }
+
+  /* As tall as the state's line, each line of the log one line too. */
+  .programConsole .programLog {
+    min-height: 0;
+    max-height: none;
+    padding-block: var(--s-2);
+    line-height: var(--lh-body);
+    white-space: nowrap;
+  }
+
+  .programConsole .programLog li {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .programConsole .programLog li::before { margin-right: var(--s-2); }
+}
+
+/* On its side and narrow, the bands under 140 px: the words alone. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 639.98px) {
+  .programBar .run .icon,
+  .programBar .halt .icon { display: none; }
+
+  .programBar button { padding-inline: var(--s-2); }
 }
 
 #programWorkspace { position: absolute; inset: 0; }

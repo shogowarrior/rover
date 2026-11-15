@@ -86,13 +86,13 @@ class FamilySelector {
   // spans both sticks where it can (upright and side by side), and says
   // OFF_SHORT where it cannot (a phone on its side). The scheme is in the
   // top's second cell: at the top on every layout, but never at its right
-  // end, where Stop and the gear are, so the line says "at the top". Off,
-  // the pad's title says why too; on, it has none, to hang over a stick in
-  // use.
+  // end, where Stop and the gear are, so the line says "top bar", as every
+  // other line that points there does. Off, the pad's title says why too;
+  // on, it has none, to hang over a stick in use.
   static CAVEAT = "Untried: go slow.";
-  static OFF = "Pivots need Advanced (at the top)";
+  static OFF = "Pivots need Advanced (top bar)";
   static OFF_SHORT = "Needs Advanced";
-  static OFF_TITLE = "Pivots need Advanced: choose Advanced in the scheme switch at the top. The NORMAL scheme keeps the pivots off the sticks and the pad.";
+  static OFF_TITLE = "Pivots need Advanced: choose Advanced in the scheme switch in the top bar. The NORMAL scheme keeps the pivots off the sticks and the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
   // is forward. Each is labelled with the move its quadrant sends.

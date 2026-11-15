@@ -24,7 +24,7 @@ class Readouts {
 
   constructor({ mode, move, phaseCell, phase, temp, motorsBadge, motorsFault }) {
     this.#ui = { mode, move, phaseCell, phase, temp, motorsBadge, motorsFault };
-    motorsBadge.title = Readouts.MOTORS_TITLE;
+    motorsBadge.setAttribute("title", Readouts.MOTORS_TITLE);
   }
 
   get mode() {
