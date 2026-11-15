@@ -734,14 +734,19 @@ if (typeof ResizeObserver === "function") new ResizeObserver(fitTheTop).observe(
 if (typeof MutationObserver === "function") new MutationObserver(fitTheTop).observe(byId("linkChip"), { attributes: true, attributeFilter: ["data-host"] });
 fitTheTop();
 
-// The readouts' line the same way: its captions go before a value is cut
-// short (each cell titled with its caption), then its values take the
-// smaller type, then the chip's temperature goes, as each frame changes
-// what it says. One line, one height, whatever it holds.
+// The readouts' line the same way: the chip's temperature goes first, the
+// least needed, then the values take the smaller type, and only then do
+// the captions go (each cell titled with its own), before a value is cut
+// short, as each frame changes what it says: without its caption, a bare
+// "STOP" read like a button (the critic's round 3). One line, one height,
+// whatever it holds.
 const readoutsLine = document.querySelector(".readouts");
-// Its values shrink to fit, cut short: the line overflows where one is.
-const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.scrollWidth > value.clientWidth);
-const fitReadouts = () => fitSteps(readoutsLine, ["words", "bare", "small", "nochip"], cutShort);
+// Its values shrink to fit, cut short: the line overflows where one is. A
+// cell put out of sight (the chip's, past the first step) is 1 px wide, its
+// value not cut short but not shown: counted as cut, every line that let
+// the chip go let the captions go too.
+const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.parentNode.getBoundingClientRect().width > 1 && value.scrollWidth > value.clientWidth);
+const fitReadouts = () => fitSteps(readoutsLine, ["words", "nochip", "small", "bare"], cutShort);
 if (typeof ResizeObserver === "function") new ResizeObserver(fitReadouts).observe(readoutsLine);
 if (typeof MutationObserver === "function") {
   new MutationObserver(fitReadouts).observe(readoutsLine, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });

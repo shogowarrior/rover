@@ -747,7 +747,8 @@ input[type="range"]::-moz-range-thumb {
 /* The view's shape, for the layouts that size its pane to what it shows
    (the Program tab's, below): --va its drawing's width over its height,
    --vcw and --vch what its card adds across and down. The scan's fan is
-   420 x 200 (scan.js), in its card's padding over the readouts line; the
+   420 x 200 (scan.js), in its card's padding under the rings' legend's
+   line (20 px) and over the readouts line; the
    room's shape is the simulator's (SimView sets --room-aspect here), under
    its bar's one row (32 px and a 4 px gap), with the walls' margin
    (SimView.PAD, 3 px) and the card's padding (3 px over the bar, 8 px
@@ -757,7 +758,7 @@ input[type="range"]::-moz-range-thumb {
 .shell {
   --va: 2.1;
   --vcw: 8px;
-  --vch: 44px;
+  --vch: 64px;
 }
 
 body[data-target="simulator"] .shell {
@@ -1430,6 +1431,8 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
    the card, and scrolls the rest. A bar of its own over the card read as a
    third row under the top's two cells (the critic's round 2). */
 .fault {
+  justify-self: start;
+  max-width: 520px;
   min-height: 0;
   max-height: 50cqh;
   overflow-y: auto;
@@ -1444,7 +1447,10 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 }
 
 /* One line, a caret for the rest: the summary is the fault, the details
-   what to do about it. */
+   what to do about it. The card as wide as its line, 520 px at most, at
+   the scan's top-left, the caret right after the words: across a 1100 px
+   view it read as a page-wide banner, its caret 900 px from its words
+   (the critic's round 3). */
 .fault summary {
   display: flex;
   align-items: center;
@@ -1460,7 +1466,7 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   flex: none;
   width: 6px;
   height: 6px;
-  margin: 0 2px 2px auto;
+  margin: 0 2px 2px;
   border-right: 1.5px solid var(--warn);
   border-bottom: 1.5px solid var(--warn);
   transform: rotate(45deg);
@@ -1507,7 +1513,8 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
 
-.scan svg {
+/* The fan, not the legend's swatches. */
+.scan > svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -1515,11 +1522,14 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 }
 
 /* The fault, while there is one, in a row at the card's top; under it the
-   fan and, with no link, the connect card, in one cell: the card over the
-   fan's faint rings, the card at its full size. */
-.scan { grid-template: auto minmax(0, 1fr) / minmax(0, 1fr); }
-.scan > * { grid-area: 2 / 1; }
+   rings' legend, a row of its own in the card's top-left corner, so it
+   never lies over the fan; under that the fan and, with no link, the
+   connect card, in one cell: the card over the fan's faint rings, the
+   card at its full size. */
+.scan { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
+.scan > * { grid-area: 3 / 1; }
 .scan > .fault { grid-area: 1 / 1; }
+.scan > .scanLegend { grid-area: 2 / 1; }
 
 /* With no link, whatever the tab or the width, over the faint fan: the
    next thing to do, rather than an empty pane that reads as a fault. Not
@@ -1612,13 +1622,13 @@ body[data-link="connecting"] .connectGo {
 }
 
 /* The fan draws at --scan-k screen pixels a unit (scan.js, which picks
-   the layout that draws it larger). Below about 7 px a label is a smudge,
-   so the bearings' names go first, with the legend (under 0.68 px a
-   unit), then the readings (under 0.45): the wedges alone still show, by
-   colour and length, what is close and on which side. scan.js says which
-   in data-labels. Under 32 px they are a smudge too. */
-#scan[data-labels="readings"] :is(.tick, .scanLegend),
-#scan[data-labels="none"] :is(.tick, .scanLegend, .reading) { display: none; }
+   the layout that draws it larger). The bearings' names go first, where
+   12 px would take more units than a reading (under 0.8 px a unit), then
+   the readings, below about 7 px a smudge (under 0.45): the wedges alone
+   still show, by colour and length, what is close and on which side.
+   scan.js says which in data-labels. Under 32 px they are a smudge too. */
+#scan[data-labels="readings"] .tick,
+#scan[data-labels="none"] :is(.tick, .reading) { display: none; }
 
 @container scan (max-height: 31.98px) {
   #scan { display: none; }
@@ -1664,7 +1674,9 @@ body[data-link="connecting"] .connectGo {
    override the attribute. Each at the drawing's own size, but never more
    than 28 px (a reading) or 14 px (a bearing's name) on screen: the fan
    grows to fill its pane, three times its size on a laptop, and its
-   labels need not. */
+   labels need not. A bearing's name never less than 12 px either
+   (ScanView.TICK_PX): at 10 px on a phone, 8 on the Program tab's fan,
+   the names were hard to read (the critic's round 3). */
 .reading {
   font-family: var(--gauge);
   font-size: min(var(--scan-reading), calc(28px / var(--scan-k, 1)));
@@ -1674,22 +1686,72 @@ body[data-link="connecting"] .connectGo {
 }
 
 .tick {
-  font-size: min(var(--scan-tick), calc(14px / var(--scan-k, 1)));
+  font-size: max(calc(12px / var(--scan-k, 1)), min(var(--scan-tick), calc(14px / var(--scan-k, 1))));
   font-weight: var(--fw-bold);
   letter-spacing: var(--track-label);
   fill: var(--dim);
 }
 
-/* The rings' legend, in the fan's corner (scan.js draws it in screen
-   pixels): the page's smallest type, in the dim ink, its rings' dashes
-   saying which is which. In red and amber, at about 22 px on a wide
-   screen, it outshouted the readouts, and a red STOP word vied with Stop
-   (the critic's round 2). */
-.ringLabel {
+/* The rings' legend (scan.js builds it), one line in the card's top-left
+   corner on every layout, under the fault while there is one: the page's
+   smallest type in the dim ink, each ring's dashes 20 px long, so red and
+   amber tell apart, before its distance and what it means. In red and
+   amber, at about 22 px on a wide screen, it outshouted the readouts, and
+   a red STOP word vied with Stop (the critic's round 2); in the fan's
+   corner it floated with the fan, its dashes too short to tell apart
+   (round 3). Where the card is narrow the 100 cm ring's goes, and where
+   it is short the whole line, for the fan. */
+.scanLegend {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 var(--s-2) var(--s-1);
+  overflow: hidden;
   font-size: var(--t-xs);
   font-weight: var(--fw-semi);
+  line-height: 16px;
   letter-spacing: var(--track-label);
-  fill: var(--dim);
+  white-space: nowrap;
+  color: var(--dim);
+  pointer-events: none;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.legendItem + .legendItem::before {
+  content: "\00b7";
+  margin-right: 2px;
+}
+
+.legendSwatch {
+  flex: none;
+  width: 20px;
+  height: 4px;
+  overflow: visible;
+}
+
+/* Its rings' colours and dashes, heavier than the rings' own: three
+   dots of each, at the rings' faintness, were too small to tell red from
+   amber. */
+.legendSwatch .ring {
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.legendSwatch .ring:is(.stop, .go) { stroke-dasharray: 4 3; }
+
+@container scan (max-width: 259.98px) {
+  .legendItem.far { display: none; }
+}
+
+@container scan (max-height: 159.98px) {
+  .scanLegend { display: none; }
 }
 
 /* Without a live link the fan is history: the wedges fade and the numbers
@@ -1699,6 +1761,17 @@ body[data-link="connecting"] .connectGo {
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
 body:not([data-link="up"]) .wedge[data-zone="clear"] { fill: var(--dim); stroke: var(--dim); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
+
+/* With no link and no scan from one (the connect card over it), the fan
+   has nothing to say: all of it faint, its rings and the rover's dot
+   included, and its words out of sight, the bearings' names and the
+   dashes of readings never taken, so the card covers nothing that reads
+   (the critic's round 3: FL and FR stuck out at its corners, and the
+   rings at full strength were the loudest thing in the view). The
+   legend keeps its place, out of sight, so the first frame moves nothing. */
+body:not([data-link="up"]) #scan[data-empty="yes"] { opacity: 0.35; }
+body:not([data-link="up"]) #scan[data-empty="yes"] :is(.tick, .reading) { display: none; }
+body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend { visibility: hidden; }
 
 /* The readouts: one line at the scan's foot, ending its card: the move,
    the chip's temperature, and the phase while the rover explores, each a
@@ -1753,13 +1826,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .cell[hidden] { display: none; }
 
 /* Where the line cannot hold every caption and value (app.js, fitSteps),
-   the captions go before any value is cut short: out of sight, still
-   read out, and each cell titled with its own. Then the values take the
-   smaller type, and last the chip's temperature goes the same way, so
-   the move and the phase are never cut, however long (ROTATE_COUNTERCLOCKWISE
-   beside SIDESTEP on a 320 px phone; the critic's round 1). */
-.readouts:is([data-fit="bare"], [data-fit="small"], [data-fit="nochip"]) .cell .label,
-.readouts[data-fit="nochip"] .cell:has(> #temp) {
+   the chip's temperature goes first, out of sight, still read out; then
+   the values take the smaller type; and only then the captions go the
+   same way, each cell titled with its own, so the move and the phase are
+   never cut, however long (ROTATE_COUNTERCLOCKWISE beside SIDESTEP on a
+   320 px phone; the critic's round 1). The captions went first, and a
+   bare "STOP" read like a button, a bare 41.5°C as nothing in particular
+   (round 3). A halt says what it is without one: "Halted: boxed in". */
+.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="bare"]) .cell:has(> #temp),
+.readouts[data-fit="bare"] .cell .label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1767,16 +1842,30 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   clip-path: inset(50%);
 }
 
-.readouts:is([data-fit="small"], [data-fit="nochip"]) {
+/* The caption of a halt, the same way: its words say what it is. */
+#phaseCell[data-halted="yes"] .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.readouts:is([data-fit="small"], [data-fit="bare"]) {
   gap: var(--s-2);
   padding-inline: var(--s-3);
 }
 
-.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell output { font-size: var(--t-sm); }
+.readouts:is([data-fit="small"], [data-fit="bare"]) .cell output { font-size: var(--t-sm); }
 
-.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell + .cell::before { margin-right: 2px; }
+.readouts:is([data-fit="small"], [data-fit="bare"]) .cell + .cell::before { margin-right: 2px; }
 
 #phase[data-tone="warn"] { color: var(--warn); }
+
+/* Without a live link what the rover last reported is history, dimmed
+   with the scan over it, the halt's amber too: in full ink under a
+   dimmed scan, "Move STOP" read as live (the critic's round 3). */
+body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
 
 /* The simulator's one view (simview.js fills it): a card the pane's size,
    which the view inside fills (sim.css). clip, not hidden: a scroll
@@ -2248,16 +2337,17 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    wide as what it shows needs at the band's height (the room's shape, or
    the fan's: --va), and the console beside it, at least 200 px wide,
    takes the rest of the band. The room filled 315 to 380 px of a 720 px
-   band, black bars either side (the critic's round 2). A band whose view
-   reaches the console's floor (the fan's wide shape) is only as tall as
-   that view needs. The editor's card under the band, the whole width,
-   its toolbar its head; with the view hidden the console goes back under
-   the editor. */
+   band, black bars either side (the critic's round 2). The band is one
+   height whatever the target, and the fan or the room fits inside it: a
+   band as tall as the fan's wide shape needed moved the editor's top
+   105 px at 768 x 1024 on a switch of target (the review's tablets 11).
+   The editor's card under the band, the whole width, its toolbar its
+   head; with the view hidden the console goes back under the editor. */
 @media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {
   .shell:has(> #programTab[data-view="shown"]:not([hidden])) {
     --band-0: clamp(200px, 38 * var(--svh), 460px);
     --view-w: min((var(--band-0) - var(--vch)) * var(--va) + var(--vcw), min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-2) - 200px);
-    --band-h: min(var(--band-0), (var(--view-w) - var(--vcw)) / var(--va) + var(--vch));
+    --band-h: var(--band-0);
     grid-template-columns: var(--view-w) minmax(0, 1fr);
     grid-template-rows: auto var(--band-h) minmax(0, 1fr);
     grid-template-areas:

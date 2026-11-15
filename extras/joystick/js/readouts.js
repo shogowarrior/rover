@@ -43,14 +43,20 @@ class Readouts {
       ui.mode.dataset.mode = data.mode;
       this.#mode = data.mode;
 
-      // What exploration is doing, and why it has given up when it has. The
-      // firmware sends neither in manual mode, so the readout goes with it.
+      // What exploration is doing, and why it has given up when it has: a
+      // halt alone, in words and amber, its caption out of sight (panel.css
+      // keys on data-halted), "Halted: boxed in". "Phase HALTED: boxed in"
+      // read as a phase among others, and "CRUISE: boxed in" as a cruise
+      // (the critic's round 3). The firmware sends neither in manual mode,
+      // so the readout goes with it.
       ui.phaseCell.hidden = !exploring;
       const halted = typeof data.halt === "string";
       ui.phase.textContent = halted
-        ? `${data.phase || "HALTED"}: ${data.halt}`
+        ? `Halted: ${data.halt}`
         : typeof data.phase === "string" ? data.phase : "—";
       ui.phase.dataset.tone = halted ? "warn" : "";
+      ui.phaseCell.dataset.halted = halted ? "yes" : "no";
+      ui.phaseCell.title = halted ? "Exploration halted, and why" : "Exploration phase";
     }
     if (typeof data.move === "string") ui.move.textContent = data.move;
     if (typeof data.temperature === "number") {
@@ -72,6 +78,8 @@ class Readouts {
     this.#mode = null;
     ui.phaseCell.hidden = true;
     ui.phase.dataset.tone = "";
+    ui.phaseCell.dataset.halted = "no";
+    ui.phaseCell.title = "Exploration phase";
     this.#showMotorsReady(undefined);
   }
 

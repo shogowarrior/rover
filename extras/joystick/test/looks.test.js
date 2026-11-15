@@ -48,7 +48,7 @@ const AUDIT = [
   ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
     "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the open tab and the link chip while all is well, the Autonomous switch's word, Blockly's toolbox and flyout, a hovered flyout button, the fault in the scan's card, the rover's alert in the link's popover"],
   ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--warn-soft over --panel"], TEXT,
-    "captions, the note, the keys' note, unchosen segments, the tabs not open, the link chip with no link, its caret and its address (on its amber tint too, lost, stale or saying the rover's alert), the Autonomous switch's knob while off, the log, the scan's ticks and its rings' legend, the room's walls and labels, the preview's tag, a menu item's key"],
+    "captions, the note, the keys' note, unchosen segments, the tabs not open, the link chip with no link, its caret and its address (on its amber tint too, lost, stale or saying the rover's alert), the Autonomous switch's knob while off, the log, the scan's ticks, its rings' legend and the readouts with no live link, the room's walls, labels and metre, the simulator's settings and its bar's how fast, a menu item's key"],
   ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word: the target, the scheme, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame"],
   ["--live", ["--case", "--raised"], TEXT, "a pending segment, the log's say"],
   ["--on-live", ["--live"], TEXT, "Connect, in the popover, on the view's connect card and in the Program console's line, Run, Yes, Update, a held rotate button"],
@@ -57,7 +57,7 @@ const AUDIT = [
   ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
     "the note gone bad, the phase, the stick's caption, the link chip lost or stale or saying the rover's alert, on its tint in a cell, the fault's headline in the scan's card, the log"],
   ["--stop-ink", ["--panel", "--glow over --panel", "--stop-soft over --case"], TEXT,
-    "a stall or a bump in the simulator"],
+    "a stall or a bump in the simulator, the scan legend's stop dashes"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
   // A fresh sonar ray is drawn at 0.95.
@@ -72,7 +72,7 @@ const AUDIT = [
   ["--ok", ["--warn-soft over --panel"], MARK, "the link chip's lamp, or the rover's glyph in its place, while up, on the chip's amber tint while it says the rover's alert"],
   ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "a sonar ray inside STOP, a bump, a stalled rover's outline"],
-  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
+  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in, and the legend's go dashes"],
   ["--stop", ["--glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
   ["--readout", ["--glow over --panel"], MARK, "the scan's rover"],
   ["--case", ["--ok", "--sim-back"], MARK, "the arrow on a turning wheel"],
@@ -89,7 +89,7 @@ const AUDIT = [
 
   ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's edge"],
   ["--raised", ["--panel"], QUIET, "the link chip and a switch's track in the top's cells, told from the cell by their fill alone: one outline per cell, the cell's"],
-  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
+  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: the legend names it, the wedges' colour shows it"],
   ["--stop-ink at 0.65", ["--glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
   ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],
   ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],

@@ -761,15 +761,22 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A halt reads as what it is, alone, in amber: "Halted: boxed in", its
+// "Phase" caption out of sight (the critic's round 3: "CRUISE: boxed in"
+// read as a cruise).
 test("phase readout: autonomous only, halt reason shown", () => {
   const { page, ws } = connected(telemetry({ phase: "CRUISE" }));
   check(!page.$("phaseCell").hidden && page.$("phase").textContent === "CRUISE", page.$("phase").textContent);
+  check(page.$("phaseCell").dataset.halted === "no" && page.$("phaseCell").title === "Exploration phase", "a phase, captioned");
   check(page.$("auto").getAttribute("aria-pressed") === "true", "auto pressed");
   ws.serverMsg(telemetry({ phase: "HALTED", halt: "boxed in" }));
-  check(page.$("phase").textContent === "HALTED: boxed in", page.$("phase").textContent);
+  check(page.$("phase").textContent === "Halted: boxed in", page.$("phase").textContent);
   check(page.$("phase").dataset.tone === "warn", "halt tone");
-  ws.serverMsg(telemetry({ phase: "HALTED", halt: "sensor silent" }));
-  check(page.$("phase").textContent === "HALTED: sensor silent", page.$("phase").textContent);
+  check(page.$("phaseCell").dataset.halted === "yes" && /halted/.test(page.$("phaseCell").title), `the halt's own words, titled: ${page.$("phaseCell").title}`);
+  ws.serverMsg(telemetry({ phase: "CRUISE", halt: "sensor silent" }));
+  check(page.$("phase").textContent === "Halted: sensor silent", `a halt whatever the phase says: ${page.$("phase").textContent}`);
+  const caption = cssRules(panelCss()).find((r) => r.selector === '#phaseCell[data-halted="yes"] .label');
+  check(caption && /clip-path:\s*inset\(50%\)/.test(caption.body), "the halt's caption out of sight, still read");
   ws.serverMsg(telemetry({ mode: "MANUAL", move: "MOVE_FORWARD" }));
   check(page.$("phaseCell").hidden === true, "hidden in manual");
   check(page.$("auto").getAttribute("aria-pressed") === "false", "auto not pressed");
@@ -799,7 +806,7 @@ test("telemetry: the page shows every frame in test/vectors/telemetry.json", () 
     check(page.$("phaseCell").hidden === !exploring, `${name}: the phase shown only while exploring`);
     if ("phase" in frame) {
       const phase = page.$("phase");
-      check(phase.textContent === (frame.halt ? `${frame.phase}: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
+      check(phase.textContent === (frame.halt ? `Halted: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
       check(phase.dataset.tone === (frame.halt ? "warn" : ""), `${name}: phase tone '${phase.dataset.tone}'`);
     }
     check(page.$("move").textContent === frame.move, `${name}: move ${page.$("move").textContent}`);
@@ -1083,14 +1090,25 @@ test("the scan: a connect card over it while no link is up, and the scan empty u
   check(states === "connecting,down", `only with no link up: ${states}`);
   check(!/data-tab|tabpanel|#(drive|program)Tab/.test(selector), `on either tab: ${selector}`);
   // The card and the fan share one cell that takes what the fault's row
-  // leaves: an auto row sized by the card, in a small scan, let the fan
-  // spill out of it. The auto row is the fault's alone.
+  // and the legend's leave: an auto row sized by the card, in a small
+  // scan, let the fan spill out of it. The auto rows are the fault's and
+  // the rings' legend's alone.
   const card = cssRules(panelCss()).find((r) => r.selector === ".scan" && /grid-template:/.test(r.body));
-  check(card && /grid-template:\s*auto minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
+  check(card && /grid-template:\s*auto auto minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
   const cell = (selector) => cssRules(panelCss()).filter((r) => r.selector === selector).map((r) => r.body).join("");
-  check(/grid-area:\s*2 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > .fault")), `the card and the fan in the cell, the fault over them: ${cell(".scan > *")} | ${cell(".scan > .fault")}`);
+  check(/grid-area:\s*3 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > .fault")) && /grid-area:\s*2 \/ 1;/.test(cell(".scan > .scanLegend")), `the card and the fan in the cell, the legend and the fault over them: ${cell(".scan > *")} | ${cell(".scan > .scanLegend")} | ${cell(".scan > .fault")}`);
   const own = cssRules(panelCss()).find((r) => r.selector === ".connectCard");
   check(own && /display:\s*none/.test(own.body), "otherwise not shown");
+  // Under the card, with no link and no scan from one, the whole fan is
+  // faint, its rings included, and nothing in it reads: no bearing's name
+  // or reading stuck out at the card's corners (the critic's round 3).
+  // The legend keeps its row, unseen, so the first frame moves nothing.
+  // A link that went keeps its last scan, dimmed, legible, as history.
+  const faint = (selector) => cssRules(panelCss()).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/opacity:\s*0\.3\d?;/.test(faint('body:not([data-link="up"]) #scan[data-empty="yes"]')), `the empty fan faint: ${faint('body:not([data-link="up"]) #scan[data-empty="yes"]')}`);
+  check(/display:\s*none/.test(faint('body:not([data-link="up"]) #scan[data-empty="yes"] :is(.tick, .reading)')), "its names and its readings' dashes out of sight");
+  check(/visibility:\s*hidden/.test(faint('body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend')), "the legend out of sight, keeping its place");
+  check(/opacity:\s*0\.25/.test(faint('body:not([data-link="up"]) .wedge')) && /fill:\s*var\(--dim\)/.test(faint('body:not([data-link="up"]) .reading')), "a lost link's last scan dimmed, its readings still there");
   check(page.$("scan").parentNode.querySelectorAll(".connectCard").length === 1, "in the scan's own card");
   check(page.$("connectGo").title && page.$("changeAddress").getAttribute("title"), "both its buttons titled");
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -1121,9 +1139,10 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   const svg = page.$("scan");
   check(svg.getAttribute("viewBox") === `0 0 ${W} ${H}` && svg.dataset.layout === "wide", "viewBox set, wide until measured");
   const nodes = all(svg);
-  const legend = nodes.find((n) => n.getAttribute("class") === "scanLegend");
-  const inLegend = new Set(legend ? all(legend) : []);
-  const fan = nodes.filter((n) => !inLegend.has(n));
+  // The rings' legend is the card's, one line in its corner, not the
+  // drawing's: in the fan's corner it floated with the fan.
+  check(!nodes.some((n) => /scanLegend/.test(n.getAttribute("class") || "")), "no legend in the drawing");
+  const fan = nodes;
   const rings = fan.filter((n) => /^ring/.test(n.getAttribute("class") || ""));
   const radii = rings.map((n) => Number(n.getAttribute("d").match(/A([\d.]+)/)[1]));
   const want = [g("ScanView.RANGE_CM"), 100, g("GO_CM"), g("STOP_CM")].map((cm) => page.evalIn(`ScanView.radiusFor(${cm})`));
@@ -1149,10 +1168,9 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
     check(y0 < CY && y1 < CY, "ring above the baseline");
   }
 
-  // In either layout, text boxes (worst-case strings, at the drawing's own
-  // size: on screen a label only ever shrinks from it) must stay inside
-  // the view, off every wedge's largest possible sector, and off each
-  // other; and so must the legend, in its corner, at any scale it shows at.
+  // In either layout, text boxes (worst-case strings, at the size each
+  // label is drawn in units at that scale) must stay inside the view, off
+  // every wedge's largest possible sector, and off each other.
   const texts = fan.filter((n) => n.tagName === "TEXT");
   const sector = (b) => {
     let hits = 0;
@@ -1166,15 +1184,17 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
     }
     return hits;
   };
-  const legendTexts = legend ? all(legend).filter((n) => n.tagName === "TEXT") : [];
-  check(legendTexts.map((n) => n.textContent).join(",") === "25 STOP,40 GO,100 cm" && legendTexts.every((n) => n.getAttribute("class") === "ringLabel"), `the legend, STOP first: ${legendTexts.map((n) => n.textContent)}`);
+  // The legend: one line of the card's, each ring's dashes before its
+  // distance, with its unit, and what it means, the stop ring first.
+  const legend = svg.parentNode.querySelectorAll(".scanLegend")[0];
+  check(legend && legend.parentNode === svg.parentNode, "the legend in the scan's card");
+  const items = legend ? legend.children : [];
+  const words = items.map((item) => item.children.filter((n) => n.tagName === "SPAN").map((n) => n.textContent).join(""));
+  check(words.join(",") === `${g("STOP_CM")} cm stop,${g("GO_CM")} cm go,100 cm`, `the legend, the stop ring first: ${words}`);
+  const swatches = items.map((item) => all(item).filter((n) => n.tagName === "PATH").map((n) => n.getAttribute("class")).join());
+  check(swatches.join("|") === "ring stop|ring go|ring", `each ring's own dashes: ${swatches.join("|")}`);
+  check(items.map((item) => item.getAttribute("class")).join() === "legendItem stop,legendItem go,legendItem far", `the items by ring: ${items.map((item) => item.getAttribute("class"))}`);
   check(legend && legend.getAttribute("aria-hidden") === "true", "the legend is decoration: the rings' meaning is in the fan's title and the readings");
-  const legendBox = (left) => {
-    const [, k] = (legend.getAttribute("transform").match(/scale\(([\d.]+)\)/) || []).map(Number);
-    const rows = legend.children.filter((row) => row.getAttribute("visibility") !== "hidden").length;
-    const widest = Math.max(...legendTexts.map((n) => n.textContent.length));
-    return { str: "legend", rows, x0: left, x1: left + (19 + widest * 7) * k, y0: 0, y1: 2 + rows * g("ScanView.LEGEND_ROW_PX") * k };
-  };
   // The type's sizes in units at a scale: the drawing's own, capped on
   // screen (panel.css, mirrored in ScanView for the names' places).
   const [RS, RMAXPX] = [g("ScanView.READING_UNITS"), g("ScanView.READING_MAX_PX")];
@@ -1183,15 +1203,22 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   check(new RegExp(`calc\\(${RMAXPX}px / var\\(--scan-k, 1\\)\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `and its cap: ${RMAXPX}px`);
   const TS = rootVar("--scan-tick");
   for (const [layout, x0, x1, shape] of [["wide", 0, W, (k) => [W * k, H * k * 1.02]], ["tall", TX, TX + TW, (k) => [TW * k, H * k * 1.5]]]) {
-    // From where the labels first show to three times the drawing's size.
-    for (const k of [0.6, 0.72, 0.73, 0.9, 1.2, 2, 3.2]) {
+    // From where the readings first show, past where the names do, to three
+    // times the drawing's size.
+    for (const k of [0.6, 0.72, 0.79, 0.8, 0.9, 1.2, 2, 3.2]) {
       page.evalIn(`scanView.fit(${shape(k).join(", ")})`);
       check(svg.dataset.layout === layout, `${layout} at ${k}: ${svg.dataset.layout}`);
       check(svg.getAttribute("viewBox") === `${x0} 0 ${x1 - x0} ${H}`, `${layout}: its box: ${svg.getAttribute("viewBox")}`);
       check(svg.style.getPropertyValue("--scan-k") === k.toFixed(3), `${layout} at ${k}: --scan-k ${svg.style.getPropertyValue("--scan-k")}`);
       const rs = Math.min(RS, RMAXPX / k) / RS;
-      const ts = Math.min(TS, 14 / k) / TS;
-      const boxes = texts.map((n) => {
+      // A name 12 px on screen at least (ScanView.TICK_PX), so it shows
+      // only where 12 px takes no more units than a reading.
+      const TP = g("ScanView.TICK_PX");
+      const ts = Math.max(TP / k, Math.min(TS, 14 / k)) / TS;
+      const names = svg.dataset.labels === "all";
+      check(names === (TP / k <= RS) && svg.dataset.labels === (names ? "all" : "readings"), `${layout} at ${k}: names shown only at ${TP} px or more: ${svg.dataset.labels}`);
+      check(!names || ts * TS * k >= TP - 1e-9, `${layout} at ${k}: a name ${ts * TS * k} px on screen`);
+      const boxes = texts.filter((n) => names || n.getAttribute("class") === "reading").map((n) => {
         const big = n.getAttribute("class") === "reading";
         const str = big ? "no echo" : n.textContent;
         const em = big ? rs : ts;
@@ -1221,18 +1248,6 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
         const gap = label && Number(b.reading.getAttribute("y")) - Number(label.getAttribute("y"));
         check(label && gap > 0 && gap <= RS * rs + 2.1, `${layout} at ${k}: ${b.key}'s name over its reading: ${gap}`);
       }
-      // The legend: two rows at least or none, in the corner, clear of
-      // every label and wedge.
-      const shown = legend.getAttribute("visibility") !== "hidden";
-      const box = legendBox(x0 + 2);
-      if (!shown) {
-        check(k < (2 * g("ScanView.LEGEND_ROW_PX")) / g("ScanView.LEGEND_ROOM"), `${layout} at ${k}: the legend hidden only where two rows do not fit`);
-        continue;
-      }
-      check(box.rows >= 2, `${layout} at ${k}: two rows at least: ${box.rows}`);
-      check(box.x1 <= x1 && sector(box) === 0, `${layout} at ${k}: the legend inside the view, off every wedge: ${JSON.stringify(box)}`);
-      const hit = boxes.find((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1);
-      check(!hit, `${layout} at ${k}: the legend overlaps '${hit && hit.str}': ${JSON.stringify(box)}`);
     }
   }
   // A box with no size (the view hidden) changes nothing.
@@ -1271,13 +1286,17 @@ test("scan fit: the larger layout for the box, measured as it changes, and smudg
   check(labels(350, 393) === "all" && labels(180, 120) === "readings" && labels(100, 80) === "none", "the bearings' names go first, then the readings");
   const css = panelCss();
   const hides = cssRules(css).filter((r) => /#scan\[data-labels/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector).join(" ");
-  check(/data-labels="readings"\] :is\(\.tick, \.scanLegend\)/.test(hides) && /data-labels="none"\] :is\(\.tick, \.scanLegend, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
+  check(/data-labels="readings"\] \.tick/.test(hides) && /data-labels="none"\] :is\(\.tick, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
   // Never larger on screen than a reading or a name needs, whatever the
-  // fan's scale; the legend at the page's smallest type, in the dim ink.
+  // fan's scale, and a name never under 12 px; the legend at the page's
+  // smallest type, in the dim ink, never over the fan or taking a press.
   const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
   check(/font-size:\s*min\(var\(--scan-reading\), calc\(28px \/ var\(--scan-k, 1\)\)\);/.test(rule(".reading")), `readings capped: ${rule(".reading")}`);
-  check(/font-size:\s*min\(var\(--scan-tick\), calc\(14px \/ var\(--scan-k, 1\)\)\);/.test(rule(".tick")), `names capped: ${rule(".tick")}`);
-  check(/font-size:\s*var\(--t-xs\);/.test(rule(".ringLabel")) && /fill:\s*var\(--dim\);/.test(rule(".ringLabel")), `the legend quiet: ${rule(".ringLabel")}`);
+  check(/font-size:\s*max\(calc\(12px \/ var\(--scan-k, 1\)\), min\(var\(--scan-tick\), calc\(14px \/ var\(--scan-k, 1\)\)\)\);/.test(rule(".tick")), `names capped, and floored at 12 px: ${rule(".tick")}`);
+  check(page.evalIn("ScanView.TICK_PX") === 12, "the floor scan.js lays the names out for");
+  const legend = rule(".scanLegend");
+  check(/font-size:\s*var\(--t-xs\);/.test(legend) && /color:\s*var\(--dim\);/.test(legend) && /white-space:\s*nowrap;/.test(legend) && /pointer-events:\s*none;/.test(legend) && /justify-self:\s*start;/.test(legend), `the legend quiet, one line, in the corner: ${legend}`);
+  check(/width:\s*20px;/.test(rule(".legendSwatch")), `its dashes long enough to tell apart: ${rule(".legendSwatch")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2737,6 +2756,12 @@ test("motorsReady: the fault trades height with the scan inside the view, never 
   check(/container:\s*scan \/ size;/.test(rule(".scan")) && /flex:\s*1 1 0;/.test(rule(".scan")) && /min-height:\s*0;/.test(rule(".scan")), `the scan takes what the pane gives: ${rule(".scan")}`);
   const fault = rule(".fault");
   check(/min-height:\s*0;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault gives way and scrolls: ${fault}`);
+  // As wide as its line, 520 px at most, its caret right after its words:
+  // across a wide view it read as a page-wide banner, its caret 900 px
+  // from the words (the critic's round 3).
+  check(/justify-self:\s*start;/.test(fault) && /max-width:\s*520px;/.test(fault), `the fault as wide as its line: ${fault}`);
+  const caret = rule(".fault summary::after");
+  check(caret && !/\bauto\b/.test(caret) && !/flex:\s*1/.test(rule(".fault strong")), `its caret right after its words: ${caret}`);
   const cap = (fault.match(/max-height:\s*(\d+)cqh;/) || [])[1];
   check(cap && Number(cap) <= 50, `at most half the card: ${cap}`);
   // No row of the shell's is the fault's, on any layout: it never opens one
@@ -2750,19 +2775,25 @@ test("motorsReady: the fault trades height with the scan inside the view, never 
 });
 
 // The readouts' line is one line of one height: where it cannot hold every
-// caption and value, the captions go first (out of sight, still read out),
-// then the values take the smaller type, then the chip's temperature goes
-// the same way, so the move and the phase are never cut short (the
-// critic's round 1). Measured, as the top's cells are, and again as each
-// frame changes what it says. Each cell is titled with its caption.
-test("readouts: the captions go before a value is cut short, each cell titled with its own", () => {
+// caption and value, the chip's temperature goes first (out of sight,
+// still read out), then the values take the smaller type, and only then
+// the captions go the same way, so the move and the phase are never cut
+// short (the critic's round 1), and keep their captions while they can: a
+// bare "STOP" read like a button (round 3). Measured, as the top's cells
+// are, and again as each frame changes what it says. Each cell is titled
+// with its caption. Without a live link the values are history, dimmed.
+test("readouts: the chip's temperature, then the captions go before a value is cut short, each cell titled with its own", () => {
   const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(readoutsLine, \["words", "bare", "small", "nochip"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
-  const hidden = cssRules(panelCss()).find((r) => /\.readouts:is\(\[data-fit="bare"\], \[data-fit="small"\], \[data-fit="nochip"\]\) \.cell \.label/.test(r.selector));
-  check(hidden && /clip-path:\s*inset\(50%\)/.test(hidden.body) && !/display:\s*none/.test(hidden.body), `the captions out of sight, still read: ${hidden && hidden.body}`);
-  check(hidden && hidden.selector.includes('.readouts[data-fit="nochip"] .cell:has(> #temp)'), `last, the chip's temperature, the same way: ${hidden && hidden.selector}`);
-  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell output');
+  check(/fitSteps\(readoutsLine, \["words", "nochip", "small", "bare"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
+  const hidden = cssRules(panelCss()).find((r) => r.selector.includes('.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="bare"]) .cell:has(> #temp)'));
+  check(hidden && /clip-path:\s*inset\(50%\)/.test(hidden.body) && !/display:\s*none/.test(hidden.body), `first the chip's temperature, out of sight, still read: ${hidden && hidden.body}`);
+  check(hidden && hidden.selector.includes('.readouts[data-fit="bare"] .cell .label') && !/nochip"?\]?[^,]*\.label|small"\][^,]*\.label/.test(hidden.selector), `last, the captions, the same way: ${hidden && hidden.selector}`);
+  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="bare"]) .cell output');
   check(smaller && /font-size:\s*var\(--t-sm\);/.test(smaller.body), `then the values the smaller type: ${smaller && smaller.body}`);
+  const dim = cssRules(panelCss()).find((r) => r.selector === 'body:not([data-link="up"]) .readouts :is(output, #phase)');
+  check(dim && /color:\s*var\(--dim\);/.test(dim.body), "with no live link the values dimmed, with the scan over them");
+  const order = cssRules(outside(panelCss(), "@media")).map((r) => r.selector);
+  check(order.indexOf('body:not([data-link="up"]) .readouts :is(output, #phase)') > order.indexOf('#phase[data-tone="warn"]'), "the halt's amber dimmed too");
   check(!cssRules(panelCss()).some((r) => /\.readouts/.test(r.selector) && /#(move|phase)|\.cell:first-child|#phaseCell/.test(r.selector) && /display:\s*none|clip-path/.test(r.body)), "the move and the phase never hidden");
   const line = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".readouts");
   check(line && /height:\s*var\(--readouts-h\);/.test(line.body) && /white-space:\s*nowrap;/.test(line.body), "one line, one height");
@@ -2770,6 +2801,22 @@ test("readouts: the captions go before a value is cut short, each cell titled wi
   const cells = all(page.doc.documentElement.querySelector(".readouts")).filter((n) => (n.getAttribute && n.getAttribute("class")) === "cell");
   check(cells.length === 3 && cells.every((c) => (c.getAttribute("title") || "").length > 0), `each cell titled: ${cells.map((c) => c.getAttribute("title"))}`);
   check(page.doc.documentElement.querySelector(".readouts").dataset.fit === "words", "a page that cannot measure keeps every word");
+  // Measured: a line too narrow for every word lets the chip go and keeps
+  // the captions. The chip's cell, out of sight, is 1 px wide and its value
+  // wider: counted as cut, it took every caption with it (320 x 568).
+  const readouts = page.doc.documentElement.querySelector(".readouts");
+  const measure = (id, widths) => {
+    const value = page.$(id);
+    Object.defineProperty(value, "scrollWidth", { configurable: true, get: () => widths().scroll });
+    Object.defineProperty(value, "clientWidth", { configurable: true, get: () => widths().client });
+    Object.defineProperty(value.parentNode, "clientWidth", { configurable: true, get: () => widths().cell, set() {} });
+  };
+  const fit = () => readouts.dataset.fit;
+  measure("move", () => (fit() === "words" ? { scroll: 40, client: 22, cell: 60 } : { scroll: 40, client: 40, cell: 78 }));
+  measure("temp", () => (fit() === "words" ? { scroll: 52, client: 52, cell: 90 } : { scroll: 52, client: 0, cell: 1 }));
+  check(page.evalIn("fitReadouts()") === "nochip", `the chip gone, the captions kept: ${fit()}`);
+  measure("move", () => (fit() === "bare" ? { scroll: 40, client: 40, cell: 40 } : { scroll: 40, client: 22, cell: 60 }));
+  check(page.evalIn("fitReadouts()") === "bare", `the captions only where a value would be cut short: ${fit()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3813,6 +3860,17 @@ test("program: switching the target mid-run stops the program, and the choice is
   const shellVars = aspect.filter((r) => r.selector === ".shell" && /--va:/.test(r.body)).map((r) => r.body).join("");
   const simVars = aspect.filter((r) => r.selector === 'body[data-target="simulator"] .shell').map((r) => r.body).join("");
   check(/--va:\s*2\.1;/.test(shellVars) && /--va:\s*var\(--room-aspect, 1\.3333\);/.test(simVars), `the fan's aspect, or the room's: ${shellVars} | ${simVars}`);
+  // A tablet upright: the band over the editor one height whatever the
+  // target, what it shows (--va) setting its width alone, so a switch of
+  // target never moves the editor's top (105 px at 768 x 1024 when the
+  // fan's band was only as tall as its wide shape: the review's tablets 11).
+  const bandRules = blockRules(panel, "@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {") || [];
+  const band = bandRules.find((r) => r.selector === '.shell:has(> #programTab[data-view="shown"]:not([hidden]))');
+  const bandBody = band ? band.body : "";
+  const bandVar = (name) => (bandBody.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[1] || "";
+  check(/grid-template-rows:\s*auto var\(--band-h\) minmax\(0, 1fr\);/.test(bandBody) && bandVar("band-h") !== "" && !/--v(a|cw|ch)\b/.test(bandVar("band-h") + bandVar("band-0")), `tablet: the band's height the screen's, not what it shows: ${bandBody}`);
+  check(/var\(--va\)/.test(bandVar("view-w")) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(bandBody), `tablet: what it shows sets the band's width: ${bandBody}`);
+  check(!bandRules.some((r) => /data-target/.test(r.selector)), "tablet: nothing in the band's layout by target");
   // The editor and the console are the stage's; nothing of the simulator's.
   const consoleBox = folded.$("programState").parentNode.parentNode;
   check(consoleBox.getAttribute("class") === "programConsole" && consoleBox.parentNode === folded.$("programStage"), "the console is in the stage");
@@ -4751,7 +4809,7 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   // The connect card shares the fan's cell, over it, under the fault's
   // row, and the scan is size-contained: the card or the fault coming and
   // going moves nothing outside it.
-  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*2 \/ 1;/.test(rule(base, ".scan > *")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > .fault")), "the connect card over the fan, in its one cell, the fault over both");
+  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*3 \/ 1;/.test(rule(base, ".scan > *")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > .fault")) && /grid-area:\s*2 \/ 1;/.test(rule(base, ".scan > .scanLegend")), "the connect card over the fan, in its one cell, the legend's row over both and the fault over that");
   // The fan centred in its card, as large as it fits: pinned to the foot,
   // it left the card's top half empty (the critic's round 2).
   check(/preserveAspectRatio", "xMidYMid meet"/.test(fs.readFileSync(path.join(PANEL_ROOT, "js", "scan.js"), "utf8")), "the fan centred in its card");
