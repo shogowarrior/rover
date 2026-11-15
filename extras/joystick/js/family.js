@@ -11,7 +11,7 @@
  * driving. Under NORMAL, and while the scheme is unknown, the pivot stick
  * and this selector are shown but off, saying the pivots are ADVANCED's.
  *
- *   new FamilySelector({ choice, group, pad, label, hints, note, noteShort })
+ *   new FamilySelector({ choice, group, pad, label, hints, note })
  *     choice   the empty element the two segments are built in;
  *     group    the selector's container;
  *     pad      the pivot stick's area, which gets data-off="yes" and a
@@ -22,10 +22,7 @@
  *              it to the stick;
  *     note     the line under the selector: that the pivots are not
  *              bench-verified, that they need ADVANCED while they are off,
- *              and where to choose it, or a request for a fresh press;
- *     noteShort optional: the same line in words short enough for the
- *              stick's narrowest column, which the page's CSS shows in the
- *              note's place where its row is that narrow.
+ *              and where to choose it, or a request for a fresh press.
  *
  *   offer(available)    turn the pivots on (ADVANCED) or off. The family
  *                       chosen is kept either way.
@@ -76,22 +73,23 @@ class FamilySelector {
 
   // The pivot stick's line: the caveat while it is on, and what it waits
   // for while it is off. One line, as is PRESS_AGAIN, so no change of
-  // words moves the stick under it. The caveat and the request fit the
-  // stick's column at its floor (112 px, on its side under about 536 px
-  // wide) with their dot: 105 px measured headless, where "Unverified: go
+  // words moves the stick under it, and the same words on every layout
+  // (the critic's round 1: "Needs Advanced" on a phone on its side and
+  // "Pivots need Advanced (at the top)" elsewhere). Each fits the line's
+  // narrowest place, the pivot stick's column at its floor (112 px, on its
+  // side under about 600 px wide) and the 12 px gap beside it, with its
+  // dot: the caveat 108 px measured headless, where "Unverified: go
   // slowly." took 129. Off, the line says what the stick needs and where
   // to choose it, where "Advanced only." said neither (F8: the owner asked
   // why Normal | Advanced sat disabled; a stick greyed out with no way on
-  // in sight reads the same). Wider than that column, so the line's row
-  // spans both sticks where it can (upright and side by side), and says
-  // OFF_SHORT where it cannot (a phone on its side). The scheme is in the
-  // top's second cell: at the top on every layout, but never at its right
-  // end, where Stop and the gear are, so the line says "top bar", as every
-  // other line that points there does. Off, the pad's title says why too;
-  // on, it has none, to hang over a stick in use.
+  // in sight reads the same): 117 px in Inter, 123 in DejaVu Sans. The
+  // scheme is in the top's second cell, at the top on every layout but in
+  // a different place across it on each (never its right end, where Stop
+  // and the gear are), and an arrow under the family would point at Pivot
+  // | Sideways, so the line says "top bar". Off, the pad's title says the
+  // rest; on, it has none, to hang over a stick in use.
   static CAVEAT = "Untried: go slow.";
-  static OFF = "Pivots need Advanced (top bar)";
-  static OFF_SHORT = "Needs Advanced";
+  static OFF = "Advanced: top bar";
   static OFF_TITLE = "Pivots need Advanced: choose Advanced in the scheme switch in the top bar. The NORMAL scheme keeps the pivots off the sticks and the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
@@ -111,8 +109,8 @@ class FamilySelector {
   #awaiting = new Set(); // the sticks a fresh press is asked of: "move", "pivot"
   #listeners = new Listeners();
 
-  constructor({ choice, group, pad, label, hints, note, noteShort = null }) {
-    this.#ui = { group, pad, label, note, noteShort };
+  constructor({ choice, group, pad, label, hints, note }) {
+    this.#ui = { group, pad, label, note };
 
     for (const { family, label: name } of FamilySelector.OPTIONS) {
       const button = segment(choice, () => this.#choose(family));
@@ -162,7 +160,7 @@ class FamilySelector {
   }
 
   #render() {
-    const { group, pad, label, note, noteShort } = this.#ui;
+    const { group, pad, label, note } = this.#ui;
     const offered = this.#offered;
     pressSegment(this.#buttons, this.#family);
     // Each segment says what its family does, and while the pivots are off
@@ -182,7 +180,6 @@ class FamilySelector {
     const tone = pressPivot ? "warn" : offered ? "caveat" : "off";
     const words = pressPivot ? FamilySelector.PRESS_AGAIN : offered ? FamilySelector.CAVEAT : FamilySelector.OFF;
     FamilySelector.#say(note, words, tone);
-    if (noteShort) FamilySelector.#say(noteShort, tone === "off" ? FamilySelector.OFF_SHORT : words, tone);
 
     // The corner labels come from moveForStick() itself, so they cannot
     // disagree with what the stick sends. They stay while the stick is off,

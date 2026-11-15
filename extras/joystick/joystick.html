@@ -282,12 +282,10 @@
         </div>
 
         <!-- The pivot stick's line, under its family: the caveat, what the
-             stick waits for, or a request for a fresh press. In its short
-             words where its row is narrow (a phone on its side): panel.css
-             shows one of the two. -->
+             stick waits for and where to choose it, or a request for a
+             fresh press, in the same words on every layout. -->
         <div class="noteLine">
           <p class="caveat" id="pivotNote"></p>
-          <p class="caveat short" id="pivotNoteShort"></p>
         </div>
 
         <div class="stickArea" id="movePad">
@@ -315,6 +313,7 @@
 
         <div class="speed">
           <span class="label" id="speedLabel">Speed</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.7 18.3a7.5 7.5 0 1 1 10.6 0M12 13l3.5-3.5"/></svg>
           <output id="speedOut">64</output>
           <input type="range" id="speed" min="0" max="255" step="8" value="64"
                  aria-labelledby="speedLabel"
