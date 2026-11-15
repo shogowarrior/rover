@@ -36,7 +36,11 @@
   /* The slot sets the height (panel.css); this is only a floor, should it
      not. */
   min-height: 280px;
-  padding: var(--s-2);
+  /* The bar's controls 4 px under the card's top edge, as the top's cells'
+     and the Program tab's toolbar's are: beside the toolbar on a wide
+     screen, with 8 px here, the two rows of buttons stood 5 px apart. The
+     room keeps 8 px round it. */
+  padding: 3px var(--s-2) var(--s-2);
   min-width: 0;
 }
 
@@ -504,7 +508,7 @@
 .sim-more {
   position: absolute;
   z-index: 2;
-  top: calc(var(--s-2) + var(--sim-tool) + var(--s-1));
+  top: calc(3px + var(--sim-tool) + var(--s-1));
   right: var(--s-2);
   left: var(--s-2);
   max-height: calc(100% - var(--sim-tool) - 2 * var(--s-3));

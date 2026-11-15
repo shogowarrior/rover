@@ -1375,13 +1375,16 @@ test("the view: it fills its slot on every layout, and each room fits whatever s
   const css = stylesheet("sim.css");
   assert.ok(!/--room-/.test(css + stylesheet("program.css")), "read by neither sim.css nor program.css");
   const panelRules = cssRules(stylesheet("panel.css")).filter((r) => /--room-/.test(r.body));
-  assert.deepEqual(panelRules.map((r) => `${r.selector} { ${r.body.trim()} }`), ['body[data-target="simulator"] .shell { --va: var(--room-aspect, 1.3333);\n  --vcw: 24px;\n  --vch: 60px; }'], "panel.css reads it once, as the view's aspect on the simulator target");
+  assert.deepEqual(panelRules.map((r) => `${r.selector} { ${r.body.trim()} }`), ['body[data-target="simulator"] .shell { --va: var(--room-aspect, 1.3333);\n  --vcw: 24px;\n  --vch: 55px; }'], "panel.css reads it once, as the view's aspect on the simulator target");
   // What the card adds round the room: its edge (2), the view's padding
-  // (16) and the walls' margin (SimView.PAD) across; and down, the bar's
-  // one row (32) and the gap under it (4) as well.
+  // (16) and the walls' margin (SimView.PAD) across; and down, the view's
+  // padding over the bar (3, its controls 4 px under the card's edge as
+  // the Program tab's toolbar's beside it are) and under the room (8), the
+  // bar's one row (32) and the gap under it (4).
   const { PAD: pad } = page.evalIn("({ PAD: SimView.PAD })");
   assert.equal(2 + 16 + pad.left + pad.right, 24, "--vcw: what the card adds across");
-  assert.equal(2 + 16 + 32 + 4 + pad.top + pad.bottom, 60, "--vch: what it adds down");
+  assert.equal(2 + 3 + 8 + 32 + 4 + pad.top + pad.bottom, 55, "--vch: what it adds down");
+  assert.match(cssRules(outside(stylesheet("sim.css"), "@media")).filter((r) => r.selector === ".sim").map((r) => r.body).join(""), /padding:\s*3px var\(--s-2\) var\(--s-2\);/, "the view's padding: 3 px over the bar, 8 round the room");
   assert.equal(blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {"), null, "no layout of its own: one view on every layout");
   const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
   const view = rule(".sim");

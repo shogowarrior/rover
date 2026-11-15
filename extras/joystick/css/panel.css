@@ -744,7 +744,8 @@ input[type="range"]::-moz-range-thumb {
    420 x 200 (scan.js), in its card's padding over the readouts line; the
    room's shape is the simulator's (SimView sets --room-aspect here), under
    its bar's one row (32 px and a 4 px gap), with the walls' margin
-   (SimView.PAD, 3 px) and the card's padding and edge round it. A pane of
+   (SimView.PAD, 3 px) and the card's padding (3 px over the bar, 8 px
+   round the room) and edge round it. A pane of
    another shape letterboxed the room, 60% of it empty at 1024 x 768 (the
    critic's round 2). */
 .shell {
@@ -756,7 +757,7 @@ input[type="range"]::-moz-range-thumb {
 body[data-target="simulator"] .shell {
   --va: var(--room-aspect, 1.3333);
   --vcw: 24px;
-  --vch: 60px;
+  --vch: 55px;
 }
 
 /* --- the top: two cells (F8) -------------------------------------------------- */
