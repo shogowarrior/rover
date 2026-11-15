@@ -1682,13 +1682,16 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   container: hints / inline-size;
 }
 
-/* A label wraps within its corner ("Right" over "back") rather than run
-   into its neighbour, on a short phone's smaller stick. Under 150 px of
-   corners (a 320 px phone, a phone on its side at the stick's floor)
-   every word wrapped to two lines and crowded the ring: the arrows alone,
-   which say each corner's way, as the gamepad's quadrants do. Not a
-   stick's ancestor, so it may be a container. */
-@container hints (max-width: 149.98px) {
+/* Each corner's words on one line, or none. Two corners side by side
+   take 2 x 87 px (the arrow, its gap and "Right back" at 11 px in DejaVu
+   Sans, the widest fallback; 77 in Inter, measured headless): under 180
+   px of corners (a stick under 164 px: a 320 or 360 px phone, a phone on
+   its side, a short laptop's stacked column) the arrows alone, which say
+   each corner's way, as the gamepad's quadrants do, beside the family's
+   name over the stick. Wrapped to two lines ("Right" over "back") they
+   crowded the ring (the critic's round 1). Not a stick's ancestor, so it
+   may be a container. */
+@container hints (max-width: 179.98px) {
   .hint .name { display: none; }
 }
 
@@ -1699,6 +1702,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   font-size: var(--t-xs);
   font-weight: var(--fw-bold);
   line-height: var(--lh-tight);
+  white-space: nowrap;
   color: var(--readout);
 }
 
@@ -1759,17 +1763,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* The pivot stick's line, under its family, ending at the pivot stick's
    right edge: the caveat while the stick is on, amber as the motor warning
-   is (a caution, not a stop); what it needs while it is off; or a request
-   for a fresh press. One line whatever it says, in a row of a fixed
-   height, so no change of words moves the stick under it. Its row spans
-   both sticks where they sit side by side: off, its words are wider than
-   one stick's column on a phone. Where the row is the pivot stick's column
-   alone (a phone on its side) and too narrow for them, the short line
-   (#pivotNoteShort) stands in. A container for that, and no stick's
-   ancestor. */
+   is (a caution, not a stop); what it needs while it is off, and where to
+   choose it; or a request for a fresh press. One line whatever it says,
+   in a row of a fixed height, so no change of words moves the stick under
+   it, and the same words on every layout (family.js): each fits the
+   narrowest place the line has, the pivot stick's column on a phone on
+   its side at its 112 px floor and the gap beside it (below). Its row
+   spans both sticks where they sit side by side. No stick's ancestor. */
 .noteLine {
   grid-area: note;
-  container: note / inline-size;
   display: flex;
   justify-content: flex-end;
   min-width: 0;
@@ -1792,18 +1794,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .caveat[data-tone="off"]::before { background: var(--faint); }
 
 .caveat[data-tone="warn"] { color: var(--warn); }
-
-.caveat.short { display: none; }
-
-/* "Pivots need Advanced (at the top)" and its dot take 205 px at 12 px
-   in Inter and 217 in DejaVu Sans, the widest fallback, measured
-   headless: under 220 px (the pivot stick's column on most phones on
-   their side), the short line. */
-@container note (max-width: 219.98px) {
-  #pivotNote { display: none; }
-
-  .caveat.short { display: flex; }
-}
 
 /* The rotate buttons, under the translate stick: 36 px tall, a pill each,
    the icon and the word. Each button's touch target reaches over the
@@ -1839,20 +1829,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* The rotate buttons take their stick's column, never more: at the
    stick's floor the icons and the words side by side outgrew it (Right
    ran 25 px across the gap into the speed at 960 x 521, and under the
-   Stop bar at 480 x 320 on its side). Narrower than both need (2 x 73 px
-   and the gap between them, in DejaVu Sans, the widest fallback,
-   measured headless), the buttons keep the word alone. Not an ancestor
-   of a stick, so it may be a container. */
+   Stop bar at 480 x 320 on its side). Narrower than both need at full
+   size (2 x 73 px and the gap between them, in DejaVu Sans, the widest
+   fallback, measured headless), the arrow at 12 px beside the word at
+   11 px, closer to it: never one without the other. The word alone could
+   read as a strafe, the arrow alone said nothing a word does (the
+   critic's rounds 1 and 2). 50 px a button holds both in DejaVu Sans,
+   and the column is at least 112 px. Not an ancestor of a stick, so it
+   may be a container. */
 @container spin (max-width: 155.98px) {
-  .spin .icon { display: none; }
-}
-
-/* Narrower still (a 320 px phone, a phone on its side at the stick's
-   floor: 50 px a button), the arrow comes back at 12 px beside the word at
-   11 px, closer to it: the arrow alone said nothing a word does, the word
-   alone could read as a strafe (the critic's rounds 1 and 2). 50 px holds
-   both in DejaVu Sans, the widest fallback, measured headless. */
-@container spin (max-width: 129.98px) {
   .spin button {
     gap: 2px;
     padding: 0 3px;
@@ -1860,7 +1845,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   }
 
   .spin .icon {
-    display: block;
     width: 12px;
     height: 12px;
   }
@@ -1876,16 +1860,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 /* Under the pivot stick, one row as tall as the rotate buttons beside it:
-   the caption and the value, then the slider. Where the stick's column is
-   narrow (a phone on its side) the caption gives the slider its room: the
-   slider is still named by it, and titled. */
+   the caption and the value, then the slider, 8 px between them. */
 .speed {
   grid-area: speed;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   align-content: center;
-  column-gap: var(--s-2);
+  column-gap: var(--s-1);
   min-width: 0;
   container: speed / inline-size;
 }
@@ -1893,6 +1875,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 #speedOut {
   flex: none;
   min-width: 3ch;
+  margin-inline: var(--s-1);
   font-family: var(--gauge);
   font-size: var(--t-lg);
   font-weight: var(--fw-bold);
@@ -1905,28 +1888,30 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   height: var(--dock-row);
 }
 
-/* Narrow, the caption over the value, in the row's height, so the slider
-   keeps its room and the row still says what it is (it dropped the
-   caption before: the critic's round 1). */
+/* The gauge stands in for the caption where the column is narrow. */
+.speed .icon {
+  display: none;
+  width: 14px;
+  height: 14px;
+  color: var(--dim);
+}
+
+/* Narrow (a 320 px phone, a phone on its side, a short laptop's stacked
+   column), still one row: the gauge in the caption's place, the value a
+   size down and 4 px either side of it, so the slider keeps its room (69
+   px of a 117 px column). The caption over the value, as before, read as
+   two lines in a row meant for one, and the caption beside it left the
+   slider 50 px (the critic's rounds 1 and 2). The caption still names the
+   slider (aria-labelledby reads a hidden label), and the slider's title
+   says what it does. */
 @container speed (max-width: 149.98px) {
-  #speedLabel {
-    grid-area: 1 / 1;
-    align-self: end;
-    font-size: var(--t-xs);
-    line-height: 1;
-  }
+  #speedLabel { display: none; }
+
+  .speed .icon { display: block; }
 
   #speedOut {
-    grid-area: 2 / 1;
-    align-self: start;
+    margin-inline: 0;
     font-size: var(--t-ctl);
-    line-height: 1.2;
-  }
-
-  #speed {
-    grid-row: 1 / 3;
-    grid-column: 2 / -1;
-    height: var(--dock-row);
   }
 }
 
@@ -2087,7 +2072,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   :root { --shell-max: 960px; }
 
   .dock {
-    margin: 0 0 calc(var(--s-4) + env(safe-area-inset-bottom, 0px));
+    margin: 0 0 calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
     padding: var(--s-3) var(--s-4);
     border-radius: var(--r-xl);
   }
@@ -2238,33 +2223,41 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   #programTab:not([hidden]) { gap: 6px; }
 }
 
-/* Wide and 700 px tall or more (a laptop, a tablet on its side): the
-   sticks one over the other in a column as wide as one of them, so the
-   dock fills its pane's height and the view takes the rest of the width.
-   Side by side, the dock left half of a tall pane empty card ("so much
-   wasted space") and the view no wider than 680 px at 1280. Only one stick
-   drives at a time (one move code), so stacking costs no thumb anything.
-   Each stick is half of what the column leaves: of the height, 324 px is
-   the rest of it, the shell's padding (12 and 16), the top's cell and the
-   padding under it (40 and 12), the dock's padding (32), its rows but the
-   sticks' (28, 36, 8, 28, 16 and 36) and the gaps between them (56), and 4
-   to spare. The translate stick, its caption over it and the rotate
-   buttons under it; then the pivot stick's family, its line, the stick
-   and the speed. */
-@media (min-width: 960px) and (min-height: 700px) {
+/* Wide and 564 px tall or more (a laptop, a tablet on its side): the
+   sticks one over the other in a column as wide as one of them, beside
+   the view: the owner's "tile them vertically with a side split for the
+   preview". The column is the dock's height whatever the screen's, and
+   the view takes the rest of the width. Side by side, the dock left half
+   of a tall pane empty card ("so much wasted space"), the view no wider
+   than 680 px at 1280; and on a laptop's browser (1366 x 657, or 1280 x
+   595 for a 1080p screen at 150%) a card 376 px tall at the column's foot
+   under 140 to 200 px of empty ground. Only one stick drives at a time
+   (one move code), so stacking costs no thumb anything. Each stick is
+   half of what the column leaves, from its 120 px floor at 564 px tall to
+   238 at 800: of the height, 324 px is the rest of it, the shell's
+   padding (12 and 16), the top's cell and the padding under it (40 and
+   12), the dock's padding (32), its rows but the sticks' (28, 36, 8, 28,
+   16 and 36) and the gaps between them (56), and 4 to spare. Up to 360 px
+   (a screen 1044 px tall); on a taller one the space between the
+   translate stick's rows and the pivot stick's takes the rest, so the
+   column is filled to its foot, never a band of empty card over and under
+   it. The translate stick, its caption over it and the rotate buttons
+   under it; then the pivot stick's family, its line, the stick and the
+   speed. */
+@media (min-width: 960px) and (min-height: 564px) {
   :root {
-    --stick: clamp(120px, (100 * var(--svh) - 324px) / 2, 300px);
+    --stick: clamp(120px, (100 * var(--svh) - 324px) / 2, 360px);
     --drive: calc(var(--stick) + 32px);
   }
 
   .dock {
     align-self: stretch;
-    place-content: center;
+    place-content: stretch;
   }
 
   .controls {
     grid-template-columns: var(--stick);
-    grid-template-rows: var(--dock-cap) auto var(--dock-row) var(--s-2) var(--dock-cap) var(--dock-note) auto var(--dock-row);
+    grid-template-rows: var(--dock-cap) auto var(--dock-row) minmax(var(--s-2), 1fr) var(--dock-cap) var(--dock-note) auto var(--dock-row);
     grid-template-areas:
       "label"
       "move"
@@ -2387,6 +2380,13 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     align-content: center;
     column-gap: var(--s-5);
   }
+
+  /* The pivot stick's line reaches over the column gap beside it (12 px
+     at the least, under 780 px wide), toward the middle column, which is
+     empty at its height: "Advanced: top bar" and its dot take 117 px in
+     Inter and 123 in DejaVu Sans, measured headless, and the column is
+     112 px at the stick's floor (568 x 320). */
+  .noteLine { margin-inline-start: calc(-1 * var(--s-3)); }
 }
 
 /* On its side and narrower than about 780 px (640 x 360, 732 x 412), the
