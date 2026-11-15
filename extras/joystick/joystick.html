@@ -247,7 +247,8 @@
 
     <!-- The dock: two sticks, as on a gamepad, the translate stick under
          the left thumb and the pivot stick under the right; the rotate
-         buttons and the speed under them.
+         buttons and the speed under them. Every row of it is one line of a
+         fixed height (panel.css), so nothing it says moves a stick.
          .controls is the grid they sit on, its own box so that on a wide
          screen it can take its content's height and sit centred in the
          dock. Each stick and what lies over it share one grid cell rather
@@ -255,16 +256,24 @@
          offsetParent, which a positioned ancestor would change. -->
     <section class="dock" id="driveTab" role="tabpanel" aria-labelledby="tabDrive">
       <div class="controls">
-        <!-- Names the translate stick, or asks for a fresh press of it;
-             family.js keeps it in step. Above the stick, where the thumb on
-             it does not hide it. -->
+        <!-- Each stick's caption row, one line: the translate stick's name,
+             or a request for a fresh press of it (family.js); over the
+             pivot stick its family. Above the sticks, where the thumb on
+             one does not hide it. -->
         <span class="label" id="stickLabel">Translate</span>
 
-        <!-- The pivot stick's family, and a line under it: the caveat, or
-             what the stick waits for. Off under NORMAL, never hidden. -->
-        <div class="family" id="family" role="group" aria-label="Pivot stick">
+        <!-- The pivot stick's family. Off under NORMAL, never hidden. -->
+        <div class="family" id="family" role="group" aria-label="Pivot stick" aria-describedby="pivotNote">
           <div class="segmented" id="familyChoice"></div>
+        </div>
+
+        <!-- The pivot stick's line, under its family: the caveat, what the
+             stick waits for, or a request for a fresh press. In its short
+             words where its row is narrow (a phone on its side): panel.css
+             shows one of the two. -->
+        <div class="noteLine">
           <p class="caveat" id="pivotNote"></p>
+          <p class="caveat short" id="pivotNoteShort"></p>
         </div>
 
         <div class="stickArea" id="movePad">

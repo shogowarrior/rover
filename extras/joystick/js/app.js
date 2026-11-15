@@ -237,6 +237,7 @@ const familySelector = new FamilySelector({
   label: byId("stickLabel"),
   hints: byId("stickHints"),
   note: byId("pivotNote"),
+  noteShort: byId("pivotNoteShort"),
 });
 
 link.onTelemetry((data) => schemeToggle.show(data));

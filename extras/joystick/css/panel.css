@@ -45,8 +45,6 @@
   --t-ctl: 13px; /* the words on the top's controls */
   --t-md: 14px;
   --t-lg: 17px;
-  --t-xl: 20px;
-  --t-2xl: 26px;
   --fw-medium: 500;
   --fw-semi: 600;
   --fw-bold: 700;
@@ -80,10 +78,8 @@
   --r-xl: 24px;
   --r-full: 999px;
 
-  /* sizes. 44 px is the floor for a touch target on a phone; the dock's are
-     bigger. */
+  /* sizes. 44 px is the floor for a touch target on a phone. */
   --tap: 44px;
-  --tap-lg: 64px;
   /* The top (F8): each cell 40 px tall, its controls 32, a segment 28. A
      button there takes the cell's padding round it as its touch target
      (its ::before), so the cells stay sleek where a phone needs 44 px. */
@@ -93,11 +89,18 @@
   --range-track: 6px;
   --range-thumb: 26px;
   --icon: 20px;
-  --icon-lg: 26px;
-  --icon-xl: 34px;
   --glyph: 16px;
   --lamp: 8px; /* every status dot on the page, the Program tab's too */
   --notch: 10px;
+
+  /* The dock's rows (F8), each one line of a fixed height: the caption
+     row over the sticks (the family toggle, 28 px with its track), the
+     pivot stick's line, and the rotate buttons and the speed under the
+     sticks; 98 px with the gaps between the four rows. */
+  --dock-cap: 28px;
+  --dock-note: 16px;
+  --dock-row: 36px;
+  --dock-gap: 6px;
 
   --glide: 480ms; /* about a telemetry interval */
 
@@ -109,8 +112,14 @@
   /* joy.js sizes the stick as it is built, and the Driver builds it again
      whenever --stick changes, letting go of a stick held then. So --stick
      must not depend on anything that settles later (a web font, a
-     scrollbar); the viewport is enough. */
-  --stick: clamp(112px, min(var(--stick-w), 20 * var(--svh)), 236px);
+     scrollbar); the viewport is enough. Upright, each stick is as wide as
+     half the shell allows, and as tall as the screen allows once the view
+     over the dock keeps 40% of it: 60% of the height, less the rest of the
+     column, 244 px: the shell's padding above (12), the top's two cells
+     and the padding under them (86 and 12), the view's margin (12), the
+     dock's padding (24) and its rows but the sticks' (98). A short phone
+     takes less padding (below). */
+  --stick: clamp(112px, min(var(--stick-w), 60 * var(--svh) - 244px - env(safe-area-inset-bottom, 0px)), 240px);
   /* Half the shell's width, less a gutter and half the gap between the
      two sticks: the widest each can be side by side, upright. */
   --stick-w: calc(min(50vw, var(--shell-max) / 2) - var(--gutter) - var(--s-2));
@@ -1492,27 +1501,37 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   box-shadow: var(--lift-sheet);
 }
 
-/* Over each stick what it drives: the translate stick's caption, and the
-   pivot stick's family with its line. Under them the rotate buttons and
-   the speed. The same areas on every layout; a phone on its side opens a
-   column between them. */
+/* Four rows, each one line of a fixed height whatever it says, so no word
+   that changes (a scheme, a request for a press, the caveat) moves a stick
+   under a thumb: each stick's caption row (the translate stick's name, the
+   pivot stick's family), the pivot stick's line, the sticks, and the
+   rotate buttons and the speed. The sticks' columns are the sticks' own
+   width, centred, so the captions and the rows under them line up with
+   the sticks' edges on every layout. The same areas on every layout; a
+   phone on its side opens a column between them, and gives the line the
+   pivot stick's column alone. */
 .controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, var(--stick));
+  grid-template-rows: var(--dock-cap) var(--dock-note) auto var(--dock-row);
   grid-template-areas:
     "label family"
+    "note  note"
     "move  pivot"
     "spin  speed";
-  gap: var(--s-2) var(--s-4);
+  justify-content: center;
+  gap: var(--dock-gap) var(--s-4);
 }
 
-/* On the row's foot, just over its stick, where the thumb on it does not
-   hide it. One line: the row's height is the family's, which holds it on
-   every scheme, so nothing above either stick changes height. */
+/* The caption row: the translate stick's name at its left edge, level
+   with the family at the pivot stick's right edge. One line: the row's
+   height is fixed, so nothing above either stick changes height. */
 #stickLabel {
   grid-area: label;
-  align-self: end;
-  justify-self: center;
+  align-self: center;
+  justify-self: start;
+  font-size: var(--t-ctl);
+  font-weight: var(--fw-semi);
   white-space: nowrap;
 }
 
@@ -1616,79 +1635,128 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 .hint[data-corner="downLeft"] { align-self: end; justify-self: start; }
 .hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; text-align: right; }
 
+/* Pivot | Sideways over the pivot stick, at its right edge: a sleek toggle
+   as every other, a step smaller than the top's, 28 px with its track. */
 .family {
   grid-area: family;
-  display: grid;
-  align-content: end;
-  gap: var(--s-1);
+  align-self: center;
+  justify-self: end;
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.family .segmented {
+  --seg: 24px;
   min-width: 0;
 }
 
-/* Pivot | Sideways across the stick's column, a sleek toggle as every
-   other: a word each, closer to its edges, so the pair fits the stick at
-   its floor. */
 .family .segmented button {
-  --seg-x: 6px;
+  position: relative;
+  --seg-x: 10px;
   font-size: var(--t-sm);
+}
+
+/* Its touch target over the caption row's height and the gaps round it,
+   as the top's controls take their cell's padding. Not a stick's
+   ancestor, so it may be positioned. */
+.family .segmented button::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--dock-gap)) 0;
 }
 
 /* Off, the family chosen stays lit but faded, as a stale scheme does: it
    is the one the stick takes up again under ADVANCED. */
 .family[data-off="yes"] .segmented { opacity: 0.55; }
 
-/* The stick's line: the caveat while it is on, amber as the motor warning
-   is (a caution, not a stop), what it waits for while it is off, or a
-   request for a fresh press. One line whatever it says (family.js keeps
-   each short enough), so no change of words moves the stick under it; its
-   dot close to the words, so the longest fits the stick at its floor. */
+/* The pivot stick's line, under its family, ending at the pivot stick's
+   right edge: the caveat while the stick is on, amber as the motor warning
+   is (a caution, not a stop); what it needs while it is off; or a request
+   for a fresh press. One line whatever it says, in a row of a fixed
+   height, so no change of words moves the stick under it. Its row spans
+   both sticks where they sit side by side: off, its words are wider than
+   one stick's column on a phone. Where the row is the pivot stick's column
+   alone (a phone on its side) and too narrow for them, the short line
+   (#pivotNoteShort) stands in. A container for that, and no stick's
+   ancestor. */
+.noteLine {
+  grid-area: note;
+  container: note / inline-size;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Its dot close to the words, so the caveat fits the stick at its floor. */
 .caveat {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-1);
   margin: 0;
   white-space: nowrap;
-  font-size: var(--t-xs);
-  line-height: var(--lh-tight);
+  font-size: var(--t-sm);
+  line-height: var(--dock-note);
   color: var(--dim);
 }
 
-.caveat::before {
-  background: var(--warn);
-  transform: translateY(-1px);
-}
+.caveat::before { background: var(--warn); }
 
 .caveat[data-tone="off"]::before { background: var(--faint); }
 
 .caveat[data-tone="warn"] { color: var(--warn); }
 
+.caveat.short { display: none; }
+
+/* "Pivots need Advanced (at the top)" and its dot take 205 px at 12 px
+   in Inter and 217 in DejaVu Sans, the widest fallback, measured
+   headless: under 220 px (the pivot stick's column on most phones on
+   their side), the short line. */
+@container note (max-width: 219.98px) {
+  #pivotNote { display: none; }
+
+  .caveat.short { display: flex; }
+}
+
+/* The rotate buttons, under the translate stick: 36 px tall, a pill each,
+   the icon and the word. Each button's touch target reaches over the
+   gap above it and the dock's padding under it, to 44 px, as the top's
+   controls do over their cell's padding: not a stick's ancestor, so it
+   may be positioned. */
 .spin {
   grid-area: spin;
-  align-self: start;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
   container: spin / inline-size;
 }
 
-/* The word beside the icon: one row's height under the stick. */
 .spin button {
+  position: relative;
   gap: var(--s-1);
-  min-height: calc(var(--tap) + var(--s-1));
-  padding: var(--s-1);
-  font-size: var(--t-sm);
-  border-radius: var(--r-lg);
+  min-height: 0;
+  height: var(--dock-row);
+  padding: 0 6px;
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
 }
 
-.spin .icon { width: var(--icon); height: var(--icon); }
+.spin button::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--dock-row) - var(--tap)) / 2) 0;
+}
+
+.spin .icon { width: var(--glyph); height: var(--glyph); }
 
 /* The rotate buttons take their stick's column, never more: at the
    stick's floor the icons and the words side by side outgrew it (Right
    ran 25 px across the gap into the speed at 960 x 521, and under the
-   Stop bar at 480 x 320 on its side). Narrower than both need, the
-   buttons keep the word alone. The widths are DejaVu Sans's, the widest
-   fallback, measured headless. Not an ancestor of a stick, so it may be
-   a container. */
-@container spin (max-width: 151.98px) {
+   Stop bar at 480 x 320 on its side). Narrower than both need (2 x 73 px
+   and the gap between them, in DejaVu Sans, the widest fallback,
+   measured headless), the buttons keep the word alone. Not an ancestor
+   of a stick, so it may be a container. */
+@container spin (max-width: 155.98px) {
   .spin .icon { display: none; }
 }
 
@@ -1701,22 +1769,24 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   border-color: transparent;
 }
 
-/* One line, no taller than the rotate buttons beside it: the caption and
-   the value, then the slider. */
+/* Under the pivot stick, one row as tall as the rotate buttons beside it:
+   the caption and the value, then the slider. Where the stick's column is
+   narrow (a phone on its side) the caption gives the slider its room: the
+   slider is still named by it, and titled. */
 .speed {
   grid-area: speed;
-  align-self: start;
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  grid-template-areas: "caption value slider";
+  display: flex;
   align-items: center;
-  column-gap: var(--s-2);
+  gap: var(--s-2);
+  min-width: 0;
+  container: speed / inline-size;
 }
 
-#speedLabel { grid-area: caption; }
+#speedLabel { flex: none; }
 
 #speedOut {
-  grid-area: value;
+  flex: none;
+  min-width: 3ch;
   font-family: var(--gauge);
   font-size: var(--t-lg);
   font-weight: var(--fw-bold);
@@ -1724,7 +1794,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   font-variant-numeric: tabular-nums;
 }
 
-#speed { grid-area: slider; }
+#speed {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--dock-row);
+}
+
+@container speed (max-width: 149.98px) {
+  #speedLabel { display: none; }
+}
 
 /* --- the other layouts ------------------------------------------------------- */
 
@@ -1736,12 +1814,27 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   .menu,
   .sim-more { scroll-margin-top: calc(2 * var(--cell-h) + 6px + 2 * var(--s-3) + env(safe-area-inset-top, 0px)); }
 
-  /* The Program tab: the view, when shown, a band over the editor about a
-     third of the screen tall, and the tab the rest, its editor growing to
-     fill it down to the foot of the screen, clear of the home bar. */
-  .shell:has(> #programTab:not([hidden])) { grid-template-rows: auto auto minmax(0, 1fr); }
+  /* The Program tab: the page exactly the screen's height, so the editor
+     is on it whole, the console under it. The view, when shown, a band
+     over the editor under a third of the screen tall, and the tab the
+     rest, its editor growing to fill it down to the foot of the screen,
+     clear of the home bar. With the band at 35% and the editor's floor at
+     280 px, a phone's editor ran past the foot of the screen, and its
+     console with it (143 px at 375 x 667). The band keeps the room in
+     sight from 660 px tall: with under 200 px inside its padding (218 px
+     of band) the simulator shows the wheels and the motion in the room's
+     place (css/sim.css). On a shorter screen it gives way first, down to
+     120 px, so the editor keeps its floor (program.css) on the screen:
+     400 px is the rest of the column, the top (106), the band's margin
+     (8), the toolbar and its gap (40), the editor's floor and its gap
+     (148), the console (86) and the padding under it (12). */
+  .shell:has(> #programTab:not([hidden])) {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: 100vh;
+    height: 100dvh;
+  }
 
-  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(180px, 35 * var(--svh), 480px); }
+  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(120px, min(33 * var(--svh), 100 * var(--svh) - 400px), 480px); }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
 
@@ -1753,11 +1846,11 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 /* A short phone screen (its browser's bars showing), 760 px or less: most
-   phones in a browser. The sticks a step smaller, so both fit at the foot
-   of the screen with the view still showing. */
+   phones in a browser. A step less padding round the view, which the
+   sticks take: 236 px of the column besides the sticks and the view. */
 @media (max-width: 959.98px) and (max-height: 760px) {
   :root {
-    --stick: clamp(112px, min(var(--stick-w), 18 * var(--svh)), 236px);
+    --stick: clamp(112px, min(var(--stick-w), 60 * var(--svh) - 236px - env(safe-area-inset-bottom, 0px)), 240px);
   }
 
   .bar { padding-bottom: var(--s-2); }
@@ -1767,8 +1860,13 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Shorter still, 600 px or less: a 16:9 phone under its browser's bars
    (375 x 548, 360 x 560), and every phone on its side. Here the stick ran
-   off the screen: everything around it a step smaller again. */
+   off the screen: everything around it a step smaller again, 224 px of
+   the column besides the sticks and the view. */
 @media (max-width: 959.98px) and (max-height: 600px) {
+  :root {
+    --stick: clamp(112px, min(var(--stick-w), 60 * var(--svh) - 224px - env(safe-area-inset-bottom, 0px)), 240px);
+  }
+
   .shell { --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
 
   /* The scan gives way to the dock down to nothing: with its padding it
@@ -1780,8 +1878,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     padding-top: var(--s-2);
     padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
   }
-
-  .spin button { min-height: var(--tap); }
 }
 
 @media (min-width: 600px) {
@@ -1800,14 +1896,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
     /* The sticks as large as the height leaves them, up to 240 px, and no
-       wider together than 45% of the screen. Of the height, 260 px is the
+       wider together than 45% of the screen. Of the height, 224 px is the
        rest of the dock's column: the shell's padding above and below (12
        and 16), the top's cells and the padding under them (40 and 12), the
-       dock's padding (32), the family's row over the sticks and the rotate
-       buttons' row under them with their gaps (140), and 8 to spare. Of
-       the width, 56 px is the dock's padding (32) and the gap between the
-       sticks (24): the column is the two sticks and that. */
-    --stick: clamp(120px, min(100 * var(--svh) - 260px, (45vw - 56px) / 2), 240px);
+       dock's padding (32), its rows but the sticks' with their gaps here
+       (80 and 24), and 8 to spare. Of the width, 56 px is the dock's
+       padding (32), the gap between the sticks (20) and 4 to spare: the
+       column is the two sticks and that. */
+    --stick: clamp(120px, min(100 * var(--svh) - 224px, (45vw - 56px) / 2), 240px);
     --drive: calc(2 * var(--stick) + 56px);
     --shell-max: 1600px;
   }
@@ -1861,26 +1957,8 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     background: radial-gradient(70% 60% at 30% 55%, var(--glow), transparent), var(--panel);
   }
 
-  /* The two sticks at their size, the grid as tall as its content. */
-  .controls {
-    grid-template-columns: repeat(2, var(--stick));
-    gap: var(--s-3) var(--s-5);
-  }
-
-  .spin button {
-    gap: var(--s-2);
-    min-height: var(--tap-lg);
-    font-size: var(--t-md);
-  }
-
-  .spin .icon { width: var(--icon-lg); height: var(--icon-lg); }
-
-  /* The larger icon and word need 182 px side by side. */
-  @container spin (max-width: 183.98px) {
-    .spin .icon { display: none; }
-  }
-
-  #speedOut { font-size: var(--t-xl); }
+  /* The grid as tall as its content, centred in the column. */
+  .controls { gap: var(--s-2) var(--s-5); }
 
   #programTab {
     overflow-y: auto;
@@ -1893,16 +1971,15 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    right with the speed under it, and between them the top's two cells,
    Stop among them, and the view under them, in reach of either thumb.
    The dock spans the screen behind them, on the same three columns, with
-   its middle left empty for them. Of the height, 150 px is the family's
-   row over the pivot stick (68 at most), the row of the rotate buttons and
-   the speed under the sticks (44), the gaps between the rows (16), the
-   shell's padding above (8) and 14 to spare; the home bar's inset is kept
-   clear below. Of the width, 212 px is half of the gutters (48), the two
+   its middle left empty for them. Of the height, 120 px is the dock's rows
+   but the sticks' (98), the shell's padding above (8), the margin under
+   the view (8) and 6 to spare; the home bar's inset is kept clear below.
+   Of the width, 212 px is half of the gutters (48), the two
    column gaps (40) and the 336 px the middle column needs for the cells,
    the second's tabs, scheme, Stop and gear in a line of 12 px words. */
 @media (orientation: landscape) and (max-height: 520px) {
   :root {
-    --stick: clamp(112px, min(100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px), 50vw - 212px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
+    --stick: clamp(112px, min(100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px), 50vw - 212px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
     --shell-max: none;
   }
 
@@ -1965,22 +2042,18 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     box-shadow: none;
   }
 
-  /* Both sticks centred in the screen's height, each in its own column. */
+  /* Both sticks centred in the screen's height, each in its own column,
+     the pivot stick's line in its column alone. */
   .controls {
     grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);
     grid-template-areas:
       "label . family"
+      ".     . note"
       "move  . pivot"
       "spin  . speed";
+    justify-content: stretch;
     align-content: center;
     column-gap: var(--s-5);
-  }
-
-  /* The speed's caption over its value, which leaves the slider 82 px of
-     the stick's column at 568 x 320 rather than 51. */
-  .speed {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "caption slider" "value slider";
   }
 }
 
@@ -1992,7 +2065,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   /* 180 px: half of the gutters (48), the gaps (24) and the 288 px the
      middle column keeps for the cells. */
   :root {
-    --stick: clamp(112px, min(100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px), 50vw - 180px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
+    --stick: clamp(112px, min(100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px), 50vw - 180px - (env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)) / 2), 240px);
   }
 
   .shell,
@@ -2000,11 +2073,12 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 /* On its side, under about 570 px wide, the pivot stick is at or near its
-   112 px floor: each family segment is 55 to 63 px wide and its chip 6 px
-   less, and "sideways" at --t-sm (54.5 px) ran past a chip under about
-   55 px, onto the frame, where the chip's ink vanished. */
+   112 px floor, and Pivot | Sideways at --t-sm with 10 px sides took 129
+   px (in Inter): a size down, closer to its words, 106. A word run past
+   its chip lies on the frame, where the chip's ink vanished. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
   .family .segmented button {
+    --seg-x: 6px;
     font-size: var(--t-xs);
     letter-spacing: var(--track-tight);
   }

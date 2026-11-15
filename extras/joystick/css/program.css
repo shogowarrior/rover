@@ -42,13 +42,13 @@
 
 /* One line of controls the top's size (32 px, 13 px words): Run and Stop
    program, then at the far end the File menu and the View toggle. Each
-   button's touch target reaches over the line above and below it, to
-   44 px, as the top's do. */
+   button's touch target reaches over the gaps above and below it, to
+   44 px, as the top's do over their cell's padding. */
 .programBar {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: var(--tap);
+  min-height: var(--ctl);
   white-space: nowrap;
 }
 
@@ -140,8 +140,8 @@
 /* --- the stage: the editor, then the console -------------------------------- */
 
 /* The editor takes the tab's height less the toolbar and the console, down
-   to a floor under which the page (a phone) or the pane (a wide screen)
-   scrolls. */
+   to a floor under which the pane (a wide screen) or the page scrolls. A
+   phone's floor is lower (below), so the editor stays on its screen. */
 .programStage {
   display: flex;
   flex: 1 1 auto;
@@ -163,10 +163,33 @@
   border-radius: var(--r-lg);
 }
 
-/* A phone on its side has under 300 px under the top: a lower floor, so
-   less of the editor scrolls away under it. */
+/* A phone, or a tablet upright: the page is the screen's height on this
+   tab (panel.css), the editor what the toolbar, the view's band and the
+   console leave it. */
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  .programEditor { min-height: 140px; }
+
+  .programLog { max-height: 76px; }
+}
+
+/* A phone on its side has under 300 px under the top: the console beside
+   the editor rather than under it, a narrow column at the right edge, so
+   the editor keeps the height and most of the width. */
 @media (orientation: landscape) and (max-height: 520px) {
-  .programEditor { min-height: 200px; }
+  .programStage { flex-direction: row; }
+
+  .programEditor { min-height: 0; }
+
+  .programConsole {
+    display: flex;
+    flex-direction: column;
+    width: clamp(140px, 24%, 220px);
+  }
+
+  .programLog {
+    flex: 1 1 auto;
+    max-height: none;
+  }
 }
 
 #programWorkspace { position: absolute; inset: 0; }
@@ -198,6 +221,22 @@
   .programHint { left: calc(50% + 60px); }
 }
 
+/* A phone, upright or on its side: a step smaller, so it fits a short
+   phone's editor (138 px at 375 x 548) or a narrow one (180 px of
+   workspace at 667 x 375) rather than run past it. Upright, clear of the
+   toolbox along the top. */
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  .programHint {
+    padding: var(--s-2) var(--s-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-body);
+  }
+}
+
+@media (max-width: 600px) {
+  .programHint { top: calc(50% + 22px); }
+}
+
 /* In the editor's place when Blockly could not load. Top-aligned: on a
    phone the editor's box runs on past the screen's foot, and centred, only
    the headline showed, and not that driving works without the editor. */
@@ -223,6 +262,7 @@
 
 /* --- the console ----------------------------------------------------------- */
 
+/* Its state line in the top's 13 px, then the log. */
 .programConsole {
   overflow: hidden;
   background: var(--panel);
@@ -233,10 +273,10 @@
 .programState {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2);
   margin: 0;
-  padding: var(--s-3) var(--s-4);
-  font-size: var(--t-md);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-ctl);
   font-weight: var(--fw-semi);
   line-height: var(--lh-body);
   border-bottom: 1px solid var(--rule);
@@ -268,8 +308,7 @@
 .programLog {
   list-style: none;
   margin: 0;
-  padding: var(--s-2) var(--s-4) var(--s-3);
-  min-height: var(--tap);
+  padding: var(--s-1) var(--s-3) var(--s-2);
   max-height: 128px;
   overflow-y: auto;
   font-family: var(--mono);

@@ -2578,7 +2578,10 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // the dock spanning the screen behind it, and takes its own presses. It
   // is no stick's ancestor (the stick-ancestor test reads every rule).
   check(/position:\s*relative;/.test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".view").map((r) => r.body).join("")), "the view over the dock");
-  check(areas(body(side, ".controls")) === '"label . family" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
+  // The pivot stick's line in its own column alone: the view lies over the
+  // middle, so the line never reaches across it (its short words stand in
+  // where the column is narrow: the schemes' test).
+  check(areas(body(side, ".controls")) === '"label . family" ". . note" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
   // Stop is in the top's second cell. Beside the Program tab the top keeps
   // to the middle column, as on the Drive tab, so a switch of tab moves
   // neither Stop nor anything beside it, with the view shown (down the
@@ -2604,13 +2607,19 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   const cap = (dock.match(/max-height:\s*calc\(100 \* var\(--svh\) - ([^;]+)\);/) || [])[1];
   check(top === "var(--s-2) + env(safe-area-inset-top, 0px)" && cap === "var(--s-2) - env(safe-area-inset-top, 0px)", `the dock as tall as the screen less the padding above it: padding ${top}, cap ${cap}`);
   check(/align-content:\s*center;/.test(body(side, ".controls")), "the sticks centred in it");
-  // Each stick takes what the height leaves (150 px and the home bar's
-  // inset) and what the width leaves the middle column: 336 px for the two
-  // cells, a row each (212 px of half the width with the gutters and gaps),
-  // and 288 px at their tightest under 780 px wide (180 px).
+  // Each stick takes what the height leaves (120 px: the dock's four rows
+  // but the sticks', the shell's padding above and the margin under the
+  // view, and the home bar's inset) and what the width leaves the middle
+  // column: 336 px for the two cells, a row each (212 px of half the width
+  // with the gutters and gaps), and 288 px at their tightest under 780 px
+  // wide (180 px). The rows' sum is the dock's own tokens': each a fixed
+  // height (the schemes' test holds them).
   const stick = (rules) => (body(rules, ":root").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(stick(side).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
-  check(stick(narrow).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
+  check(stick(side).includes("100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
+  check(stick(narrow).includes("100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
+  const px = (name) => Number((body(cssRules(outside(panelCss(), "@media")), ":root").match(new RegExp(`--${name}:\\s*(\\d+)px;`)) || [])[1]);
+  const rows = px("dock-cap") + px("dock-note") + px("dock-row") + 3 * px("dock-gap");
+  check(rows + 8 + 8 <= 120, `the dock's rows (${rows} px) and the padding above and below (16) inside the 120 px kept from the height`);
   check(/padding:\s*0 0 env\(safe-area-inset-bottom, 0px\);/.test(dock), `the home bar's inset clear under the sticks: ${dock}`);
   // No foot bar: Stop and Autonomous are in the top's cells, in the middle
   // column on both tabs.
@@ -2628,10 +2637,14 @@ test("layout: the rotate buttons keep to their stick's column, the icons going w
   check(/container:\s*spin \/ inline-size;/.test(spin), `a container to ask: ${spin}`);
   const hides = (css, width) => (blockRules(css, `@container spin (max-width: ${width}) {`) || [])
     .some((r) => r.selector === ".spin .icon" && /display:\s*none;/.test(r.body));
-  check(hides(outside(panelCss(), "@media"), "151.98px"), "the icons go under 152 px");
-  const wide = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
-  const at = wide.indexOf("@media (min-width: 960px) and (min-height: 521px) {");
-  check(at >= 0 && hides(wide.slice(at), "183.98px"), "and under 184 px on a wide screen, whose icons and words are larger");
+  check(hides(outside(panelCss(), "@media"), "155.98px"), "the icons go under 156 px");
+  // One size on every layout (F8: 36 px rows under the sticks), so the
+  // one threshold holds everywhere: no layout makes them larger again.
+  const button = base.filter((r) => r.selector === ".spin button").map((r) => r.body).join("");
+  check(/height:\s*var\(--dock-row\);/.test(button) && /min-height:\s*0;/.test(button), `the dock's row height: ${button}`);
+  const baseKeys = new Set(base.map((r) => `${r.selector}{${r.body}`));
+  const resized = cssRules(panelCss()).filter((r) => /\.spin (button|\.icon)/.test(r.selector) && !baseKeys.has(`${r.selector}{${r.body}`) && /(^|[\s;{])(min-|max-)?(height|width|font-size|padding)\s*:/.test(r.body));
+  check(resized.length === 0, `no layout resizes them: ${resized.map((r) => r.selector)}`);
 });
 
 // Blockly draws the grid's lines once, with its colour as their stroke
@@ -2923,7 +2936,7 @@ test("schemes: a pivot stick a scheme change let go of asks for a fresh press on
 
 // What is above the stick holds its height as the family and the caption
 // change, so the stick stays where a held thumb pressed it (js/drive.js). A
-// browser measured it; this keeps the two rules that made it so.
+// browser measured it; this keeps the rules that made it so.
 test("schemes: the caption and the pivot stick's line change nothing's height above the sticks", () => {
   const page = loadPage();
   // The caption's request fits the stick's narrowest column on one line, as
@@ -2934,25 +2947,53 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   const caveatWords = page.evalIn("FamilySelector.CAVEAT");
   check(request.length <= caveatWords.length && request.length <= 17, `the press-again request '${request}' is no longer than the caveat '${caveatWords}' (17 at most): it wrapped`);
 
-  // The pivot stick's line says one of three things, each on one line: none
-  // longer than the caveat, which fits the stick's narrowest column (112 px
-  // on its side under 536 px wide, measured headless: 17 characters took
-  // 105 px with the dot, where 22 took 129). It never hides, which would
-  // take its height too.
-  const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
+  // The pivot stick's line says one of three things, each on one line. The
+  // caveat, the request and the off line's short words fit the stick's
+  // narrowest column (112 px on its side under 536 px wide, measured
+  // headless: 17 characters took 105 px with the dot, where 22 took 129).
+  // Off, its words say what the stick needs and where to choose it (F8,
+  // where "Advanced only." said neither), wider than that: they
+  // show only where the line's row is 220 px wide or more (205 px in Inter,
+  // 217 in DejaVu Sans, measured headless), and its short words stand in
+  // below that. Upright and side by side the row spans both sticks, at
+  // least 240 px; on a phone on its side it is the pivot stick's column.
+  // It never hides, which would take its height too.
+  const said = ["CAVEAT", "OFF_SHORT", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
   check(said[0].length <= 17 && said.every((text) => text.length > 0 && text.length <= said[0].length), `the line's words: ${said}`);
+  const off = page.evalIn("FamilySelector.OFF");
+  check(/Advanced/.test(off) && /top/.test(off) && off.length <= 33, `off, it says what the stick needs and where: '${off}'`);
   const rules = cssRules(outside(panelCss(), "@media"));
+  const narrowLine = blockRules(panelCss(), "@container note (max-width: 219.98px) {") || [];
+  check(narrowLine.some((r) => r.selector === "#pivotNote" && /display:\s*none;/.test(r.body)) && narrowLine.some((r) => r.selector === ".caveat.short" && /display:\s*flex;/.test(r.body)),
+    `under 220 px the short words: ${narrowLine.map((r) => r.selector)}`);
+  check(/display:\s*none;/.test((rules.find((r) => r.selector === ".caveat.short") || {}).body || ""), "the short words hidden wherever the row is wide enough");
+  check(/container:\s*note \/ inline-size;/.test((rules.find((r) => r.selector === ".noteLine") || {}).body || ""), "the line's row the container the query asks");
+  const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
+  const controls = rules.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
+  check(areas(controls) === '"label family" "note note" "move pivot" "spin speed"', `upright and side by side, the line across both sticks: ${areas(controls)}`);
+  // Every row of the dock is one fixed height, whatever it says: the
+  // caption row, the line, the sticks' own (their box), and the rotate
+  // buttons and the speed.
+  check(/grid-template-rows:\s*var\(--dock-cap\) var\(--dock-note\) auto var\(--dock-row\);/.test(controls), `the rows' heights fixed: ${controls}`);
+  const rowsSet = cssRules(panelCss()).filter((r) => r.selector.replace(/\s+/g, " ") === ".controls" && /grid-template-rows/.test(r.body));
+  check(rowsSet.length === 1, `no layout sizes the rows apart: ${rowsSet.length}`);
   for (const selector of [".caveat", "#stickLabel"]) {
     const rule = rules.find((r) => r.selector === selector);
     check(rule && /white-space:\s*nowrap/.test(rule.body), `${selector} never wraps: ${rule && rule.body.trim()}`);
   }
+  const lineRule = rules.find((r) => r.selector === ".caveat");
+  check(lineRule && /line-height:\s*var\(--dock-note\);/.test(lineRule.body) && /font-size:\s*var\(--t-sm\);/.test(lineRule.body), `one line of the row's height, at 12 px, not 11: ${lineRule && lineRule.body.trim()}`);
   // Its dot close to its words: with the wider gap the caveat ran past the
   // stick at its floor.
-  const caveat = rules.find((r) => r.selector === ".caveat");
-  check(caveat && /gap:\s*var\(--s-1\);/.test(caveat.body), `the caveat's dot close to its words: ${caveat && caveat.body.trim()}`);
+  check(lineRule && /gap:\s*var\(--s-1\);/.test(lineRule.body), `the caveat's dot close to its words: ${lineRule && lineRule.body.trim()}`);
   const note = page.$("pivotNote");
+  const short = page.$("pivotNoteShort");
   const lines = [];
-  const look = () => lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}`);
+  const shorts = [];
+  const look = () => {
+    lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}/${note.dataset.tone}`);
+    shorts.push(`${short.hidden ? "hidden" : "shown"} ${short.textContent}/${short.dataset.tone}`);
+  };
   look();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
@@ -2963,8 +3004,65 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   look();
   ws.serverMsg(telemetry({ scheme: "ADVANCED" })); // which waits for a fresh press
   look();
-  check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => `shown ${page.evalIn(`FamilySelector.${name}`)}`).join(" | "), `the line: ${lines.join(" | ")}`);
+  const tones = ["off", "caveat", "off", "warn"];
+  check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name, i) => `shown ${page.evalIn(`FamilySelector.${name}`)}/${tones[i]}`).join(" | "), `the line: ${lines.join(" | ")}`);
+  check(shorts.join(" | ") === ["OFF_SHORT", "CAVEAT", "OFF_SHORT", "PRESS_AGAIN"].map((name, i) => `shown ${page.evalIn(`FamilySelector.${name}`)}/${tones[i]}`).join(" | "), `its short words: ${shorts.join(" | ")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Where each stick is, and how large, follows from the viewport alone:
+// measured headless at 26 sizes (320 x 568 to 1920 x 1080, upright, on
+// its side and side by side), neither stick's box moved through a scheme
+// change both ways, a motor fault, the rover exploring (the badges), stale
+// telemetry, a lost link and a switch of target both ways. This holds the
+// rules that made it so. The top's cells keep one height and the view's
+// size is the grid's (their own tests); here, the sticks' size is a
+// function of the viewport and constants, set on :root alone; every row of
+// the dock is a fixed height (the schemes' test above); and no rule keyed
+// on the page's state (a scheme, a tone, a held or pressed control, the
+// link, the target) does more to the dock than paint it.
+test("the sticks: sized from the viewport alone, in rows of fixed height, so no scheme, fault, link or target moves either", () => {
+  const css = panelCss();
+  const rules = cssRules(css);
+  const declared = (name) => rules.filter((r) => new RegExp(`(^|[\\s;{])${name}\\s*:`).test(r.body));
+  for (const name of ["--stick", "--stick-w", "--drive", "--gutter", "--shell-max", "--svh", "--dock-cap", "--dock-note", "--dock-row", "--dock-gap"]) {
+    const where = declared(name);
+    check(where.length > 0 && where.every((r) => r.selector === ":root"), `${name} set on :root alone, never per state, tab or target: ${where.map((r) => r.selector)}`);
+    for (const r of where) {
+      const value = ((r.body.match(new RegExp(`(?:^|[\\s;{])${name}\\s*:([^;]*);`)) || [])[1] || "").trim();
+      // What is left once the viewport's units, the insets, the tokens built
+      // from them, numbers and arithmetic are taken out: nothing, or a
+      // container's or the content's size (%, em, cq units) got in.
+      const left = value
+        .replace(/env\(safe-area-inset-(top|bottom|left|right), 0px\)/g, "")
+        .replace(/var\(--(svh|stick-w|stick|shell-max|gutter|s-\d)\)/g, "")
+        .replace(/\b(clamp|min|max|calc|none)\b/g, "")
+        .replace(/\d+(\.\d+)?(px|vw|vh|svh)?/g, "");
+      check(value !== "" && /^[\s()+\-*/,]*$/.test(left), `${name}: from the viewport alone: '${value}' (left '${left.trim()}')`);
+    }
+  }
+  // Every rule on the dock's parts keyed on a state only paints them.
+  const dockPart = /\.dock\b|#driveTab|\.controls\b|#stickLabel|\.family\b|\.segmented\b|\.noteLine|\.caveat|#pivotNote|\.spin\b|\.speed\b|#speed|#movePad|#pivotPad|\.stickArea|#stick\b|#pivotStick|\.hints?\b/;
+  // (A hint's corner is where it is built, once, not a state.)
+  const keyedOnState = /data-(?!corner)|aria-|:active|:hover|:disabled|:checked/;
+  const paints = /^(color|background(-color)?|border-color|border-style|opacity|box-shadow|outline(-color|-offset)?|animation|pointer-events|touch-action|-webkit-touch-callout|cursor|filter)\s*:/;
+  // Each selector of a list on its own: a dock part keyed on a state.
+  const parts = (selector) => {
+    const out = [];
+    let depth = 0;
+    let from = 0;
+    for (let i = 0; i < selector.length; i++) {
+      if (selector[i] === "(") depth++;
+      else if (selector[i] === ")") depth--;
+      else if (selector[i] === "," && depth === 0) { out.push(selector.slice(from, i)); from = i + 1; }
+    }
+    return [...out, selector.slice(from)].map((part) => part.trim());
+  };
+  const resizes = rules.filter((r) => parts(r.selector).some((part) => dockPart.test(part) && keyedOnState.test(part)))
+    .filter((r) => !r.body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => paints.test(d)));
+  check(resizes.length === 0, `state rules that do more than paint the dock: ${resizes.map((r) => `${r.selector} { ${r.body.trim()} }`).join(" | ")}`);
+  // And the line's short words come in by its width, never by a state.
+  check(!rules.some((r) => parts(r.selector).some((part) => /\.caveat\.short|#pivotNote\b/.test(part) && keyedOnState.test(part)) && /display\s*:/.test(r.body)), "the line's words picked by its width alone");
 });
 
 test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change until telemetry resumes", () => {
@@ -3941,9 +4039,10 @@ test("every button titled with what it does, in every state of the link and of a
   check(untitled().length === 0, `untitled with telemetry: ${untitled()}`);
   // Off under NORMAL, the family's segments say why too.
   const familySegs = all(page.$("familyChoice")).filter((n) => n.dataset.family);
-  check(familySegs.length === 2 && familySegs.every((b) => b.disabled && /Advanced only/.test(b.title)), `the family off: ${familySegs.map((b) => b.title)}`);
+  const offTitle = page.evalIn("FamilySelector.OFF_TITLE");
+  check(/Advanced/.test(offTitle) && familySegs.length === 2 && familySegs.every((b) => b.disabled && b.title.endsWith(offTitle)), `the family off, saying what it needs: ${familySegs.map((b) => b.title)}`);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
-  check(familySegs.every((b) => !b.disabled && !/Advanced only/.test(b.title) && b.title !== ""), `the family on: ${familySegs.map((b) => b.title)}`);
+  check(familySegs.every((b) => !b.disabled && !b.title.includes(offTitle) && b.title !== ""), `the family on: ${familySegs.map((b) => b.title)}`);
 
   // The editor up, then a program run on the rover, and after it.
   standInEditor(page);
@@ -4108,7 +4207,7 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   // column as wide as they need, and no layout of its own for a short,
   // tall or narrower wide screen.
   const wideRoot = rule(mediaRules(WIDE) || [], ":root");
-  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 260px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
+  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 224px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
   check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `wide: the column: ${wideRoot}`);
   check(mediaRules(WIDE_SHORT) === null && !css.includes("@media (min-width: 1180px)") && !/min-height: 761px|max-height: 738\.98px/.test(css), "no layout of its own for a short, a tall or a wider wide screen");
   check(!css.includes("@media (min-width: 960px) and (max-width: 999.98px)"), "no narrower switches from 960 to 999 px");
@@ -4116,7 +4215,14 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   // A phone: the view between the top and the dock on the Drive tab; on
   // the Program tab a band over the editor, or gone with its toggle off.
   const phone = mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
-  check(/height:\s*clamp\(180px, 35 \* var\(--svh\), 480px\);/.test(rule(phone, ".shell:has(> #programTab:not([hidden])) > .view")), "phone: the Program tab's view a band a third of the screen");
+  check(/height:\s*clamp\(120px, min\(33 \* var\(--svh\), 100 \* var\(--svh\) - 400px\), 480px\);/.test(rule(phone, ".shell:has(> #programTab:not([hidden])) > .view")), "phone: the Program tab's view a band a third of the screen, giving way to the editor on a short one");
+  // The page the screen's height beside the Program tab, so the editor and
+  // its console are on it whole (at 375 x 667 they ran 143 px past it).
+  const programShell = rule(phone, ".shell:has(> #programTab:not([hidden]))");
+  check(/height:\s*100dvh;/.test(programShell) && /grid-template-rows:\s*auto auto minmax\(0, 1fr\);/.test(programShell), `phone: the Program tab the screen's height: ${programShell}`);
+  const programPhone = blockRules(stylesheet("program.css"), "@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
+  const floor = Number((rule(programPhone, ".programEditor").match(/min-height:\s*(\d+)px;/) || [])[1]);
+  check(floor > 0 && floor <= 160, `phone: the editor's floor low enough to stay on the screen: ${floor}`);
   check(/display:\s*none;/.test(rule(phone, '.shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view')), "phone: gone with its toggle off, no strip");
   check(!phone.some((r) => /#driveTab/.test(r.selector) && /\.view\b/.test(r.selector)), "phone: the Drive tab's view never hidden or sized by the tab");
   // The target is the first cell's first control on every phone, on both
