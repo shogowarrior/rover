@@ -680,12 +680,15 @@ class RoverBlocks {
  *                      shape first and throws, keeping the current program,
  *                      when it is not a rover program; a program it loads
  *                      shows from its top-left corner, no wider than the
- *                      editor (never zoomed in past the start scale).
+ *                      editor (never zoomed in past the start scale),
+ *                      and is fitted again as the editor's width changes
+ *                      until the operator zooms or pans.
  *   clear()            remove every block (undo brings them back).
  *   highlight(id)      light up the running block; null for none.
  *   select(id)         select a block and bring it into view.
  *   setReadOnly(on)    lock editing while a program runs.
- *   resize()           fit the container again, after it is shown.
+ *   resize()           fit the container again, after it is shown or
+ *                      its box changes size.
  *   restyle()          take the page's look, after it changes (look.js): the
  *                      workspace, toolbox and flyout repaint in it; the
  *                      blocks keep PALETTE.
@@ -722,6 +725,10 @@ class BlockEditor {
   #readOnly = false;
   #placed = false; // the program has been scrolled into a view with a size
   #fitPending = false; // a program loaded, to fit to the editor's width once it has one
+  // The view as the last fit left it, { width, scale, x, y }, while nobody
+  // has zoomed or panned since: refitted when the editor's width changes.
+  // null otherwise. A width of 0: to fit once the editor has one.
+  #fit = null;
   #startScale = 0.85;
   #saveTimer = null;
   #scheme = null;
@@ -807,11 +814,13 @@ class BlockEditor {
       workspaces.load(before, this.#workspace);
       throw new Error(`It could not be loaded: ${err.message}`);
     }
+    this.#fit = null;
     this.#showTopLeft(true);
   }
 
   clear() {
     this.#workspace.clear();
+    this.#fit = null;
   }
 
   highlight(id) {
@@ -832,11 +841,26 @@ class BlockEditor {
     this.#workspace.setIsReadOnly(on);
   }
 
+  // A program fitted to the editor's width is fitted again as the width
+  // changes, until the operator zooms or pans: on a phone on its side,
+  // Preview put the view beside the editor, which narrowed from 534 to
+  // 302 px at 568 x 320, and an example fitted a moment before ran 166 px
+  // past its right edge ("epeat" under the categories: the reviewers'
+  // round 3). The view as the fit left it says nobody has moved it since,
+  // read before Blockly resizes, which may scroll it itself.
   resize() {
+    const fit = this.#fit;
+    const kept = fit !== null && (fit.width === 0 || this.#unmoved(fit));
     this.#Blockly.svgResize(this.#workspace);
+    if (!kept) this.#fit = null;
+    const width = this.#container.clientWidth;
     // Built in a hidden tab, the workspace had no view to scroll the program
     // into; it has one now.
     if (!this.#placed) this.#showTopLeft();
+    else if (kept && width === 0) fit.width = 0;
+    else if (kept && width !== fit.width) {
+      if (!this.#fitWidth()) fit.width = 0;
+    } else if (kept) Object.assign(fit, this.#viewState());
     this.#markOverflow();
   }
 
@@ -954,9 +978,13 @@ class BlockEditor {
 
   // Scroll a block into view, if there is a view: on the Drive tab the
   // workspace has no size, and a program running there is followed by the
-  // highlight alone.
+  // highlight alone. A run's own scroll is not the operator's: a fitted
+  // program stays fitted through it.
   #reveal(block) {
-    if (this.#container.clientWidth > 0) this.#workspace.scrollBoundsIntoView(block.getBoundingRectangleWithoutChildren(), 24);
+    if (!(this.#container.clientWidth > 0)) return;
+    const kept = this.#fit !== null && this.#fit.width > 0 && this.#unmoved(this.#fit);
+    this.#workspace.scrollBoundsIntoView(block.getBoundingRectangleWithoutChildren(), 24);
+    if (kept) Object.assign(this.#fit, this.#viewState());
   }
 
   #scheduleSave() {
@@ -998,7 +1026,20 @@ class BlockEditor {
     const scale = Math.max(BlockEditor.MIN_SCALE, Math.min(this.#startScale, (view.width - 2 * margin) / width));
     workspace.setScale(scale);
     workspace.scroll(margin - box.left * scale, margin - box.top * scale);
+    this.#fit = { width: this.#container.clientWidth, ...this.#viewState() };
     return true;
+  }
+
+  #viewState() {
+    const workspace = this.#workspace;
+    return { scale: workspace.scale, x: workspace.scrollX, y: workspace.scrollY };
+  }
+
+  // Whether the view is as fit left it: no zoom, no pan, by a wheel, a
+  // pinch, a drag, a scrollbar or the zoom buttons.
+  #unmoved(fit) {
+    const now = this.#viewState();
+    return now.scale === fit.scale && Math.abs(now.x - fit.x) < 0.5 && Math.abs(now.y - fit.y) < 0.5;
   }
 }
 

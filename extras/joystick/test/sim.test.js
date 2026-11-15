@@ -1403,8 +1403,8 @@ test("the view: the motion and the clock in the bar's one row, a metre in the ro
   // phones 2): where it does not fit, how fast and the clock go first, and
   // then it goes with how fast (data-fit, simview.js).
   const hidesMove = cssRules(css).filter((r) => /\.sim-move\b/.test(r.selector) && /display:\s*none/.test(r.body));
-  assert.deepEqual(hidesMove.map((r) => r.selector), ['.sim-move[data-fit="no"],\n.sim-clock[data-fit="no"]', ".sim-move,\n  .sim-twist"], "the move hidden only where measured not to fit, or with no room for any");
-  assert.match(css, /@container simstatus \(max-width: 69\.98px\) \{\s*\.sim-move,\s*\.sim-twist \{ display: none; \}/, "under 70 px of room, none");
+  assert.deepEqual(hidesMove.map((r) => r.selector), ['.sim-move[data-fit="no"],\n.sim-clock[data-fit="no"]', ".sim-status > .sim-move,\n  .sim-status > .sim-twist"], "the move hidden only where measured not to fit, or with no room for any");
+  assert.match(css, /@container simstatus \(max-width: 69\.98px\) \{\s*\.sim-status > \.sim-move,\s*\.sim-status > \.sim-twist \{ display: none; \}/, "under 70 px of room, none");
   assert.doesNotMatch(rule(".sim-move"), /ellipsis/, "never cut short");
   // The clock with its caption, or not at all: a bare "4.8 s" after "50%"
   // read as how long the move lasts (the reviews' laptops 3, tablets 4).
@@ -1676,6 +1676,104 @@ test("the view: the move by its name, and how fast in the parts that say somethi
   assert.deepEqual(parts(), [["sim-word", "not simulated"]]);
   const names = page.evalIn("MOTIONS.map((m) => m.label)");
   assert.ok(names.every((n) => !/_/.test(n)), "every name the blocks' words");
+  assert.deepEqual(page.errors, []);
+});
+
+// The display sim.css gives el, as a browser's cascade would where each
+// container named in sizes is that wide or tall: the rules outside every
+// at-rule and those of each @container block whose one query holds, the
+// most specific winning, and of those the last. As much selector as the
+// bar's rules need: compounds of classes and attributes (a data-*
+// attribute read from dataset, as the fake DOM keeps it), under
+// descendant and child combinators. A selector with anything else
+// (:empty, a sibling) is passed over, and so is every @media block.
+function displayIn(css, el, sizes) {
+  const attr = (node, name) => (name.startsWith("data-") ? node.dataset[name.slice(5).replace(/-(\w)/g, (_, c) => c.toUpperCase())] : node.getAttribute(name) === null ? undefined : node.getAttribute(name));
+  // The compound's specificity where node matches it, false where it does
+  // not, null where it is more than this reads.
+  const compound = (text, node) => {
+    if (!/^(?:\.[\w-]+|\[[\w-]+(?:="[^"]*")?\])+$/.test(text)) return null;
+    if (!node || !node.getAttribute) return false;
+    const classes = (node.getAttribute("class") || "").split(" ");
+    let count = 0;
+    for (const [, cls, name, value] of text.matchAll(/\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/g)) {
+      count++;
+      if (cls && !classes.includes(cls)) return false;
+      if (name && (value === undefined ? attr(node, name) === undefined : attr(node, name) !== value)) return false;
+    }
+    return count;
+  };
+  const specificity = (selector) => {
+    const parts = selector.split(/\s*(>)\s*|\s+/).filter(Boolean);
+    let node = el;
+    let total = compound(parts.pop(), node);
+    while (total && parts.length) {
+      const child = parts[parts.length - 1] === ">" && parts.pop();
+      const text = parts.pop();
+      let found = false;
+      for (node = node.parentNode; node && node.getAttribute && found === false; node = child ? null : node.parentNode) {
+        found = compound(text, node);
+        if (found === null) return null;
+        if (found !== false) break;
+      }
+      if (!found) return found === null ? null : false;
+      total += found;
+    }
+    return total || null;
+  };
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const holds = [];
+  let best = null;
+  for (const m of text.matchAll(/@container\s+([\w-]+)\s+\((min|max)-(width|height):\s*([\d.]+)px\)\s*\{|@[^{]+\{|([^{}@]+)\{([^{}]*)\}|\}/g)) {
+    if (m[1]) {
+      const size = (sizes[m[1]] || {})[m[3]];
+      holds.push(size !== undefined && (m[2] === "max" ? size <= Number(m[4]) : size >= Number(m[4])));
+    } else if (m[0].startsWith("@")) holds.push(false);
+    else if (m[0] === "}") holds.pop();
+    else if (holds.every(Boolean)) {
+      const display = /(?:^|;)\s*display:\s*([^;]+);/.exec(m[6]);
+      for (const selector of display ? m[5].split(",") : []) {
+        const spec = specificity(selector.trim());
+        if (spec && (!best || spec >= best.spec)) best = { spec, value: display[1].trim() };
+      }
+    }
+  }
+  return best ? best.value : "inline";
+}
+
+// Under about 70 px of status, neither the move nor how fast, whatever was
+// measured: the container query hid the move, but .sim-twist's display:
+// flex, as specific and later, won over it, and #fitTwist measured the
+// hidden move as fitting, so through a preview at 640 x 360 (a 65 px
+// status) the bar read "0.30 m/s" alone (the reviewers' round 3).
+test("the view: at a 65 px status neither the move nor how fast shows, by the stylesheet and by #fitTwist", async () => {
+  const { page, sim, byClass, play } = pageWithView();
+  const css = stylesheet("sim.css");
+  const [move, twist] = ["sim-move", "sim-twist"].map((name) => byClass(name)[0]);
+  for (const n of [move, twist]) n.dataset.fit = "yes";
+  const at = (width) => [move, twist].map((n) => displayIn(css, n, { simstatus: { width }, sim: { width: 300, height: 200 } }));
+  assert.deepEqual(at(65), ["none", "none"], "at 65 px: neither");
+  assert.deepEqual(at(69.98), ["none", "none"], "nor at the query's edge");
+  assert.deepEqual(at(70), ["inline", "flex"], "from 70 px, both, as measured");
+  twist.dataset.fit = "no";
+  assert.deepEqual(at(200), ["inline", "none"], "how fast measured not to fit: gone");
+  // #fitTwist: a move the stylesheet hides takes how fast with it, though
+  // it measures as fitting.
+  Object.defineProperty(move, "scrollWidth", { configurable: true, get: () => 0 });
+  Object.defineProperty(move, "clientWidth", { configurable: true, get: () => 0 });
+  page.evalIn(`globalThis.__style = getComputedStyle;
+    globalThis.getComputedStyle = (el) => { const style = __style(el); return (el.getAttribute("class") || "").split(" ").includes("sim-move") ? Object.assign({}, style, { display: "none", getPropertyValue: style.getPropertyValue }) : style; };`);
+  sim.command(protocol.MOVE_RIGHT, 128, 400);
+  await pageFrames(page, 160, sim);
+  play(1);
+  assert.deepEqual([move.dataset.fit, twist.dataset.fit], ["yes", "no"], "the move hidden by the stylesheet: how fast hidden too");
+  page.evalIn("globalThis.getComputedStyle = __style;");
+  Object.defineProperty(move, "scrollWidth", { configurable: true, get: () => 72 });
+  Object.defineProperty(move, "clientWidth", { configurable: true, get: () => 72 });
+  sim.command(protocol.MOVE_FORWARD, 128, 400);
+  await pageFrames(page, 160, sim);
+  play(1);
+  assert.deepEqual([move.dataset.fit, twist.dataset.fit], ["yes", "yes"], "room again: both");
   assert.deepEqual(page.errors, []);
 });
 

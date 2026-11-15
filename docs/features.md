@@ -2081,7 +2081,15 @@ scan's 12 px floor and its label steps, the fault in the legend's row, the
 rings dimmed after a lost link and the phase's caption first; the
 preview's ring; the simulator's move whole or hidden; the File menu on a
 phone on its side; the editor's thresholds and an example's fit; and the
-stacked dock column. Panel tests 346/346.
+stacked dock column. The third review's fixes added: a press of
+Autonomous while one waits sending STOP, from on as from off; the view's
+amber line on the simulator target and the card's address wrapping to two
+lines, never cut; the wide Program tab's console keeping its line and
+three lines of its log on either target, the view's row giving way; a
+loaded program fitted again as the editor's width changes (Preview or
+View putting the view beside it), until the operator zooms or pans; and
+the simulator's speed hidden with its move under 70 px. Panel tests
+348/348.
 
 **Checks for the owner,** which need real screens and fingers:
 

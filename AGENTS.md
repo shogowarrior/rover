@@ -512,7 +512,9 @@ it, Cancel while connecting, "Reconnect to" it after a lost link, "Try" it
 "again" after a rover never reached, and "Connect to" the field's address
 once that is another. Where the button would cut that short, measured
 (`fitConnect()` in `js/app.js`, `data-fit="verb"`), it says its verb alone
-and the address takes a line of the card. Its Change address opens the
+and the address takes a line of the card, wrapping anywhere to two lines
+at most, never cut short, so two addresses that start alike never look
+the same. Its Change address opens the
 popover with the focus in the address. In a view under 260 px tall the
 card is tighter, and drops Change address where the view is under 230 px
 wide too; under 170 px tall (a phone's band over the Program tab's editor)
@@ -537,7 +539,8 @@ alert. On the simulator target the view says it too, in an amber line at
 its top (`#roverAway`): "The rover is exploring on its own. Stop stops
 it.", and once the link goes or goes quiet, dashed, "Last seen exploring
 on its own. Reconnect, then Stop.", since a phone's chip says it with a
-glyph alone. The popover says why in words, as the chip's title does: a
+glyph alone. The line wraps to two lines at most, never cut short: cut,
+it lost what to do on the phones it is for. The popover says why in words, as the chip's title does: a
 touch screen cannot hover. The link's popover and Options hang from the
 foot of the top (the link's from the chip's left edge) and the Program
 tab's File menu from its button (on a phone on its side, from the second
@@ -579,7 +582,7 @@ caption), which only the Program tab's row has: the Drive tab holds the
 playback at 1x, its note saying "Held at 1× on the Drive tab" and its
 title why. What the rover is doing is shown whole or not at all, never cut
 short: how fast gives way first, then the clock, and then the move, which
-always goes under about 70 px of room; where the next preview goes on from
+always goes under about 70 px of room, and how fast with it; where the next preview goes on from
 is in the move's title. The room is picked in the settings, with the rays,
 the trail and the colours' key (the wheels' drag is no longer there:
 `releasedDrag` stays in `js/sim.js` as calibration); the room takes the
@@ -608,7 +611,9 @@ move the dock under a held stick.
   view a column about half the width (360 to 640 px): the view at its top,
   sized to its drawing (the legend, the fan and the readouts together),
   and the console under it taking the rest of the column, its log
-  scrolling, with no rule while it is empty; the editor with its toolbar
+  scrolling, with no rule while it is empty, and never less than its
+  state line and three lines of its log on either target: on a short
+  screen the view's row gives way (`--console-min`); the editor with its toolbar
   takes the other side at full height. With the view hidden the editor
   takes the width, and the console sits under it, its log as tall as its
   lines up to five and then scrolling. From 1800 px wide the panes use the
@@ -825,7 +830,9 @@ tall drops Blockly's trash can and zoom buttons (a pinch still zooms), and
 one under 200 px tall and 400 px wide, but on an upright phone, its empty
 hint (the File menu's examples are a press away). An example or an import
 opens at its top-left, zoomed to fit the editor's width, never past the
-starting scale or under 0.4. Its scrollbars show only while the program
+starting scale or under 0.4, and is fitted again as that width changes
+(Preview or View putting the view beside it, on a phone on its side),
+until the operator zooms or pans (`BlockEditor.resize()`). Its scrollbars show only while the program
 runs past the view (`data-overflow`), and Export is off, saying why, while
 the editor is empty. The console's line, under the editor (under the view,
 on a wide screen with the view shown), says briefly what is running and

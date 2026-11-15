@@ -4268,6 +4268,17 @@ test("program: switching the target mid-run stops the program, and the choice is
   // screen, never the console's last line.
   check(/--view-h:\s*calc\(\(var\(--view-w\) - var\(--vcw\)\) \/ var\(--va\) \+ var\(--vch\)\);/.test(wideBody), `wide, shown: the view as tall as its drawing at the column's width: ${wideBody}`);
   check(/grid-template-rows:\s*auto var\(--bar-h\) minmax\(0, calc\(var\(--view-h\) - var\(--bar-h\)\)\) minmax\(var\(--console-min\), 1fr\);/.test(wideBody) && /"head head"\s*"view pbar"\s*"view edit"\s*"cons edit"/.test(wideBody) && !/(^|[\s;])(row-)?gap:/.test(wideBody), `wide, shown: the view over the console, the editor's card beside both: ${wideBody}`);
+  // The console keeps its state line and three of its log's lines, on
+  // either target, and the view's row gives way: with the line alone kept,
+  // the simulator's room took the column at 1366 x 657 and left the log
+  // 12 px (the reviewers' round 3). Its sum is the console's margin and
+  // border, the state line, and the log's border, padding and three lines
+  // as program.css sets them.
+  check(/--console-min:\s*calc\(var\(--s-4\) \+ 2px \+ var\(--bar-h\) \+ 1px \+ var\(--s-1\) \+ 3 \* var\(--t-sm\) \* var\(--lh-loose\) \+ var\(--s-2\)\);/.test(wideBody), `the console: its line and three log lines: ${wideBody}`);
+  const programSheet = stylesheet("program.css");
+  const logOwn = cssRules(programSheet).filter((r) => r.selector === ".programLog").map((r) => r.body).join("");
+  check(/padding:\s*var\(--s-1\) var\(--s-3\) var\(--s-2\);/.test(logOwn) && /font-size:\s*var\(--t-sm\);/.test(logOwn) && /line-height:\s*var\(--lh-loose\);/.test(logOwn) && cssRules(programSheet).some((r) => r.selector === ".programLog:not(:empty)" && /border-top:\s*1px solid/.test(r.body)), `the sum is the log's own: ${logOwn}`);
+  check(!cssRules(panel).concat(cssRules(programSheet)).some((r) => r.body !== wideBody && /--console-min:|minmax\(var\(--console-min\)/.test(r.body)) && !wideRules.some((r) => /data-target/.test(r.selector) && /grid-template-rows|--console-min|--view-h:/.test(r.body)), "the same on both targets: no other rule sets the console's room or the rows");
   const wideTab = (selector) => wideRules.filter((r) => r.selector.replace(/,\n\s*/g, ",") === selector).map((r) => r.body).join("");
   // The tab and its stage step aside, with the view shown alone, so the
   // toolbar, the editor and the console take the shell's areas; hidden,
@@ -5274,8 +5285,16 @@ test("alerts: the chip keeps the link's word, and says No motors and a rover exp
   check(away.hidden, "the rover target: the switch says it");
   const awayCss = cssRules(panelCss()).filter((r) => /\.roverAway\b/.test(r.selector));
   const awayBase = awayCss.filter((r) => r.selector === ".roverAway").map((r) => r.body).join("");
-  check(/flex:\s*none;/.test(awayBase) && /white-space:\s*nowrap;/.test(awayBase) && /(^|[^-])color:\s*var\(--warn\);/.test(awayBase) && /background:\s*var\(--warn-soft\);/.test(awayBase)
+  check(/flex:\s*none;/.test(awayBase) && /(^|[^-])color:\s*var\(--warn\);/.test(awayBase) && /background:\s*var\(--warn-soft\);/.test(awayBase)
     && awayCss.some((r) => r.selector === '.roverAway[data-known="last"]' && /dashed var\(--warn\)/.test(r.body)), `one amber line, dashed once last known: ${awayBase}`);
+  // Wrapped to two lines at most, never cut with an ellipsis: cut, at 480 x
+  // 320 it lost what to do, "Stop stops it." and "Reconnect, then Stop."
+  // (the reviewers' round 3). The view is size-contained, so the second
+  // line moves nothing outside it.
+  const awayAll = awayCss.map((r) => r.body).join("");
+  check(/-webkit-line-clamp:\s*2;/.test(awayBase) && /display:\s*-webkit-box;/.test(awayBase) && /overflow-wrap:\s*anywhere;/.test(awayBase) && !/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(awayAll), `wraps to two lines at most: ${awayBase}`);
+  const viewBody = cssRules(panelCss()).filter((r) => r.selector === ".view").map((r) => r.body).join("");
+  check(/contain:\s*size;/.test(viewBody) && page.$("roverAway").parentNode === page.$("view"), "inside the size-contained view");
   // Each alert its own shape, neither two circles (the reviewers' round 2:
   // a slashed circle and a circled needle looked alike at 14 px): a motor
   // struck through, and a route. The rover's own glyph a side view with
@@ -5874,10 +5893,21 @@ test("the connect card: the verb alone and the address on a line of its own wher
   page.$("host").value = "10.0.0.8";
   page.fire(page.$("host"), "input");
   check(card.dataset.fit === "full" && go.textContent === "Connect to 10.0.0.8", `room again, another address: ${card.dataset.fit} ${go.textContent}`);
+  // A long hostname, narrow, after a lost link: the line holds it whole,
+  // and wraps rather than cutting it, so two that start alike
+  // (rover-kitchen.local, rover-kitchen-2.local) never look the same (the
+  // reviewers' round 3: cut with an ellipsis, the press went to one the
+  // card did not show whole).
+  go.clientWidth = 150;
+  page.$("host").value = "my-second-rover-name.local";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "verb" && go.textContent === "Connect" && page.$("connectHost").textContent === "my-second-rover-name.local", `a long name, narrow: ${card.dataset.fit} ${go.textContent} | ${page.$("connectHost").textContent}`);
   const rules = cssRules(panelCss());
   const own = rules.filter((r) => r.selector === ".connectHost").map((r) => r.body).join("");
   const shown = rules.filter((r) => r.selector === '.connectCard[data-fit="verb"] .connectHost').map((r) => r.body).join("");
-  check(/display:\s*none;/.test(own) && /white-space:\s*nowrap;/.test(own) && /color:\s*var\(--dim\);/.test(own) && /display:\s*block;/.test(shown), `the line only with the verb alone: ${own} | ${shown}`);
+  check(/display:\s*none;/.test(own) && /color:\s*var\(--dim\);/.test(own) && /display:\s*-webkit-box;/.test(shown), `the line only with the verb alone: ${own} | ${shown}`);
+  const hostRules = rules.filter((r) => /\.connectHost\b/.test(r.selector)).map((r) => r.body).join("");
+  check(/overflow-wrap:\s*anywhere;/.test(own) && /-webkit-line-clamp:\s*2;/.test(shown) && !/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(hostRules), `wrapped, at most two lines, never cut with an ellipsis: ${hostRules}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -6332,6 +6362,89 @@ test("program: the editor marks whether the program runs past its view, and the 
   check(mark() === "yes", `Blockly cannot say: they show: ${mark()}`);
   const rules = cssRules(outside(stylesheet("program.css"), "@media")).filter((r) => /data-overflow="no"/.test(r.selector));
   check(rules.some((r) => /blocklyScrollbarHorizontal/.test(r.selector) && /blocklyScrollbarVertical/.test(r.selector) && /visibility:\s*hidden;/.test(r.body)), `the scrollbars hidden while nothing is past the view: ${rules.map((r) => r.selector)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A loaded program, fitted to the editor's width, is fitted again as that
+// width changes, until the operator zooms or pans: on a phone on its side
+// Preview put the view beside the editor, 534 px wide down to 302 at 568
+// x 320, and an example fitted a moment before ran 166 px past its right
+// edge (the reviewers' round 3). Never past the start scale, never under
+// 0.4; a run's own scroll is not the operator's.
+test("program: a loaded program is fitted again as the editor's width changes, until the operator zooms or pans", () => {
+  const page = loadPage();
+  page.fire(page.$("tabProgram"), "click");
+  page.$("programWorkspace").clientWidth = 600;
+  page.evalIn(`
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    // The program 500 workspace units wide; Blockly's view the editor's
+    // width less 100 px of categories.
+    const box = { left: 0, top: 0, right: 500, bottom: 200 };
+    const block = { getBoundingRectangleWithoutChildren: () => box };
+    const target = {
+      scale: 0.85, scrollX: 0, scrollY: 0,
+      setScale(scale) { target.scale = scale; },
+      scroll(x, y) { target.scrollX = x; target.scrollY = y; },
+      // A run's highlight scrolls its block into view.
+      scrollBoundsIntoView() { target.scrollY -= 30; },
+      getBlocksBoundingBox: () => box,
+      getTopBlocks: () => [block],
+      getBlockById: () => block,
+      getAllBlocks: () => [],
+      getMetricsManager: () => ({ getViewMetrics: () => ({ left: 0, top: 0, width: byId("programWorkspace").clientWidth - 100, height: 300 }), getContentMetrics: () => ({ left: 0, top: 0, width: 0, height: 0 }) }),
+      addChangeListener() {},
+    };
+    globalThis.__ws = target;
+    const workspace = new Proxy(target, { get: (t, key) => (key in t ? t[key] : any) });
+    // Blockly's own resize may scroll the view itself: not the operator.
+    globalThis.__nudge = 0;
+    const stub = { inject: () => workspace, Theme: { defineTheme: (_, theme) => theme }, svgResize: () => { target.scrollY += __nudge; __nudge = 0; } };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const scale = () => Number(page.evalIn("__ws.scale").toFixed(3));
+  const width = (px) => {
+    page.$("programWorkspace").clientWidth = px;
+    page.evalIn("__editor.resize()");
+  };
+  page.evalIn('__editor.load({ blocks: { blocks: [] } })');
+  check(scale() === 0.85 && page.evalIn("__ws.scrollX") === 16 && page.evalIn("__ws.scrollY") === 16, `loaded: from its top-left, never past the start scale: ${scale()}`);
+  width(400);
+  check(scale() === Number(((300 - 32) / 500).toFixed(3)) && page.evalIn("__ws.scrollX") === 16, `narrower, the view beside it: fitted again: ${scale()}`);
+  width(300);
+  check(scale() === 0.4, `narrower still: never under 0.4: ${scale()}`);
+  // A run's highlight scrolls; the program stays fitted.
+  page.evalIn('__editor.highlight("x")');
+  check(page.evalIn("__ws.scrollY") === -14, "the run scrolled to its block");
+  width(600);
+  check(scale() === 0.85 && page.evalIn("__ws.scrollY") === 16, `the view hidden again: the width back, the fit back: ${scale()}`);
+  // The same width, the height alone: left as Blockly leaves it, and
+  // still fitted.
+  page.evalIn("__nudge = -6; __editor.resize()");
+  check(page.evalIn("__ws.scrollY") === 10 && scale() === 0.85, "a resize that keeps the width moves nothing");
+  // A hidden tab (no width), then shown narrower: fitted then.
+  width(0);
+  check(scale() === 0.85, "hidden: nothing to fit to");
+  width(400);
+  check(scale() === Number(((300 - 32) / 500).toFixed(3)), `shown narrower: fitted: ${scale()}`);
+  // The operator zooms (a wheel, a pinch, the buttons): their scale stays.
+  page.evalIn("__ws.scale = 0.7");
+  width(600);
+  check(scale() === 0.7, `zoomed by the operator: kept: ${scale()}`);
+  width(300);
+  check(scale() === 0.7, `and kept after: ${scale()}`);
+  // Loaded again, fitted again; then the operator pans: left where it is.
+  page.evalIn('__editor.load({ blocks: { blocks: [] } })');
+  check(scale() === 0.4, `loaded again at 300 px: fitted: ${scale()}`);
+  page.evalIn("__ws.scrollX += 40");
+  width(600);
+  check(scale() === 0.4 && page.evalIn("__ws.scrollX") === 56, `panned by the operator: kept: ${scale()}`);
+  // Cleared, nothing is fitted to a width.
+  page.evalIn('__editor.load({ blocks: { blocks: [] } }); __editor.clear(); __ws.scale = 0.6');
+  width(400);
+  check(scale() === 0.6, `cleared: no fit: ${scale()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

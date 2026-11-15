@@ -1536,9 +1536,18 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
    it explores, in words at the view's top (app.js, markAlert): one amber
    line over the simulator, as the motor fault is one over the scan,
    dashed once the link has gone or gone quiet. It takes its height from
-   the simulator's, inside the view. */
+   the simulator's, inside the view. It wraps, to two lines at most, never
+   cut: one line with an ellipsis lost what to do ("Stop stops it.",
+   "Reconnect, then Stop.") on the phones it is for, the only place they
+   say it in words (the reviewers' round 3). The view is size-contained,
+   so a second line only takes the simulator's height, and nothing outside
+   the view moves. */
 .roverAway {
   flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   margin: 0 0 var(--s-1);
   padding: 2px var(--s-2);
   overflow: hidden;
@@ -1546,8 +1555,7 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   font-weight: var(--fw-semi);
   line-height: var(--lh-tight);
   color: var(--warn);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   background: var(--warn-soft);
   border-radius: var(--r-md);
 }
@@ -1760,7 +1768,10 @@ body[data-link="connecting"] .connectGo {
    where the card is too narrow for it beside the button's verb (app.js,
    fitConnect(), data-fit "verb"): "Reconnect to 192.168.0.115" ran into
    its pill's ends at 480 x 320 (the reviewers' round 2). Quieter than the
-   title, and cut short with its title saying it, never wrapped. */
+   title. It wraps anywhere, to two lines at most, and is never cut short:
+   cut, "rover-kitchen.local" and "rover-kitchen-2.local" looked the same,
+   and the press went to one the card did not show whole (the reviewers'
+   round 3). The card is inside the size-contained view. */
 .connectHost {
   display: none;
   max-width: 100%;
@@ -1770,11 +1781,15 @@ body[data-link="connecting"] .connectGo {
   font-weight: var(--fw-medium);
   line-height: var(--lh-tight);
   color: var(--dim);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
-.connectCard[data-fit="verb"] .connectHost { display: block; }
+.connectCard[data-fit="verb"] .connectHost {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
 
 /* A view under 260 px tall: the card tighter, so that its title, the
    address where it has a line, a wish's note and both buttons fit over
@@ -2725,7 +2740,12 @@ body:not([data-link="up"]) .readouts :is(output, #phase) {
      column empty from 1024 x 768 to 1920 x 1080, the legend at its top
      and the readouts 200 px under the fan (the review's laptops 0 and
      tablets 6). The view's row gives way where the screen is short, so
-     the console keeps a line (--console-min). The tab's own box and its
+     the console keeps its state line and three lines of its log, its
+     border and padding counted (--console-min), on either target: with
+     only the line kept, the simulator's room took the column at 1366 x
+     657 and left the log 12 px, its first line's descenders (the
+     reviewers' round 3). The room or the fan draws smaller in what the
+     view's row keeps. The tab's own box and its
      stage step aside (display: contents), so the toolbar, the editor and
      the console are the shell's grid items: the console under the view,
      the editor beside both. With the view hidden the tab is one box
@@ -2733,7 +2753,7 @@ body:not([data-link="up"]) .readouts :is(output, #phase) {
   .shell:has(> #programTab:not([hidden])) {
     --view-w: clamp(360px, 0.5 * (min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-4)), 640px);
     --view-h: calc((var(--view-w) - var(--vcw)) / var(--va) + var(--vch));
-    --console-min: calc(var(--bar-h) + var(--s-4));
+    --console-min: calc(var(--s-4) + 2px + var(--bar-h) + 1px + var(--s-1) + 3 * var(--t-sm) * var(--lh-loose) + var(--s-2));
     grid-template-columns: var(--view-w) minmax(0, 1fr);
     grid-template-rows: auto var(--bar-h) minmax(0, calc(var(--view-h) - var(--bar-h))) minmax(var(--console-min), 1fr);
     grid-template-areas:

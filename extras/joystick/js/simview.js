@@ -581,6 +581,13 @@ class SimView {
   #fitTwist() {
     const { twist, move, clockBox } = this.#ui;
     for (const part of [twist, move, clockBox]) part.dataset.fit = "yes";
+    // The move hidden by the stylesheet, with no room for any (sim.css,
+    // under 70 px): how fast goes with it, never a bare "0.30 m/s" (the
+    // reviewers' round 3: hidden, the move measured as fitting).
+    if (getComputedStyle(move).display === "none") {
+      twist.dataset.fit = "no";
+      return;
+    }
     const cut = () => move.scrollWidth > move.clientWidth + 0.5;
     if (cut()) clockBox.dataset.fit = "no";
     if (cut()) {

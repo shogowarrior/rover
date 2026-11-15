@@ -202,15 +202,7 @@
 .sim-move[data-fit="no"],
 .sim-clock[data-fit="no"] { display: none; }
 
-/* Under about 70 px of room, no move at all, whatever its name: one that
-   fits there ("Stopped") and the next that does not would come and go
-   with every move of a preview. */
 .sim-status { container: simstatus / inline-size; }
-
-@container simstatus (max-width: 69.98px) {
-  .sim-move,
-  .sim-twist { display: none; }
-}
 
 .sim-move[data-stalled="yes"] { color: var(--stop-ink); }
 
@@ -245,6 +237,19 @@
 
 .sim-twist > :empty,
 .sim-twist[data-fit="no"] { display: none; }
+
+/* Under about 70 px of room, no move at all, whatever its name: one that
+   fits there ("Stopped") and the next that does not would come and go
+   with every move of a preview. How fast goes with it: a bare "0.30 m/s"
+   with no move read as nothing (the review's phones 2). After the rules it
+   overrides, and more specific than them: before .sim-twist's
+   display: flex and as specific, it lost to it, and the bar read
+   "0.30 m/s" alone at 640 x 360 (the reviewers' round 3). simview.js's
+   #fitTwist hides how fast too whenever the move is hidden. */
+@container simstatus (max-width: 69.98px) {
+  .sim-status > .sim-move,
+  .sim-status > .sim-twist { display: none; }
+}
 
 .sim-twist > :not(:empty) ~ :not(:empty)::before {
   content: "\00b7";

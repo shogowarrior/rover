@@ -411,7 +411,13 @@ design: on a 390 px phone upright the chip shows the rover's glyph for
 "Rover:", which has no room there once the alerts' room is kept; an iPad
 upright has no room for the chip's address, which only the link's popover
 shows there; and a 320 px phone says Adv for Advanced, which whole is
-15 px short there. Panel tests 346/346, the protocol check and the guard's
+15 px short there. The third review's last fixes: a press of Autonomous
+while one waits sends STOP, so two quick presses end stopped from on as
+from off; the view's amber line and the card's address wrap to two lines
+rather than being cut; the wide Program tab's console keeps three lines of
+its log; a loaded program is fitted again as the editor's width changes,
+until the operator zooms or pans; and the simulator's speed goes with its
+move under 70 px. Panel tests 348/348, the protocol check and the guard's
 224/224 pass. The host tests and board builds were not run for this round;
 no firmware changed since they last passed (host tests 192/192).
 
