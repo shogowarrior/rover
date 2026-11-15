@@ -57,16 +57,23 @@ default install path, `~/.platformio/penv/bin/pio`.
    gear's Options, Firmware, takes the `firmware.bin` a build leaves in
    `.pio/build/<env>/` (see below).
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
-   from disk (the rover cannot serve it), enter the rover's address and press
-   Connect. The header's Normal | Advanced toggle is the rover's control
-   scheme (below), or on the simulator the simulator's own. The Drive tab
-   has the two joysticks, the left one to translate and the right one to
-   pivot; the Program tab has block programs. The header's Rover | Simulator switch puts both tabs on a
-   simulated rover instead, to try the controls or preview a program with no
-   rover connected: then they drive only the simulated rover, and Stop stops
-   both. The gear picks the page's look. The Program tab loads its block
-   editor from cdn.jsdelivr.net, so it needs the internet the first time (the
-   browser may keep a copy); driving never does. Or, from a terminal:
+   from disk (the rover cannot serve it) and press Connect on the card
+   over the scan, which names the address it will use; the link chip at
+   the top ("Not connected") opens the address, to change it first. Every
+   control is in two cells at the top: Rover | Simulator, the Autonomous
+   switch and the link chip in the first; the Drive and Program tabs,
+   Normal | Advanced, Stop (the red square) and the gear in the second.
+   Normal | Advanced is the rover's control scheme (below), or on the
+   simulator the simulator's own; picked before the rover reports one, it
+   is sent as soon as it does, and the page says so in words. The
+   Drive tab has the two joysticks, the left one to translate and the right
+   one to pivot; the Program tab has block programs. Rover | Simulator puts
+   both tabs on a simulated rover instead, to try the controls or preview a
+   program with no rover connected: then they drive only the simulated
+   rover, and Stop stops both. The gear picks the page's look. The Program
+   tab loads its block editor from cdn.jsdelivr.net, so it needs the
+   internet the first time (the browser may keep a copy); driving never
+   does. Or, from a terminal:
    ```
    pip install websockets
    python3 client/drive.py                   # or --host rover.local
@@ -78,22 +85,22 @@ paired address in `src/Features.h`.
 
 ## Controls
 
-Any command, a stop included, takes control from exploration; the Autonomous
-button, `t` or START hands it back, and also restarts exploration that has
-halted. While you hold a control the client re-sends it; let go and the rover
+Any command, a stop included, takes control from exploration; turning the
+panel's Autonomous toggle on, `t` or START hands it back, and also restarts
+exploration that has halted (on the panel, turn it off and on again). While you hold a control the client re-sends it; let go and the rover
 stops within half a second.
 
 | | Browser panel | Keyboard (`drive.py`, and the panel) | PS3 pad |
 |---|---|---|---|
 | Move | Left joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
-| Pivot (Advanced only) | Right joystick: pick Pivot or Pivot sideways over it, and its quadrant picks the pivot; under Normal it is shown, off | -- | Hold L1 (pivot) or R1 (pivot sideways) and push the left stick |
+| Pivot (Advanced only) | Right joystick: pick Pivot or Sideways over it, and its quadrant picks the pivot; under Normal it is shown, off | -- | Hold L1 (pivot) or R1 (pivot sideways) and push the left stick |
 | Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
 | Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
-| Control scheme | Normal \| Advanced, in the header | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
+| Control scheme | Normal \| Advanced, at the top | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
 | Programs | The Program tab | -- | -- |
-| Simulator | Rover \| Simulator, in the header: the Drive tab and programs drive a simulated rover | -- | -- |
-| Stop | Stop | space | Cross (a held stick then drives again only from centre), or let go of the stick |
-| Back to autonomous | Autonomous | `t` | START |
+| Simulator | Rover \| Simulator, at the top: the Drive tab and programs drive a simulated rover | -- | -- |
+| Stop | Stop, the red square at the top | space | Cross (a held stick then drives again only from centre), or let go of the stick |
+| Back to autonomous | The Autonomous toggle, lit while the rover explores: a press while it is lit stops the rover | `t` (on the panel it presses the toggle) | START |
 
 The panel takes `drive.py`'s keys too: the drive and speed keys while its
 Drive tab shows, Space and `t` on either tab. The gear's Options list them.

@@ -295,6 +295,132 @@ under 2:1 in the dark looks (now the ink), and a clear wedge's body
 snapping rather than gliding as its fill's opacity changed. Panel tests
 314/314 and the protocol check pass. No firmware changed.
 
+On 2026-11-05 the owner left four comments on the try-it page: the Drive
+tab's view of the simulator was still the smallest pane; the dock and the
+right pane wasted space, and should be tiled vertically with a side split
+for the view; Stop was too big, and should be an icon beside the gear,
+every button with hover hints, and Autonomous a toggle; and the header's
+two or three lines should be one. The first thread did all four in one
+PR, panel only (features.md, F3i and F3j):
+
+- from 960 px wide the Drive tab splits the page: on the left, at the
+  page's height, the simulator's view on the simulator target and the
+  rover's scan on the rover target; on the right one column (`--drive`, at
+  most 45% of the screen), the dock with the readouts on one line under it;
+- the header is one 44 px row beside both tabs: the mark, the Autonomous
+  toggle, the status pills, the tabs, the scheme and the target as icons
+  with hover hints, the address, the note (two lines at most), and Stop, a
+  red icon, beside the gear, with the note, not Disconnect, beside Stop;
+  there is no foot bar on a wide screen;
+- every button on the page has a hover hint saying what it does;
+- Autonomous is a toggle on every layout (`js/autotoggle.js`): on while the
+  target explores, a press turns it off (STOP) or on (RESUME_AUTONOMOUS);
+  on the simulator target it shows the simulator's mode, and the mode pill
+  keeps the rover's, on a phone in the motors pill's place;
+- the Program tab gains the header's and the foot bar's height, and every
+  phone layout is as it was but for that pill. The view's room is twice as
+  wide as on main at 1280 x 800 (600 x 450, from 296 x 222) and about 60%
+  wider at 1366 x 657 (542 x 407, from 344 x 258); below 1180 px wide the
+  sticks are smaller (194 px at 1024 x 768, from 282), and above it larger
+  (252 at 1280 x 800, from 202).
+
+On 2026-11-14 the owner, looking at `main`'s try-it page (which did not yet
+have F3i and F3j), found the panel cluttered and confusing, on a phone and
+everywhere: Stop and Autonomous still huge at the foot, a pane squeezed
+between two others, Normal | Advanced greyed out with no rover, and every
+control wanted in two cells at the top, Rover | Simulator first. A thread
+did F8 in features.md, panel only, on PR #9's branch, and it replaces the
+layout F3 to F3j built:
+
+- every control but the open tab's own is in two cells at the top, on
+  every layout and both tabs: Rover | Simulator, the Autonomous switch and
+  the link chip in the first; the Drive and Program tabs, Normal |
+  Advanced, and Stop, a red icon, beside the gear in the second. One row
+  where the top is 900 px wide or more, a cell a row below that, and
+  under 568 px on its side across the screen. Autonomous is never over
+  Stop where the cells stack, and Stop never moves on a switch of tab.
+  Each cell says as much as its width allows, measured, and nothing in a
+  cell moves on a switch of target, a change of link or an alert;
+- the link chip says the link's state in one word for each ("Not
+  reachable" for a rover that never answered) and opens a popover with the
+  address, Connect and the note; with no link a card over the scan, titled
+  with the chip's word, offers Connect to the address it will use (one row
+  under the fan only in a view under 170 px tall); after its word the chip
+  says "No motors", or "Rover exploring" on the simulator target, in
+  amber, where nothing else on screen says it, the second dashed as last
+  known once the link goes, and cleared only by a frame that reports
+  MANUAL; on the simulator target a line at the top of the view says it
+  too;
+- a press of Autonomous on the rover is marked, its track dashed, until a
+  frame reports the mode asked for; a press while one is pending sends
+  STOP, so two quick presses always end stopped, from off or from on, and
+  off and on again to retry a halted rover waits for the switch to show
+  off; and with no link a press opens the link's popover and says why;
+- Normal | Advanced is never greyed out for want of a link: a press before
+  the rover reports a scheme is a wish, said in words on the card and in
+  the popover, sent as soon as the rover reports one (and only while the
+  rover is the target);
+- under the cells two panes, never three: the view (the rover's scan, its
+  legend in a corner, its readouts in one line, or the simulated room
+  under one row of controls) beside both tabs, and the hands (the dock, or
+  the editor with its console line under it, which on a wide screen sits
+  under the view instead, the view's column there about half the width);
+  on a wide screen the Drive tab stacks its sticks in one column beside
+  the view, from the owner's "tile them vertically", each up to 280 px;
+  under NORMAL the pivot stick is grey and says "Needs Advanced"; the
+  Program tab's View toggle shows or hides the view, which starts hidden
+  on a phone and opens for a Preview;
+- gone: the wordmark, the status pills, the address row, the foot bar, the
+  rail with its readouts card, and the Program tab's simulator strip.
+
+It was built in three steps, then checked by two rounds of a critic's
+screenshots at twelve sizes from 320 x 568 to 1440 x 900, every state
+included; the second round's fixes were split across parallel workers (the
+cells, the view, the dock, the Program tab, the popovers, and these docs).
+A review of the result by phone, tablet, laptop and code then found more,
+fixed by five more parallel workers (the cells, the view, the Program tab,
+the dock, and the scheme wish with the dialog and Options) and merged one
+at a time. The merge itself found and fixed three things no single branch
+had: at 480 x 320 the Program tab's toolbar lay under the cells, out of
+reach (now a row under them); from 700 px wide on its side the Program tab
+put the cells in one row, moving Stop on a switch of tab (now the
+toolbar takes the bands beside the stacked cells from 568 px wide); and a
+phone's compact connect card dropped the scheme wish's note (now a line
+over its buttons). It was then checked headless at 375 x 667, 480 x 320,
+844 x 390, 768 x 1024, 1280 x 800 and 1920 x 1080 in nine states (no
+link, live, simulator, both Program tab targets, the alerts, the motor
+fault, the link's popover, Options): no overflow, no page errors, both
+cells 40 px everywhere, Stop in the same place on both tabs at every
+size. features.md, F8, maps each of the owner's clauses to what was done,
+and says where the build differs from the spec and why (the badges became
+the chip's alerts, the stacked sticks, Autonomous before the chip, the
+Program toolbar on a phone on its side, "Needs Advanced"). A second review
+by phone, tablet, laptop and code then went over the merged result, and
+two parallel workers fixed what it found, merged one at a time onto
+PR #9's branch: the top (the connect card on a layer of its own, which had
+taken no press on a tablet, and naming its address; Autonomous's pending
+press and its press with no link; "Rover exploring" kept through a Stop;
+both cells' steps, measured, the alerts' words kept longest and the second
+cell's controls held to its far end) and the view, the Program tab and the
+dock (the wide Program tab's view column about half the width with the
+console under it; the scan's 12 px floor and the fault in the legend's
+row; the simulator's move whole or not at all, and no wheel drag in its
+settings; the preview's ring on the tab; an example's fit in the editor;
+the stacked dock column at least 230 px). Three things stay as they are by
+design: on a 390 px phone upright the chip shows the rover's glyph for
+"Rover:", which has no room there once the alerts' room is kept; an iPad
+upright has no room for the chip's address, which only the link's popover
+shows there; and a 320 px phone says Adv for Advanced, which whole is
+15 px short there. The third review's last fixes: a press of Autonomous
+while one waits sends STOP, so two quick presses end stopped from on as
+from off; the view's amber line and the card's address wrap to two lines
+rather than being cut; the wide Program tab's console keeps three lines of
+its log; a loaded program is fitted again as the editor's width changes,
+until the operator zooms or pans; and the simulator's speed goes with its
+move under 70 px. Panel tests 348/348, the protocol check and the guard's
+224/224 pass. The host tests and board builds were not run for this round;
+no firmware changed since they last passed (host tests 192/192).
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -320,7 +446,12 @@ F4 deferred is under "Open, not started" below:
 7. **Done.** F4: other buttons (PS3 Cross as STOP, keyboard keys).
 
 F6, firmware updates from the panel, and F7, darker looks with a Dark |
-Light toggle, came later and are done too.
+Light toggle, came later and are done too, and so are F3i, the Drive tab
+split for a larger view, and F3j, the header in one row with Stop beside
+the gear and Autonomous a toggle, from the owner's comments on the try-it
+page. F8, from his comments of 2026-11-14, is done and replaces F3 to
+F3j's layout: every control in two cells at the top, and two panes under
+them, the view beside both tabs and the open tab.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -356,16 +487,31 @@ and the next thread's task names that branch.
   features.md, F5 and F7, list them, and what each left as it was
   (Blockly's focus colours, its faint zoom and trash icons; Console Dark
   and Field Dark now close, the light looks' dark amber).
-- The gear sits at the end of the header's first group, which on a wide
-  screen is mid-header. A later header change (F1 moved the Rover |
-  Simulator switch into the header) can give it the header's right end.
-  Moving it means updating the panel test that pins it to the masthead's
-  end, and keeping it within `--tap-lg` of the top, which the popover's
-  height cap assumes.
+- F8's checks for the owner, which need real screens and fingers
+  (features.md, F8): the panel on a laptop, an iPad both ways and a phone
+  both ways, on both tabs and both targets; touch on the cells' small
+  controls (the segments, the link chip and its caret, Autonomous, Stop
+  and the gear, 32 px tall with touch targets reaching 44 px); the connect
+  card's buttons by touch at first load; the scheme wish with the rover
+  (press Advanced before connecting, then connect); Autonomous with the
+  rover (its dashed track until the rover reports; two quick presses
+  leaving it stopped, tried from off and again from on with the rover
+  exploring; a press with no link opening the link's popover); Stop by
+  touch and by Space with a popover open; "Rover exploring" on the
+  simulator target, in the chip and the view's line, dashed once the
+  rover's link is cut and kept through a Stop until the rover reports
+  MANUAL; the chip's glyphs told apart by shape on a phone;
+  the grey pivot stick reading as off under NORMAL; on a phone on its
+  side, the Program tab's toolbar in the bands and Stop in the same place
+  on both tabs; a laptop's Program tab with the console under the view; a
+  touch screen's Options without the keys (an iPad with a trackpad may
+  show them); and on an iPhone a tap into the address or the OTA password,
+  whose 13 px words Safari may zoom the page for (it zooms into a field
+  under 16 px).
 - Small panel and client items listed under "Open from earlier work" in
-  [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
-  traceback, and no committed stand-in rover.
-- No owner answers yet to the 20 questions (features.md, "The owner's
+  [features.md](../features.md): `client/ws.py`'s traceback, and no
+  committed stand-in rover.
+- No owner answers yet to the 22 questions (features.md, "The owner's
   answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud
   review, has never run on this code. Only the owner can start it, as with
@@ -408,7 +554,11 @@ There:
 - For layout, use Playwright's chromium headless shell only, as
   [instructions.md](instructions.md) says, measuring at 375, 1024 x 768,
   1180 x 820, 1280 and about 1600 px (the owner's screen; the owner puts a
-  laptop or an iPad on its side first). Where the container already has one
+  laptop or an iPad on its side first), and for a change to the top or the
+  panes at F8's twelve sizes too: 320 x 568, 375 x 667, 390 x 844,
+  568 x 320, 844 x 390, 932 x 430, 768 x 1024, 820 x 1180, 1024 x 768,
+  1180 x 820, 1280 x 800 and 1440 x 900, with 480 x 320 (the smallest
+  phone on its side, where the cells span the screen) and 1920 x 1080. Where the container already has one
   under `/opt/pw-browsers` (its `chromium_headless_shell-<revision>`), skip
   `playwright install` and pin the `playwright` package whose browser
   revision matches it (1.56.1 for revision 1194). Where `cdn.jsdelivr.net` is

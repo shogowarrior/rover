@@ -149,6 +149,33 @@ test("abort mid-sleep rejects the wait, releases at once, and logs why", async (
   assert.equal(clock.pending(), 0);
 });
 
+// The operator's own Stop program ends the run as it asked: a plain
+// "Stopped." in the log, not the amber of a stop the panel imposed, which
+// read as a fault (the review's phones 25). How it ended says own, so the
+// tab can say it plainly too; every other stop leaves own out.
+test("abort with own: the operator's own stop logs a plain Stopped., and how it ended says own", async () => {
+  const { clock, target, runner, logs, states } = setup();
+  let detail = null;
+  runner.onState((state, d) => { if (state === "idle") detail = d; });
+  const done = runner.run(async (api) => { await api.drive(P.MOVE_FORWARD, 100, 30); }, target);
+  await clock.advance(300);
+  assert.equal(runner.abort("Stop was pressed on the Program tab.", { own: true }), true);
+  assert.deepEqual(target.calls, ["hold 1 255", "release"], "released inside abort(), as any stop");
+  assert.deepEqual(await done, { outcome: "stopped", reason: "Stop was pressed on the Program tab.", own: true });
+  assert.equal(logs.at(-1), "info: Stopped.");
+  assert.deepEqual(states, ["running", "stopping", "idle stopped"]);
+  assert.equal(detail.own, true);
+  assert.equal(clock.pending(), 0);
+
+  // A stop the panel imposed, after an own one: no own, amber, with why.
+  const again = runner.run(async (api) => { await api.wait(10); }, target);
+  await clock.advance(100);
+  runner.abort("Stop was pressed.");
+  assert.deepEqual(await again, { outcome: "stopped", reason: "Stop was pressed." });
+  assert.equal(logs.at(-1), "stopped: Stopped: Stop was pressed.");
+  assert.ok(!("own" in detail), "own only when the operator ended it");
+});
+
 test("onLost of the target aborts the program with its reason", async () => {
   const { clock, target, runner } = setup();
   const done = runner.run(async (api) => { await api.wait(10); }, target);
@@ -707,6 +734,16 @@ test("RoverTarget: ready() and telemetry() follow the link", () => {
   assert.match(target.ready().why, /Waiting/);
   link.go("up");
   assert.equal(target.ready().ok, true);
+  // Each reason in a few words too, for the Program tab's one-line console,
+  // short enough for a 320 px phone's line beside Connect and Log (about
+  // 16 characters): the whole reason there was cut to "Connect t..." (the
+  // review's phones 0).
+  for (const [state, brief] of [["down", "Not connected."], ["connecting", "Connecting…"], ["stale", "No telemetry."]]) {
+    link.go(state);
+    assert.equal(target.ready().brief, brief, state);
+    assert.ok(target.ready().brief.length <= 16, `${state}: short`);
+  }
+  link.go("up");
 });
 
 test("RoverTarget: a program never starts on a rover that is not connected", async () => {

@@ -65,7 +65,6 @@
   --live: #4d9dff;
   --on-live: #000000;
   --ok: #3fdb68;
-  --on-ok: #000000;
   --ok-soft: rgb(63 219 104 / 0.16);
   --ok-body: var(--ok); /* a clear way drawn faint: the scan's body, an aged sonar ray */
   --warn: #ffb02e;
@@ -117,7 +116,6 @@
   --live: #0b5cd6;
   --on-live: #ffffff;
   --ok: #086d2d;
-  --on-ok: #ffffff;
   --ok-soft: rgb(20 170 70 / 0.16);
   --ok-body: var(--ok);
   --warn: #865900;
@@ -163,7 +161,6 @@
   --live: #66b0ff;
   --on-live: #000000;
   --ok: #45e07a;
-  --on-ok: #000000;
   --ok-soft: rgb(69 224 122 / 0.18);
   --ok-body: var(--ok);
   --warn: #ffc247;
@@ -209,7 +206,6 @@
   --live: #0050c8;
   --on-live: #ffffff;
   --ok: #006b2b;
-  --on-ok: #ffffff;
   --ok-soft: rgb(0 150 60 / 0.16);
   --ok-body: var(--ok);
   --warn: #785000;
@@ -255,7 +251,6 @@
   --live: #6cb4ff;
   --on-live: #031226;
   --ok: #4fe08a;
-  --on-ok: #02200e;
   /* A faint green over this navy mixes to the teal F7 took out: the tint
      is opaque, and a clear way's body a yellower green. */
   --ok-soft: #12351f;
@@ -287,7 +282,9 @@
 
   --case: #e4edf8;
   --panel: #f6f9fd;
-  --raised: #eaf1f9;
+  /* A shade under the cells' ground, 1.1:1, so that the link chip and a
+     switch's track in a cell are told from it by their fill alone. */
+  --raised: #e6eef8;
   --raised-hi: #d3e0f0;
   --chosen: #0b2142;
   --on-chosen: #ffffff;
@@ -303,7 +300,6 @@
   --live: #0a58cc;
   --on-live: #ffffff;
   --ok: #066b33;
-  --on-ok: #ffffff;
   /* As in Blueprint Dark, over this pale blue: an opaque tint, and a
      yellower body. */
   --ok-soft: #d6efdc;

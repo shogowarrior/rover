@@ -92,6 +92,7 @@ class LookPicker {
     for (const flavour of LookPicker.#each("flavour")) {
       const button = segment(flavours, () => this.#pick(LookPicker.#of(this.#look.theme, flavour)));
       button.textContent = flavour;
+      button.title = `${flavour}: the page in the theme's ${flavour.toLowerCase()} colours.`;
       this.#flavours.set(flavour, button);
     }
     for (const theme of LookPicker.#each("theme")) {

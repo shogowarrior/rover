@@ -1,8 +1,10 @@
 /**
  * The Rover | Simulator switch: what the page drives, the Drive tab's
- * controls and a program alike. A segmented control with one segment per
- * target the registry holds; with only the rover there is nothing to
- * switch, and it is hidden. The choice is remembered.
+ * controls and a program alike, first in the top's first cell, as the
+ * owner asked (F8). A segmented control with one segment per target the
+ * registry holds, each its word ("Sim" where the cell is narrow); with only
+ * the rover there is nothing to switch, and it is hidden. The choice is
+ * remembered.
  *
  *   new TargetSwitch({ group, targets, storageKey, formerKey })
  *     group       the empty .segmented element it fills.
@@ -24,6 +26,12 @@
  */
 class TargetSwitch {
   static LABELS = Object.freeze({ rover: "Rover", simulator: "Simulator" });
+  // Where its cell is narrow (panel.css): the word it shows instead.
+  static SHORT = Object.freeze({ simulator: "Sim" });
+  static HINTS = Object.freeze({
+    rover: "Rover: the controls drive the rover, and programs run on it.",
+    simulator: "Simulator: the controls drive a simulated rover, and programs preview on it. Nothing goes to the rover but Stop.",
+  });
 
   #targets;
   #storageKey;
@@ -39,8 +47,11 @@ class TargetSwitch {
     if (remembered === null && formerKey !== null) remembered = memory.recall(formerKey);
     this.#kind = kinds.includes(remembered) ? remembered : kinds[0];
     for (const kind of kinds) {
-      const button = segment(group, () => this.#choose(kind));
-      button.textContent = TargetSwitch.LABELS[kind] || kind;
+      const button = labelSegment(segment(group, () => this.#choose(kind)), {
+        word: TargetSwitch.LABELS[kind] || kind,
+        short: TargetSwitch.SHORT[kind] || null,
+        hint: TargetSwitch.HINTS[kind] || "",
+      });
       this.#segments.set(kind, button);
     }
     group.hidden = kinds.length < 2;

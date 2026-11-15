@@ -12,8 +12,8 @@
  * <head>, the rest at the foot of <body>, after the vendored joy.js:
  *
  *   support.js       what the parts share: Listeners, memory, dom, segment,
- *                    pressSegment, clamp, radians, degrees, abortableWait,
- *                    isPrimaryPress, reportFault
+ *                    pressSegment, labelSegment, clamp, radians, degrees,
+ *                    abortableWait, isPrimaryPress, reportFault, fitSteps
  *   look.js          LookPicker, lookToken: the page's looks, the one in
  *                    force, and the Dark | Light toggle and theme tiles
  *                    that pick one
@@ -29,6 +29,8 @@
  *   keys.js          Keyboard: client/drive.py's keys, driving through the Driver
  *   scheme.js        SchemeToggle: the control scheme, NORMAL or ADVANCED: the
  *                    rover's, or on the simulator target the simulator's
+ *   autotoggle.js    AutoToggle: the Autonomous toggle, on while the target
+ *                    explores
  *   family.js        FamilySelector: the pivot stick's family, and both
  *                    sticks' labels
  *   tabs.js          Tabs: the Drive and Program tabs
@@ -70,10 +72,48 @@ const link = new Link({
   body: document.body,
   host: byId("host"),
   connect: byId("connect"),
+  chip: byId("linkChip"),
   linkState: byId("linkState"),
   note: byId("note"),
+  proxy: byId("connectGo"),
+  cardTitle: byId("connectTitle"),
+  cardHost: byId("connectHost"),
   storageKey: "rover.host",
 });
+
+// The link chip opens the link's popover: the address, Connect and the
+// note. It hangs below the top's cells, never over them, from the chip's
+// left edge (panel.css, with the chip's place from the top's block,
+// below), and is not modal, so Stop stays one press while it is open.
+new Popover(byId("linkChip"), byId("linkPanel"));
+
+// The connect card, over the faint scan while the rover target has no
+// link: its button is a press of Connect (Link), and Change address opens
+// the link's popover, as the chip does, with the focus in the address.
+byId("changeAddress").addEventListener("click", () => {
+  if (byId("linkPanel").hidden) byId("linkChip").click();
+  byId("host").focus();
+});
+// Its button names the address a press goes to ("Reconnect to" it), and
+// where the card is too narrow for that, measured, it says the verb alone
+// and a line of the card the address (the reviewers' round 2: "Connect to
+// 192.168.0.115" ran into its pill's ends at 480 x 320, and "Reconnect"
+// alone went to an address typed since, unseen). Again whenever Link says
+// it again, the link's state changes (which shows or hides the card), or
+// the scan's card changes size.
+const connectCard = document.querySelector(".connectCard");
+function fitConnect() {
+  const go = byId("connectGo");
+  go.textContent = go.dataset.full;
+  connectCard.dataset.fit = "full";
+  if (!(go.scrollWidth > go.clientWidth)) return;
+  go.textContent = go.dataset.verb;
+  connectCard.dataset.fit = "verb";
+}
+link.onSay(fitConnect);
+link.onState(fitConnect);
+if (typeof ResizeObserver === "function") new ResizeObserver(fitConnect).observe(connectCard.parentNode);
+fitConnect();
 
 const scanView = new ScanView(byId("scan"));
 
@@ -83,7 +123,6 @@ const readouts = new Readouts({
   phaseCell: byId("phaseCell"),
   phase: byId("phase"),
   temp: byId("temp"),
-  auto: byId("auto"),
   motorsFault: byId("motorsFault"),
 });
 
@@ -162,18 +201,40 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 
 /* --- Stop and Autonomous ------------------------------------------------- */
 
-// Outside the tabs, so both are in reach whatever tab is showing. Stop always
+// In the top's cells, outside the tabs, so both are in reach whatever tab
+// is showing. Stop always
 // sends STOP, driving or not: it is also how to stop an exploring rover. On
 // the simulator the Driver's STOP goes there, and Stop sends one to a
 // connected rover too, since Stop means everything: first, so that nothing
-// the simulator does can keep it from the rover. Autonomous acts on the
-// simulator alone. Both also stop a program, a preview included: see the
-// Program tab's block.
+// the simulator does can keep it from the rover. Autonomous is a toggle,
+// on while the target explores: a press turns it the other way, on the
+// target alone, so on the simulator it leaves the rover be (the target's
+// block binds it there). Both also stop a program, a preview included: see
+// the Program tab's block.
 byId("stop").addEventListener("click", () => {
   if (driven.simulator) link.send({ move: STOP, speed: 0, duration: MOVE_DURATION_MS });
   driver.stopRover();
 });
-byId("auto").addEventListener("click", () => driver.resumeAutonomous());
+// With no link on the rover target, a press of Autonomous (or T) sends
+// nothing, and says why where the link is made: the link's popover opens,
+// its note saying it. A switch that did nothing read as broken (the
+// reviewers' round 2), and its title says so too while the link is down
+// (titleAuto(), the target's block).
+const AUTO_NEEDS_LINK = "Autonomous needs the rover connected: connect, then press it again.";
+const autoToggle = new AutoToggle({
+  button: byId("auto"),
+  driver,
+  link,
+  unlinked: () => {
+    link.note(AUTO_NEEDS_LINK, "bad");
+    if (byId("linkPanel").hidden) byId("linkChip").click();
+  },
+});
+link.onTelemetry((data) => autoToggle.show(data));
+link.onState((state) => {
+  if (state === "connecting") autoToggle.clear();
+  else if (state === "down") autoToggle.linkDown();
+});
 
 /* --- the keyboard -------------------------------------------------------- */
 
@@ -202,6 +263,7 @@ const schemeToggle = new SchemeToggle({
   link,
   group: byId("scheme"),
   choice: byId("schemeChoice"),
+  notes: [byId("linkWish"), byId("connectWish")],
 });
 
 // The pivot stick's family, on under ADVANCED only.
@@ -218,6 +280,12 @@ link.onTelemetry((data) => schemeToggle.show(data));
 link.onState((state) => {
   if (state === "down") schemeToggle.linkDown();
   else if (state === "stale") schemeToggle.linkStale();
+});
+// While Advanced is wished, the pivot stick's line says when it comes,
+// where "Needs Advanced" under the dashed Advanced said the opposite (the
+// reviewers' round 2).
+schemeToggle.onWish((wish, heard) => {
+  familySelector.wished(wish === SCHEME_ADVANCED ? FamilySelector.WISHED[heard ? "heard" : "waiting"] : null);
 });
 
 // The operator's own choice re-steers a held pivot stick at once, as
@@ -270,8 +338,9 @@ const runner = new ProgramRunner();
 
 /* --- the simulator ------------------------------------------------------- */
 
-// A simulated rover, drawn in #simSlot: a program previews on it, and the
-// Drive tab's controls can drive it (the target's block, next). The
+// A simulated rover, drawn in #simSlot, in the view pane beside both tabs:
+// a program previews on it, and the Drive tab's controls can drive it (the
+// target's block, next). The
 // simulator holds no Link and no Driver, so nothing done to it reaches the
 // rover whatever the link is doing, and its telemetry reaches only a program
 // and its view, never the scan fan or the readouts. Only the rover's scheme
@@ -284,7 +353,7 @@ let simView = null;
 if (typeof SimTarget === "function" && typeof SimView === "function") {
   const simulator = new SimTarget({ bearings: BEARINGS });
   targets.simulator = simulator;
-  simView = new SimView(byId("simSlot"), simulator);
+  simView = new SimView(byId("simSlot"), simulator, { layout: document.querySelector(".shell") });
   schemeToggle.onChange((scheme) => {
     if (scheme !== null) simulator.setScheme(scheme);
   });
@@ -307,17 +376,140 @@ const targetSwitch = new TargetSwitch({
 });
 const autoButton = byId("auto");
 const autoTitle = autoButton.getAttribute("title");
+// On the simulator target the toggles are the simulator's, and the link
+// chip in the top's first cell still speaks for the rover: "Rover:" before
+// its word, or the rover's glyph where the cell is narrow, on that target
+// alone (on the rover's, the target says whose it is). After the link's
+// word, each in a slot of its own, amber, it says what needs the operator
+// about the rover while nothing on screen says it already: a motor shield
+// that did not answer, while the view shows no scan (the simulator target,
+// or the view folded on the Program tab), whose fault line says it there;
+// and on the simulator target a rover that explores, since one sent
+// exploring before the switch must not move unseen (on the rover target
+// the Autonomous toggle says so). Both at once where both are so, and the
+// link's word always (the critics' round 3: one alert in the word's place
+// hid the other, and hid "No data"). A rover last seen exploring stays so,
+// dashed, after its link goes stale or is lost, or a new one is tried:
+// nothing says it stopped until a frame says MANUAL. Not a Stop, even one
+// sent over an open link: a stale link may be half-open, and a STOP sent
+// down it proves nothing (the reviewers' round 2: a Stop over a silent
+// link cleared the one warning left once it dropped). Its popover says
+// each in words, and so does the chip's title, before the link's own.
+const chip = byId("linkChip");
+const chipFor = byId("chipFor");
+const linkAlert = byId("linkAlert");
+const roverAway = byId("roverAway");
+// The view's line over the simulator, while the rover explores: the
+// chip's glyph alone said it on a phone (the reviewers' round 2).
+const ROVER_AWAY = Object.freeze({
+  now: "The rover is exploring on its own. Stop stops it.",
+  last: "Last seen exploring on its own. Reconnect, then Stop.",
+});
+const programTabPanel = byId("programTab");
+const programConnect = byId("programConnect");
+const ALERTS = Object.freeze({
+  motors: {
+    element: byId("alertMotors"),
+    why: () => "No motors: the rover's motor shield did not answer when it booted, so the wheels cannot move. Check its wiring and power, then reset the rover with its wheels off the ground: after a power-on or the EN button it starts exploring.",
+  },
+  exploring: {
+    element: byId("alertExploring"),
+    why: (live) => (live
+      ? "Rover exploring: the rover reports that it is driving itself. The simulator target leaves it be; Stop stops it."
+      : "Rover exploring, as last reported: the link to it has gone or gone quiet, so it may still be driving itself. Stop stops it once the link is back."),
+  },
+});
+let roverExploring = false; // the rover's mode as last reported, kept when its link goes
+let modeHeard = false; // whether this link, up now, has reported it
+link.onTelemetry((data) => {
+  if (typeof data.mode !== "string") return;
+  roverExploring = data.mode === MODE_AUTONOMOUS;
+  modeHeard = true;
+});
+link.onState((state) => {
+  if (state !== "up") modeHeard = false;
+});
+function viewShowsScan() {
+  if (driven.simulator) return false;
+  return programTabPanel.hidden || programTabPanel.dataset.view !== "hidden";
+}
+function markAlert() {
+  const reporting = link.state === "up" || link.state === "stale";
+  const live = link.state === "up" && modeHeard;
+  const on = Object.keys(ALERTS).filter((key) => (key === "motors"
+    ? reporting && readouts.motorsReady === false && !viewShowsScan()
+    : Boolean(driven.simulator) && roverExploring));
+  const whys = on.map((key) => ALERTS[key].why(live));
+  for (const [key, alert] of Object.entries(ALERTS)) {
+    alert.element.hidden = !on.includes(key);
+    alert.element.title = on.includes(key) ? ALERTS[key].why(live) : "";
+  }
+  ALERTS.exploring.element.dataset.known = live ? "now" : "last";
+  roverAway.hidden = !on.includes("exploring");
+  roverAway.dataset.known = live ? "now" : "last";
+  roverAway.textContent = ROVER_AWAY[live ? "now" : "last"];
+  roverAway.title = ALERTS.exploring.why(live);
+  chip.dataset.alert = on.join(" ");
+  chip.title = [...whys, link.title].join(" ");
+  linkAlert.textContent = whys.join(" ");
+  linkAlert.hidden = on.length === 0;
+  offerConnect();
+  // An alert takes room from the chip's word at the top's last step.
+  sayChipWord();
+}
+// With no link on the rover target, the Program tab's console says why Run
+// is off, and beside it a press of Connect does the next thing, while the
+// view, and the connect card over its scan, is folded away: on a phone it
+// starts folded on that tab, and the link chip was the only way to connect
+// (the critic's round 2). Not while the card is there too: two Connect
+// buttons asked which to press (round 1). Hidden by its attribute, so no
+// style follows the target or the link (the view test). Again whenever the
+// alert is marked, which is as the link, the target, the tab or the view
+// changes.
+function offerConnect() {
+  programConnect.hidden = Boolean(driven.simulator) || link.state !== "down" || viewShowsScan();
+}
+link.onTelemetry(markAlert);
+link.onState(markAlert);
+// Whenever Link says the chip again, its word or its address, with the
+// state or without (an address typed with no link, or one that cannot be
+// opened at all): its title is Link's alone then, and the alerts go back
+// before it.
+link.onSay(markAlert);
+// Again as the tab or the View toggle changes what the view shows (below),
+// and as anything else does (a switch of target folding the view).
+if (typeof MutationObserver === "function") {
+  new MutationObserver(markAlert).observe(programTabPanel, { attributes: true, attributeFilter: ["hidden", "data-view"] });
+}
 // The scheme toggle shows and sets the target's scheme: the simulator's is
 // its own, so Normal | Advanced work with no rover, and the Drive tab's
-// family follows it as it follows the rover's.
+// family follows it as it follows the rover's. The Autonomous toggle shows
+// the target's mode.
 function driveTarget(kind) {
   driven.simulator = kind === "simulator" ? targets.simulator : null;
   schemeToggle.bind(driven.simulator);
+  autoToggle.bind(driven.simulator);
   document.body.dataset.target = kind;
-  autoButton.setAttribute("title", driven.simulator
-    ? "On the simulator: the simulated rover takes the mode, but exploring is not simulated, so it stands still. The rover is left alone."
-    : autoTitle);
+  chipFor.hidden = !driven.simulator;
+  // The view pane shows the target: the simulated room on the simulator,
+  // the rover's scan otherwise (panel.css). Hidden, not only undrawn, so
+  // the view knows it is out of sight and an idle one draws nothing.
+  byId("simSlot").hidden = !driven.simulator;
+  markAlert();
+  titleAuto();
 }
+// Autonomous says what it does on the target, and on the rover target
+// with no link that it needs one: a press then only opens the link's
+// popover (AutoToggle).
+function titleAuto() {
+  const unlinked = link.state === "down" || link.state === "connecting";
+  autoButton.setAttribute("title", driven.simulator
+    ? "Autonomous (T), on the simulator: on, the simulated rover takes the mode, but exploring is not simulated, so it stands still; off, it stops. The rover is left alone."
+    : unlinked
+      ? `${autoTitle} Needs a link to the rover: with none, a press opens the link's popover to connect.`
+      : autoTitle);
+}
+link.onState(titleAuto);
 driveTarget(targetSwitch.kind);
 targetSwitch.onChange((kind) => {
   runner.abort(`the target was switched to the ${kind}.`);
@@ -333,20 +525,18 @@ driver.onManualInput(() => {
   if (driven.simulator) Promise.resolve().then(() => runner.abort("the simulated rover was driven by hand."));
 });
 
-// The one view: the Program tab's, or beside the Drive tab's controls while
-// they drive the simulator. Driven from there it runs at 1x: the Driver
-// re-sends a held move every 200 ms of real time, each lasting 400 ms of the
-// simulator's (SimView.holdPlayback). Without a simulator the Drive tab
-// keeps no place for one.
+// The one view of the simulator, in the view pane beside both tabs. While
+// the Drive tab's controls drive it, it runs at 1x: the Driver re-sends a
+// held move every 200 ms of real time, each lasting 400 ms of the
+// simulator's (SimView.holdPlayback). On the Program tab it plays at the
+// operator's speed. Out of sight (the rover target, or the view hidden on
+// the Program tab) an idle view draws nothing (SimView).
 const driveTab = byId("driveTab");
-const driveView = byId("driveView");
-driveView.hidden = !simView;
-function placeSimView() {
+function holdSimPlayback() {
   if (!simView) return;
   const driving = !driveTab.hidden && targetSwitch.kind === "simulator";
-  simView.moveTo(byId(driving ? "driveSimSlot" : "simSlot"));
   simView.holdPlayback(driving
-    ? "Driven from the Drive tab, the simulator runs in real time: 2× and 4× are for previews on the Program tab."
+    ? "Held at 1× on the Drive tab: driven from there, the simulator runs in real time, and 2× and 4× are for previews on the Program tab."
     : null);
 }
 
@@ -361,14 +551,22 @@ const ask = new AskDialog({
   yes: byId("askYes"),
   no: byId("askNo"),
 });
+// The view pane shows with the editor at first where the screen has room
+// for both: wide enough to put them side by side (panel.css), or a tablet
+// upright, tall enough for its band over the editor. On a phone it starts
+// folded on either target (it squeezed the editor to a strip); the tab's
+// View toggle shows or hides it.
+const roomForView = typeof matchMedia === "function" && matchMedia("(min-width: 960px) and (min-height: 521px), (min-width: 720px) and (min-height: 900px)").matches;
 const programTab = new ProgramTab({
   runner,
   targetSwitch,
   examples: RoverBlocks.EXAMPLES,
   ask,
+  showView: roomForView,
   ui: {
     run: byId("programRun"),
     runLabel: byId("programRunLabel"),
+    runShort: byId("programRunShort"),
     stop: byId("programStop"),
     menu: byId("programMenu"),
     menuList: byId("programMenuList"),
@@ -377,21 +575,29 @@ const programTab = new ProgramTab({
     importButton: byId("programImport"),
     importFile: byId("programFile"),
     clear: byId("programClear"),
-    stage: byId("programStage"),
+    tab: byId("programTab"),
     workspace: byId("programWorkspace"),
     hint: byId("programHint"),
     offline: byId("programOffline"),
-    simPane: byId("programSim"),
-    simToggle: byId("simToggle"),
+    viewToggle: byId("viewToggle"),
     state: byId("programState"),
     log: byId("programLog"),
+    logToggle: byId("programLogToggle"),
+    logCount: byId("programLogCount"),
   },
 });
 
+// The console's Connect (offerConnect(), above) is a press of the
+// popover's, whatever that does now; its view starts as ProgramTab left it.
+programConnect.addEventListener("click", () => byId("connect").click());
+offerConnect();
+
 // Every other way a program stops: the Target reports its own losses
 // (program.js). Stop and Autonomous stop a program on any target, a preview
-// included: an operator reaching for Stop means everything.
-byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab."));
+// included: an operator reaching for Stop means everything. The tab's own
+// Stop program is the operator ending their program, which the console
+// says plainly; every other stop says why, in amber.
+byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab.", { own: true }));
 byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));
 
@@ -404,15 +610,23 @@ schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 
 // A program driving the rover from the Program tab goes on while the Drive
 // tab shows, and nothing there said so: the tab itself is marked while one
-// runs. A press of any drive control takes over, as ever.
+// runs, and says so on hover. A preview on the simulator marks it too, in
+// another shape (program.css): the simulated rover drove itself under the
+// Drive tab with nothing to say why (the review's laptops 6). A press of
+// any drive control takes over, as ever. Its own title, what the tab is,
+// comes back after.
 const programTabButton = byId("tabProgram");
+const programTabTitle = programTabButton.getAttribute("title");
 runner.onState((state, { kind }) => {
   if (state !== "idle" && kind === "rover") {
     programTabButton.dataset.running = "yes";
     programTabButton.setAttribute("title", "A program is driving the rover. Any drive press, Stop or Autonomous takes over.");
+  } else if (state !== "idle") {
+    programTabButton.dataset.running = "preview";
+    programTabButton.setAttribute("title", "A preview is running on the simulator. Any drive press takes over.");
   } else {
     delete programTabButton.dataset.running;
-    programTabButton.removeAttribute("title");
+    programTabButton.setAttribute("title", programTabTitle);
   }
 });
 
@@ -423,21 +637,25 @@ runner.onState((state, { kind }) => {
 // button carries on, as it has nothing to steer and its release still
 // arrives; a program or an exploring rover is left alone. On the simulator
 // it goes too: off the Drive tab the view plays at the operator's speed,
-// and at 4x each re-sent move ran out before the next (placeSimView).
+// and at 4x each re-sent move ran out before the next (holdSimPlayback).
 //
 // Blockly sizes its workspace from its container, and a hidden tab has no
 // size: fit it again whenever the tab is shown. So with the sticks, whose
 // look or size may have changed while they were hidden (Driver.shown). The
-// simulator's view goes with the tab that shows it.
+// simulator's playback is held at 1x on the Drive tab alone.
 tabs.onChange((tab) => {
   if (tab.id === "tabDrive") driver.shown();
   else if (driven.simulator) driver.standDown("tab");
   else driver.releaseSticks();
-  placeSimView();
+  holdSimPlayback();
   if (tab.id === "tabProgram") programTab.shown();
+  markAlert();
 });
-targetSwitch.onChange(placeSimView);
-placeSimView();
+// The View toggle folds the scan away on the Program tab, and with it the
+// fault line: the chip says it instead (after ProgramTab's own listener).
+byId("viewToggle").addEventListener("click", markAlert);
+targetSwitch.onChange(holdSimPlayback);
+holdSimPlayback();
 
 // Blockly is deferred (joystick.html): once the page is parsed, it has run,
 // or failed to load. Only then is the editor built. Without Blockly the tab
@@ -538,3 +756,109 @@ link.onOta((message) => firmwareUpdate.reply(message));
 firmwareUpdate.onStart(() => {
   if (runner.target === targets.rover) runner.abort("the rover's firmware is being updated.");
 });
+
+/* --- the top's words, where they fit -------------------------------------- */
+
+// Each of the top's cells says as much as its width allows: fitSteps tries
+// its steps of data-fit (panel.css) from the most words to the fewest,
+// measured, so it follows the fonts the device has. Each control in a cell
+// is a slot as wide whatever it says, so the step follows the cell's width
+// alone, never the link, the target or the rover's state, and nothing in
+// either cell moves as they change (the critic's round 2: a badge or a
+// switch to the simulator moved Autonomous 58 px). What comes and goes in
+// the chip, the rover's name on the simulator target and the two alerts,
+// is measured shown, all three (data-fitting, panel.css), so it always has
+// its room; out of it, it takes none. Where the cells share a row the
+// second cell's controls keep to its far end (panel.css), so the room the
+// first takes as the chip says more comes out of the second's empty start,
+// and nothing there moves either. Again whenever a cell changes size.
+// Where the cells share a row, the first as wide as what it holds and the
+// second the rest, either can run over, so both count, and the row. The
+// address wherever the first cell has room for it, measured as the rest
+// (the reviewers' round 2: an iPad upright has, where a 1280 px screen was
+// asked). Neither cell's height can change: a cell is one line whatever it
+// says. The alerts' words go after every other word but the link's, Sim
+// and Auto and the rover's glyph for "Rover:" first. The second cell's
+// steps: every word ("words"); its segments closer together and closer
+// still ("tight", "snug"), keeping its 13 px words and Advanced whole down
+// to a 375 px phone; 12 px words ("small"); and Adv for Advanced only on a
+// 320 px phone ("short"), where Advanced whole is 15 px short. At 12 px
+// on a 375 px phone and on a phone on its side, its words were a size
+// under the first cell's (the critic's round 1).
+const cellsRow = document.querySelector(".cells");
+const firstCell = document.querySelector(".hcell.drives");
+const secondCell = document.querySelector(".hcell.hands");
+// Whether a box holds what it holds: nothing past its content box, the
+// last control laid out included. scrollWidth alone missed a chip that ran
+// into the cell's padding and touched its outline (the reviewers' round
+// 2), and the popovers it hangs are out of the flow, so not counted.
+function runsPast(box) {
+  if (box.scrollWidth > box.clientWidth) return true;
+  const style = getComputedStyle(box);
+  const end = box.getBoundingClientRect().left + box.clientWidth + (parseFloat(style.borderLeftWidth) || 0) - (parseFloat(style.paddingRight) || 0);
+  const inFlow = [...box.children].filter((child) => child.getBoundingClientRect().width > 0 && getComputedStyle(child).position !== "absolute");
+  const last = inFlow[inFlow.length - 1];
+  if (!last) return false;
+  const rect = last.getBoundingClientRect();
+  return rect.left + rect.width > end + 0.5;
+}
+const runsOver = () => runsPast(firstCell) || runsPast(secondCell) || cellsRow.scrollWidth > cellsRow.clientWidth;
+// The second cell first: where the two share a row, the first takes what
+// the second leaves.
+function fitTheTop() {
+  cellsRow.dataset.fitting = "yes";
+  firstCell.dataset.fit = "lamp";
+  fitSteps(secondCell, ["words", "tight", "snug", "small", "short"], runsOver);
+  fitSteps(firstCell, ["host", "words", "short", "snug", "rover", "glyphs", "icons", "small", "lamp"], runsOver);
+  delete cellsRow.dataset.fitting;
+  sayChipWord();
+  placeLinkPanel();
+}
+// At the last step the chip's word has the room the cell leaves it after
+// the lamp, the rover's glyph, the alerts' glyphs and the caret, a slot
+// whose width no word changes: the word is said there where it fits whole,
+// and otherwise left to the chip's title and the link's popover (data-word
+// "cut", panel.css), never cut short. Again as the chip says another word
+// and as an alert comes or goes. Before the last step every word fits its
+// slot, which is as wide as the longest.
+// Its own lookups, not the consts above: markAlert() calls it, earlier.
+function sayChipWord() {
+  const word = byId("linkState");
+  const cut = chip.parentNode.dataset.fit === "lamp" && word.getBoundingClientRect().width > word.parentNode.getBoundingClientRect().width + 0.5;
+  if (cut) chip.dataset.word = "cut";
+  else delete chip.dataset.word;
+}
+link.onSay(sayChipWord);
+// The link's popover hangs from the chip's left edge (the critics' round
+// 3: from the cells' left, it read as the first control's), below the
+// cells: the chip's place in them, which only the fit above moves, since
+// nothing before it changes width.
+function placeLinkPanel() {
+  const x = chip.getBoundingClientRect().left - cellsRow.getBoundingClientRect().left;
+  byId("linkPanel").style.setProperty("--chip-x", `${Math.max(0, Math.round(x))}px`);
+}
+if (typeof ResizeObserver === "function") new ResizeObserver(fitTheTop).observe(cellsRow);
+// The address, which the chip names at the first step, is no state: it
+// changes only as the operator connects somewhere else, or edits it with no
+// link (Link sets the chip's data-host).
+if (typeof MutationObserver === "function") new MutationObserver(fitTheTop).observe(byId("linkChip"), { attributes: true, attributeFilter: ["data-host"] });
+fitTheTop();
+
+// The readouts' line the same way: the chip's temperature goes first, the
+// least needed, then the values take the smaller type, and only then do
+// the captions go, the phase's before the move's (each cell titled with its
+// own), before a value is cut short, as each frame changes what it says: without its caption, a bare
+// "STOP" read like a button (the critic's round 3). One line, one height,
+// whatever it holds.
+const readoutsLine = document.querySelector(".readouts");
+// Its values shrink to fit, cut short: the line overflows where one is. A
+// cell put out of sight (the chip's, past the first step) is 1 px wide, its
+// value not cut short but not shown: counted as cut, every line that let
+// the chip go let the captions go too.
+const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.parentNode.getBoundingClientRect().width > 1 && value.scrollWidth > value.clientWidth);
+const fitReadouts = () => fitSteps(readoutsLine, ["words", "nochip", "small", "nophase", "bare"], cutShort);
+if (typeof ResizeObserver === "function") new ResizeObserver(fitReadouts).observe(readoutsLine);
+if (typeof MutationObserver === "function") {
+  new MutationObserver(fitReadouts).observe(readoutsLine, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
+}
+fitReadouts();

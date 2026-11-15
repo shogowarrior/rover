@@ -6,26 +6,28 @@
  * and no Driver, and the simulator's telemetry never goes to the scan fan or
  * the readouts.
  *
- *   new SimView(slot, target)
- *     slot     the empty element the view fills (#simSlot, which the Program
- *              tab sizes). The view puts the room's shape on it, for a
- *              layout that sizes the slot to the room (css/sim.css):
- *              --room-aspect, the room's width over its depth, and
- *              --room-pad-x and --room-pad-y, the margins kept clear
- *              around it (PAD).
+ *   new SimView(slot, target, { layout })
+ *     slot     the empty element the view fills (#simSlot, in the page's
+ *              view pane, beside both tabs, which the layout sizes): the
+ *              room takes all of it under one row, the controls and what
+ *              the rover is doing, fitted with PAD kept clear around it.
+ *              The row is the same on both tabs, but for the playback
+ *              speed and the clock, which a held playback has no use for;
+ *              the room is picked in the settings.
  *     target   the SimTarget it shows, and whose clock it runs.
- *
- *   moveTo(slot)
- *       Draw the view in another empty slot instead, with everything it
- *       shows and its settings: one view serves both tabs (app.js moves it
- *       to the Drive tab's slot and back). The room's shape goes onto the
- *       new slot.
+ *     layout   the element whose CSS lays the pane out (the page's shell),
+ *              optional: it gets --room-aspect, the room's width over its
+ *              height, whenever the room changes, so the layout can give
+ *              the pane the room's shape (panel.css) rather than letterbox
+ *              it. Only the Program tab's layouts read it: beside the
+ *              Drive tab's sticks a room picked moves nothing.
  *
  *   holdPlayback(why)
- *       Hold the playback at 1x, the faster speeds disabled with why as
- *       their title, as buttons and in the playback list alike; null lets
- *       go, back to the speed chosen last. Holding also plays a paused
- *       view. For the Drive tab: its Driver
+ *       Hold the playback at 1x, the faster speeds disabled in the
+ *       playback list with why as their title, and the list off the bar
+ *       (one speed is no choice), the settings saying why; null lets go,
+ *       back to the speed chosen last. Holding also plays a paused view.
+ *       For the Drive tab: its Driver
  *       re-sends a held move every 200 ms of real time, each lasting 400 ms
  *       of simulated time, so at 2x or 4x each ran out before the next
  *       came and the simulated rover drove in jerks.
@@ -34,11 +36,10 @@
  * playback speed (the target steps it in fixed steps of its own), and it
  * draws at the display's rate with requestAnimationFrame. While the page is
  * hidden it does nothing at all, and the preview simply waits; while only
- * the view is out of sight (the Drive tab showing on the rover target, or
- * the view folded away to watch the blocks) a preview in progress runs on,
- * undrawn,
- * and an idle one asks for no frames at all until it is shown or a program
- * starts on it.
+ * the view is out of sight (the rover the target, or the view pane hidden
+ * on the Program tab to watch the blocks) a preview in progress runs on,
+ * undrawn, and an idle one asks for no frames at all until it is shown or a
+ * program starts on it.
  *
  * The rover can be dragged to set where it starts, and turned by the handle
  * ahead of its nose; focused, the arrow keys move it and Q and E turn it.
@@ -49,9 +50,12 @@ class SimView {
   static CM = 100;
   // A stroke as wide on screen at any scale.
   static #THIN = Object.freeze({ "vector-effect": "non-scaling-stroke" });
-  // Room kept clear around the floor, in screen pixels: the badge sits above
-  // it and the scale bar below, never over the room.
-  static PAD = Object.freeze({ top: 22, right: 8, bottom: 18, left: 8 });
+  // Room kept clear around the floor, in screen pixels: the walls' stroke,
+  // and nothing more. The words that once had a line above the floor and
+  // another below it are in the bar's one row, and the room has the rest:
+  // the owner asked twice for it to be bigger, and at 568 x 320 the two
+  // lines and the bar took half the pane.
+  static PAD = Object.freeze({ top: 3, right: 3, bottom: 3, left: 3 });
   // A ray's reading fades over about two sweeps, so an old one looks old.
   static RAY_FADE_MS = 1400;
   // The trail fades over this long, drawn in this many bands of age.
@@ -86,17 +90,19 @@ class SimView {
   // view is shown, so they never stop.
   #canRest = typeof ResizeObserver === "function";
 
-  constructor(slot, target) {
+  #layout;
+
+  constructor(slot, target, { layout = null } = {}) {
     this.#slot = slot;
     this.#target = target;
+    this.#layout = layout;
     this.#chosen = target.playback;
-    this.#shape(slot);
     this.#build();
     this.#drawRoom();
     this.#render();
 
     document.addEventListener("visibilitychange", () => this.#wake());
-    // Shown again (the Program tab chosen, the view unfolded), or resized.
+    // Shown again (the simulator the target, the view pane shown), or resized.
     // The root too: a view too short for the room hides the stage and still
     // shows the rover's wheels.
     if (this.#canRest) {
@@ -111,21 +117,18 @@ class SimView {
     this.#wake();
   }
 
-  moveTo(slot) {
-    if (slot === this.#slot) return;
-    this.#slot = slot;
-    this.#shape(slot);
-    slot.appendChild(this.#ui.root);
-    this.#fit();
-    this.#wake();
-  }
-
   holdPlayback(why) {
     this.#held = why || null;
-    for (const controls of [this.#ui.speeds, this.#ui.speedOptions]) {
-      for (const [rate, control] of controls) SimView.#offer(control, rate, this.#held);
-    }
+    for (const [rate, option] of this.#ui.speedOptions) SimView.#offer(option, rate, this.#held);
     this.#ui.speedPick.setAttribute("title", this.#held || "Playback speed");
+    // The bar hides the list while held (sim.css): one speed is no choice,
+    // and greyed-out ones read as broken. The settings say why, in a line
+    // (why's first clause), its title the whole of it. The clock goes too: at 1x it only counts
+    // the operator's own seconds.
+    this.#ui.root.dataset.held = this.#held ? "yes" : "no";
+    this.#ui.heldWhy.textContent = this.#held ? this.#held.split(":")[0] : "";
+    this.#ui.heldWhy.setAttribute("title", this.#held || "");
+    this.#ui.heldWhy.hidden = !this.#held;
     this.#target.playback = this.#held ? 1 : this.#chosen;
     // A pause left on the Program tab would freeze what the Drive tab
     // drives, where a phone's view has no bar to resume it from.
@@ -138,16 +141,6 @@ class SimView {
   static #offer(control, rate, held) {
     control.disabled = Boolean(held) && rate !== 1;
     control.setAttribute("title", control.disabled ? held : `Play at ${rate} times real speed`);
-  }
-
-  // The room's shape, on the slot that sizes the view to it (css/sim.css):
-  // its margins here, its aspect as each room is drawn.
-  #shape(slot) {
-    const { PAD } = SimView;
-    slot.style.setProperty("--room-pad-x", `${PAD.left + PAD.right}px`);
-    slot.style.setProperty("--room-pad-y", `${PAD.top + PAD.bottom}px`);
-    const room = this.#target.room;
-    slot.style.setProperty("--room-aspect", (room.width / room.height).toFixed(4));
   }
 
   /* --- the loops --------------------------------------------------------- */
@@ -181,13 +174,13 @@ class SimView {
   }
 
   // The root, not the stage: a view too short for the room shows only the
-  // foot, whose wheels still turn.
+  // bar, whose wheels still turn.
   #shown() {
     return this.#ui.root.getClientRects().length > 0;
   }
 
-  // Out of sight with nothing to run -- the Drive tab showing on the rover
-  // target, and no program on the simulator -- both loops rest, rather than keep a phone
+  // Out of sight with nothing to run -- the rover the target, and no
+  // program on the simulator -- both loops rest, rather than keep a phone
   // busy through a whole drive. Being shown (the ResizeObserver) or a program
   // starting (the target's onWake) wakes them, timing afresh.
   #canIdle() {
@@ -228,28 +221,18 @@ class SimView {
     const root = dom.html("div", { class: "sim" }, this.#slot);
     ui.root = root;
 
-    // The controls, in one row.
+    // One row of the panel's 32 px controls, the same on both tabs and at
+    // every width: the playback speed, pause and reset, then what the rover
+    // is doing, and at the far end the settings. A held playback (the
+    // Drive tab) hides its list (holdPlayback), and nothing else differs.
+    // The room is picked in the settings: on the bar, the room's list was
+    // the first control beside the Drive tab and gone beside the Program
+    // tab, the pane narrower there, so a tab switch changed the bar (the
+    // critic's round 3).
     const bar = dom.html("div", { class: "sim-bar" }, root);
-    ui.room = dom.html("select", { class: "sim-room", "aria-label": "Room", title: "Room" }, bar);
-    for (const [key, { label }] of Object.entries(Room.PRESETS)) dom.html("option", { value: key }, ui.room, label);
-    ui.room.value = this.#target.roomKey;
-    ui.room.addEventListener("change", () => {
-      this.#target.setRoom(ui.room.value);
-      this.#render();
-    });
-
-    const speed = dom.html("div", { class: "segmented sim-speed", role: "group", "aria-label": "Playback speed" }, bar);
-    ui.speeds = new Map(SimTarget.PLAYBACKS.map((rate) => {
-      const button = segment(speed, () => this.#play(rate));
-      button.textContent = `${rate}×`;
-      SimView.#offer(button, rate, null);
-      return [rate, button];
-    }));
-    // The same choice as a list, for a bar too narrow to show the buttons
-    // beside the room's name: sim.css shows one or the other. While paused
-    // it shows none, as no button is pressed then, so any choice resumes,
-    // the speed it was at included.
-    ui.speedPick = dom.html("select", { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" }, bar);
+    // One list for the playback speed at every width. While paused it shows
+    // none, so any choice resumes, the speed it was at included.
+    ui.speedPick = SimView.#pick(bar, { class: "sim-speed-pick", "aria-label": "Playback speed", title: "Playback speed" });
     ui.speedOptions = new Map(SimTarget.PLAYBACKS.map((rate) => {
       const option = dom.html("option", { value: rate }, ui.speedPick, `${rate}×`);
       SimView.#offer(option, rate, null);
@@ -262,17 +245,50 @@ class SimView {
       this.#render();
     });
     ui.reset = this.#tool(bar, "Reset: put the rover back where it starts and clear the trail (stops a preview). " +
-      "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6");
+      "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6", "sim-reset");
     ui.reset.addEventListener("click", () => this.#target.reset());
-    ui.more = this.#tool(bar, "Rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
 
-    // The room.
+    // The bar's middle: the wheels now, the move by name and how fast; the
+    // latest word from the preview; and on the Program tab the clock. One
+    // line, each part giving way where the view is narrow (sim.css), the
+    // move last, whole or not at all (#fitTwist). How fast is in parts,
+    // each shown whole or not at all: the turn in degrees, the travel in m/s, and the share of full speed,
+    // which goes first, then the travel, the turn last (#fitTwist): "50% ·
+    // 0.00 m/s · 0..." hid the one number that matters while rotating. The move as the Program tab's blocks name it, not
+    // the firmware's MOVE_BACKWARD; and no "Idealised preview" tag, which
+    // the settings say (the critic's round 3).
+    const status = dom.html("div", { class: "sim-status" }, bar);
+    this.#buildInset(status);
+    ui.move = dom.html("output", { class: "sim-move" }, status, SimView.STILL);
+    ui.twist = dom.html("span", { class: "sim-twist" }, status);
+    ui.twistWord = dom.html("span", { class: "sim-word" }, ui.twist);
+    ui.turn = dom.html("span", { class: "sim-turn", title: "How fast it turns" }, ui.twist);
+    ui.pace = dom.html("span", { class: "sim-pace", title: "How fast it travels" }, ui.twist);
+    ui.pct = dom.html("span", { class: "sim-pct", title: "Its speed, a share of full speed" }, ui.twist);
+    // When it was said, then what: a narrow view drops the time (sim.css).
+    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite", "data-empty": "yes" }, status);
+    ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
+    ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
+    // Captioned, not only titled: a tablet shows no title.
+    ui.clockBox = dom.html("span", { class: "sim-clock", title: "Sim time: how long the simulator has run, at its playback speed" }, status);
+    dom.html("span", { class: "label" }, ui.clockBox, "Sim time");
+    ui.clock = dom.html("span", { class: "sim-time" }, ui.clockBox, "0.0 s");
+
+    ui.more = this.#tool(bar, "Settings: the room, rays, trail and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
+
+    // The room, taking every pixel the bar leaves, nothing over it.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);
     // A group, not an image: an image's contents are presentational, and the
     // rover inside it, a focusable button, would be announced as nothing.
     ui.map = dom.svg("svg", { class: "sim-map", role: "group", "aria-label": "The simulated room from above, with the rover in it" }, ui.stage);
     ui.world = dom.svg("g", { transform: "scale(1,-1)" }, ui.map);
     ui.floor = dom.svg("g", {}, ui.world);
+    // A metre, in the floor's bottom-left corner, over the room's things
+    // and under the rover's: in the bar it was a hairline that read as a
+    // divider (the critic's round 3). #fit keeps it the same on screen.
+    ui.scale = dom.svg("g", { class: "sim-scale", "aria-hidden": "true" }, ui.world);
+    ui.scaleBar = dom.svg("path", { ...SimView.#THIN }, ui.scale);
+    ui.scaleText = dom.svg("text", { transform: "scale(1,-1)" }, ui.scale, "1 m");
     ui.trail = dom.svg("g", { class: "sim-trail" }, ui.world);
     for (let band = 0; band < SimView.TRAIL_BANDS; band++) {
       const opacity = 0.08 + (0.72 * (SimView.TRAIL_BANDS - band)) / SimView.TRAIL_BANDS;
@@ -287,64 +303,42 @@ class SimView {
     this.#buildRover(ui.world);
     ui.labels = dom.svg("g", { class: "sim-labels" }, ui.map);
 
-    const badge = dom.html("div", { class: "sim-badge" }, ui.stage);
-    dom.html("strong", {}, badge, "Idealised preview");
-    dom.html("span", {}, badge, "nothing is sent to the rover");
-    ui.scale = dom.html("div", { class: "sim-scale", "aria-hidden": "true" }, ui.stage);
-    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
-    dom.html("span", {}, ui.scale, "1 m");
-
-    // What the rover is doing, and the latest word from the preview.
-    const foot = dom.html("div", { class: "sim-foot" }, root);
-    this.#buildInset(foot);
-    const motion = dom.html("div", { class: "sim-motion" }, foot);
-    ui.move = dom.html("output", { class: "sim-move" }, motion, "STOP");
-    ui.twist = dom.html("span", { class: "sim-twist" }, motion, "standing still");
-    const said = dom.html("div", { class: "sim-said" }, foot);
-    ui.clock = dom.html("span", { class: "sim-clock" }, said, "0.0 s");
-    // When it was said, then what: a narrow view drops the time (sim.css).
-    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite" }, said);
-    ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
-    ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
-
-    // The key, under the rest when the view is tall enough for it (sim.css).
-    ui.key = this.#buildKey(root, "sim-key inline");
-
-    // Folded away until asked for: the less used controls, what the drag
-    // setting means, the key and what "idealised" leaves out. Its keys are
-    // its own while it has the focus, not the panel's drive keys (keys.js).
+    // Folded away until asked for: the room, the less used controls, the
+    // key and that this is an idealised preview. One line a setting, the
+    // detail in its title: three paragraphs of prose round two buttons and
+    // a slider were a wall (the critic's round 3). Its keys are its own
+    // while it has the focus, not the panel's drive keys (keys.js).
     ui.panel = dom.html("div", { class: "sim-more", id: "simMore", role: "group", "aria-label": "Simulator settings", "data-keys": "own" }, root);
+    const roomRow = dom.html("label", { class: "sim-row sim-room-row" }, ui.panel);
+    dom.html("span", { class: "label" }, roomRow, "Room");
+    ui.rooms = [this.#roomPick(roomRow)];
+    // Why the playback is held, while it is (holdPlayback).
+    ui.heldWhy = dom.html("p", { class: "sim-about sim-held" }, ui.panel);
+    ui.heldWhy.hidden = true;
     const toggles = dom.html("div", { class: "sim-toggles" }, ui.panel);
-    ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true" }, toggles, "Sonar rays");
+    ui.rays = dom.html("button", { type: "button", class: "sim-switch", "aria-pressed": "true", title: "Draw each ping's ray from where the rover was" }, toggles, "Sonar rays");
     ui.rays.addEventListener("click", () => {
       this.#showRays = !this.#showRays;
       ui.rays.setAttribute("aria-pressed", String(this.#showRays));
       this.#render();
     });
-    ui.clearTrail = dom.html("button", { type: "button", class: "sim-switch" }, toggles, "Clear trail");
+    ui.clearTrail = dom.html("button", { type: "button", class: "sim-switch", title: "Forget the path the rover has drawn" }, toggles, "Clear trail");
     ui.clearTrail.addEventListener("click", () => {
       this.#target.clearTrail();
       this.#render();
     });
 
-    const drag = dom.html("label", { class: "sim-drag" }, ui.panel);
-    dom.html("span", { class: "label" }, drag, "Released-wheel drag");
-    ui.drag = dom.html("input", { type: "range", min: "0", max: "1", step: "0.05", "aria-describedby": "simDragWhat" }, drag);
-    ui.drag.value = String(this.#target.releasedDrag);
-    ui.dragOut = dom.html("output", { class: "sim-value" }, drag, this.#target.releasedDrag.toFixed(2));
-    ui.drag.addEventListener("input", () => {
-      this.#target.releasedDrag = Number(ui.drag.value);
-      ui.dragOut.textContent = Number(ui.drag.value).toFixed(2);
-    });
-    dom.html("p", { class: "sim-about", id: "simDragWhat" }, ui.panel,
-      "How hard a wheel the shield has released resists turning: at 0 it turns freely, at 1 it holds like a " +
-      "driven wheel. No move in the firmware's wheel table needs a released wheel to turn, so today this " +
-      "changes nothing; it would for a row that did.");
+    // No wheel drag here: no row of the firmware's wheel table needs a
+    // released wheel to turn, so a slider for it changed nothing (the
+    // reviews' laptops 4, tablets 5). The calibration stays in sim.js
+    // (SimTarget.releasedDrag), for a row that would.
     this.#buildKey(ui.panel, "sim-key");
-    dom.html("p", { class: "sim-about" }, ui.panel,
-      `Idealised: wheels that never slip, no inertia or motor lag, one ray per ping, and a chassis that stops ` +
-      `dead on contact. Full speed is taken as ${SIM_WHEEL_MAX_MPS} m/s, an estimate until the bench measures ` +
-      "it. The pivots follow the wheel table, which is not bench-verified yet.");
+    dom.html("p", {
+      class: "sim-about",
+      title: "Idealised: wheels that never slip, no inertia or motor lag, one ray per ping, and a chassis that stops " +
+        `dead on contact. Full speed is taken as ${SIM_WHEEL_MAX_MPS} m/s, an estimate until the bench measures it. ` +
+        "The pivots follow the wheel table, which is not bench-verified yet.",
+    }, ui.panel, "Idealised preview: nothing is sent to the rover");
 
     // Escape, or a press anywhere else, folds it away again.
     new Popover(ui.more, ui.panel);
@@ -426,6 +420,28 @@ class SimView {
     });
   }
 
+  // A list of the rooms, in the settings; #render keeps it showing the
+  // room.
+  #roomPick(parent) {
+    const pick = SimView.#pick(parent, { class: "sim-room", "aria-label": "Room", title: "Room" });
+    for (const [key, { label }] of Object.entries(Room.PRESETS)) dom.html("option", { value: key }, pick, label);
+    pick.value = this.#target.roomKey;
+    pick.addEventListener("change", () => {
+      this.#target.setRoom(pick.value);
+      this.#render();
+    });
+    return pick;
+  }
+
+  // A list, with the panel's caret over its right end (sim.css), as the
+  // File menu's: the browser's own arrow looked like another page's.
+  static #pick(parent, attributes) {
+    const wrap = dom.html("span", { class: "sim-pick" }, parent);
+    const select = dom.html("select", attributes, wrap);
+    dom.svg("path", { d: "M4.5 6.5 8 10l3.5-3.5" }, dom.svg("svg", { class: "sim-caret", viewBox: "0 0 16 16", "aria-hidden": "true" }, wrap));
+    return select;
+  }
+
   #tool(parent, title, path, extraClass = "") {
     const button = dom.html("button", { type: "button", class: `sim-tool ${extraClass}`.trim(), title, "aria-label": title }, parent);
     dom.svg("path", { d: path }, dom.svg("svg", { class: "sim-icon", viewBox: "0 0 16 16", "aria-hidden": "true" }, button));
@@ -451,6 +467,9 @@ class SimView {
     const ui = this.#ui;
     ui.floor.textContent = "";
     ui.labels.textContent = "";
+    // The room's shape, for the layout to give the pane (panel.css).
+    const aspect = (room.width / room.height).toFixed(4);
+    if (this.#layout) this.#layout.style.setProperty("--room-aspect", aspect);
 
     dom.svg("rect", { class: "sim-floor", x: 0, y: 0, width: w, height: h }, ui.floor);
     // A soft grid: every 50 cm, stronger every metre.
@@ -477,7 +496,6 @@ class SimView {
     this.#drawn = { room };
     for (const mark of this.#bumpMarks) mark.remove();
     this.#bumpMarks = [];
-    this.#shape(this.#slot);
     this.#fit();
   }
 
@@ -510,11 +528,14 @@ class SimView {
     }
     const s = this.#pxPerCm;
     // The viewBox spans the whole stage, so the padding is in pixels whatever
-    // the room's shape; the floor sits centred in it.
+    // the room's shape; the floor sits centred in what PAD leaves. A larger
+    // pad on one side moves the floor away from it: with the sign the other
+    // way round the floor sat 18 px under the stage's top and 22 over its
+    // foot.
     const vw = Math.max(width, 1) / s;
     const vh = Math.max(height, 1) / s;
-    const left = -(vw - w) / 2 + (PAD.left - PAD.right) / (2 * s);
-    const top = -h - (vh - h) / 2 + (PAD.top - PAD.bottom) / (2 * s);
+    const left = -(vw - w) / 2 - (PAD.left - PAD.right) / (2 * s);
+    const top = -h - (vh - h) / 2 - (PAD.top - PAD.bottom) / (2 * s);
     ui.map.setAttribute("viewBox", `${left.toFixed(2)} ${top.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
 
     for (const label of ui.labels.children || []) {
@@ -524,8 +545,18 @@ class SimView {
       const fits = label.textContent.length * size * 0.85 + 8 / s < Number(label.getAttribute("data-width"));
       label.setAttribute("visibility", fits ? "visible" : "hidden");
     }
-    ui.scaleBar.style.width = `${Math.round(CM * s)}px`;
+    // The metre, 10 px in from the floor's corner, its ends ticked 4 px up.
+    const inset = 10 / s;
+    const tick = 4 / s;
+    ui.scaleBar.setAttribute("d", `M${inset.toFixed(1)} ${(inset + tick).toFixed(1)} V${inset.toFixed(1)} H${(inset + CM).toFixed(1)} V${(inset + tick).toFixed(1)}`);
+    ui.scaleText.setAttribute("x", (inset + CM + 5 / s).toFixed(1));
+    ui.scaleText.setAttribute("y", (-inset + 3.5 / s).toFixed(1));
+    ui.scaleText.setAttribute("font-size", (10 / s).toFixed(2));
+    // Not in a room drawn a few centimetres tall (a phone's band), where
+    // it lay over half the floor.
+    ui.scale.setAttribute("visibility", height >= 160 ? "visible" : "hidden");
     for (const { dot } of this.#rays) dot.setAttribute("r", (2.6 / s).toFixed(2));
+    this.#fitTwist();
     this.#drawn.bumps = -1;
     this.#rover.grip.setAttribute("r", Math.max(17, 22 / s).toFixed(1));
     this.#rover.halo.setAttribute("r", Math.max(16, 15 / s).toFixed(1));
@@ -536,6 +567,38 @@ class SimView {
     this.#rover.handleLine.setAttribute("x2", reach.toFixed(1));
   }
 
+  // The move shows whole or not at all, and so does how fast. The move is
+  // never cut ("Strafe rig…", or a lone "B" between reset and settings at
+  // 480 x 320: the review's phones 2): how fast gives way first (sim.css),
+  // then the clock, and where the move still does not fit it goes with
+  // how fast, and the room shows the motion. Of how fast, the parts after
+  // the first wrap out of sight by themselves where they do not fit
+  // (sim.css); the first, a number, would be cut instead, "54°" for
+  // 54°/s, so where it does not fit none shows. A word (what a stall
+  // pushes against) may be cut short. Measured only as what the bar says
+  // changes, and as the view's size does (#fit); a page that cannot
+  // measure shows it all.
+  #fitTwist() {
+    const { twist, move, clockBox } = this.#ui;
+    for (const part of [twist, move, clockBox]) part.dataset.fit = "yes";
+    // The move hidden by the stylesheet, with no room for any (sim.css,
+    // under 70 px): how fast goes with it, never a bare "0.30 m/s" (the
+    // reviewers' round 3: hidden, the move measured as fitting).
+    if (getComputedStyle(move).display === "none") {
+      twist.dataset.fit = "no";
+      return;
+    }
+    const cut = () => move.scrollWidth > move.clientWidth + 0.5;
+    if (cut()) clockBox.dataset.fit = "no";
+    if (cut()) {
+      move.dataset.fit = "no";
+      twist.dataset.fit = "no";
+      return;
+    }
+    const first = [...twist.children].find((n) => n.textContent);
+    if (first && first !== this.#ui.twistWord && first.scrollWidth > twist.clientWidth + 0.5) twist.dataset.fit = "no";
+  }
+
   /* --- drawing ----------------------------------------------------------- */
 
   #render() {
@@ -544,7 +607,7 @@ class SimView {
     const ui = this.#ui;
     const { CM } = SimView;
     if (this.#drawn.room !== target.room) {
-      ui.room.value = target.roomKey;
+      for (const pick of ui.rooms) pick.value = target.roomKey;
       this.#drawRoom();
     }
 
@@ -571,30 +634,50 @@ class SimView {
 
     // The playback.
     ui.pause.setAttribute("aria-pressed", String(target.paused));
-    pressSegment(ui.speeds, target.paused ? null : target.playback);
     ui.speedPick.value = target.paused ? "" : String(target.playback);
   }
 
+  // What the move reads with none running, and while exploring, which
+  // the simulator does not.
+  static STILL = "Stopped";
+  static EXPLORING = "Exploring";
+
   // The motion in words and numbers, the clock, and the latest thing the
-  // preview said (a bump, or that exploring is not simulated).
+  // preview said (a bump, or that exploring is not simulated). How fast
+  // in parts, each only where it says something: a share of full speed,
+  // the turn (a rotation's, a pivot's) and the travel (a translation's,
+  // a pivot's), never "0.00 m/s" beside a rotation.
   #describe(state) {
     const ui = this.#ui;
     const motion = state.moving ? motionFor(state.move) : null;
-    ui.move.textContent = motion ? motion.name : state.mode === MODE_AUTONOMOUS ? MODE_AUTONOMOUS : "STOP";
-    const percent = `${Math.round((state.speed * 100) / SPEED_MAX)}%`;
+    ui.move.textContent = motion ? motion.label : state.mode === MODE_AUTONOMOUS ? SimView.EXPLORING : SimView.STILL;
     const { vx, vy, w } = state.twist;
+    const pace = Math.hypot(vx, vy);
+    const turn = Math.abs(degrees(w));
     // Stopped away from its start with nothing running, the rover is where
-    // the next preview begins: say so, since a second run is otherwise drawn
-    // over the first. (Mid-run, a wait between moves is only standing still.)
-    const resting = state.atStart || !this.#target.idle ? "standing still" : "standing still · a preview goes on from here";
-    ui.twist.textContent = !motion
-      ? state.mode === MODE_AUTONOMOUS ? "exploring is not simulated" : resting
-      : state.stalled ? `${percent}, pushing against ${state.contact || "something"}`
-      : `${percent} · ${Math.hypot(vx, vy).toFixed(2)} m/s · ${Math.round(degrees(w))}°/s`;
+    // the next preview begins: the move's title says so, as the Program
+    // tab's console does (app.js), since a second run is otherwise drawn
+    // over the first. On the bar, an 11 px note cut to "a preview …" beside
+    // a cut "Stopp…" (the review's phones 2). (Mid-run, a wait between
+    // moves is only a stop.)
+    const goesOn = !motion && state.mode !== MODE_AUTONOMOUS && !state.atStart && this.#target.idle;
+    ui.move.setAttribute("title", goesOn ? "Stopped where the next preview begins: Reset, at the bar's start, starts it over." : "What the simulated rover is doing");
+    ui.twistWord.textContent = !motion
+      ? state.mode === MODE_AUTONOMOUS ? "not simulated" : ""
+      : state.stalled ? `pushing against ${state.contact || "something"}` : "";
+    ui.pct.textContent = motion ? `${Math.round((state.speed * 100) / SPEED_MAX)}%` : "";
+    ui.turn.textContent = motion && !state.stalled && turn >= 0.5 ? `${Math.round(turn)}°/s` : "";
+    ui.pace.textContent = motion && !state.stalled && pace >= 0.005 ? `${pace.toFixed(2)} m/s` : "";
     ui.move.dataset.stalled = state.stalled ? "yes" : "no";
+    // The clock's length too: a pause, or another figure, widens it.
+    const said = [ui.move, ...ui.twist.children].map((n) => n.textContent).join("|") + `|${this.#target.paused}|${String(Math.floor(state.now / 1000)).length}`;
+    if (said !== this.#drawn.twist) {
+      this.#drawn.twist = said;
+      this.#fitTwist();
+    }
 
     ui.clock.textContent = `${this.#target.paused ? "paused · " : ""}${(state.now / 1000).toFixed(1)} s`;
-    ui.clock.dataset.paused = this.#target.paused ? "yes" : "no";
+    ui.clockBox.dataset.paused = this.#target.paused ? "yes" : "no";
 
     const last = state.log[state.log.length - 1] || null;
     if (last !== this.#drawn.said) {

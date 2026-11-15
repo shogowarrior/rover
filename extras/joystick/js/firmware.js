@@ -40,6 +40,11 @@
  * The update carries on with the popover closed, which shows how it went
  * when it opens again. The password is never remembered or logged, and
  * never sent: only an answer made from it goes to the rover.
+ *
+ * The status line says how the last update went, or what this one is
+ * doing; with nothing to say of either, it says why Update is off while it
+ * is, as Update's title does: a touch screen shows no title, and Update
+ * greyed out over an empty line said nothing (the reviewer's round 1).
  */
 class FirmwareUpdate {
   // How long the rover may take to answer. A piece costs it one pass of its
@@ -80,6 +85,9 @@ class FirmwareUpdate {
   // restarting (after "done", until the link goes), relinked (the link has
   // gone since, so the next frame is a new link's) }.
   #check = null;
+  // What the status line says of an update, how it went or how it goes,
+  // and its tone; "" for nothing, where it says why Update is off instead.
+  #said = { text: "", tone: "" };
 
   constructor({ link, ui }) {
     this.#link = link;
@@ -302,10 +310,10 @@ class FirmwareUpdate {
     const focused = [ui.choose, ui.start, ui.cancel].find((button) => button === document.activeElement);
     ui.build.textContent = running === undefined ? "—" : running === null ? "an older firmware" : running.slice(0, 8);
     ui.choose.disabled = this.#busy;
-    ui.choose.title = this.#busy ? FirmwareUpdate.WHY_NOT.busy : "";
+    ui.choose.title = this.#busy ? FirmwareUpdate.WHY_NOT.busy : "Choose a firmware.bin built for this rover";
     const why = this.#whyNot();
     ui.start.disabled = why !== "";
-    ui.start.title = why;
+    ui.start.title = why || "Send the file to the rover, which restarts on it once at rest, in manual";
     ui.cancel.disabled = !job || job.phase !== "sending";
     ui.cancel.title = ui.cancel.disabled ? "No update to cancel." : "Stop the update. The rover keeps the firmware it had.";
     // A disabled button drops the focus to the page, where the drive keys
@@ -313,11 +321,11 @@ class FirmwareUpdate {
     // the update: the focus moves to the section's next live control, the
     // password's field at the last, which keeps the keys to itself.
     if (focused && focused.disabled) [ui.cancel, ui.start, ui.choose, ui.password].find((control) => !control.disabled).focus();
-    // Touch shows no title, and the only way past an old firmware is one
-    // the operator has to be told: a USB flash.
-    const tooOld = FirmwareUpdate.WHY_NOT.tooOld;
-    if (!job && !check && running === null && !ui.status.textContent) this.#say(tooOld);
-    else if (running !== null && running !== undefined && ui.status.textContent === tooOld) this.#say("");
+    // Touch shows no title: the status line says why Update is off, when it
+    // has nothing to say of an update, which says why itself (the link
+    // lost, the rover restarting, a file that is not firmware). That is
+    // also how the only way past an old firmware is told: a USB flash.
+    this.#show();
     const shown = job ? job.acked : check && check.restarting && !check.relinked ? check.size : null;
     ui.progress.hidden = shown === null;
     if (shown !== null) {
@@ -327,8 +335,14 @@ class FirmwareUpdate {
   }
 
   #say(text, tone = "") {
-    this.#ui.status.textContent = text;
-    this.#ui.status.dataset.tone = tone;
+    this.#said = { text, tone };
+    this.#show();
+  }
+
+  #show() {
+    const said = this.#said;
+    this.#ui.status.textContent = said.text || this.#whyNot();
+    this.#ui.status.dataset.tone = said.text ? said.tone : "";
   }
 
   // An ESP32 app image, by the bytes the rover checks too: the image's magic

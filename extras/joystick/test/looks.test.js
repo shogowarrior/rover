@@ -37,38 +37,42 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // A disabled control's faded text is exempt (WCAG 1.4.3), and is left out.
 // A rule that paints a token on a surface not listed here adds its pair.
 //
-// The surfaces: the page, under the header, the Program tab, Blockly's
-// workspace and the log (--case); the cards, menus, the dock and the bars
-// (--panel), with the glow behind the scan and the wide dock; buttons,
-// tracks, pills, the flyout and the room's floor (--raised); a hovered or
-// pressed one (--raised-hi); the chosen segment (--chosen). A tinted pill
+// The surfaces: the page, around the top's cells, the Program tab, Blockly's
+// workspace and the log (--case); the top's two cells, the cards, menus,
+// the dock and the bars (--panel), with the glow behind the scan and the
+// wide dock; buttons, a switch's track, the link chip, the flyout and the
+// room's floor (--raised); a hovered, pressed or open one, and the Autonomous switch's
+// track (--raised-hi); the chosen segment (--chosen). A tinted chip, badge
 // or button replaces its fill with the tint.
 const AUDIT = [
-  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the pills while all is well, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
-  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel"], TEXT,
-    "captions, the note, the keys' note, unchosen segments, idle pills, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
-  ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word and icon: the tabs, the scheme, the target, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame; the open Program tab's running dot"],
+  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
+    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the open tab and the link chip while all is well, the Autonomous switch's word, Blockly's toolbox and flyout, a hovered flyout button, the fault in the scan's card, the rover's alert in the link's popover"],
+  ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--warn-soft over --panel"], TEXT,
+    "captions, the note, a scheme wish's note (in the link's popover and on the connect card), the keys' note, the firmware's status line, unchosen segments, the tabs not open, the link chip with no link, its caret and its address (on its amber tint too, lost, stale or saying the rover's alert), the Autonomous switch's knob while off, the log, the scan's ticks, its rings' legend and the readouts with no live link, the room's walls, labels and metre, the simulator's settings and its bar's how fast, a menu item's key"],
+  ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word: the target, the scheme, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame"],
   ["--live", ["--case", "--raised"], TEXT, "a pending segment, the log's say"],
-  ["--on-live", ["--live"], TEXT, "Connect, Run, Yes, Update, a held rotate button"],
+  ["--on-live", ["--live"], TEXT, "Connect, in the popover, on the view's connect card and in the Program console's line, Run, Yes, Update, a held rotate button"],
   ["--ok", ["--case", "--panel", "--ok-soft over --panel", "--ok-soft over --case"], TEXT,
-    "the log's done, a firmware update's, Autonomous lit and as last reported (on a card, and on the bare bar of a phone on its side)"],
-  ["--on-ok", ["--ok"], TEXT, "the mode pill while exploring"],
-  ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case"], TEXT,
-    "the note gone bad, the phase, the stick's caption, the GO tick, the pills, the fault's headline, the log"],
+    "the log's done, a firmware update's, the Autonomous switch's knob on its tinted track while on"],
+  ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
+    "the note gone bad, the phase, the stick's caption, the link chip lost or stale or saying the rover's alert, on its tint in a cell, the fault's headline in the scan's card, the log"],
   ["--stop-ink", ["--panel", "--glow over --panel", "--stop-soft over --case"], TEXT,
-    "the STOP tick, the link pill down, Stop program, a stall or a bump in the simulator"],
+    "a stall or a bump in the simulator, the scan legend's stop dashes"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
   // A fresh sonar ray is drawn at 0.95.
   ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
-    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar, the rover's aim"],
-  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list, the theme tiles"],
+    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar and the View toggle's while shown, the rover's aim, the dashed ring before a scheme wish's note, the Autonomous switch's dashed edge while a press waits for the rover"],
+  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks outside the top's cells, the address, the room list, the theme tiles"],
   ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
-    "the pills' lamps while all is well, a program's dots, the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
+    "the link chip's lamp while up, open or not, the Autonomous switch's edge while on, a program's dots (the running tab's on the cell, and a preview's ring there), the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
+  ["--chosen", ["--panel"], MARK, "the open tab's underline, in the top's second cell"],
+  ["--dim", ["--raised-hi"], MARK, "the Autonomous switch's knob while off, on its track"],
+  ["--ok", ["--ok-soft over --panel"], MARK, "the Autonomous switch's knob while on, on its tinted track"],
+  ["--ok", ["--warn-soft over --panel"], MARK, "the link chip's lamp, or the rover's glyph in its place, while up, on the chip's amber tint while it says the rover's alert"],
   ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
-  ["--stop at 0.95", ["--case", "--raised"], MARK, "Stop program's edge, a sonar ray inside STOP, a bump, a stalled rover's outline"],
-  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
+  ["--stop at 0.95", ["--case", "--raised"], MARK, "a sonar ray inside STOP, a bump, a stalled rover's outline"],
+  ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in, and the legend's go dashes"],
   ["--stop", ["--glow over --panel", "--panel"], MARK, "the scan's wedge inside STOP, and the simulator key's ray"],
   ["--readout", ["--glow over --panel"], MARK, "the scan's rover"],
   ["--case", ["--ok", "--sim-back"], MARK, "the arrow on a turning wheel"],
@@ -84,7 +88,8 @@ const AUDIT = [
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
   ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's edge"],
-  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
+  ["--raised", ["--panel"], QUIET, "the link chip and a switch's track in the top's cells, told from the cell by their fill alone: one outline per cell, the cell's"],
+  ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: the legend names it, the wedges' colour shows it"],
   ["--stop-ink at 0.65", ["--glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
   ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],
   ["--stick-ring", ["--case", "--raised"], QUIET, "the stick's ring"],

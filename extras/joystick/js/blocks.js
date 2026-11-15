@@ -632,7 +632,7 @@ class RoverBlocks {
         flyoutForegroundColour: ink,
         flyoutOpacity: 1,
         scrollbarColour: lookToken("--dim"),
-        scrollbarOpacity: 0.35,
+        scrollbarOpacity: 0.25,
         // A shadow of the block where it would drop, in the look's ink:
         // white would vanish on a light look's case.
         insertionMarkerColour: ink,
@@ -678,23 +678,41 @@ class RoverBlocks {
  *   save() / load(state)
  *                      the program in Blockly's JSON form. load() checks the
  *                      shape first and throws, keeping the current program,
- *                      when it is not a rover program.
+ *                      when it is not a rover program; a program it loads
+ *                      shows from its top-left corner, no wider than the
+ *                      editor (never zoomed in past the start scale),
+ *                      and is fitted again as the editor's width changes
+ *                      until the operator zooms or pans.
  *   clear()            remove every block (undo brings them back).
  *   highlight(id)      light up the running block; null for none.
  *   select(id)         select a block and bring it into view.
  *   setReadOnly(on)    lock editing while a program runs.
- *   resize()           fit the container again, after it is shown.
+ *   resize()           fit the container again, after it is shown or
+ *                      its box changes size.
  *   restyle()          take the page's look, after it changes (look.js): the
  *                      workspace, toolbox and flyout repaint in it; the
  *                      blocks keep PALETTE.
  *   onChange(fn)       fn() after the program changes.
  *
- * Under 600 px of screen the toolbox runs across the top, as a row of pills,
- * and the workspace is rebuilt when the screen crosses that width.
+ * On an upright phone (600 px wide or less, taller than wide) the
+ * toolbox runs across the top, as rows of pills (program.css), and the
+ * workspace is rebuilt when the screen crosses that. Everywhere else, a
+ * phone on its side too, it runs down the editor's left: across the top
+ * of a phone on its side it wrapped, Output alone on a second row, and
+ * cost the editor 30 px of its little height (the review's phones 0 and
+ * 23); a short editor's pills are closer there, so the seven fit.
+ *
+ * Blockly's scrollbars show only while the program runs past the view
+ * (the container's data-overflow, program.css): on an empty workspace
+ * they said there was more to see when there was nothing (the review's
+ * laptops 14). The workspace pans by a drag anywhere either way.
  */
 class BlockEditor {
-  static NARROW = "(max-width: 600px)";
+  static NARROW = "(max-width: 600px) and (orientation: portrait)";
   static SAVE_DELAY_MS = 400;
+  static MIN_SCALE = 0.4;
+  // The margin round a program fitted to the editor's width, in pixels.
+  static FIT_MARGIN = 16;
 
   static #AsyncFunction = (async () => {}).constructor;
 
@@ -706,6 +724,12 @@ class BlockEditor {
   #workspace = null;
   #readOnly = false;
   #placed = false; // the program has been scrolled into a view with a size
+  #fitPending = false; // a program loaded, to fit to the editor's width once it has one
+  // The view as the last fit left it, { width, scale, x, y }, while nobody
+  // has zoomed or panned since: refitted when the editor's width changes.
+  // null otherwise. A width of 0: to fit once the editor has one.
+  #fit = null;
+  #startScale = 0.85;
   #saveTimer = null;
   #scheme = null;
   #warned = new WeakMap(); // block -> the scheme warning it carries, or null
@@ -790,11 +814,13 @@ class BlockEditor {
       workspaces.load(before, this.#workspace);
       throw new Error(`It could not be loaded: ${err.message}`);
     }
-    this.#showTopLeft();
+    this.#fit = null;
+    this.#showTopLeft(true);
   }
 
   clear() {
     this.#workspace.clear();
+    this.#fit = null;
   }
 
   highlight(id) {
@@ -815,11 +841,27 @@ class BlockEditor {
     this.#workspace.setIsReadOnly(on);
   }
 
+  // A program fitted to the editor's width is fitted again as the width
+  // changes, until the operator zooms or pans: on a phone on its side,
+  // Preview put the view beside the editor, which narrowed from 534 to
+  // 302 px at 568 x 320, and an example fitted a moment before ran 166 px
+  // past its right edge ("epeat" under the categories: the reviewers'
+  // round 3). The view as the fit left it says nobody has moved it since,
+  // read before Blockly resizes, which may scroll it itself.
   resize() {
+    const fit = this.#fit;
+    const kept = fit !== null && (fit.width === 0 || this.#unmoved(fit));
     this.#Blockly.svgResize(this.#workspace);
+    if (!kept) this.#fit = null;
+    const width = this.#container.clientWidth;
     // Built in a hidden tab, the workspace had no view to scroll the program
     // into; it has one now.
     if (!this.#placed) this.#showTopLeft();
+    else if (kept && width === 0) fit.width = 0;
+    else if (kept && width !== fit.width) {
+      if (!this.#fitWidth()) fit.width = 0;
+    } else if (kept) Object.assign(fit, this.#viewState());
+    this.#markOverflow();
   }
 
   restyle() {
@@ -828,6 +870,12 @@ class BlockEditor {
 
   #inject(state) {
     const narrow = this.#narrow.matches;
+    this.#startScale = narrow ? 0.72 : 0.85;
+    // Slim scrollbars: Blockly's own are 15 px, 25 on a touch screen, thick
+    // grey bars that looked unstyled (the critic's round 2). The workspace
+    // pans by a drag anywhere, so the bar is a cue more than a handle.
+    const bars = this.#Blockly.Scrollbar;
+    if (bars && typeof bars.scrollbarThickness === "number") bars.scrollbarThickness = 11;
     const workspace = this.#Blockly.inject(this.#container, {
       toolbox: RoverBlocks.toolbox(),
       theme: RoverBlocks.theme(this.#Blockly),
@@ -841,7 +889,7 @@ class BlockEditor {
       // attribute, as given (13.3.0's grid.ts): var() follows the look, as
       // the scan's fills do.
       grid: { spacing: 24, length: 2, colour: "var(--raised-hi)", snap: true },
-      zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
+      zoom: { controls: true, wheel: true, startScale: this.#startScale, maxScale: 2, minScale: BlockEditor.MIN_SCALE, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },
       maxTrashcanContents: 16,
     });
@@ -858,12 +906,37 @@ class BlockEditor {
     this.#showTopLeft();
 
     this.#markPivots();
+    this.#markOverflow();
     workspace.addChangeListener((event) => {
+      // Any event, a scroll or a zoom among them, may bring the program
+      // into the view or take it past it.
+      this.#markOverflow();
       if (event.isUiEvent) return;
       this.#markPivots();
       this.#scheduleSave();
       this.#changeListeners.emit();
     });
+  }
+
+  // Whether the program runs past the view, for program.css: the scrollbars
+  // show only then. Where Blockly cannot say, they show.
+  #markOverflow() {
+    let over = true;
+    try {
+      const metrics = this.#workspace.getMetricsManager();
+      const view = metrics.getViewMetrics(true);
+      const content = metrics.getContentMetrics(true);
+      const edges = [view.left, view.top, view.width, view.height, content.left, content.top, content.width, content.height];
+      if (edges.every((edge) => typeof edge === "number" && Number.isFinite(edge))) {
+        over = content.width > 0 && content.height > 0 &&
+          (content.left < view.left || content.top < view.top ||
+           content.left + content.width > view.left + view.width ||
+           content.top + content.height > view.top + view.height);
+      }
+    } catch {
+      over = true;
+    }
+    this.#container.dataset.overflow = over ? "yes" : "no";
   }
 
   // A block inside a disabled one is drawn disabled and writes no code, but
@@ -905,9 +978,13 @@ class BlockEditor {
 
   // Scroll a block into view, if there is a view: on the Drive tab the
   // workspace has no size, and a program running there is followed by the
-  // highlight alone.
+  // highlight alone. A run's own scroll is not the operator's: a fitted
+  // program stays fitted through it.
   #reveal(block) {
-    if (this.#container.clientWidth > 0) this.#workspace.scrollBoundsIntoView(block.getBoundingRectangleWithoutChildren(), 24);
+    if (!(this.#container.clientWidth > 0)) return;
+    const kept = this.#fit !== null && this.#fit.width > 0 && this.#unmoved(this.#fit);
+    this.#workspace.scrollBoundsIntoView(block.getBoundingRectangleWithoutChildren(), 24);
+    if (kept) Object.assign(this.#fit, this.#viewState());
   }
 
   #scheduleSave() {
@@ -918,13 +995,51 @@ class BlockEditor {
   }
 
   // Scroll the program's top-left corner into view, rather than wherever the
-  // workspace was left.
-  #showTopLeft() {
+  // workspace was left. A program just loaded (an example, an imported
+  // file) is fitted to the editor's width too, never zoomed in past the
+  // start scale: at full scale an example ran past a phone's editor, "1 s"
+  // cut off at its edge and the trash can under its blocks (the review's
+  // phones 3). In a hidden tab, once it is shown (resize()).
+  #showTopLeft(fit = false) {
     const workspace = this.#workspace;
+    this.#fitPending = this.#fitPending || fit;
     this.#placed = this.#container.clientWidth > 0;
     if (!this.#placed) return;
     const blocks = workspace.getTopBlocks(true);
-    if (blocks.length) workspace.scrollBoundsIntoView(blocks[0].getBoundingRectangleWithoutChildren(), 32);
+    if (!blocks.length) return;
+    if (this.#fitPending) {
+      this.#fitPending = false;
+      if (this.#fitWidth()) return;
+    }
+    workspace.scrollBoundsIntoView(blocks[0].getBoundingRectangleWithoutChildren(), 32);
+  }
+
+  // The program as wide as the editor's view at most, its top-left corner
+  // FIT_MARGIN in from the view's: false where Blockly cannot say how wide.
+  #fitWidth() {
+    const workspace = this.#workspace;
+    const margin = BlockEditor.FIT_MARGIN;
+    const box = workspace.getBlocksBoundingBox();
+    const view = workspace.getMetricsManager().getViewMetrics();
+    const width = box.right - box.left;
+    if (!(width > 0) || !(view.width > 2 * margin)) return false;
+    const scale = Math.max(BlockEditor.MIN_SCALE, Math.min(this.#startScale, (view.width - 2 * margin) / width));
+    workspace.setScale(scale);
+    workspace.scroll(margin - box.left * scale, margin - box.top * scale);
+    this.#fit = { width: this.#container.clientWidth, ...this.#viewState() };
+    return true;
+  }
+
+  #viewState() {
+    const workspace = this.#workspace;
+    return { scale: workspace.scale, x: workspace.scrollX, y: workspace.scrollY };
+  }
+
+  // Whether the view is as fit left it: no zoom, no pan, by a wheel, a
+  // pinch, a drag, a scrollbar or the zoom buttons.
+  #unmoved(fit) {
+    const now = this.#viewState();
+    return now.scale === fit.scale && Math.abs(now.x - fit.x) < 0.5 && Math.abs(now.y - fit.y) < 0.5;
   }
 }
 

@@ -14,7 +14,7 @@ const harness = require("./harness.js");
 const { loadPage, all, PANEL_ROOT, flush, connectOpen, pageFrames } = require("./fake-dom.js");
 const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
 const { stylesheet, cssRules, blockRules, outside, lookBlocks, tokensOf } = require("./css.js");
-const { degrees } = require("../js/support.js");
+const { degrees, fitSteps } = require("../js/support.js");
 
 let failed = null; // the running test's failed checks
 let passes = 0;
@@ -100,7 +100,10 @@ test("loads clean from the HTML: scripts, ids, initial state", () => {
   check(page.errors.length === 0, `errors ${page.errors}`);
   check(page.doc.body.dataset.link === "down", "link down");
   check(page.$("connect").textContent === "Connect", "button Connect");
-  check(page.$("linkState").textContent === "No link", "label");
+  check(page.$("linkState").textContent === "Not connected", `the chip says ${page.$("linkState").textContent}`);
+  check(page.$("linkChip").dataset.say === "down", `the chip's colour: ${page.$("linkChip").dataset.say}`);
+  check(/^Not connected to the rover \(192\.168\.0\.115\)/.test(page.$("linkChip").title), `the chip's title names the address: ${page.$("linkChip").title}`);
+  check(page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "false", "the link's popover closed at load");
   check(page.$("note").textContent === "Enter the rover's address and connect.", "help note");
   check(page.$("phaseCell").hidden === true, "phase hidden at load");
   const wedges = all(page.$("scan")).filter((n) => n.getAttribute("class") === "wedge");
@@ -254,7 +257,8 @@ test("Connect is Cancel while connecting, and cancel is a neutral disconnect", (
   page.$("host").value = "10.0.0.7";
   page.fire(page.$("connect"), "click");
   check(page.$("connect").textContent === "Cancel", "Cancel label");
-  check(page.$("linkState").textContent === "Connecting", "Connecting label");
+  check(page.$("linkState").textContent === "Connecting…", `Connecting label: ${page.$("linkState").textContent}`);
+  check(/^Connecting to the rover at 10\.0\.0\.7/.test(page.$("linkChip").title), `the chip's title names the address being tried: ${page.$("linkChip").title}`);
   page.fire(page.$("connect"), "click");
   check(page.sockets.length === 1, "no second socket");
   check(page.sockets[0].closeCalls === 1, "closed");
@@ -308,6 +312,94 @@ test("unreachable host reports Not reachable", () => {
   page.$("host").value = "localhost:8081";
   page.fire(page.$("connect"), "click");
   check(page.sockets[1].url === "ws://localhost:8081", page.sockets[1].url);
+});
+
+// A rover that never answered is not a link that went: the chip, the card
+// and its button say which (the critics' round 3: both read "Link lost"),
+// while the Driver, the program and the readouts hear "linkLost" for both,
+// since nothing can reach the rover either way.
+test("a socket that never opens reads Not reachable, one that went reads Link lost; both stand down as linkLost", () => {
+  const page = loadPage();
+  const heard = listen(page);
+  page.$("host").value = "10.0.0.99";
+  page.fire(page.$("connect"), "click");
+  page.sockets[0].serverDrop();
+  check(page.$("linkChip").dataset.say === "unreachable", `said ${page.$("linkChip").dataset.say}`);
+  check(page.$("linkState").textContent === "Not reachable", `chip ${page.$("linkState").textContent}`);
+  check(page.$("connectTitle").textContent === "Not reachable", `card ${page.$("connectTitle").textContent}`);
+  check(page.$("connectGo").textContent === "Try 10.0.0.99 again", `card button ${page.$("connectGo").textContent}`);
+  check(page.$("connectGo").dataset.verb === "Try again", `its verb alone, for a narrow card: ${page.$("connectGo").dataset.verb}`);
+  check(/^Not reachable: no rover answered at 10\.0\.0\.99\./.test(page.$("linkChip").title), `chip title ${page.$("linkChip").title}`);
+  check(page.doc.body.dataset.link === "down" && heard.downs() === "linkLost", `down as ${heard.downs()}`);
+  page.fire(page.$("connectGo"), "click"); // Try again is a press of Connect
+  check(page.sockets.length === 2 && page.sockets[1].url === "ws://10.0.0.99:81", `tried again: ${page.sockets.map((w) => w.url)}`);
+  check(page.$("connectTitle").textContent === "Connecting to 10.0.0.99…", `card ${page.$("connectTitle").textContent}`);
+  check(page.$("connectGo").textContent === "Cancel", `card button ${page.$("connectGo").textContent}`);
+  page.sockets[1].serverOpen();
+  page.evalIn("__downs.length = 0");
+  page.sockets[1].serverDrop();
+  check(page.$("linkChip").dataset.say === "lost" && page.$("linkState").textContent === "Link lost", `chip ${page.$("linkState").textContent}`);
+  check(page.$("connectTitle").textContent === "Link lost" && page.$("connectGo").textContent === "Reconnect to 10.0.0.99", `card ${page.$("connectTitle").textContent} / ${page.$("connectGo").textContent}`);
+  // Another address typed since is no reconnect: the card says where a
+  // press goes, at once (the reviewers' round 2: "Reconnect" went to an
+  // address typed since, unseen).
+  page.$("host").value = "10.9.9.9";
+  page.fire(page.$("host"), "input");
+  check(page.$("connectGo").textContent === "Connect to 10.9.9.9" && page.$("connectGo").dataset.verb === "Connect" && page.$("connectHost").textContent === "10.9.9.9", `typed: ${page.$("connectGo").textContent} | ${page.$("connectHost").textContent}`);
+  page.$("host").value = "10.0.0.99";
+  page.fire(page.$("host"), "input");
+  check(page.$("connectGo").textContent === "Reconnect to 10.0.0.99", `typed back: ${page.$("connectGo").textContent}`);
+  check(heard.downs() === "linkLost", `down as ${heard.downs()}`);
+  page.fire(page.$("connect"), "click");
+  page.fire(page.$("connect"), "click"); // Cancel: a deliberate disconnect
+  check(page.$("linkChip").dataset.say === "down" && page.$("linkState").textContent === "Not connected", `chip ${page.$("linkState").textContent}`);
+  check(page.$("connectTitle").textContent === "Not connected" && page.$("connectGo").textContent === "Connect to 10.0.0.99", `card ${page.$("connectTitle").textContent} / ${page.$("connectGo").textContent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The chip says the link's state in one word at every width, never what a
+// press would do ("Connect" read as a button and as a state at once): the
+// critics' round 3. Each state has its word, and every word has a sizer in
+// the chip's slot, so a change of state moves nothing.
+test("the chip names each state in its own word, never a verb", () => {
+  const page = loadPage();
+  const said = () => page.$("linkState").textContent;
+  const sizers = page.$("linkChip").querySelectorAll(".chipSizer").map((each) => each.textContent);
+  const words = Object.values(page.evalIn("Link.LABEL"));
+  check(new Set(words).size === words.length, `one word per state: ${words}`);
+  check(words.every((word) => sizers.includes(word)), `a sizer for each: ${sizers}`);
+  check(words.every((word) => !/^(Connect|Reconnect|Disconnect|Cancel)$/.test(word)), `no verbs: ${words}`);
+  check(said() === "Not connected", `at load ${said()}`);
+  const ws = connectOpen(page);
+  check(said() === "Connected", `open ${said()}`);
+  ws.serverMsg(telemetry());
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(said() === "No data", `stale ${said()}`);
+  check(page.$("linkChip").querySelector(".caret") !== null, "the caret is always there");
+});
+
+// With no socket, the chip, the card and its button name the address a
+// press of Connect will use, the field's, whatever a socket that has gone
+// was opened to (the critics' round 3: "Connect to" the old address).
+test("once the socket goes, the card names the field's address, not the old link's", () => {
+  for (const [how, end] of [["Disconnect", (page) => page.fire(page.$("connect"), "click")], ["a dropped link", (page, ws) => ws.serverDrop()]]) {
+    const page = loadPage();
+    page.$("host").value = "10.0.0.7";
+    page.fire(page.$("connect"), "click");
+    const ws = page.sockets[0];
+    ws.serverOpen();
+    ws.serverMsg(telemetry());
+    page.$("host").value = "10.0.0.8";
+    page.fire(page.$("host"), "input");
+    check(/10\.0\.0\.7/.test(page.$("linkChip").title), `${how}: while up the chip names the link's own: ${page.$("linkChip").title}`);
+    end(page, ws);
+    const go = page.$("connectGo");
+    check(/10\.0\.0\.8/.test(go.textContent + go.title) && !/10\.0\.0\.7/.test(go.textContent + go.title), `${how}: card button ${go.textContent} / ${go.title}`);
+    check(/10\.0\.0\.8/.test(page.$("linkChip").title) && !/10\.0\.0\.7/.test(page.$("linkChip").title), `${how}: chip title ${page.$("linkChip").title}`);
+    page.fire(go, "click");
+    check(page.sockets[1].url === "ws://10.0.0.8:81", `${how}: connected to ${page.sockets[1].url}`);
+    check(page.$("connectTitle").textContent === "Connecting to 10.0.0.8…", `${how}: card ${page.$("connectTitle").textContent}`);
+  }
 });
 
 test("link lost while driving: repeat ends, inputs forgotten", () => {
@@ -679,15 +771,22 @@ test("telemetry: five wedges coloured by STOP/GO, no echo faded at full reach", 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A halt reads as what it is, alone, in amber: "Halted: boxed in", its
+// "Phase" caption out of sight (the critic's round 3: "CRUISE: boxed in"
+// read as a cruise).
 test("phase readout: autonomous only, halt reason shown", () => {
   const { page, ws } = connected(telemetry({ phase: "CRUISE" }));
   check(!page.$("phaseCell").hidden && page.$("phase").textContent === "CRUISE", page.$("phase").textContent);
+  check(page.$("phaseCell").dataset.halted === "no" && page.$("phaseCell").title === "Exploration phase", "a phase, captioned");
   check(page.$("auto").getAttribute("aria-pressed") === "true", "auto pressed");
   ws.serverMsg(telemetry({ phase: "HALTED", halt: "boxed in" }));
-  check(page.$("phase").textContent === "HALTED: boxed in", page.$("phase").textContent);
+  check(page.$("phase").textContent === "Halted: boxed in", page.$("phase").textContent);
   check(page.$("phase").dataset.tone === "warn", "halt tone");
-  ws.serverMsg(telemetry({ phase: "HALTED", halt: "sensor silent" }));
-  check(page.$("phase").textContent === "HALTED: sensor silent", page.$("phase").textContent);
+  check(page.$("phaseCell").dataset.halted === "yes" && /halted/.test(page.$("phaseCell").title), `the halt's own words, titled: ${page.$("phaseCell").title}`);
+  ws.serverMsg(telemetry({ phase: "CRUISE", halt: "sensor silent" }));
+  check(page.$("phase").textContent === "Halted: sensor silent", `a halt whatever the phase says: ${page.$("phase").textContent}`);
+  const caption = cssRules(panelCss()).find((r) => r.selector === '#phaseCell[data-halted="yes"] .label');
+  check(caption && /clip-path:\s*inset\(50%\)/.test(caption.body), "the halt's caption out of sight, still read");
   ws.serverMsg(telemetry({ mode: "MANUAL", move: "MOVE_FORWARD" }));
   check(page.$("phaseCell").hidden === true, "hidden in manual");
   check(page.$("auto").getAttribute("aria-pressed") === "false", "auto not pressed");
@@ -717,7 +816,7 @@ test("telemetry: the page shows every frame in test/vectors/telemetry.json", () 
     check(page.$("phaseCell").hidden === !exploring, `${name}: the phase shown only while exploring`);
     if ("phase" in frame) {
       const phase = page.$("phase");
-      check(phase.textContent === (frame.halt ? `${frame.phase}: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
+      check(phase.textContent === (frame.halt ? `Halted: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
       check(phase.dataset.tone === (frame.halt ? "warn" : ""), `${name}: phase tone '${phase.dataset.tone}'`);
     }
     check(page.$("move").textContent === frame.move, `${name}: move ${page.$("move").textContent}`);
@@ -734,7 +833,7 @@ test("telemetry: the page shows every frame in test/vectors/telemetry.json", () 
   }
 });
 
-test("Stop always sends STOP; Autonomous sends only RESUME and ends the repeat", () => {
+test("Stop always sends STOP; the Autonomous toggle sends RESUME when off and STOP when on, and ends the repeat", () => {
   const { page, ws } = connected(telemetry());
   page.fire(page.$("stop"), "click");
   check(names(ws).join() === "STOP", `idle stop ${names(ws)}`);
@@ -748,12 +847,134 @@ test("Stop always sends STOP; Autonomous sends only RESUME and ends the repeat",
   lift(page, page.$("cw"), 4);
   check(count(ws) === mark, "later release sends nothing");
 
+  // Off, the rover in manual: RESUME_AUTONOMOUS alone, the stick let go.
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(page.$("auto").getAttribute("aria-pressed") === "false", "off");
   const s = stickTouch(page, 0);
   s.start(); s.move(0, -50);
   mark = count(ws);
   page.fire(page.$("auto"), "click");
   page.clock.advance(1000);
-  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `auto ${names(ws, mark)}`);
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `auto off: ${names(ws, mark)}`);
+  check(page.$("auto").getAttribute("aria-pressed") === "false", "lit only once the rover reports it");
+
+  // On, the rover exploring: STOP alone, a held rotate button let go.
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(page.$("auto").getAttribute("aria-pressed") === "true", "on");
+  press(page, page.$("cw"), 5);
+  mark = count(ws);
+  page.fire(page.$("auto"), "click");
+  page.clock.advance(1000);
+  check(names(ws, mark).join() === "STOP", `auto on: ${names(ws, mark)}`);
+  check(page.$("cw").dataset.held === undefined, "unlit");
+});
+
+// A press of Autonomous on the rover is a request only a frame confirms,
+// up to half a second later: a second press meanwhile, to undo the first,
+// went by the old report and sent RESUME_AUTONOMOUS again, leaving the
+// rover exploring (the reviewers' round 2); from on, going the other way
+// from the request did the same (round 3). A press while one is pending
+// sends STOP, whichever way it went: the safe direction.
+test("Autonomous: a press waits, marked, for a frame, and a press while one waits sends STOP: two quick presses end stopped, from off or on", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  const auto = page.$("auto");
+  const pressed = () => auto.getAttribute("aria-pressed");
+  const tTwice = () => {
+    for (const type of ["keydown", "keyup", "keydown", "keyup"]) page.fire(page.doc.body, type, { key: "t", repeat: false });
+  };
+  let mark = count(ws);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `the first press: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "on" && pressed() === "false", `marked pending on, still off as reported: ${auto.dataset.pending} ${pressed()}`);
+  page.clock.advance(120);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS,STOP", `a second press before a frame undoes it: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "off" && pressed() === "false", `pending off: ${auto.dataset.pending}`);
+  // A frame from before both reports MANUAL, as asked last: settled.
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(auto.dataset.pending === undefined && pressed() === "false", `settled: ${auto.dataset.pending} ${pressed()}`);
+
+  // T the same: twice before a frame ends on STOP.
+  mark = count(ws);
+  tTwice();
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS,STOP", `T twice: ${names(ws, mark)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(auto.dataset.pending === undefined, `settled again: ${auto.dataset.pending}`);
+
+  // Pending on, a frame reports it: lit, the mark gone.
+  page.fire(auto, "click");
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(auto.dataset.pending === undefined && pressed() === "true", `confirmed: ${auto.dataset.pending} ${pressed()}`);
+  // From on, two quick presses end with STOP too, never RESUME_AUTONOMOUS:
+  // the knob stays on until a frame comes, so an Off press that seems not
+  // to have taken is pressed again (the reviewers' round 3).
+  mark = count(ws);
+  page.fire(auto, "click");
+  page.clock.advance(150);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "STOP,STOP", `from on, twice: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "off" && pressed() === "true", `pending off, still on as reported: ${auto.dataset.pending} ${pressed()}`);
+  // A request the rover never takes is given up after CONFIRM_FRAMES
+  // frames that do not report it, never shown as applied meanwhile.
+  const frames = page.evalIn("AutoToggle.CONFIRM_FRAMES");
+  for (let i = 1; i <= frames; i++) {
+    ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+    check(pressed() === "true" && (i < frames ? auto.dataset.pending === "off" : auto.dataset.pending === undefined), `frame ${i} of ${frames}: ${pressed()} ${auto.dataset.pending}`);
+  }
+  // T twice from on, nothing pending: STOP and STOP.
+  mark = count(ws);
+  tTwice();
+  check(names(ws, mark).join() === "STOP,STOP" && auto.dataset.pending === "off", `T twice from on: ${names(ws, mark)} ${auto.dataset.pending}`);
+  // Any other press supersedes a request: Stop after it, then the switch
+  // goes by the report again.
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  page.fire(auto, "click");
+  page.fire(page.$("stop"), "click");
+  check(auto.dataset.pending === undefined, `Stop supersedes it: ${auto.dataset.pending}`);
+  mark = count(ws);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `then a press resumes, as the switch says: ${names(ws, mark)}`);
+  // A link that goes forgets it; the simulator is never pending.
+  ws.serverDrop();
+  check(auto.dataset.pending === undefined, "the link gone: nothing pending");
+  page.fire(page.$("target").children[1], "click");
+  page.fire(auto, "click");
+  page.fire(auto, "click");
+  check(auto.dataset.pending === undefined && pressed() === "false", `the simulator takes it at once, twice back off: ${pressed()}`);
+  // The mark is drawn: a dashed edge in the controls' blue.
+  const mark2 = cssRules(panelCss()).find((r) => r.selector === "#auto[data-pending] .track");
+  check(mark2 && /border-style:\s*dashed;/.test(mark2.body) && /border-color:\s*var\(--live\);/.test(mark2.body), `drawn dashed: ${mark2 && mark2.body}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// With no link on the rover target, Autonomous and T sent nothing and did
+// nothing anyone could see: a switch that read as broken (the reviewers'
+// round 2). They open the link's popover, saying why, and the switch's
+// title says it while the link is down.
+test("Autonomous with no link: nothing sent, the link's popover opens and says why, and the title says so", () => {
+  const page = loadPage();
+  const auto = page.$("auto");
+  check(/Needs a link to the rover/.test(auto.getAttribute("title")), `titled so while down: ${auto.getAttribute("title")}`);
+  page.fire(auto, "pointerdown");
+  page.fire(auto, "click");
+  check(page.sockets.length === 0, "nothing opened, nothing sent");
+  check(!page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "true", "the link's popover open");
+  check(/Autonomous needs the rover connected/.test(page.$("note").textContent), `its note says why: ${page.$("note").textContent}`);
+  check(auto.getAttribute("aria-pressed") === "false" && auto.dataset.pending === undefined, "the switch off, nothing pending");
+  // T the same, and with the popover open already it stays open.
+  page.fire(page.doc.body, "keydown", { key: "t", repeat: false });
+  check(!page.$("linkPanel").hidden && page.sockets.length === 0, "T: still open, nothing sent");
+  // Connecting is no link yet either.
+  page.fire(page.$("connect"), "click");
+  const ws = page.sockets[0];
+  page.fire(auto, "click");
+  check(ws.sent.length === 0 && /Needs a link/.test(auto.getAttribute("title")), "connecting: nothing sent");
+  ws.serverOpen();
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(!/Needs a link/.test(auto.getAttribute("title")), `up: the plain title: ${auto.getAttribute("title")}`);
+  page.fire(auto, "click");
+  check(names(ws).join() === "RESUME_AUTONOMOUS", `up: a press resumes: ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 test("speed slider re-speeds a held move (throttled)", () => {
@@ -806,7 +1027,7 @@ test("blocked localStorage does not stop the panel", () => {
     const page = loadPage({ storage });
     check(page.errors.length === 0, `${storage}: errors ${page.errors}`);
     check(page.$("host").value === "192.168.0.115", `${storage}: default host`);
-    check(page.$("linkState").textContent === "No link", `${storage}: initial state rendered`);
+    check(page.$("linkState").textContent === "Not connected", `${storage}: initial state rendered`);
     page.$("host").value = "10.1.1.1";
     page.fire(page.$("connect"), "click");
     check(page.sockets.length === 1 && page.sockets[0].url === "ws://10.1.1.1:81", `${storage}: connected`);
@@ -819,8 +1040,8 @@ test("blocked localStorage does not stop the panel", () => {
 
 /* --- motorsReady ----------------------------------------------------------- */
 
-// The shield warning, and its data-ready, which the header's motors pill
-// keys on: "shown/no", "hidden/yes" or "hidden/unknown".
+// The shield warning, and its data-ready, which the page's CSS keys on:
+// "shown/no", "hidden/yes" or "hidden/unknown".
 const shield = (fault) => `${fault.hidden ? "hidden" : "shown"}/${fault.dataset.ready}`;
 
 test("motorsReady: false shows the shield warning; missing or true does not", () => {
@@ -829,7 +1050,11 @@ test("motorsReady: false shows the shield warning; missing or true does not", ()
   check(fault !== null, "#motorsFault exists");
   check(shield(fault) === "hidden/unknown", `at load: ${shield(fault)}`);
   check(fault.getAttribute("role") === "alert", "announced as an alert");
-  check(/Motor shield not found/.test(fault.children.map((c) => c.textContent).join(" ")), "says what is wrong");
+  // One line says what is wrong; what to do is a press away (a disclosure,
+  // closed): four lines of it took the scan's height on a phone.
+  const said = fault.children.filter((c) => c.tagName && c.tagName !== "#TEXT");
+  check(fault.tagName === "DETAILS" && !fault.hasAttribute("open") && said[0].tagName === "SUMMARY" && /^No motor shield: the wheels can't move$/.test(all(said[0]).map((n) => n.textContent || "").join("").trim()), `says what is wrong in a line: ${said.map((c) => c.tagName)}`);
+  check(said[1] && /I2C wiring and\s+power/.test(said[1].textContent) && /wheels off the ground/.test(said[1].textContent), "and what to do, behind it");
 
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ motorsReady: undefined })); // no motorsReady key at all: older firmware
@@ -928,46 +1153,97 @@ test("a new link starts the scan and readouts from nothing; a link that went kee
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The right column is the rover's at all times (F3c): with nothing to show
-// yet it says so, in its own place and at its full size, rather than look
-// broken. Only before a frame: a link that goes leaves its scan, dimmed.
-test("the scan says no rover is connected until the first frame, and not after a link goes", () => {
+// The view is the rover's while it is the target (F3c, F8): with no link it
+// says so and offers the next thing to do, over the faint fan, in its own
+// place and at its full size, rather than look broken. The scan itself
+// still knows when it has nothing to draw: a link that goes leaves its
+// scan, dimmed, as history.
+test("the scan: a connect card over it while no link is up, and the scan empty until the first frame", () => {
   const page = loadPage();
   const empty = () => page.$("scan").dataset.empty;
+  const go = page.$("connectGo");
   check(empty() === "yes", `at load: ${empty()}`);
+  check(go.textContent === "Connect to 192.168.0.115" && /192\.168\.0\.115/.test(go.title), `the card names the address: ${go.textContent} | ${go.title}`);
+  // The card's button is a press of Connect, whatever Connect does now.
+  page.fire(go, "click");
+  check(page.sockets.length === 1 && page.doc.body.dataset.link === "connecting", "a press connects");
+  check(go.textContent === "Cancel", `connecting, it cancels: ${go.textContent}`);
+  page.fire(go, "click");
+  check(page.doc.body.dataset.link === "down" && go.textContent === "Connect to 192.168.0.115", `cancelled: ${go.textContent}`);
   let ws = connectOpen(page);
   check(empty() === "yes", "up, before a frame: still nothing to draw");
   ws.serverMsg(FRAMES.manualBeforeScan);
   check(empty() === "no", "a frame without distances is a frame: the rover is there");
   ws.serverDrop();
   check(page.doc.body.dataset.link === "down" && empty() === "no", "gone: its last scan stays, as history");
+  check(go.textContent === "Reconnect to 10.0.0.7" && /again/.test(go.title), `after a lost link: ${go.textContent} | ${go.title}`);
   ws = connectOpen(page);
   check(empty() === "yes", "a new link starts from nothing");
   ws.serverMsg(telemetry({ distanceFront: 80 }));
   check(empty() === "no", "until its first frame");
   page.fire(page.$("host"), "keydown", { key: "Enter" });
   check(page.doc.body.dataset.link === "connecting" && empty() === "yes", "replaced: nothing again");
+  page.fire(page.$("connect"), "click");
+  // The card names the address Connect would use: the field's, as typed.
+  page.$("host").value = "rover.local";
+  page.fire(page.$("host"), "input");
+  check(go.textContent === "Connect to rover.local", `the field's address: ${go.textContent}`);
 
-  // panel.css shows the words while the scan is empty and no link is up:
-  // with a link up and its first frame still to come, the pill says so.
-  const shown = cssRules(panelCss()).filter((r) => /\.scanEmpty\b/.test(r.selector) && /display:\s*block/.test(r.body));
+  // Change address opens the link's popover, as the chip does, with the
+  // focus in the address; pressed with it open, it leaves it open.
+  check(page.$("linkPanel").hidden, "the popover closed");
+  for (let i = 0; i < 2; i++) {
+    page.fire(page.$("changeAddress"), "pointerdown");
+    page.fire(page.$("changeAddress"), "click");
+    check(!page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "true", `open (${i})`);
+    check(page.doc.activeElement === page.$("host"), `the focus in the address (${i})`);
+  }
+
+  // panel.css shows the card while no link is up, on either tab: with a
+  // link up and its first frame still to come, the link chip says so.
+  const shown = cssRules(panelCss()).filter((r) => /\.connectCard\b/.test(r.selector) && /display:\s*grid/.test(r.body));
   check(shown.length === 1, `one rule shows it: ${shown.map((r) => r.selector)}`);
   const selector = shown.length ? shown[0].selector : "";
-  check(/#scan\[data-empty="yes"\]/.test(selector), `only while empty: ${selector}`);
   const states = (selector.match(/data-link="(\w+)"/g) || []).map((m) => m.slice(11, -1)).sort().join();
   check(states === "connecting,down", `only with no link up: ${states}`);
-  // One cell the card's own size: an auto row, sized by the hidden words
-  // in a small card, let the fan spill out of it.
+  check(!/data-tab|tabpanel|#(drive|program)Tab/.test(selector), `on either tab: ${selector}`);
+  // The card and the fan share one cell that takes what the legend's row
+  // leaves: an auto row sized by the card, in a small scan, let the fan
+  // spill out of it. The auto row is the rings' legend's, and the fault's
+  // in its place while there is one, the legend keeping its height under
+  // it: in a row of its own the fault took the fan's height, readings down
+  // to 9 px on a phone (the review's phones 1).
   const card = cssRules(panelCss()).find((r) => r.selector === ".scan" && /grid-template:/.test(r.body));
-  check(card && /grid-template:\s*minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
-  const own = cssRules(panelCss()).find((r) => r.selector === ".scanEmpty");
+  check(card && /grid-template:\s*auto minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
+  const cell = (selector) => cssRules(panelCss()).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/grid-area:\s*2 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > :is(.fault, .scanLegend)")) && /visibility:\s*hidden/.test(cell(".scan:has(> .fault:not([hidden])) > .scanLegend")), `the card and the fan in the cell, the fault in the legend's place over them: ${cell(".scan > *")} | ${cell(".scan > :is(.fault, .scanLegend)")}`);
+  const px = (selector, prop) => Number((cell(selector).match(new RegExp(`${prop}:\\s*(\\d+)px`)) || [])[1]);
+  check(px(".fault summary", "height") + 2 === px(".scanLegend", "line-height") && /padding:\s*0 /.test(cell(".fault")), `the fault closed the legend's height, its edge included: ${px(".fault summary", "height")} + 2 vs ${px(".scanLegend", "line-height")}`);
+  const own = cssRules(panelCss()).find((r) => r.selector === ".connectCard");
   check(own && /display:\s*none/.test(own.body), "otherwise not shown");
-  check(page.$("scan").parentNode.querySelectorAll(".scanEmpty").length === 1, "in the scan's own card");
-  // The rule reaches the words only as the scan's next sibling.
-  check(/#scan\[data-empty="yes"\]\s*\+\s*\.scanEmpty$/.test(selector), `the words right after the scan: ${selector}`);
-  const cardKids = page.$("scan").parentNode.children;
-  const next = cardKids[cardKids.indexOf(page.$("scan")) + 1];
-  check(next && /\bscanEmpty\b/.test(next.getAttribute("class") || ""), "and so they are, in the page");
+  // On a layer over the fan, whatever fades the fan: an opacity on the
+  // SVG made it a stacking context that painted over the unpositioned card
+  // and took every press of Connect (the reviewers' round 2).
+  check(own && /position:\s*relative;/.test(own.body) && /z-index:\s*[1-9]\d*;/.test(own.body), `the card on a layer of its own: ${own && own.body}`);
+  const cardRules = cssRules(panelCss()).filter((r) => /\.connectCard\b/.test(r.selector));
+  check(!cardRules.some((r) => /position:\s*static|z-index:\s*(auto|0|-)/.test(r.body)), `no rule takes the card off its layer: ${cardRules.filter((r) => /position|z-index/.test(r.body)).map((r) => r.selector)}`);
+  // Under the card, with no link and no scan from one, the whole fan is
+  // faint, its rings included, and nothing in it reads: no bearing's name
+  // or reading stuck out at the card's corners (the critic's round 3).
+  // The legend keeps its row, unseen, so the first frame moves nothing.
+  // A link that went keeps its last scan, dimmed, legible, as history.
+  const faint = (selector) => cssRules(panelCss()).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/opacity:\s*0\.3\d?;/.test(faint('body:not([data-link="up"]) #scan[data-empty="yes"]')), `the empty fan faint: ${faint('body:not([data-link="up"]) #scan[data-empty="yes"]')}`);
+  check(/display:\s*none/.test(faint('body:not([data-link="up"]) #scan[data-empty="yes"] :is(.tick, .reading)')), "its names and its readings' dashes out of sight");
+  check(/visibility:\s*hidden/.test(faint('body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend')), "the legend out of sight, keeping its place");
+  check(/opacity:\s*0\.25/.test(faint('body:not([data-link="up"]) .wedge')) && /fill:\s*var\(--dim\)/.test(faint('body:not([data-link="up"]) .reading')), "a lost link's last scan dimmed, its readings still there");
+  // Its stop and go rings grey with it, their dashes kept: in red and
+  // amber over a greyed fan they were the loudest things in the view (the
+  // review's laptops 7). The legend's swatches keep their colours.
+  const rings = faint('body:not([data-link="up"]) #scan .ring:is(.go, .stop)');
+  check(/stroke:\s*var\(--dim\)/.test(rings) && !/stroke-dasharray/.test(rings), `a lost link's rings grey, dashed still: ${rings}`);
+  check(page.$("scan").parentNode.querySelectorAll(".connectCard").length === 1, "in the scan's own card");
+  check(page.$("connectGo").title && page.$("changeAddress").getAttribute("title"), "both its buttons titled");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -992,9 +1268,15 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   const g = (n) => page.evalIn(n);
   const [CX, CY, RMIN, RMAX, HW] = ["CX", "CY", "R_MIN", "R_MAX", "HALF_WIDTH"].map((n) => g(`ScanView.${n}`));
   const [W, H] = [g("ScanView.VIEW_W"), g("ScanView.VIEW_H")];
-  check(page.$("scan").getAttribute("viewBox") === `0 0 ${W} ${H}`, "viewBox set");
-  const nodes = all(page.$("scan"));
-  const rings = nodes.filter((n) => /^ring/.test(n.getAttribute("class") || ""));
+  const [TX, TW] = [g("ScanView.TALL_X"), g("ScanView.TALL_W")];
+  const svg = page.$("scan");
+  check(svg.getAttribute("viewBox") === `0 0 ${W} ${H}` && svg.dataset.layout === "wide", "viewBox set, wide until measured");
+  const nodes = all(svg);
+  // The rings' legend is the card's, one line in its corner, not the
+  // drawing's: in the fan's corner it floated with the fan.
+  check(!nodes.some((n) => /scanLegend/.test(n.getAttribute("class") || "")), "no legend in the drawing");
+  const fan = nodes;
+  const rings = fan.filter((n) => /^ring/.test(n.getAttribute("class") || ""));
   const radii = rings.map((n) => Number(n.getAttribute("d").match(/A([\d.]+)/)[1]));
   const want = [g("ScanView.RANGE_CM"), 100, g("GO_CM"), g("STOP_CM")].map((cm) => page.evalIn(`ScanView.radiusFor(${cm})`));
   check(radii.length === 4 && radii.every((r, i) => Math.abs(r - want[i]) < 0.06), `ring radii ${radii} vs ${want}`);
@@ -1019,23 +1301,11 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
     check(y0 < CY && y1 < CY, "ring above the baseline");
   }
 
-  // Text boxes (worst-case strings) must stay inside the view, off every wedge's
-  // largest possible sector, and off each other.
-  const texts = nodes.filter((n) => n.tagName === "TEXT");
-  const boxes = texts.map((n) => {
-    const cls = n.getAttribute("class");
-    const big = cls === "reading";
-    const str = big ? "no echo" : n.textContent;
-    const w = str.length * (big ? 9.0 : 6.8);
-    const x = Number(n.getAttribute("x"));
-    const y = Number(n.getAttribute("y"));
-    const a = n.getAttribute("text-anchor");
-    const x0 = a === "end" ? x - w : a === "start" ? x : x - w / 2;
-    return { str, x0, x1: x0 + w, y0: y - (big ? 11 : 7), y1: y + (big ? 3 : 1) };
-  });
-  check(texts.every((n) => n.getAttribute("text-anchor")), "every label anchored");
-  for (const b of boxes) {
-    check(b.x0 >= 0 && b.x1 <= W && b.y0 >= 0 && b.y1 <= H, `'${b.str}' inside view: ${JSON.stringify(b)}`);
+  // In either layout, text boxes (worst-case strings, at the size each
+  // label is drawn in units at that scale) must stay inside the view, off
+  // every wedge's largest possible sector, and off each other.
+  const texts = fan.filter((n) => n.tagName === "TEXT");
+  const sector = (b) => {
     let hits = 0;
     for (let x = b.x0; x <= b.x1; x += 0.5) {
       for (let y = b.y0; y <= b.y1; y += 0.5) {
@@ -1045,18 +1315,136 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
         for (const brg of g("BEARINGS")) if (Math.abs(ang - (90 + brg.bearing)) <= HW) hits++;
       }
     }
-    check(hits === 0, `'${b.str}' overlaps a wedge (${hits} samples)`);
-  }
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const p = boxes[i], q = boxes[j];
-      const overlap = p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
-      check(!overlap, `'${p.str}' overlaps '${q.str}'`);
+    return hits;
+  };
+  // The legend: one line of the card's, each ring's dashes before its
+  // distance, with its unit, and what it means, the stop ring first.
+  const legend = svg.parentNode.querySelectorAll(".scanLegend")[0];
+  check(legend && legend.parentNode === svg.parentNode, "the legend in the scan's card");
+  const items = legend ? legend.children : [];
+  const words = items.map((item) => item.children.filter((n) => n.tagName === "SPAN").map((n) => n.textContent).join(""));
+  check(words.join(",") === `${g("STOP_CM")} cm stop,${g("GO_CM")} cm go,100 cm`, `the legend, the stop ring first: ${words}`);
+  const swatches = items.map((item) => all(item).filter((n) => n.tagName === "PATH").map((n) => n.getAttribute("class")).join());
+  check(swatches.join("|") === "ring stop|ring go|ring", `each ring's own dashes: ${swatches.join("|")}`);
+  check(items.map((item) => item.getAttribute("class")).join() === "legendItem stop,legendItem go,legendItem far", `the items by ring: ${items.map((item) => item.getAttribute("class"))}`);
+  check(legend && legend.getAttribute("aria-hidden") === "true", "the legend is decoration: the rings' meaning is in the fan's title and the readings");
+  // The type's sizes in units at a scale: the drawing's own, capped on
+  // screen (panel.css, mirrored in ScanView for the names' places).
+  const [RS, RMAXPX] = [g("ScanView.READING_UNITS"), g("ScanView.READING_MAX_PX")];
+  const rootVar = (name) => Number((panelCss().match(new RegExp(`${name}:\\s*([\\d.]+)px;`)) || [])[1]);
+  check(RS === rootVar("--scan-reading"), `ScanView's reading size is panel.css's: ${RS} vs ${rootVar("--scan-reading")}`);
+  check(new RegExp(`calc\\(${RMAXPX}px / var\\(--scan-k, 1\\)\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `and its cap: ${RMAXPX}px`);
+  const TS = rootVar("--scan-tick");
+  for (const [layout, x0, x1, shape] of [["wide", 0, W, (k) => [W * k, H * k * 1.02]], ["tall", TX, TX + TW, (k) => [TW * k, H * k * 1.5]]]) {
+    // From where no reading fits at 12 px, past where the names show, to
+    // three times the drawing's size.
+    for (const k of [0.4, 0.5, 0.55, 0.6, 0.72, 0.79, 0.8, 0.9, 1.2, 2, 3.2]) {
+      page.evalIn(`scanView.fit(${shape(k).join(", ")})`);
+      check(svg.dataset.layout === layout, `${layout} at ${k}: ${svg.dataset.layout}`);
+      check(svg.getAttribute("viewBox") === `${x0} 0 ${x1 - x0} ${H}`, `${layout}: its box: ${svg.getAttribute("viewBox")}`);
+      check(svg.style.getPropertyValue("--scan-k") === k.toFixed(3), `${layout} at ${k}: --scan-k ${svg.style.getPropertyValue("--scan-k")}`);
+      // A reading 12 px on screen at least, as a name is (the review's
+      // phones 1: 8 to 10 px on a phone), as panel.css draws it.
+      const RP = g("ScanView.READING_MIN_PX");
+      check(RP === 12 && new RegExp(`max\\(calc\\(${RP}px / var\\(--scan-k, 1\\)\\), min\\(var\\(--scan-reading\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `a reading's floor: ${RP} px`);
+      const rs = Math.max(RP / k, Math.min(RS, RMAXPX / k)) / RS;
+      // A name 12 px on screen at least (ScanView.TICK_PX), so it shows
+      // only where 12 px takes no more units than a reading.
+      const TP = g("ScanView.TICK_PX");
+      const ts = Math.max(TP / k, Math.min(TS, 14 / k)) / TS;
+      const labels = svg.dataset.labels;
+      const names = labels === "all";
+      check(names === (TP / k <= RS) && ["all", "readings", "front", "none"].includes(labels), `${layout} at ${k}: names shown only at ${TP} px or more: ${labels}`);
+      check(!names || ts * TS * k >= TP - 1e-9, `${layout} at ${k}: a name ${ts * TS * k} px on screen`);
+      check(rs * RS * k >= RP - 1e-9, `${layout} at ${k}: a reading ${rs * RS * k} px on screen`);
+      // Where the five do not fit at 12 px, the side ones go first, and
+      // only then the front three: never all of them while three fit, nor
+      // the side ones while five do (the boxes below hold whatever shows).
+      const outer = texts.filter((n) => n.getAttribute("data-outer") === "yes");
+      check(outer.length === 2 && outer.every((n) => n.getAttribute("class") === "reading"), "L and R marked, which go first");
+      if (k >= 0.6) check(labels === "all" || labels === "readings", `${layout} at ${k}: all five readings at 12 px: ${labels}`);
+      if (k >= 0.55 || (layout === "wide" && k >= 0.45)) check(labels !== "none", `${layout} at ${k}: the front three at least: ${labels}`);
+      const shown = (n) => n.getAttribute("class") === "reading" ? labels !== "none" && (labels !== "front" || n.getAttribute("data-outer") !== "yes") : names;
+      const boxes = texts.filter(shown).map((n) => {
+        const big = n.getAttribute("class") === "reading";
+        const str = big ? "no echo" : n.textContent;
+        const em = big ? rs : ts;
+        const tw = str.length * (big ? 9.0 : 6.8) * em;
+        const x = Number(n.getAttribute("x"));
+        const y = Number(n.getAttribute("y"));
+        const a = n.getAttribute("text-anchor");
+        const left = a === "end" ? x - tw : a === "start" ? x : x - tw / 2;
+        return { str, x0: left, x1: left + tw, y0: y - (big ? 11 : 7) * em, y1: y + (big ? 3 : 1) * em };
+      });
+      check(texts.every((n) => n.getAttribute("text-anchor")), `${layout}: every label anchored`);
+      for (const b of boxes) {
+        check(b.x0 >= x0 && b.x1 <= x1 && b.y0 >= 0 && b.y1 <= H, `${layout} at ${k}: '${b.str}' inside view: ${JSON.stringify(b)}`);
+        const hits = sector(b);
+        check(hits === 0, `${layout} at ${k}: '${b.str}' overlaps a wedge (${hits} samples)`);
+      }
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const p = boxes[i], q = boxes[j];
+          const overlap = p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+          check(!overlap, `${layout} at ${k}: '${p.str}' overlaps '${q.str}'`);
+        }
+      }
+      // A name sits right over its reading, wherever the names show.
+      if (names) for (const b of scanBearings(page)) {
+        const label = texts.find((n) => n !== b.reading && n.getAttribute("x") === b.reading.getAttribute("x") && n.getAttribute("class") === "tick");
+        const gap = label && Number(b.reading.getAttribute("y")) - Number(label.getAttribute("y"));
+        check(label && gap > 0 && gap <= RS * rs + 2.1, `${layout} at ${k}: ${b.key}'s name over its reading: ${gap}`);
+      }
     }
   }
+  // A box with no size (the view hidden) changes nothing.
+  page.evalIn("scanView.fit(0, 0)");
+  check(svg.dataset.layout === "tall", "an unmeasured box keeps the layout");
   const tickTexts = texts.filter((n) => n.getAttribute("class").startsWith("tick")).map((n) => n.textContent);
-  check(["100", "40 GO", "25 STOP", "L", "FL", "F", "FR", "R"].every((t) => tickTexts.includes(t)), `ticks ${tickTexts}`);
+  check(["L", "FL", "F", "FR", "R"].every((t) => tickTexts.includes(t)) && tickTexts.length === 5, `ticks ${tickTexts}`);
   check(!tickTexts.some((t) => /°/.test(t)), "no servo-angle ticks");
+});
+
+// The fan fits its box as the box changes: the layout that draws it larger,
+// tall wherever the box is squarer than the wide one's shape by a tenth, so
+// a box sized to the wide layout (the Program tab's view) never flips; and
+// labels that would be a smudge go.
+test("scan fit: the larger layout for the box, measured as it changes, and smudged labels gone", () => {
+  const page = loadPage({ frames: true });
+  const svg = page.$("scan");
+  check(svg.resizeObserved, "the fan's box observed");
+  const fitTo = (w, h) => {
+    svg.clientWidth = w;
+    svg.clientHeight = h;
+    page.resized();
+  };
+  fitTo(712, 488);
+  check(svg.dataset.layout === "tall" && svg.style.getPropertyValue("--scan-k") === (712 / 304).toFixed(3), `an iPad's pane: tall: ${svg.dataset.layout} ${svg.style.getPropertyValue("--scan-k")}`);
+  fitTo(470, 228);
+  check(svg.dataset.layout === "wide", `a box the wide layout's shape: wide: ${svg.dataset.layout}`);
+  fitTo(400, 200);
+  check(svg.dataset.layout === "wide", `a box 2:1: still wide: ${svg.dataset.layout}`);
+  fitTo(380, 200);
+  check(svg.dataset.layout === "tall", `squarer by more than a tenth: tall: ${svg.dataset.layout}`);
+  const labels = (w, h) => {
+    fitTo(w, h);
+    return svg.dataset.labels;
+  };
+  check(labels(350, 393) === "all" && labels(180, 120) === "readings" && labels(210, 100) === "front" && labels(100, 80) === "none", "the bearings' names go first, then the side readings, then the rest");
+  const css = panelCss();
+  const hides = cssRules(css).filter((r) => /#scan\[data-labels/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector).join(" ");
+  check(/#scan:is\(\[data-labels="readings"\], \[data-labels="front"\]\) \.tick/.test(hides) && /#scan\[data-labels="front"\] \.reading\[data-outer="yes"\]/.test(hides) && /data-labels="none"\] :is\(\.tick, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
+  // Never larger on screen than a reading or a name needs, whatever the
+  // fan's scale, and a name never under 12 px; the legend at the page's
+  // smallest type, in the dim ink, never over the fan or taking a press.
+  const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/font-size:\s*max\(calc\(12px \/ var\(--scan-k, 1\)\), min\(var\(--scan-reading\), calc\(28px \/ var\(--scan-k, 1\)\)\)\);/.test(rule(".reading")), `readings capped, and floored at 12 px: ${rule(".reading")}`);
+  check(/font-size:\s*max\(calc\(12px \/ var\(--scan-k, 1\)\), min\(var\(--scan-tick\), calc\(14px \/ var\(--scan-k, 1\)\)\)\);/.test(rule(".tick")), `names capped, and floored at 12 px: ${rule(".tick")}`);
+  check(page.evalIn("ScanView.TICK_PX") === 12, "the floor scan.js lays the names out for");
+  const legend = rule(".scanLegend");
+  check(/font-size:\s*var\(--t-sm\);/.test(legend) && /color:\s*var\(--dim\);/.test(legend) && /white-space:\s*nowrap;/.test(legend) && /pointer-events:\s*none;/.test(legend) && /justify-self:\s*start;/.test(legend), `the legend quiet, one line, in the corner: ${legend}`);
+  check(/width:\s*20px;/.test(rule(".legendSwatch")), `its dashes long enough to tell apart: ${rule(".legendSwatch")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 function arcCentre(x1, y1, x2, y2, r, sweep) {
@@ -1426,10 +1814,13 @@ test("tabs: switching leaves a held control driving, and Stop and Autonomous on 
   page.fire(page.$("stop"), "click"); // from the Program tab
   check(names(ws, mark).join() === "STOP", `Stop on the Program tab ${names(ws, mark)}`);
 
-  // The scheme toggle sits outside the tabs, in the header; both sticks,
-  // and the family selector that belongs to the pivot stick, on the Drive
-  // tab.
-  check(page.$("schemeSlot") !== null && !inside("schemeSlot", "driveTab") && !inside("schemeSlot", "programTab"), "#schemeSlot outside the tabs");
+  // The scheme toggle sits outside the tabs, in the header's cell beside
+  // them, as Stop does; both sticks, and the family selector that belongs to
+  // the pivot stick, on the Drive tab.
+  const bar = page.doc.documentElement.querySelector(".bar");
+  for (const id of ["scheme", "stop", "auto", "target", "linkChip"]) {
+    check(page.$(id) !== null && bar && all(bar).includes(page.$(id)) && !inside(id, "driveTab") && !inside(id, "programTab"), `#${id} in the header, outside the tabs`);
+  }
   for (const id of ["family", "movePad", "pivotPad"]) check(page.$(id) !== null && inside(id, "driveTab"), `#${id} on the Drive tab`);
   check(page.$("programTab").tagName === "SECTION", "#programTab is a section");
 });
@@ -2075,27 +2466,38 @@ test("schemes: scheme.js and family.js load after what they use, before app.js",
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("schemes: the toggle is disabled and unknown until telemetry names a scheme", () => {
+// Unknown is not broken: the owner read a greyed toggle with no rover as
+// a fault (docs/features.md, F8). So both segments take a press, and a press
+// is a wish the next frame that names a scheme settles; until then nothing
+// is pressed, nothing is sent, and the pivots stay off.
+test("schemes: until telemetry names a scheme nothing is pressed, both segments take a wish, and nothing is sent", () => {
   const page = loadPage();
   const group = page.$("scheme");
   const unknown = (when) => {
     check(shownScheme(page) === "unknown", `${when}: shows ${shownScheme(page)}`);
-    check(SCHEMES.every((s) => schemeButton(page, s).disabled === true), `${when}: both disabled`);
+    check(SCHEMES.every((s) => schemeButton(page, s).disabled === false), `${when}: both take a press`);
     check(group.dataset.state === "unknown", `${when}: state ${group.dataset.state}`);
+    check(page.evalIn("schemeToggle.scheme") === null, `${when}: no scheme, a wish is not one`);
     check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT", `${when}: pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
   };
   check(SCHEMES.every((s) => schemeButton(page, s) !== undefined), "two segments built");
   unknown("at load");
+  check(/has not reported its control scheme/.test(schemeButton(page, "NORMAL").title), `the segments say why neither is lit: ${schemeButton(page, "NORMAL").title}`);
 
   const ws = connectOpen(page);
   unknown("connected, no telemetry yet");
-  // Firmware from before schemes, a scheme this panel does not know, junk.
+  // Firmware from before schemes, a scheme this panel does not know, junk:
+  // a wish waits through each, and is replaced or dropped as pressed.
   for (const scheme of [undefined, "EXPERT", "advanced", 1, null, { name: "ADVANCED" }]) {
     ws.serverMsg(telemetry({ scheme }));
     unknown(`scheme ${JSON.stringify(scheme)}`);
     for (const s of SCHEMES) page.fire(schemeButton(page, s), "click");
+    check(page.evalIn("schemeToggle.wanted") === "ADVANCED" && pendingScheme(page) === "ADVANCED", `scheme ${JSON.stringify(scheme)}: the later press replaced the wish: ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}`);
+    unknown(`scheme ${JSON.stringify(scheme)}, wishing`);
+    page.fire(schemeButton(page, "ADVANCED"), "click");
+    check(page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === null, `scheme ${JSON.stringify(scheme)}: a press on the wish dropped it`);
   }
-  check(count(ws) === 0, `a disabled toggle sent ${ws.sent}`);
+  check(count(ws) === 0, `a wish sent ${ws.sent}`);
 
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
   check(shownScheme(page) === "NORMAL" && group.dataset.state === "known", `NORMAL: ${shownScheme(page)} ${group.dataset.state}`);
@@ -2108,6 +2510,143 @@ test("schemes: the toggle is disabled and unknown until telemetry names a scheme
   ws.serverMsg(telemetry({ scheme: undefined })); // a frame that names none says nothing is known
   unknown("a frame without scheme");
   check(count(ws) === 0, `sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a wish made before connecting goes to the rover with its first frame, once, and the rover explores on", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  const wished = schemeButton(page, "ADVANCED");
+  check(pendingScheme(page) === "ADVANCED" && shownScheme(page) === "unknown", `wished: marked ${pendingScheme(page)}, shown ${shownScheme(page)}`);
+  check(/^Advanced: .* Sent to the rover as soon as it reports its scheme/.test(wished.title), `the wished segment says what will happen: ${wished.title}`);
+  check(!/Sent to the rover/.test(schemeButton(page, "NORMAL").title), `the other does not: ${schemeButton(page, "NORMAL").title}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "true", "busy while wished");
+  check(page.sockets.length === 0 && pivotsState(page) === "off", `a wish connects nothing and turns no pivot on: ${pivotsState(page)}`);
+
+  const ws = connectOpen(page);
+  const heard = listen(page);
+  check(count(ws) === 0, `sent before any frame: ${ws.sent}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" })); // exploring, on NORMAL
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the first frame sent ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === null, "the wish is spent");
+  check(pendingScheme(page) === "ADVANCED" && shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "pending", `pending as a press's: ${pendingScheme(page)}, shown ${shownScheme(page)}`);
+  check(!/Sent to the rover as soon/.test(wished.title), `no longer titled as a wish: ${wished.title}`);
+  liveFor(page, ws, 500, { scheme: "NORMAL" });
+  check(count(ws) === 1, `a frame before the rover's answer sent ${ws.sent}`);
+  liveFor(page, ws, 1000, { scheme: "ADVANCED" });
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && pivotsState(page) === "on", `confirmed: ${shownScheme(page)}, pivots ${pivotsState(page)}`);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent ${ws.sent}`);
+  check(heard.presses() === 0 && heard.downs() === "", `a wish is no manual input: ${heard.presses()}, stand-downs '${heard.downs()}'`);
+  check(page.$("auto").getAttribute("aria-pressed") === "true", "the rover explores on");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a wish the rover's first frame already meets sends nothing, and a wish waits through a link going", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  let ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(count(ws) === 0, `sent ${ws.sent}`);
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === null, `met: ${shownScheme(page)}, marked ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false", "not busy");
+
+  // The link goes, the scheme is unknown again, and a wish made then goes
+  // out on the next link's first frame.
+  ws.serverDrop();
+  check(shownScheme(page) === "unknown", `lost: ${shownScheme(page)}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(pendingScheme(page) === "NORMAL", `wished with no link: ${pendingScheme(page)}`);
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(ws.sent.join() === '{"scheme":"NORMAL"}', `the next link's first frame sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("schemes: a press on the other segment replaces a wish, and a press on the wished one drops it", () => {
+  const page = loadPage();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(pendingScheme(page) === "ADVANCED" && page.evalIn("schemeToggle.wanted") === "ADVANCED", `replaced: marked ${pendingScheme(page)}`);
+  check(!/Sent to the rover/.test(schemeButton(page, "NORMAL").title), "the replaced one no longer titled as the wish");
+  let ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "NORMAL", mode: "MANUAL" }));
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the replacement went: ${ws.sent}`);
+  ws.serverDrop();
+
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === null, `dropped: marked ${pendingScheme(page)}`);
+  check(page.$("scheme").getAttribute("aria-busy") === "false" && !/Sent to the rover/.test(schemeButton(page, "NORMAL").title), "not busy, and titled as unknown again");
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED", mode: "MANUAL" }));
+  liveFor(page, ws, 2000, { scheme: "ADVANCED" });
+  check(count(ws) === 0, `a dropped wish sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A wish in words, where a touch screen shows it (it shows no title): on
+// the connect card over the rover's scan while there is no link, and in
+// the link's popover, behind a dashed ring as the segment is drawn (the
+// reviewer's round 1, on an iPad). Gone with the wish.
+test("schemes: a wish is said in words on the connect card and in the link's popover, and only while it waits", () => {
+  const page = loadPage();
+  const notes = () => [page.$("connectWish"), page.$("linkWish")];
+  const said = () => notes().map((n) => (n.hidden ? "-" : n.textContent)).join(" | ");
+  check(notes().every((n) => n.hidden), `nothing to say at first: ${said()}`);
+  check(all(page.$("view")).includes(page.$("connectWish")) && all(page.$("view")).filter((n) => /\bconnectCard\b/.test(n.getAttribute("class") || "")).some((card) => all(card).includes(page.$("connectWish"))), "one on the connect card");
+  check(all(page.$("linkPanel")).includes(page.$("linkWish")), "one in the link's popover");
+  const pivotLine = () => page.$("pivotNote").textContent;
+  check(pivotLine() === "Needs Advanced", `the pivot stick's line at first: ${pivotLine()}`);
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(notes().every((n) => !n.hidden && n.textContent === "Advanced goes to the rover once it connects."), `wished: ${said()}`);
+  // The pivot stick's line says when Advanced comes, not that it is
+  // needed, which under the dashed Advanced said the opposite (the
+  // reviewers' round 2), in its one wording, which fits its narrowest.
+  check(pivotLine() === "Advanced on link" && page.$("pivotNote").dataset.tone === "off", `the pivot stick's line, wished: ${pivotLine()}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(notes().every((n) => n.textContent === "Normal goes to the rover once it connects."), `replaced: ${said()}`);
+  check(pivotLine() === "Needs Advanced", `Normal wished: ${pivotLine()}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(notes().every((n) => n.hidden), `dropped: ${said()}`);
+
+  // Connected to firmware that names no scheme: still waiting, and said so.
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  const ws = connectOpen(page);
+  check(page.$("linkWish").textContent === "Advanced goes to the rover once it connects.", `connected, no frame yet: ${said()}`);
+  ws.serverMsg(telemetry({ scheme: undefined }));
+  check(page.$("linkWish").textContent === "Advanced goes to the rover once it reports its scheme." && !page.$("linkWish").hidden, `a frame that names none: ${said()}`);
+  check(pivotLine() === "Advanced waits", `the pivot stick's line, waiting for a report: ${pivotLine()}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  check(notes().every((n) => n.hidden) && ws.sent.join() === '{"scheme":"ADVANCED"}', `sent, and said no more: ${said()}, ${ws.sent}`);
+  check(pivotLine() === "Needs Advanced", `the wish spent, the rover on Normal: ${pivotLine()}`);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(pivotLine() === "Untried: go slow", `Advanced reported: the caveat: ${pivotLine()}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  ws.serverDrop();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(page.$("connectWish").textContent === "Normal goes to the rover once it connects.", `a wish after the link went: ${said()}`);
+
+  // Drawn as the wished segment is: --dim words behind a dashed ring in
+  // --live. In the compact row a short view makes of the card (a phone's
+  // band over the Program tab's editor), its title gone, the note a line
+  // over the buttons, across the card, narrow or not (the reviewers'
+  // round 2: at 320 x 568 it was dropped over 150 px of bare view); gone
+  // only where there is no room for a line over them, where the link's
+  // popover still says it.
+  const rules = cssRules(panelCss());
+  const ring = rules.find((r) => r.selector === ".schemeWish::before");
+  check(ring && /border:\s*1px dashed var\(--live\)/.test(ring.body), `the dashed ring: ${ring && ring.body}`);
+  const words = rules.find((r) => r.selector === ".schemeWish");
+  check(words && /color:\s*var\(--dim\)/.test(words.body), `its words: ${words && words.body}`);
+  const short = blockRules(panelCss(), "@container scan (max-height: 169.98px) {") || [];
+  const shortHidden = short.filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  const shortNote = short.filter((r) => r.selector === ".connectCard .schemeWish").map((r) => r.body).join("");
+  check(/\.connectTitle/.test(shortHidden) && !/schemeWish/.test(shortHidden), `a short card's title gone, the note kept: ${shortHidden}`);
+  check(/grid-area:\s*1 \/ 1 \/ auto \/ -1;/.test(shortNote) && short.some((r) => r.selector === ".connectGo" && /grid-area:\s*3 \/ 2;/.test(r.body)), `a short card's note a line over its buttons, across the card: ${shortNote}`);
+  const narrowHidden = (blockRules(panelCss(), "@container scan (max-height: 169.98px) and (max-width: 329.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  check(!/schemeWish/.test(narrowHidden), `kept where the short view is narrow too: ${narrowHidden}`);
+  const noRoom = (blockRules(panelCss(), "@container scan (max-height: 119.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  check(/\.connectCard \.schemeWish/.test(noRoom), `gone only with no room for a line over the buttons: ${noRoom}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2226,16 +2765,16 @@ test("schemes: the pivot stick and its family are off under NORMAL and on under 
   const CAVEAT = `${page.evalIn("FamilySelector.CAVEAT")}/caveat`;
   check(familyButton(page, "PIVOT") && familyButton(page, "PIVOT_SIDEWAYS") && !familyButton(page, "TRANSLATE"), "two segments built, the pivots'");
 
-  // Each segment shows its family's icon as the up-and-right corner draws
-  // it, so the segment and the corner it lights up cannot disagree. Drawn,
-  // not typed: the arrow characters fell back to fonts of different weights.
+  // Each segment is its family's word alone, a sleek segment as every
+  // switch on the page is (F8), titled with what the family does. The
+  // corners draw the family's icon: drawn, not typed, since the arrow
+  // characters fell back to fonts of different weights.
   ICONS = page.evalIn("FamilySelector.ICONS");
   check(Object.keys(ICONS).join() === "PIVOT,PIVOT_SIDEWAYS" && new Set(Object.values(ICONS)).size === 2 && Object.values(ICONS).every((d) => /^M[\d. ]/.test(d)), `two icons ${JSON.stringify(ICONS)}`);
-  for (const family of ["PIVOT", "PIVOT_SIDEWAYS"]) {
-    const [icon, name] = familyButton(page, family).children;
-    const drawn = icon.children[0];
-    check(icon.getAttribute("aria-hidden") === "true" && name.textContent.length > 0, `${family}: icon hidden, name read`);
-    check(drawn.getAttribute("d") === ICONS[family] && drawn.getAttribute("transform") === MIRROR.upRight, `${family}: segment drew ${drawn.getAttribute("d")}`);
+  for (const [family, word] of [["PIVOT", "Pivot"], ["PIVOT_SIDEWAYS", "Sideways"]]) {
+    const button = familyButton(page, family);
+    check(button.children.length === 1 && button.children[0].textContent === word, `${family}: the word ${word} alone, got ${button.children.map((n) => n.tagName + ":" + n.textContent)}`);
+    check(new RegExp(`^${family === "PIVOT" ? "Pivot" : "Pivot sideways"}: `).test(button.title), `${family}: titled with what it does: ${button.title}`);
   }
 
   const want = {
@@ -2298,9 +2837,19 @@ test("schemes: the pivot stick and its family are off under NORMAL and on under 
 // The phone-on-its-side block's opening, as css/panel.css writes it, and the
 // rules inside one @media block of panel.css (css.js).
 const LANDSCAPE_PHONE = "@media (orientation: landscape) and (max-height: 520px) {";
-// Where the Drive tab's view of the simulator sits beside the dock (F1).
-const DRIVE_BESIDE = "@media (min-width: 1180px) and (min-height: 521px) {";
+// The side-by-side layout's blocks, as css/panel.css opens them: from 960
+// by 521 px, its Drive tab where the height limits the sticks (F3i), and
+// 640 px or less.
+const WIDE = "@media (min-width: 960px) and (min-height: 521px) {";
+// Where the pills were their lamps alone, before the top's two cells: no
+// block of its own now (the top's test checks it is gone).
+const WIDE_LAMPS = "@media (min-width: 960px) and (max-width: 1279.98px) and (min-height: 521px) {";
+const WIDE_SHORT = "@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {";
+// The shell with the Drive tab showing, as the wide blocks select it.
+const DRIVE_SHELL = ".shell:has(> #driveTab:not([hidden]))";
 const panelCss = () => stylesheet("panel.css");
+// A selector list split at its own commas, not those inside :is() or :not().
+const selectorsOf = (list) => list.replace(/\([^()]*\)/g, (inner) => inner.replace(/,/g, "\u0000")).split(",").map((each) => each.replace(/\u0000/g, ",").trim());
 const mediaRules = (opening) => blockRules(panelCss(), opening);
 
 // A declaration that makes an element the containing block of positioned
@@ -2397,37 +2946,102 @@ test("schemes: the stick hints cannot take a touch from joy.js, and nothing abov
   ]) check(!caught(css), `flagged harmless: ${css}`);
 });
 
-// Layout the fake DOM cannot lay out, held by the stylesheet's words. On a
-// phone the motor-fault card takes the scan's place; at its own height the
-// page grew and the stick slid half off a 568 x 320 screen, or under the
-// Stop bar at 375 x 667. And a line clamp in a card the grid stretches cut
-// the text mid-sentence and still showed the lines after its ellipsis.
-// Measured in a browser at 375 x 667 and 480 x 320 to 812 x 375
-// (css/panel.css says what it found).
-test("motorsReady: the fault beside a phone's stick takes no height of its own, and no fault card clamps its lines", () => {
-  const besideStick = (selector) =>
-    /:has\(>\s*#driveTab:not\(\[hidden\]\)\).*#motorsFault:not\(\[hidden\]\)\)\s+\.fault$/.test(selector.trim());
-  // In the block for every phone, upright or on its side.
-  const phone = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || []).filter((r) => r.selector.split(",").some(besideStick));
-  check(phone.length === 1, `the Drive tab's fault card, in the phone block: ${phone.map((r) => r.selector)}`);
-  const body = phone.length === 1 ? phone[0].body : "";
-  check(/\bcontain:\s*size\b/.test(body) && /\boverflow-y:\s*auto\b/.test(body), `sized by the room it is given: ${body}`);
-  // On its side the row is what the head and readouts leave: the card keeps
-  // its headline and a line more, whatever that is.
-  const beside = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(",").some(besideStick));
-  const floor = beside.length === 1 ? beside[0].body : "";
-  check(/\bmin-height:\s*calc\(/.test(floor) && /box-sizing:\s*content-box/.test(floor), `on its side, a floor of two lines: ${floor}`);
-  // And only beside the stick: the Program tab's card, contained, fell to its
-  // floor and scrolled inside a page that scrolls.
-  const rules = cssRules(panelCss());
-  const contained = rules.filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:(?!\s*none\b)/.test(r.body));
-  check(contained.every((r) => r.selector.split(",").every(besideStick)), `contained beyond the Drive tab: ${contained.map((r) => r.selector)}`);
-  const clamped = rules.filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
+// Layout the fake DOM cannot lay out, held by the stylesheet's words. The
+// motor-fault card is in the view pane, over the scan (F8): it takes
+// height from the scan inside the pane, never from the shell. At its own
+// height the page grew and the stick slid half off a 568 x 320 screen, or
+// under the Stop bar there was at 375 x 667. And a line clamp in a card the
+// grid stretches cut the text mid-sentence and still showed the lines after
+// its ellipsis.
+test("motorsReady: the fault trades height with the scan inside the view, never moving the dock, and no fault card clamps its lines", () => {
+  const page = loadPage();
+  // In the scan's own card, at its top: a bar of its own over the card read
+  // as a third row under the top's two cells (the critic's round 2).
+  const card = page.$("scan").parentNode;
+  check(page.$("motorsFault").parentNode === card && card.getAttribute("class") === "scan", "the fault is in the scan's card");
+  check(card.parentNode === page.$("view"), "the card in the view pane");
+  const base = cssRules(outside(panelCss(), "@media"));
+  const rule = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  // The pane's size is the grid's: its content counts for nothing.
+  check(/min-height:\s*0;/.test(rule(".view")) && /grid-area:\s*view;/.test(rule(".view")) && /contain:\s*size;/.test(rule(".view")), `the pane sized by its grid area: ${rule(".view")}`);
+  // The card is a size container: the fault's row takes height from the
+  // fan, never from the pane.
+  check(/container:\s*scan \/ size;/.test(rule(".scan")) && /flex:\s*1 1 0;/.test(rule(".scan")) && /min-height:\s*0;/.test(rule(".scan")), `the scan takes what the pane gives: ${rule(".scan")}`);
+  const fault = rule(".fault");
+  check(/min-height:\s*0;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault gives way and scrolls: ${fault}`);
+  // As wide as its line, 520 px at most, its caret right after its words:
+  // across a wide view it read as a page-wide banner, its caret 900 px
+  // from the words (the critic's round 3).
+  check(/justify-self:\s*start;/.test(fault) && /max-width:\s*520px;/.test(fault), `the fault as wide as its line: ${fault}`);
+  const caret = rule(".fault summary::after");
+  check(caret && !/\bauto\b/.test(caret) && !/flex:\s*1/.test(rule(".fault strong")), `its caret right after its words: ${caret}`);
+  const cap = (fault.match(/max-height:\s*(\d+)cqh;/) || [])[1];
+  check(cap && Number(cap) <= 50, `at most half the card: ${cap}`);
+  // No row of the shell's is the fault's, on any layout: it never opens one
+  // above a stick.
+  const rows = cssRules(panelCss()).filter((r) => /grid-template-areas:[^;]*\bfault\b/.test(r.body) || /grid-area:\s*fault/.test(r.body));
+  check(rows.length === 0, `no row of its own: ${rows.map((r) => r.selector)}`);
+  const contained = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /\bcontain:(?!\s*none\b)/.test(r.body));
+  check(contained.length === 0, `no fault contained to its floor: ${contained.map((r) => r.selector)}`);
+  const clamped = cssRules(panelCss()).filter((r) => /\.fault\b/.test(r.selector) && /line-clamp/.test(r.body));
   check(clamped.length === 0, `clamped: ${clamped.map((r) => r.selector)}`);
 });
 
+// The readouts' line is one line of one height: where it cannot hold every
+// caption and value, the chip's temperature goes first (out of sight,
+// still read out), then the values take the smaller type, and only then
+// the captions go the same way, so the move and the phase are never cut
+// short (the critic's round 1), and keep their captions while they can: a
+// bare "STOP" read like a button (round 3). Measured, as the top's cells
+// are, and again as each frame changes what it says. Each cell is titled
+// with its caption. Without a live link the values are history, dimmed.
+test("readouts: the chip's temperature, then the captions go before a value is cut short, each cell titled with its own", () => {
+  const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/fitSteps\(readoutsLine, \["words", "nochip", "small", "nophase", "bare"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
+  const hidden = cssRules(panelCss()).find((r) => r.selector.includes('.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell:has(> #temp)'));
+  check(hidden && /clip-path:\s*inset\(50%\)/.test(hidden.body) && !/display:\s*none/.test(hidden.body), `first the chip's temperature, out of sight, still read: ${hidden && hidden.body}`);
+  check(hidden && hidden.selector.includes('.readouts[data-fit="bare"] .cell .label') && !/nochip"?\]?[^,]*\.label|small"\][^,]*\.label/.test(hidden.selector), `last, the captions, the same way: ${hidden && hidden.selector}`);
+  // The phase's caption before the move's: a phase says what it is, and
+  // "FORWARD · CRUISE" bare read as buttons at 480 x 320 (the review's
+  // phones 11).
+  check(hidden && hidden.selector.includes('.readouts[data-fit="nophase"] #phaseCell .label') && !/nophase"\][^,]*\.cell \.label/.test(hidden.selector), `the phase's caption first: ${hidden && hidden.selector}`);
+  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell output');
+  check(smaller && /font-size:\s*var\(--t-sm\);/.test(smaller.body), `then the values the smaller type: ${smaller && smaller.body}`);
+  const dim = cssRules(panelCss()).find((r) => r.selector === 'body:not([data-link="up"]) .readouts :is(output, #phase)');
+  check(dim && /color:\s*var\(--dim\);/.test(dim.body) && /opacity:\s*0\.[5-7]\d*;/.test(dim.body), "with no live link the values dimmed and faded, with the scan over them");
+  const order = cssRules(outside(panelCss(), "@media")).map((r) => r.selector);
+  check(order.indexOf('body:not([data-link="up"]) .readouts :is(output, #phase)') > order.indexOf('#phase[data-tone="warn"]'), "the halt's amber dimmed too");
+  check(!cssRules(panelCss()).some((r) => r.selector.split(",").some((part) => /\.readouts/.test(part) && /#(move|phase)|\.cell:first-child|#phaseCell/.test(part) && !/\.label\s*$/.test(part)) && /display:\s*none|clip-path/.test(r.body)), "the move and the phase never hidden");
+  const line = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".readouts");
+  check(line && /height:\s*var\(--readouts-h\);/.test(line.body) && /white-space:\s*nowrap;/.test(line.body), "one line, one height");
+  const page = loadPage();
+  const cells = all(page.doc.documentElement.querySelector(".readouts")).filter((n) => (n.getAttribute && n.getAttribute("class")) === "cell");
+  check(cells.length === 3 && cells.every((c) => (c.getAttribute("title") || "").length > 0), `each cell titled: ${cells.map((c) => c.getAttribute("title"))}`);
+  check(page.doc.documentElement.querySelector(".readouts").dataset.fit === "words", "a page that cannot measure keeps every word");
+  // Measured: a line too narrow for every word lets the chip go and keeps
+  // the captions. The chip's cell, out of sight, is 1 px wide and its value
+  // wider: counted as cut, it took every caption with it (320 x 568).
+  const readouts = page.doc.documentElement.querySelector(".readouts");
+  const measure = (id, widths) => {
+    const value = page.$(id);
+    Object.defineProperty(value, "scrollWidth", { configurable: true, get: () => widths().scroll });
+    Object.defineProperty(value, "clientWidth", { configurable: true, get: () => widths().client });
+    Object.defineProperty(value.parentNode, "clientWidth", { configurable: true, get: () => widths().cell, set() {} });
+  };
+  const fit = () => readouts.dataset.fit;
+  measure("move", () => (fit() === "words" ? { scroll: 40, client: 22, cell: 60 } : { scroll: 40, client: 40, cell: 78 }));
+  measure("temp", () => (fit() === "words" ? { scroll: 52, client: 52, cell: 90 } : { scroll: 52, client: 0, cell: 1 }));
+  check(page.evalIn("fitReadouts()") === "nochip", `the chip gone, the captions kept: ${fit()}`);
+  measure("move", () => (fit() === "bare" ? { scroll: 40, client: 40, cell: 40 } : { scroll: 40, client: 22, cell: 60 }));
+  check(page.evalIn("fitReadouts()") === "bare", `the captions only where a value would be cut short: ${fit()}`);
+  measure("move", () => (fit() === "bare" || fit() === "nophase" ? { scroll: 40, client: 40, cell: 40 } : { scroll: 40, client: 22, cell: 60 }));
+  check(page.evalIn("fitReadouts()") === "nophase", `the move's caption kept while it fits: ${fit()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 // A phone on its side, held like a gamepad: a stick down each edge, and
-// between them the header, the scan, and Stop and Autonomous at the foot.
+// between them the top's two cells, Stop and Autonomous among them, and
+// the view under them.
 // Layout itself is measured in a browser (568 x 320 to 1000 x 500); this
 // holds the shape, and the rules that keep the sticks where they are.
 test("on its side: a stick down each edge, Stop between them, and nothing in the middle moves a stick", () => {
@@ -2436,52 +3050,241 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   const body = (rules, selector) => rules.filter((r) => r.selector.replace(/\s+/g, " ") === selector).map((r) => r.body).join("");
   const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
   // The shell's columns and the dock's are the same three, the dock's
-  // middle left empty for the header, the scan and Stop.
+  // middle left empty for the top and the view.
   const columns = "grid-template-columns: var(--stick) minmax(0, 1fr) var(--stick);";
   check(body(side, ".shell").includes(columns) && body(side, ".controls").includes(columns), "the shell's columns are the dock's");
-  check(areas(body(side, ".shell")) === '". head ." ". fault ." ". scan ." ". read ." ". act ."', `the middle column: ${areas(body(side, ".shell"))}`);
-  check(areas(body(side, ".controls")) === '"label . family" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
+  check(areas(body(side, ".shell")) === '". head ." ". view ."', `the middle column: ${areas(body(side, ".shell"))}`);
+  // The view lies over the dock's empty middle: positioned, so it is over
+  // the dock spanning the screen behind it, and takes its own presses. It
+  // is no stick's ancestor (the stick-ancestor test reads every rule).
+  check(/position:\s*relative;/.test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".view").map((r) => r.body).join("")), "the view over the dock");
+  // The pivot stick's line in its own column alone: the view lies over the
+  // middle, so the line never reaches across it, only over the gap beside
+  // its column (the schemes' test).
+  check(areas(body(side, ".controls")) === '"label . family" ". . note" "move . pivot" "spin . speed"', `a stick down each edge: ${areas(body(side, ".controls"))}`);
+  // Stop is in the top's second cell. Beside the Program tab the top keeps
+  // to the middle of the screen, as on the Drive tab, so a switch of tab
+  // moves neither Stop nor anything beside it: the shell's columns are the
+  // same three with the middle one split in two (the second makes the
+  // view's 40%), and the top spans both halves. Under it the editor takes
+  // the width, the view shown or hidden: two panes at most, never the
+  // view, the editor and the console side by side (the critic's round 1).
+  const split = "grid-template-columns: var(--stick) max(0px, 40% - var(--stick)) minmax(0, 1fr) var(--stick);";
+  check(body(side, ".shell:has(> #programTab:not([hidden]))").includes(split), `the middle column split in two: ${body(side, ".shell:has(> #programTab:not([hidden]))")}`);
+  const expected = { ".shell:has(> #programTab:not([hidden]))": "view view main main", '.shell:has(> #programTab[data-view="hidden"]:not([hidden]))': "main main main main" };
+  for (const [selector, under] of Object.entries(expected)) {
+    const program = areas(body(side, selector)).split('" "').map((row) => row.replace(/"/g, "").trim().split(/\s+/));
+    check(program[0] && program[0].join(" ") === ". head head .", `${selector}: the top in the middle, over both halves: ${program.map((row) => row.join(" ")).join(" / ")}`);
+    check(program[1] && program[1].join(" ") === under, `${selector}: the editor under it, to the right edge: ${program.map((row) => row.join(" ")).join(" / ")}`);
+  }
+  // The tab in its area under the top, a column as on every layout: the
+  // toolbar one slim row over the editor, the console under the editor.
+  // In the bands beside the top, the toolbar was two rows there, and four
+  // 240 px slabs before that (the critic's round 2): nothing in the rules
+  // for every width on its side places the tab, the toolbar or its
+  // controls on the shell's tracks, and nothing lays the console beside
+  // the editor.
+  const tab = body(side, "#programTab:not([hidden])");
+  check(!/grid-(row|column|area|template)/.test(tab) && !/display:/.test(tab), `the tab in its area, a column: ${tab}`);
+  const programSide = blockRules(stylesheet("program.css"), LANDSCAPE_PHONE) || [];
+  const where = (selector) => body(programSide, selector);
+  const placed = [...programSide, ...side].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage/.test(r.selector) && /grid-|display:/.test(r.body));
+  check(placed.length === 0, `the toolbar a row over the editor, as everywhere: ${placed.map((r) => r.selector)}`);
+  check(!/flex-direction:\s*row/.test(where(".programStage")) && !programSide.some((r) => /programConsole/.test(r.selector)), `the console under the editor: ${where(".programStage")}`);
+  // From 568 px wide (568 x 320, 844 x 390) the cells are a cell a row in
+  // the middle, and the bands beside them were empty while the editor
+  // under them had about 90 px (the review's phones 0): the toolbar takes
+  // them, Run over Stop program on the left and File over View on the
+  // right, a row a cell's, and the editor's card starts under the cells,
+  // the width the view leaves it. Two rows of two, never the four slabs.
+  const bands = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [];
+  const banded = (selector) => body(bands, selector);
+  check(/grid-area:\s*1 \/ 1 \/ -1 \/ -1;/.test(banded("#programTab:not([hidden])")) && /grid-template-columns:\s*subgrid;/.test(banded("#programTab:not([hidden])")) && /container-type:\s*normal;/.test(banded("#programTab:not([hidden])")),
+    `from 568 px: the tab on the shell's tracks, no container: ${banded("#programTab:not([hidden])")}`);
+  check(/grid-area:\s*1 \/ 1 \/ 2 \/ -1;/.test(banded("#programTab .programBar")) && /grid-template-rows:\s*var\(--ctl\) var\(--ctl\);/.test(banded("#programTab .programBar")),
+    `from 568 px: the toolbar two rows of the top's height, beside it: ${banded("#programTab .programBar")}`);
+  const spot = { "#programRun": "1 / 1", "#programStop": "2 / 1", "#programTab .menuHolder": "1 / -2", "#viewToggle": "2 / -2" };
+  for (const [selector, area] of Object.entries(spot)) check(banded(selector).includes(`grid-area: ${area};`), `from 568 px: ${selector} in its band: ${banded(selector)}`);
+  check(/grid-area:\s*2 \/ 3 \/ 3 \/ -1;/.test(banded("#programTab .programStage")) && /grid-area:\s*2 \/ 1 \/ 3 \/ -1;/.test(banded('#programTab[data-view="hidden"] .programStage')),
+    "from 568 px: the editor's card under the cells, beside the view or the screen's width");
+  // At no width on its side does the Program tab put the cells anywhere
+  // the Drive tab does not: from 700 px they once took one row across the
+  // screen on this tab alone, and a switch of tab moved Stop 198 px
+  // across and 46 up at 844 x 390 (the merge's round 2). Stop stays put on
+  // a switch of tab, on every layout.
+  const sideBlocks = panelCss().match(/@media \(orientation: landscape\) and \(max-height: 520px\)[^{]*\{/g) || [];
+  const cellsMoved = sideBlocks.flatMap((head) => mediaRules(head) || []).filter((r) => /programTab/.test(r.selector) && /\.(cells|hcell)\b/.test(r.selector));
+  check(cellsMoved.length === 0, `on its side, nothing lays the cells out by tab: ${cellsMoved.map((r) => r.selector)}`);
+  const sideHeads = sideBlocks.flatMap((head) => mediaRules(head) || []).filter((r) => /^\.shell:has\(> #programTab/.test(r.selector) && /grid-template-areas/.test(r.body)).map((r) => areas(r.body).split('" "')[0].replace(/"/g, "").trim());
+  check(sideHeads.every((row) => row === ". head head ." || row === "head head head head"), `on its side, the top where the Drive tab has it: ${sideHeads}`);
+  // File's menu hangs from its button as on every layout, never moved, and
+  // stops at the screen's foot under the top and the toolbar (in the
+  // bands, under the cells' first row), scrolling inside past that:
+  // uncapped, it ran past the foot and opening it scrolled the toolbar
+  // under the top.
+  const fileMenu = where("#programMenuList");
+  check(!/\btop:/.test(fileMenu)
+    && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - var\(--ctl\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
+    && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, under both rows of cells, on the screen: ${fileMenu}`);
+  const bandMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [], "#programMenuList");
+  // In the band its right edge stays at its button's, but it hangs from
+  // the cells' foot, 4 px under them: from its button, 208 px wide, it
+  // slid under the second cell, "Examples" read "mples", and a press on
+  // its first example landed on the top (the review's phones 0; measured
+  // in a browser at 568 x 320 to 932 x 430: no item meets a cell). Its top
+  // is the cells' two rows and the 6 px between them, less the band's
+  // padding over its button, and 4 px.
+  check(/top:\s*calc\(2 \* var\(--cell-h\) \+ 6px - \(var\(--cell-h\) - var\(--ctl\)\) \/ 2 \+ var\(--s-1\)\);/.test(bandMenu) && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - var\(--s-1\) - 2 \* var\(--s-2\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(bandMenu) && !/\b(left|right):/.test(bandMenu),
+    `in the band, from the cells' foot to the screen's, its right edge at its button's: ${bandMenu}`);
+  const band = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [];
+  check(/padding-top:\s*calc\(\(var\(--cell-h\) - var\(--ctl\)\) \/ 2\);/.test(body(band, "#programTab .programBar")) && /grid-area:\s*1 \/ -2;/.test(body(band, "#programTab .menuHolder")), "its button in the band's first row, at the cells' first row");
+  // Under 568 px (480 x 320) the top spans the screen, a cell a row, and
+  // leaves no bands: the toolbar in the top's row lay under the cells, Run
+  // out of reach (the merge of the cells' and the Program tab's round 2).
+  // There the toolbar heads the editor's card, a row under the top, and
+  // the File menu stops at the foot under both rows of cells (the rule
+  // for every width on its side, above, which the bands' overrides).
+  const narrowSide = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
+  check(areas(body(narrowSide, ".shell:has(> #programTab:not([hidden]))")).startsWith('"head head head head"'), `under 568 px: the top across the screen: ${body(narrowSide, ".shell:has(> #programTab:not([hidden]))")}`);
+  // The tab starts under the top, on the shell's tracks, its toolbar a
+  // row across the screen and the editor's card under it, beside the view
+  // or the screen's width; the view, shown, starts level with the card.
+  // Beside a 40% view the card was 245 px, and its toolbar needs 277: View
+  // lay past its edge (measured headless).
+  check(/grid-area:\s*2 \/ 1 \/ -1 \/ -1;/.test(body(narrowSide, "#programTab:not([hidden])")) && /grid-template-columns:\s*subgrid;/.test(body(narrowSide, "#programTab:not([hidden])")) && /container-type:\s*normal;/.test(body(narrowSide, "#programTab:not([hidden])")),
+    `under 568 px: the tab under the top, on the shell's tracks: ${body(narrowSide, "#programTab:not([hidden])")}`);
+  check(/grid-area:\s*1 \/ 1 \/ 2 \/ -1;/.test(body(narrowSide, "#programTab .programBar")) && /grid-area:\s*2 \/ 3 \/ 3 \/ -1;/.test(body(narrowSide, "#programTab .programStage")) && /grid-area:\s*2 \/ 1 \/ 3 \/ -1;/.test(body(narrowSide, '#programTab[data-view="hidden"] .programStage')),
+    "under 568 px: the toolbar a row across under the top, the editor's card under it");
+  check(/margin-top:\s*calc\(var\(--ctl\) \+ var\(--s-2\)\);/.test(body(narrowSide, ".shell:has(> #programTab:not([hidden])) > .view")), "under 568 px: the view level with the editor's card, under the toolbar");
+  // The bands' rules start at 568 px: nothing else on its side places the
+  // toolbar in the top's row.
+  check((panelCss().match(/@media \(orientation: landscape\) and \(max-height: 520px\)[^{]*\{/g) || []).every((head) => /min-width: 568px|max-width: 567\.98px/.test(head) || !(mediaRules(head) || []).some((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle/.test(r.selector))), "the toolbar placed only by the bands' rules and the narrow ones");
+  // The state one line on every layout, never a height that follows what
+  // it says (program.css's base rule; the program tests hold it), and
+  // nothing on its side makes it more: the reason Run is off is short on
+  // the line, and whole on Run's title and the line's.
+  check(!programSide.some((r) => /programState/.test(r.selector) && /white-space|line-height|max-height/.test(r.body)), "the state one line on its side too");
   for (const rules of [side, narrow]) {
-    const gap = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
-    const pad = body(rules, ".shell:has(> #driveTab[hidden]) .actions").match(/padding-inline:\s*calc\(var\(--stick\) \+ ([^)]+\))\);/);
-    check(gap && pad && gap[1].trim() === pad[1].trim(), `beside the Program tab, Stop keeps to the middle column, as on the Drive tab: gap ${gap && gap[1]}, padding ${pad && pad[1]}`);
+    const shell = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
+    const dockGap = (body(rules, ".shell, .controls") + body(rules, ".controls")).match(/column-gap:\s*([^;]+);/);
+    check(shell && dockGap && shell[1].trim() === dockGap[1].trim(), `the shell's columns and the dock's close up together: ${shell && shell[1]}, ${dockGap && dockGap[1]}`);
   }
   // The dock spans every row, and the middle column outgrows a short screen
   // with no rover connected (568 x 320): the dock stops at the screen's
-  // height, less the shell's padding above, so the sticks centred in it stay
-  // where they are as lines come and go.
+  // height, less the shell's padding above (the top's, --shell-top, which
+  // the sticky top takes as its own), so the sticks at its foot stay where
+  // they are as lines come and go.
   const dock = body(side, ".shell > .dock:not([hidden])");
   check(/grid-row:\s*1 \/ -1;/.test(dock), `the dock spans every row: ${dock}`);
-  const top = (body(side, ".shell").match(/padding-top:\s*calc\(([^;]+)\);/) || [])[1];
+  const top = (body(side, ".shell").match(/--shell-top:\s*calc\(([^;]+)\);/) || [])[1];
   const cap = (dock.match(/max-height:\s*calc\(100 \* var\(--svh\) - ([^;]+)\);/) || [])[1];
   check(top === "var(--s-2) + env(safe-area-inset-top, 0px)" && cap === "var(--s-2) - env(safe-area-inset-top, 0px)", `the dock as tall as the screen less the padding above it: padding ${top}, cap ${cap}`);
-  check(/align-content:\s*center;/.test(body(side, ".controls")), "the sticks centred in it");
-  // Each stick takes what the height leaves (150 px and the home bar's
-  // inset) and what the width leaves the middle column (320 px, where the
-  // tabs and the scheme share a row; 240 px under 780 px wide, a row each).
+  // The sticks' rows at the dock's foot, so the captions over them (Pivot |
+  // Sideways, Translate) sit clear below the top's two cells: centred,
+  // the family lay level with the second cell, 15 px from the gear, and
+  // read as a third switch of the top's (the review's phones 8).
+  check(/align-content:\s*end;/.test(body(side, ".controls")) && !/align-content:\s*center;/.test(body(side, ".controls")), `the sticks at the foot of the dock: ${body(side, ".controls")}`);
+  // Each stick takes what the height leaves (212 px: the shell's padding
+  // above, the two cells, 12 px clear of them, the dock's four rows but the
+  // sticks' and 4 px under them, and the notch's and the home bar's
+  // insets) and what the width leaves the middle column: 336 px for the
+  // two cells, a row each (212 px of half the width with the gutters and
+  // gaps), and 288 px at their tightest under 780 px wide (180 px). The
+  // rows' sum is the dock's own tokens': each a fixed height (the schemes'
+  // test holds them).
   const stick = (rules) => (body(rules, ":root").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(stick(side).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 204px"), `on its side: ${stick(side)}`);
-  check(stick(narrow).includes("100 * var(--svh) - 150px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 156px"), `under 780 px wide: ${stick(narrow)}`);
-  check(/padding:\s*0 0 env\(safe-area-inset-bottom, 0px\);/.test(dock), `the home bar's inset clear under the sticks: ${dock}`);
-  // Stop and Autonomous share the middle column evenly.
-  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(body(side, ".actions")), `Stop and Autonomous: ${body(side, ".actions")}`);
+  const height = "100 * var(--svh) - 212px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)";
+  check(stick(side).includes(height) && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
+  check(stick(narrow).includes(height) && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
+  const px = (name) => Number((body(cssRules(outside(panelCss(), "@media")), ":root").match(new RegExp(`--${name}:\\s*(\\d+)px;`)) || [])[1]);
+  const rows = px("dock-cap") + px("dock-note") + px("dock-row") + 3 * px("dock-gap");
+  const cells = 8 + 2 * px("cell-h") + 6; // the shell's padding above, and the two cells 6 px apart
+  check(rows === 102 && cells + 12 + rows + 4 <= 212, `the dock's rows (${rows} px) under the cells (${cells}), 12 px clear of them and 4 over the foot, inside the 212 px kept from the height`);
+  check(/padding:\s*0 0 calc\(var\(--s-1\) \+ env\(safe-area-inset-bottom, 0px\)\);/.test(dock), `the home bar's inset clear under the sticks, and 4 px: ${dock}`);
+  // No foot bar: Stop and Autonomous are in the top's cells, in the middle
+  // column on both tabs.
+  check(!/\.actions\b/.test(panelCss()), "no .actions rule left in panel.css");
 });
 
-// The rotate buttons share their stick's column and never outgrow it: at
-// the stick's floor the icons beside the words did (Right across the gap
-// into the speed at 960 x 521, under the Stop bar at 480 x 320 on its
-// side). Narrower than icon and word need, the word alone.
-test("layout: the rotate buttons keep to their stick's column, the icons going where it is narrow", () => {
+// The rotate buttons keep to their area and never outgrow it: at the
+// stick's floor the icons beside the words did (Right across the gap into
+// the speed at 960 x 521, under the Stop bar at 480 x 320 on its side).
+// Narrower than icon and word need at full size, the arrows alone, at
+// their full size: the words a size down to 11 px were the dock's smallest
+// (the review's phones 20). On an upright phone they are their arrows
+// alone beside the speed, which takes the rest of the row: under the pivot
+// stick alone its slider was 64 to 84 px long (the review's phones 4).
+test("layout: the rotate buttons keep to their area, their words where they fit, and the speed most of an upright phone's row", () => {
   const base = cssRules(outside(panelCss(), "@media"));
   const spin = base.filter((r) => r.selector === ".spin").map((r) => r.body).join("");
-  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(spin), `two columns that cannot grow past the column: ${spin}`);
+  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(spin), `two columns that cannot grow past the area: ${spin}`);
   check(/container:\s*spin \/ inline-size;/.test(spin), `a container to ask: ${spin}`);
-  const hides = (css, width) => (blockRules(css, `@container spin (max-width: ${width}) {`) || [])
-    .some((r) => r.selector === ".spin .icon" && /display:\s*none;/.test(r.body));
-  check(hides(outside(panelCss(), "@media"), "151.98px"), "the icons go under 152 px");
-  const wide = panelCss().replace(/\/\*[\s\S]*?\*\//g, "");
-  const at = wide.indexOf("@media (min-width: 960px) and (min-height: 521px) {");
-  check(at >= 0 && hides(wide.slice(at), "183.98px"), "and under 184 px on a wide screen, whose icons and words are larger");
+  // Under 156 px (an upright phone, a phone on its side, a short laptop's
+  // stacked column) the words go and the arrows stay, at their size; that
+  // is the only rule that hides either, and no rule makes either smaller.
+  const narrow = blockRules(outside(panelCss(), "@media"), "@container spin (max-width: 155.98px) {") || [];
+  check(narrow.length === 1 && narrow[0].selector === ".spinWord" && /display:\s*none/.test(narrow[0].body), `under 156 px the arrows alone: ${narrow.map((r) => r.selector)}`);
+  const hidden = cssRules(panelCss()).filter((r) => /\.spin (\.icon|\.spinWord)|\.spinWord|\.spin \.icon/.test(r.selector) && /display:\s*none/.test(r.body));
+  check(hidden.length === 1 && hidden[0].selector === ".spinWord", `nothing else hides a word, nothing an arrow: ${hidden.map((r) => r.selector)}`);
+  check(!cssRules(panelCss()).some((r) => /\.spin\b|\.spinWord/.test(r.selector) && /font-size:\s*var\(--t-xs\)/.test(r.body)), "no 11 px word on a rotate button");
+  const page = loadPage();
+  // The words in each button's name and title wherever they show.
+  check(["ccw", "cw"].every((id) => /^Rotate (counter-)?clockwise$/.test(page.$(id).getAttribute("aria-label") || "")), "each named, whatever shows");
+  const titled = ["ccw", "cw"].map((id) => page.$(id).getAttribute("title") || "");
+  check(/^Rotate left \(Q\)/.test(titled[0]) && /^Rotate right \(E\)/.test(titled[1]), `each titled with its words: ${titled.join(" / ")}`);
+  check(["ccw", "cw"].every((id) => all(page.$(id)).some((n) => n.tagName === "SVG") && all(page.$(id)).some((n) => n.getAttribute && n.getAttribute("class") === "spinWord")), "each its arrow and its word");
+  // An upright phone: the rotate buttons' area two 44 px buttons and the
+  // gap between them, under the 156 px where the words go, at the
+  // translate stick's left edge; the speed the rest of the row, across
+  // both sticks' columns. The three columns add up to the two sticks and
+  // the gap between them, so neither stick moves; the caption keeps to the
+  // first column, the family the rest of its row.
+  const root = base.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--spin-w:\s*calc\(2 \* var\(--tap\) \+ var\(--s-2\)\);/.test(root) && /--tap:\s*44px;/.test(root) && /--s-2:\s*8px;/.test(root) && 2 * 44 + 8 < 156, `two 44 px buttons, their words gone: ${root.match(/--spin-w:[^;]*;/)}`);
+  const phone = blockRules(panelCss(), "@media (max-width: 599.98px) and (orientation: portrait) {") || [];
+  const controls = phone.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
+  const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
+  check(/grid-template-columns:\s*var\(--spin-w\) calc\(var\(--stick\) - var\(--spin-w\) - var\(--s-4\)\) var\(--stick\);/.test(controls), `the sticks' columns, the first split for the rotate buttons: ${controls}`);
+  check(areas === '"label family family" "note note note" "move move pivot" "spin speed speed"', `the speed across both sticks: ${areas}`);
+  check(!/grid-template-rows/.test(controls) && phone.every((r) => r.selector === ".controls"), "its rows the dock's own, and nothing else changed");
+  // The corners' words on one line or not at all: under 180 px of corners
+  // nothing, after the rules that lay a corner out (before them, those
+  // showed every corner again, words overlapping at 320 px). Bare arrows
+  // said nothing, and looked like controls (the review's phones 22);
+  // wrapped to two lines they crowded the ring.
+  // At 12 px, the dock's least: at 11 they were under it (the reviews'
+  // phones 12, tablets 7), so under 190 px.
+  const corners = blockRules(outside(panelCss(), "@media"), "@container hints (max-width: 189.98px) {") || [];
+  check(corners.length === 1 && corners[0].selector === ".hint" && /display:\s*none/.test(corners[0].body), `under 190 px of corners, none: ${corners.map((r) => r.selector)}`);
+  const text = outside(panelCss(), "@media");
+  check(text.indexOf("@container hints (max-width: 189.98px)") > text.lastIndexOf(".hint[data-corner="), "the corners hidden after the rules that place them");
+  const hint = base.filter((r) => r.selector === ".hint").map((r) => r.body).join("");
+  check(/white-space:\s*nowrap;/.test(hint) && /font-size:\s*var\(--t-sm\);/.test(hint), `a corner's words never wrap, at 12 px: ${hint}`);
+  // On its side the gauge goes and the slider takes the rest of the
+  // column: with the gauge it was 64 px, 2 px a step (the review's phones
+  // 5). The caption still names it.
+  const sideSpeed = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => /\.speed/.test(r.selector));
+  check(sideSpeed.some((r) => r.selector === ".speed .icon" && /display:\s*none/.test(r.body)) && sideSpeed.some((r) => r.selector === ".speed" && /grid-template-columns:\s*auto minmax\(0, 1fr\);/.test(r.body)), `on its side, no gauge, the slider the rest: ${sideSpeed.map((r) => r.selector)}`);
+  // The speed one row on every layout. Under 230 px, where the caption
+  // would leave the slider under about 140 px, a gauge in the caption's
+  // place; under 150 the value a size down too. The caption over the value
+  // read as two lines (the critic's round 2). The caption still names the
+  // slider.
+  const speedNarrow = blockRules(outside(panelCss(), "@media"), "@container speed (max-width: 229.98px) {") || [];
+  check(speedNarrow.some((r) => r.selector === "#speedLabel" && /display:\s*none/.test(r.body)) && speedNarrow.some((r) => r.selector === ".speed .icon" && /display:\s*block/.test(r.body)), "under 230 px, the gauge in the caption's place");
+  const speedNarrower = blockRules(outside(panelCss(), "@media"), "@container speed (max-width: 149.98px) {") || [];
+  check(speedNarrower.length === 1 && speedNarrower[0].selector === "#speedOut" && /font-size:\s*var\(--t-ctl\)/.test(speedNarrower[0].body), `under 150 px, the value a size down: ${speedNarrower.map((r) => r.selector)}`);
+  check(![...speedNarrow, ...speedNarrower].some((r) => /grid-(area|row|column)/.test(r.body)), "narrow, still one row");
+  check(/display:\s*none/.test(base.filter((r) => r.selector === ".speed .icon").map((r) => r.body).join("")), "the gauge only where the caption gives way");
+  const gauge = all(page.$("speed").parentNode).find((n) => n.tagName === "SVG");
+  check(gauge && gauge.getAttribute("aria-hidden") === "true" && page.$("speed").getAttribute("aria-labelledby") === "speedLabel" && page.$("speedLabel").textContent === "Speed", "the slider named by its caption, the gauge silent");
+  // One size on every layout (F8: 36 px rows under the sticks), so the
+  // one threshold holds everywhere: no layout makes them larger again.
+  const button = base.filter((r) => r.selector === ".spin button").map((r) => r.body).join("");
+  check(/height:\s*var\(--dock-row\);/.test(button) && /min-height:\s*0;/.test(button), `the dock's row height: ${button}`);
+  const baseKeys = new Set(base.map((r) => `${r.selector}{${r.body}`));
+  const resized = cssRules(panelCss()).filter((r) => /\.spin (button|\.icon)/.test(r.selector) && !baseKeys.has(`${r.selector}{${r.body}`) && /(^|[\s;{])(min-|max-)?(height|width|font-size|padding)\s*:/.test(r.body));
+  check(resized.length === 0, `no layout resizes them: ${resized.map((r) => r.selector)}`);
 });
 
 // Blockly draws the grid's lines once, with its colour as their stroke
@@ -2695,7 +3498,7 @@ test("schemes: losing the link makes the scheme unknown and turns the pivots off
   page.fire(familyButton(page, "PIVOT_SIDEWAYS"), "click");
   check(page.evalIn("driver.family") === "PIVOT_SIDEWAYS" && pivotsState(page) === "on", "pivoting sideways");
   ws.serverDrop();
-  check(shownScheme(page) === "unknown" && SCHEMES.every((s) => schemeButton(page, s).disabled), `lost: ${shownScheme(page)}`);
+  check(shownScheme(page) === "unknown" && SCHEMES.every((s) => !schemeButton(page, s).disabled), `lost: ${shownScheme(page)}, still taking a wish`);
   check(pivotsState(page) === "off" && page.evalIn("driver.family") === "PIVOT_SIDEWAYS", `pivots ${pivotsState(page)}, family ${page.evalIn("driver.family")}`);
   check(page.$("pivotNote").textContent === page.evalIn("FamilySelector.OFF"), `note '${page.$("pivotNote").textContent}'`);
 
@@ -2773,32 +3576,99 @@ test("schemes: a pivot stick a scheme change let go of asks for a fresh press on
 
 // What is above the stick holds its height as the family and the caption
 // change, so the stick stays where a held thumb pressed it (js/drive.js). A
-// browser measured it; this keeps the two rules that made it so.
+// browser measured it; this keeps the rules that made it so.
 test("schemes: the caption and the pivot stick's line change nothing's height above the sticks", () => {
   const page = loadPage();
+  // The caption's request fits the stick's narrowest column on one line, as
+  // the pivot stick's line below does: no longer than the caveat measured
+  // there. (A family's name was the bound while the longest was "Pivot
+  // sideways"; its segment now says "Sideways".)
   const request = page.evalIn("FamilySelector.PRESS_AGAIN");
-  const longest = Math.max(...page.evalIn("FamilySelector.OPTIONS").map((option) => option.label.length));
-  check(request.length <= longest, `the press-again request '${request}' is no longer than a family's name (${longest}): it wrapped`);
+  const caveatWords = page.evalIn("FamilySelector.CAVEAT");
+  check(request.length <= caveatWords.length && request.length <= 17, `the press-again request '${request}' is no longer than the caveat '${caveatWords}' (17 at most): it wrapped`);
 
-  // The pivot stick's line says one of three things, each on one line: none
-  // longer than the caveat, which fits the stick's narrowest column (112 px
-  // on its side under 536 px wide, measured headless: 17 characters took
-  // 105 px with the dot, where 22 took 129). It never hides, which would
-  // take its height too.
-  const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
-  check(said[0].length <= 17 && said.every((text) => text.length > 0 && text.length <= said[0].length), `the line's words: ${said}`);
+  // The pivot stick's line says one of three things, each on one line, in
+  // the same words on every layout (the critic's round 1: "Needs Advanced"
+  // on a phone on its side, "Pivots need Advanced (at the top)"
+  // elsewhere). Each fits the line's narrowest place at the dock's 13 px:
+  // the pivot stick's column at its floor (112 px, on its side under about
+  // 600 px wide) and the 12 px gap the line reaches into there, or a short
+  // laptop's stacked column (120 px), with its dot: up to 118 px in DejaVu
+  // Sans, measured headless, where 22 characters took 129 at 12 px. Off,
+  // its words say what the stick is waiting for, as a need: "Advanced: top
+  // bar" read as a label and its value, as if Advanced were on, and named
+  // a bar the top no longer has (the review's phones 5, tablets 3,
+  // laptops 5). It never hides, which would take its height too, and has
+  // no second, shorter copy for a narrow row.
+  const said = ["CAVEAT", "OFF", "PRESS_AGAIN", "WISHED.waiting", "WISHED.heard"].map((name) => page.evalIn(`FamilySelector.${name}`));
+  check(said.every((text) => text.length > 0 && text.length <= 17), `the line's words: ${said}`);
+  const off = page.evalIn("FamilySelector.OFF");
+  check(/^Needs? Advanced\b/.test(off) && !/\bbar\b|:/.test(off), `off, it says what the stick needs, not as a label and its value: '${off}'`);
+  check(/^Untried: go slow$/.test(page.evalIn("FamilySelector.CAVEAT")), `on, the caveat: '${page.evalIn("FamilySelector.CAVEAT")}'`);
+  check(/\bat the top\b/.test(page.evalIn("FamilySelector.OFF_TITLE")) && !/\btop bar\b/.test(page.evalIn("FamilySelector.OFF_TITLE")), `off, the pad's title says where: '${page.evalIn("FamilySelector.OFF_TITLE")}'`);
+  check(page.evalIn("FamilySelector.OFF_SHORT") === undefined && page.doc.getElementById("pivotNoteShort") === null && page.$("pivotNote").parentNode.children.filter((n) => n.tagName === "P").length === 1, "one line, one wording: no short copy");
   const rules = cssRules(outside(panelCss(), "@media"));
+  check(!/@container note\b/.test(panelCss()) && !/\.caveat\.short/.test(panelCss()), "no rule picks other words by the row's width");
+  const landscapeLine = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(/,\s*/).includes(".noteLine")).map((r) => r.body).join("");
+  check(/margin-inline-start:\s*calc\(-1 \* var\(--s-3\)\);/.test(landscapeLine), `on its side, the line reaches over the 12 px gap beside the pivot stick's column: ${landscapeLine}`);
+  const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
+  const controls = rules.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
+  check(areas(controls) === '"label family" "note note" "move pivot" "spin speed"', `upright and side by side, the line across both sticks: ${areas(controls)}`);
+  // Every row of the dock is one fixed height, whatever it says: the
+  // caption row, the line, the sticks' own (their box), and the rotate
+  // buttons and the speed.
+  check(/grid-template-rows:\s*var\(--dock-cap\) var\(--dock-note\) auto var\(--dock-row\);/.test(controls), `the rows' heights fixed: ${controls}`);
+  // A wide screen 564 px tall or more stacks the sticks in one column (the
+  // owner's "tile them vertically"), with the same rows one under the
+  // other: still every one a fixed height, the sticks' boxes the only
+  // auto ones, but for three empty rows that share what a column taller
+  // than both sticks need leaves (from 892 px tall, the sticks at their
+  // 280 px cap) evenly: over the translate stick's rows, between them and
+  // the pivot stick's (at least 8 px), and under those. Only the viewport
+  // sets them (the shell's grid), so the column is filled to its foot with
+  // no band of empty card (one gap of 188 px between the sticks at 1920 x
+  // 1080, the review's laptops 3). No other layout sets the rows.
+  const rowsSet = cssRules(panelCss()).filter((r) => r.selector.replace(/\s+/g, " ") === ".controls" && /grid-template-rows/.test(r.body));
+  const rowsOf = (r) => ((r.body.match(/grid-template-rows:([^;]*);/) || [])[1] || "").trim();
+  const fixedRows = (value) => value !== "" && value.split(/\s+(?![^(]*\))/).every((row) => /^(auto|var\(--(dock-cap|dock-note|dock-row|s-\d)\)|minmax\((0|var\(--s-\d\)), 1fr\))$/.test(row));
+  check(rowsSet.length === 2 && rowsSet.every((r) => fixedRows(rowsOf(r))), `no layout sizes a row by what it says: ${rowsSet.map(rowsOf).join(" | ")}`);
+  const stacked = blockRules(panelCss(), "@media (min-width: 960px) and (min-height: 564px) {") || [];
+  const stackedControls = stacked.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
+  check(/grid-template-rows:\s*minmax\(0, 1fr\) var\(--dock-cap\) auto var\(--dock-row\) minmax\(var\(--s-2\), 1fr\) var\(--dock-cap\) var\(--dock-note\) auto var\(--dock-row\) minmax\(0, 1fr\);/.test(stackedControls)
+    && areas(stackedControls) === '"." "label" "move" "spin" "." "family" "note" "pivot" "speed" "."', `stacked: the translate stick's rows, then the pivot stick's, the line its own row, the empty rows over, between and under them the flexible ones: ${areas(stackedControls)}`);
+  check(rowsSet.filter((r) => /1fr/.test(rowsOf(r))).length === 1, "no other layout has a flexible row");
+  // The stacked sticks up to 280 px: 360 px was more stick than a laptop's
+  // hand needs, and took the view's width (the review's laptops 3).
+  const stackedRoot = stacked.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--stick:\s*clamp\(120px, \(100 \* var\(--svh\) - 332px\) \/ 2, 280px\);/.test(stackedRoot) && /--dock-col:\s*max\(var\(--stick\), 230px\);/.test(stackedRoot) && /--drive:\s*calc\(var\(--dock-col\) \+ 32px\);/.test(stackedRoot), `stacked: up to 280 px, the column one stick wide, 230 px at the least: ${stackedRoot}`);
+  // The rotate buttons and the speed across the whole column, centred
+  // under their sticks, whose edges the captions keep: one stick wide, a
+  // short laptop's lost 'Speed', 'Left' and 'Right' and kept an 80 px
+  // slider (the review's laptops 5, tablets 7). The speed keeps its word
+  // from 230 px.
+  const across = stacked.filter((r) => r.selector.replace(/\s+/g, " ") === ".spin, .speed").map((r) => r.body).join("");
+  check(/margin-inline:\s*calc\(\(var\(--stick\) - var\(--dock-col\)\) \/ 2\);/.test(across) && !stacked.some((r) => /grid-template-columns/.test(r.body) && r.selector === ".controls" && !/var\(--stick\)/.test(r.body)), `stacked: the rotate buttons and the speed the column's width: ${across}`);
+  // The family and the line end at the pivot stick's right edge on every
+  // layout, the stacked one's too: the line's dot, unpainted while off,
+  // keeps its place before the words, so a line from the column's start
+  // would start "Needs Advanced" 12 px in, under nothing.
+  check(!stacked.some((r) => /^\.(family|noteLine)$/.test(r.selector)), "stacked: the family and the line where they are on every layout");
   for (const selector of [".caveat", "#stickLabel"]) {
     const rule = rules.find((r) => r.selector === selector);
     check(rule && /white-space:\s*nowrap/.test(rule.body), `${selector} never wraps: ${rule && rule.body.trim()}`);
   }
+  const lineRule = rules.find((r) => r.selector === ".caveat");
+  check(lineRule && /line-height:\s*var\(--dock-note\);/.test(lineRule.body) && /font-size:\s*var\(--t-ctl\);/.test(lineRule.body), `one line of the row's height, at the dock's 13 px (the review's laptops 16): ${lineRule && lineRule.body.trim()}`);
+  // Off, no dot: a grey lamp before the words read as a status. Unpainted,
+  // not removed, so nothing on the line moves as the scheme changes.
+  const offDot = rules.filter((r) => r.selector === '.caveat[data-tone="off"]::before').map((r) => r.body).join("");
+  check(/^\s*background:\s*none;\s*$/.test(offDot), `off, the dot unpainted: ${offDot}`);
   // Its dot close to its words: with the wider gap the caveat ran past the
   // stick at its floor.
-  const caveat = rules.find((r) => r.selector === ".caveat");
-  check(caveat && /gap:\s*var\(--s-1\);/.test(caveat.body), `the caveat's dot close to its words: ${caveat && caveat.body.trim()}`);
+  check(lineRule && /gap:\s*var\(--s-1\);/.test(lineRule.body), `the caveat's dot close to its words: ${lineRule && lineRule.body.trim()}`);
   const note = page.$("pivotNote");
   const lines = [];
-  const look = () => lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}`);
+  const look = () => lines.push(`${note.hidden ? "hidden" : "shown"} ${note.textContent}/${note.dataset.tone}`);
   look();
   const ws = connectOpen(page);
   ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
@@ -2809,8 +3679,123 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   look();
   ws.serverMsg(telemetry({ scheme: "ADVANCED" })); // which waits for a fresh press
   look();
-  check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => `shown ${page.evalIn(`FamilySelector.${name}`)}`).join(" | "), `the line: ${lines.join(" | ")}`);
+  const tones = ["off", "caveat", "off", "warn"];
+  check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name, i) => `shown ${page.evalIn(`FamilySelector.${name}`)}/${tones[i]}`).join(" | "), `the line: ${lines.join(" | ")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Under NORMAL the pivot stick is drawn but off, and must look it: its
+// knob in the operator's blue and its corners in blue read as a stick to
+// use, behind a faded family (the review's phones 22, laptops 5). Each
+// paints only, keyed on the pad's data-off, so nothing moves under a held
+// stick (the sticks' test below). And the dock's words are one size: its
+// captions and the line 13 px, the corners' 11 (the review's laptops 16);
+// the family's segments 28 px as every switch's, in a caption row that
+// holds their 32 px track (the review's phones 21, tablets 14).
+test("dock: the pivot stick off looks off, grey not blue, and the dock's words and switch keep the page's sizes", () => {
+  const css = panelCss();
+  const base = cssRules(outside(css, "@media"));
+  const body = (selector, rules = base) => rules.filter((r) => r.selector.split(/,\s*/).includes(selector)).map((r) => r.body).join("");
+  // The knob grey: joy.js paints it once, in --live, so the canvas itself
+  // is filtered, never an ancestor of it (the stick-ancestor test holds
+  // that), and only while the pad is off.
+  check(/^\s*filter:\s*grayscale\(1\);\s*$/.test(body('#pivotPad[data-off="yes"] canvas')), `off, the knob grey: ${body('#pivotPad[data-off="yes"] canvas')}`);
+  check(!cssRules(css).some((r) => /filter\s*:/.test(r.body) && /#pivotStick|#stick\b|#movePad|canvas/.test(r.selector) && !/\[data-off="yes"\]/.test(r.selector)), "nothing filters a stick that is on");
+  // Its corners grey, their arrows too, where on they are the page's blue.
+  const offHint = body('#pivotPad[data-off="yes"] .hint');
+  check(offHint === body('#pivotPad[data-off="yes"] .hint .glyph') && /^\s*color:\s*var\(--dim\);\s*$/.test(offHint), `off, the corners --dim: ${offHint}`);
+  check(/color:\s*var\(--live\)/.test(body(".hint .glyph")), "on, their arrows the operator's blue");
+  // The family's segments the page's 28 px (no smaller --seg of its own),
+  // their track 4 px more, in the caption row's height; its touch target
+  // 44 px as the top's are.
+  const root = body(":root");
+  const px = (name) => Number((root.match(new RegExp(`--${name}:\\s*(\\d+)px;`)) || [])[1]);
+  check(px("seg") === 28 && px("dock-cap") === px("seg") + 4, `the caption row (${px("dock-cap")} px) holds a 28 px segment's track`);
+  check(!cssRules(css).some((r) => /\.family/.test(r.selector) && /--seg\s*:/.test(r.body)), "no smaller segment for the family");
+  check(/inset:\s*calc\(\(var\(--seg\) - var\(--tap\)\) \/ 2\) 0;/.test(body(".family .segmented button::before")), `its target 44 px: ${body(".family .segmented button::before")}`);
+  // Its words step down by its own area's width: the family a container,
+  // stretched over its area, its switch at the area's end.
+  const family = body(".family");
+  check(/container:\s*family \/ inline-size;/.test(family) && /justify-self:\s*stretch;/.test(family) && /justify-content:\s*flex-end;/.test(family), `the family's area its container: ${family}`);
+  // The dock's captions and its line at 13 px, the corners at 11.
+  for (const selector of ["#stickLabel", "#speedLabel", ".caveat"]) check(/font-size:\s*var\(--t-ctl\);/.test(body(selector)), `${selector} at 13 px: ${body(selector)}`);
+  check(/font-size:\s*var\(--t-sm\);/.test(body(".hint")), "the corners at 12 px, the dock's least (the reviews' phones 12, tablets 7)");
+  // On a phone on its side the family is quieter than the top's switches
+  // beside it: no track, the family chosen raised rather than inverted, so
+  // it reads as its stick's caption (the review's phones 8). It and the
+  // line reach over the gap beside the pivot stick's column.
+  const side = mediaRules(LANDSCAPE_PHONE) || [];
+  check(/^\s*background:\s*none;\s*$/.test(body(".family .segmented", side)), `on its side, no track: ${body(".family .segmented", side)}`);
+  const chosen = body('.family .segmented button[aria-pressed="true"]', side);
+  check(/color:\s*var\(--readout\);/.test(chosen) && /background:\s*var\(--raised-hi\);/.test(chosen), `on its side, the chosen family raised: ${chosen}`);
+  check(side.some((r) => r.selector.split(/,\s*/).includes(".family") && r.selector.split(/,\s*/).includes(".noteLine") && /margin-inline-start:\s*calc\(-1 \* var\(--s-3\)\);/.test(r.body)), "on its side, the family and the line over the gap beside them");
+  // In the page: the pad off under NORMAL, on under ADVANCED, and the line
+  // with it, what the rules above key on.
+  const page = loadPage();
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  check(page.$("pivotPad").dataset.off === "yes" && page.$("pivotNote").dataset.tone === "off", "NORMAL: the pad off, the line's dot unpainted");
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(page.$("pivotPad").dataset.off === "no" && page.$("pivotNote").dataset.tone === "caveat", "ADVANCED: the pad on, the line's amber dot");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Where each stick is, and how large, follows from the viewport alone:
+// measured headless at 26 sizes (320 x 568 to 1920 x 1080, upright, on
+// its side and side by side), neither stick's box moved through a scheme
+// change both ways, a motor fault, the rover exploring (the badges), stale
+// telemetry, a lost link and a switch of target both ways. This holds the
+// rules that made it so. The top's cells keep one height and the view's
+// size is the grid's (their own tests); here, the sticks' size is a
+// function of the viewport and constants, set on :root alone; every row of
+// the dock is a fixed height (the schemes' test above); and no rule keyed
+// on the page's state (a scheme, a tone, a held or pressed control, the
+// link, the target) does more to the dock than paint it.
+test("the sticks: sized from the viewport alone, in rows of fixed height, so no scheme, fault, link or target moves either", () => {
+  const css = panelCss();
+  const rules = cssRules(css);
+  const declared = (name) => rules.filter((r) => new RegExp(`(^|[\\s;{])${name}\\s*:`).test(r.body));
+  for (const name of ["--stick", "--stick-w", "--dock-col", "--drive", "--gutter", "--shell-max", "--svh", "--dock-cap", "--dock-note", "--dock-row", "--dock-gap"]) {
+    const where = declared(name);
+    check(where.length > 0 && where.every((r) => r.selector === ":root"), `${name} set on :root alone, never per state, tab or target: ${where.map((r) => r.selector)}`);
+    for (const r of where) {
+      const value = ((r.body.match(new RegExp(`(?:^|[\\s;{])${name}\\s*:([^;]*);`)) || [])[1] || "").trim();
+      // What is left once the viewport's units, the insets, the tokens built
+      // from them, numbers and arithmetic are taken out: nothing, or a
+      // container's or the content's size (%, em, cq units) got in.
+      const left = value
+        .replace(/env\(safe-area-inset-(top|bottom|left|right), 0px\)/g, "")
+        .replace(/var\(--(svh|stick-w|stick|dock-col|shell-max|gutter|s-\d)\)/g, "")
+        .replace(/\b(clamp|min|max|calc|none)\b/g, "")
+        .replace(/\d+(\.\d+)?(px|vw|vh|svh)?/g, "");
+      check(value !== "" && /^[\s()+\-*/,]*$/.test(left), `${name}: from the viewport alone: '${value}' (left '${left.trim()}')`);
+    }
+  }
+  // Every rule on the dock's parts keyed on a state only paints them.
+  const dockPart = /\.dock\b|#driveTab|\.controls\b|#stickLabel|\.family\b|\.segmented\b|\.noteLine|\.caveat|#pivotNote|\.spin\b|\.speed\b|#speed|#movePad|#pivotPad|\.stickArea|#stick\b|#pivotStick|\.hints?\b/;
+  // (A hint's corner is where it is built, once, not a state.)
+  const keyedOnState = /data-(?!corner)|aria-|:active|:hover|:disabled|:checked/;
+  const paints = /^(color|background(-color)?|border-color|border-style|opacity|box-shadow|outline(-color|-offset)?|animation|pointer-events|touch-action|-webkit-touch-callout|cursor|filter)\s*:/;
+  // Each selector of a list on its own: a dock part keyed on a state.
+  const parts = (selector) => {
+    const out = [];
+    let depth = 0;
+    let from = 0;
+    for (let i = 0; i < selector.length; i++) {
+      if (selector[i] === "(") depth++;
+      else if (selector[i] === ")") depth--;
+      else if (selector[i] === "," && depth === 0) { out.push(selector.slice(from, i)); from = i + 1; }
+    }
+    return [...out, selector.slice(from)].map((part) => part.trim());
+  };
+  // (The top's cells are not the dock: their segments step their words down
+  // by the cell's width, data-fit, in a cell of one fixed height.)
+  const topCell = /^\.(hands|drives|hcell|cells|bar)\b/;
+  const resizes = rules.filter((r) => parts(r.selector).some((part) => !topCell.test(part) && dockPart.test(part) && keyedOnState.test(part)))
+    .filter((r) => !r.body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => paints.test(d)));
+  check(resizes.length === 0, `state rules that do more than paint the dock: ${resizes.map((r) => `${r.selector} { ${r.body.trim()} }`).join(" | ")}`);
+  // And no state shows or hides the line.
+  check(!rules.some((r) => parts(r.selector).some((part) => /\.caveat|#pivotNote\b|\.noteLine/.test(part) && keyedOnState.test(part)) && /display\s*:/.test(r.body)), "the line never shown or hidden by a state");
 });
 
 test("schemes: a stale link keeps the scheme shown, dimmed, and offers no change until telemetry resumes", () => {
@@ -2985,16 +3970,21 @@ test("program: without Blockly the tab says so, Run stays off, and driving works
   check(page.errors.length === 0, `errors ${page.errors}`);
 
   // The switch offers what the registry holds: the rover, and the simulator
-  // when its scripts registered one; its view's places show only then.
+  // when its scripts registered one; the simulator's view is drawn only
+  // then, in its one slot in the view pane, beside both tabs. The view pane
+  // is there either way (the rover's scan), and the View toggle shows and
+  // hides it.
   for (const without of [false, true]) {
-    const p = without ? loadPage({ leaveOut: ["js/sim.js", "js/simview.js"] }) : page;
+    const p = without ? loadPage({ leaveOut: ["js/sim.js", "js/simview.js"], stored: { "rover.tab": "tabProgram" } }) : page;
     const sim = p.evalIn("'simulator' in targets");
     check(sim === !without, `the simulator registered: ${sim}`);
     check(segments(p).length === (sim ? 2 : 1), `segments ${segments(p).map((b) => b.textContent)}`);
-    check(p.$("target").hidden === !sim && p.$("programSim").hidden === !sim && p.$("driveView").hidden === !sim,
-      `the switch and both places for the view follow the registry, ${without ? "without" : "with"} the simulator`);
-    check(p.$("programStage").dataset.sim === (sim ? "yes" : "no"), "stage layout follows it");
-    check(p.$("simSlot") !== null && all(p.$("programTab")).includes(p.$("simSlot")), "#simSlot is in the Program tab");
+    check(p.$("target").hidden === !sim, `the switch follows the registry, ${without ? "without" : "with"} the simulator`);
+    const slot = p.$("simSlot");
+    check(slot.parentNode === p.$("view") && p.$("view").parentNode === p.$("programTab").parentNode, "#simSlot is in the view pane, a sibling of the tabs");
+    check((slot.children.length > 0) === sim, `the simulator's view drawn in it only with a simulator: ${slot.children.length}`);
+    p.fire(p.$("viewToggle"), "click");
+    p.fire(p.$("viewToggle"), "click");
     check(p.errors.length === 0, `errors ${p.errors}`);
   }
 });
@@ -3018,7 +4008,10 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   standInEditor(page);
   check(page.$("programOffline").hidden, "no offline message");
   check(page.$("programRun").disabled === true, "Run off without a link");
-  check(/Connect to the rover/.test(page.$("programRun").title) && /Connect to the rover/.test(page.$("programState").textContent), `says why: ${page.$("programRun").title}`);
+  // Why, in full on Run and on the line's hover, and in a few words on the
+  // line, which is one line: a phone cut the whole reason to "Connect t..."
+  // (the review's phones 0).
+  check(/Connect to the rover/.test(page.$("programRun").title) && page.$("programState").textContent === "Not connected." && /Connect to the rover/.test(page.$("programState").title), `says why: ${page.$("programRun").title} / ${page.$("programState").textContent} / ${page.$("programState").title}`);
   check(page.$("programRunLabel").textContent === "Run on rover", `label ${page.$("programRunLabel").textContent}`);
   check(exampleItems(page).length === 4 && fileMenu(page).every((b) => b.disabled === false), "the File menu works offline");
 
@@ -3066,7 +4059,7 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's Stop, link loss and a stale link each stop it", async () => {
+test("program: a manual press, blur, a hidden page, Stop, Autonomous either way, the tab's Stop, link loss and a stale link each stop it", async () => {
   const cases = [
     // [what, act, the reason, what goes out after it]
     ["a rotate press", (page) => press(page, page.$("ccw"), 3), /^the rover was driven by hand\.$/, "ROTATE_COUNTERCLOCKWISE"],
@@ -3075,6 +4068,9 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
     ["a hidden page", (page) => { page.doc.hidden = true; page.fire(page.doc, "visibilitychange", { bubbles: false }); }, /hidden/, "STOP"],
     ["Stop", (page) => page.fire(page.$("stop"), "click"), /^Stop was pressed\.$/, "STOP"],
     ["Autonomous", (page) => page.fire(page.$("auto"), "click"), /^Autonomous was pressed\.$/, "RESUME_AUTONOMOUS"],
+    // Turned off, lit by a rover reported exploring: STOP, and the console
+    // names the toggle, not Stop.
+    ["Autonomous, lit", (page, ws) => { ws.serverMsg(telemetry({ mode: "AUTONOMOUS" })); page.fire(page.$("auto"), "click"); }, /^Autonomous was pressed\.$/, "STOP"],
     ["the tab's Stop", (page) => page.fire(page.$("programStop"), "click"), /Program tab/, "STOP"],
     ["link loss", (page, ws) => ws.serverDrop(), /link to the rover was lost/, ""],
     ["Disconnect", (page) => page.fire(page.$("connect"), "click"), /disconnected/, "STOP"],
@@ -3091,7 +4087,18 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous, the tab's 
     check(end && end.outcome === "stopped" && reason.test(end.reason), `${what}: ended ${JSON.stringify(end)}`);
     check(page.evalIn("runner.state") === "idle", `${what}: idle`);
     check(names(ws, mark).join() === after, `${what}: sent ${names(ws, mark)}, wanted ${after}`);
-    check(/^Stopped: /.test(page.$("programState").textContent) && page.$("programState").dataset.tone === "stopped", `${what}: state ${page.$("programState").textContent}`);
+    // Every stop the panel imposed says why, in amber; the operator's own
+    // Stop program, what they asked for, a plain "Stopped." (the review's
+    // phones 25: their own stop read as a warning).
+    if (what === "the tab's Stop") {
+      check(page.$("programState").textContent === "Stopped." && page.$("programState").dataset.tone === "ended" && end.own === true, `${what}: state ${page.$("programState").textContent} ${page.$("programState").dataset.tone}`);
+      const last = page.$("programLog").children.at(-1);
+      check(last.textContent === "Stopped." && last.dataset.tone === "info", `${what}: logged ${last.dataset.tone}: ${last.textContent}`);
+    } else {
+      check(/^Stopped: /.test(page.$("programState").textContent) && page.$("programState").dataset.tone === "stopped" && !("own" in end), `${what}: state ${page.$("programState").textContent}`);
+      const last = page.$("programLog").children.at(-1);
+      check(/^Stopped: /.test(last.textContent) && last.dataset.tone === "stopped", `${what}: logged ${last.dataset.tone}: ${last.textContent}`);
+    }
     check(!logLines(page).includes("after"), `${what}: nothing after the drive ran`);
     // The program never takes the rover back: only what the operator holds
     // drives on.
@@ -3148,8 +4155,10 @@ test("program: start exploring hands over, its own stop is obeyed, and neither s
 test("program: switching the target mid-run stops the program, and the choice is remembered", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   standInEditor(page);
-  check(segments(page).map((b) => b.textContent).join() === "Rover,Simulator", `segments ${segments(page).map((b) => b.textContent)}`);
-  check(!page.$("target").hidden && !page.$("programSim").hidden, "both offered, and the view shown");
+  // Each segment's word (a narrow cell shows Sim in Simulator's place).
+  const words = (b) => all(b).filter((n) => n.getAttribute && n.getAttribute("class") === "segWord").map((n) => n.textContent).join("");
+  check(segments(page).map(words).join() === "Rover,Simulator", `segments ${segments(page).map(words)}`);
+  check(!page.$("target").hidden && page.$("simSlot").children.length > 0, "both offered, and the simulator's view drawn");
   check(segments(page)[0].getAttribute("aria-pressed") === "true", "the rover chosen");
 
   startProgram(page);
@@ -3197,53 +4206,208 @@ test("program: switching the target mid-run stops the program, and the choice is
   page.fire(segments(page)[0], "click");
   check(page.$("programState").textContent === "Ready to run on the rover.", `after a switch: ${page.$("programState").textContent}`);
 
-  // The view starts folded away under the rover, on every layout, giving
-  // the editor the room; switching to the simulator unfolds it, since
-  // previewing is when it is wanted. Its heading folds it either way.
+  // The view pane beside the editor: hidden at first on a phone, on
+  // either target, giving the editor the room; a switch to the simulator
+  // leaves it folded there (shown, it squeezed the editor to a strip on an
+  // upright phone: the critic's round 1). The View toggle shows and hides
+  // it either way, and says so (aria-pressed, its title).
   const folded = loadPage();
-  check(folded.$("programSim").dataset.collapsed === "yes", "folded under the rover");
+  const view = () => `${folded.$("programTab").dataset.view} ${folded.$("viewToggle").getAttribute("aria-pressed")}`;
+  check(view() === "hidden false", `hidden under the rover, with no room for both: ${view()}`);
+  check(/show/i.test(folded.$("viewToggle").title), `its title says what a press does: ${folded.$("viewToggle").title}`);
   folded.fire(segments(folded)[1], "click");
-  check(folded.$("programSim").dataset.collapsed === "no", "unfolded on the simulator");
-  folded.fire(folded.$("simToggle"), "click");
-  check(folded.$("programSim").dataset.collapsed === "yes" && folded.$("simToggle").getAttribute("aria-expanded") === "false", "its heading folds it");
-  // The fold is no layout's alone (beside the editor it once always
-  // showed): its rule is outside every @media.
+  check(view() === "hidden false", `still folded on the simulator, on a phone: ${view()}`);
+  const onSim = loadPage({ stored: { "rover.target": "simulator" } });
+  check(onSim.$("programTab").dataset.view === "hidden", `folded at first on a phone with the simulator the target: ${onSim.$("programTab").dataset.view}`);
+  folded.fire(folded.$("viewToggle"), "click");
+  check(view() === "shown true", `the toggle shows it: ${view()}`);
+  folded.fire(folded.$("viewToggle"), "click");
+  check(view() === "hidden false" && /show/i.test(folded.$("viewToggle").title), `the toggle hides it: ${view()}`);
+  folded.fire(segments(folded)[0], "click");
+  check(view() === "hidden false", `back on the rover, as it was: ${view()}`);
+  folded.fire(folded.$("viewToggle"), "click");
+  check(view() === "shown true" && /hide/i.test(folded.$("viewToggle").title), `shown again: ${view()} ${folded.$("viewToggle").title}`);
+  // Where the screen has room for both side by side, it starts shown.
+  const roomy = loadPage();
+  roomy.evalIn(`globalThis.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });`);
+  check(roomy.evalIn(`new ProgramTab({ runner, targetSwitch, examples: [], ask, showView: true, ui: {
+    ...Object.fromEntries(["run", "runLabel", "stop", "menu", "menuList", "examples", "exportButton", "importButton", "importFile", "clear", "workspace", "hint", "offline", "state", "log"].map((k) => [k, document.createElement(k === "importFile" ? "input" : "div")])),
+    tab: document.createElement("section"), viewToggle: document.createElement("button") } }) && true`), "a tab told there is room");
+  // Told there is room, it starts shown, and a switch to the simulator
+  // shows it again after the toggle folded it.
+  roomy.evalIn(`globalThis.__ui = { ...Object.fromEntries(["run", "runLabel", "stop", "menu", "menuList", "examples", "exportButton", "importButton", "importFile", "clear", "workspace", "hint", "offline", "state", "log"].map((k) => [k, document.createElement(k === "importFile" ? "input" : "div")])),
+    tab: document.createElement("section"), viewToggle: document.createElement("button") };
+    new ProgramTab({ runner, targetSwitch, examples: [], ask, showView: true, ui: __ui });`);
+  const roomyView = [roomy.evalIn("__ui.tab.dataset.view")];
+  roomy.fire(roomy.evalIn("__ui.viewToggle"), "click");
+  roomyView.push(roomy.evalIn("__ui.tab.dataset.view"));
+  roomy.fire(segments(roomy)[1], "click");
+  roomyView.push(roomy.evalIn("__ui.tab.dataset.view"));
+  check(roomyView.join() === "shown,hidden,shown", `with room: shown at first, and again on a switch to the simulator: ${roomyView}`);
+  const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/showView:\s*roomForView/.test(app) && /matchMedia\("\(min-width: 960px\) and \(min-height: 521px\), \(min-width: 720px\) and \(min-height: 900px\)"\)/.test(app), "shown at first where the layout is side by side, or a tablet upright has room for its band");
+  // Hidden is no layout's alone: the pane is gone on every layout, with no
+  // strip left, and the editor takes its room.
+  const panel = panelCss();
+  const gone = '.shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view';
+  for (const opening of ["@media (max-width: 959.98px), (max-height: 520.98px) {", "@media (min-width: 960px) and (min-height: 521px) {"]) {
+    check((blockRules(panel, opening) || []).some((r) => r.selector === gone && /display:\s*none/.test(r.body)), `${opening}: hidden, the pane is gone`);
+  }
+  const wideRules = blockRules(panel, "@media (min-width: 960px) and (min-height: 521px) {") || [];
+  const hiddenWide = wideRules.find((r) => r.selector === '.shell:has(> #programTab[data-view="hidden"]:not([hidden]))');
+  check(hiddenWide && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(hiddenWide.body) && /"head"\s*"main"/.test(hiddenWide.body), `wide, hidden: the editor the width: ${hiddenWide && hiddenWide.body}`);
+  const shownWide = wideRules.find((r) => r.selector === ".shell:has(> #programTab:not([hidden]))");
+  const wideBody = shownWide ? shownWide.body : "";
+  check(/--view-w:\s*clamp\(360px, 0\.5 \* \(min\(100vw, var\(--shell-max\)\) - 2 \* var\(--gutter\) - var\(--s-4\)\), 640px\);/.test(wideBody) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(wideBody), `wide, shown: the view's column about half, the editor the rest: ${wideBody}`);
+  // The view's card at the top of its column, as tall as its drawing at
+  // the column's width (--va) and its bars, and the console under it the
+  // rest of the column; the editor's card beside both, full height, its
+  // toolbar its head. Given the whole column, the fan or the room floated
+  // in it with bare ground over and under, 50 to 67% of it empty (the
+  // review's laptops 0, tablets 6). The view's row gives way to a short
+  // screen, never the console's last line.
+  check(/--view-h:\s*calc\(\(var\(--view-w\) - var\(--vcw\)\) \/ var\(--va\) \+ var\(--vch\)\);/.test(wideBody), `wide, shown: the view as tall as its drawing at the column's width: ${wideBody}`);
+  check(/grid-template-rows:\s*auto var\(--bar-h\) minmax\(0, calc\(var\(--view-h\) - var\(--bar-h\)\)\) minmax\(var\(--console-min\), 1fr\);/.test(wideBody) && /"head head"\s*"view pbar"\s*"view edit"\s*"cons edit"/.test(wideBody) && !/(^|[\s;])(row-)?gap:/.test(wideBody), `wide, shown: the view over the console, the editor's card beside both: ${wideBody}`);
+  // The console keeps its state line and three of its log's lines, on
+  // either target, and the view's row gives way: with the line alone kept,
+  // the simulator's room took the column at 1366 x 657 and left the log
+  // 12 px (the reviewers' round 3). Its sum is the console's margin and
+  // border, the state line, and the log's border, padding and three lines
+  // as program.css sets them.
+  check(/--console-min:\s*calc\(var\(--s-4\) \+ 2px \+ var\(--bar-h\) \+ 1px \+ var\(--s-1\) \+ 3 \* var\(--t-sm\) \* var\(--lh-loose\) \+ var\(--s-2\)\);/.test(wideBody), `the console: its line and three log lines: ${wideBody}`);
+  const programSheet = stylesheet("program.css");
+  const logOwn = cssRules(programSheet).filter((r) => r.selector === ".programLog").map((r) => r.body).join("");
+  check(/padding:\s*var\(--s-1\) var\(--s-3\) var\(--s-2\);/.test(logOwn) && /font-size:\s*var\(--t-sm\);/.test(logOwn) && /line-height:\s*var\(--lh-loose\);/.test(logOwn) && cssRules(programSheet).some((r) => r.selector === ".programLog:not(:empty)" && /border-top:\s*1px solid/.test(r.body)), `the sum is the log's own: ${logOwn}`);
+  check(!cssRules(panel).concat(cssRules(programSheet)).some((r) => r.body !== wideBody && /--console-min:|minmax\(var\(--console-min\)/.test(r.body)) && !wideRules.some((r) => /data-target/.test(r.selector) && /grid-template-rows|--console-min|--view-h:/.test(r.body)), "the same on both targets: no other rule sets the console's room or the rows");
+  const wideTab = (selector) => wideRules.filter((r) => r.selector.replace(/,\n\s*/g, ",") === selector).map((r) => r.body).join("");
+  // The tab and its stage step aside, with the view shown alone, so the
+  // toolbar, the editor and the console take the shell's areas; hidden,
+  // the tab is one box, its console under the editor.
+  check(/display:\s*contents/.test(wideTab('#programTab:not([hidden], [data-view="hidden"]),#programTab:not([hidden], [data-view="hidden"]) > .programStage')), "wide, shown: the tab's toolbar, editor and console on the shell's grid");
+  check(/grid-area:\s*pbar/.test(wideTab('#programTab:not([data-view="hidden"]) .programBar')) && /grid-area:\s*edit/.test(wideTab('#programTab:not([data-view="hidden"]) .programEditor')), "the toolbar the editor's head, the editor under it");
+  const consoleWide = wideTab('#programTab:not([data-view="hidden"]) .programConsole');
+  const logWide = wideTab('#programTab:not([data-view="hidden"]) .programLog');
+  check(/grid-area:\s*cons/.test(consoleWide) && /margin-top:\s*var\(--s-4\)/.test(consoleWide) && /flex:\s*1 1 auto/.test(logWide) && /max-height:\s*none/.test(logWide), `the console under the view, its log the rest of it, scrolling: ${consoleWide} | ${logWide}`);
+  check(!/padding-top|margin-top/.test(wideTab("#programTab")), "wide: the toolbar at the pane's top, against the editor");
+  const stageSplit = (rules) => rules.filter((r) => /#programTab|programStage|programConsole|programBar|programEditor|programLog/.test(r.selector) && /subgrid|display:\s*contents|grid-(area|row|column)|max-height:\s*none/.test(r.body));
+  // A tablet upright: the view a band over the editor's card, the
+  // screen's width, one height whatever the target; the console under the
+  // editor there too. Beside the band it was a box as tall as the band
+  // holding one line, and the fan a thumbnail (the review's tablets 1).
+  const tabletRules = blockRules(panel, "@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {") || [];
+  const band = tabletRules.filter((r) => r.selector === ".shell:has(> #programTab:not([hidden])) > .view").map((r) => r.body).join("");
+  check(/height:\s*clamp\(120px, min\(38 \* var\(--svh\), 100 \* var\(--svh\) - 400px\), 460px\);/.test(band), `a tablet: the view a band one height: ${band}`);
+  check(stageSplit(tabletRules).length === 0 && !tabletRules.some((r) => /programTab/.test(r.selector) && /grid-template-(columns|areas)/.test(r.body)) && !tabletRules.some((r) => /^\.shell/.test(r.selector) && /grid-template-columns/.test(r.body)),
+    `a tablet: the band the width, the console under the editor: ${stageSplit(tabletRules).map((r) => r.selector)}`);
+  // The console after the editor in the stage, so a column puts it under.
+  const stageKids = [...folded.$("programStage").children].map((n) => n.getAttribute("class"));
+  check(stageKids.indexOf("programEditor") >= 0 && stageKids.indexOf("programEditor") < stageKids.indexOf("programConsole"), `the console after the editor: ${stageKids}`);
+  const aspect = cssRules(outside(panel, "@media"));
+  const shellVars = aspect.filter((r) => r.selector === ".shell" && /--va:/.test(r.body)).map((r) => r.body).join("");
+  const simVars = aspect.filter((r) => r.selector === 'body[data-target="simulator"] .shell').map((r) => r.body).join("");
+  check(/--va:\s*2\.1;/.test(shellVars) && /--va:\s*var\(--room-aspect, 1\.3333\);/.test(simVars), `the fan's aspect, or the room's: ${shellVars} | ${simVars}`);
+  // A tablet upright: the band over the editor one height whatever the
+  // target, from the screen alone, never from what it shows (--va, --vcw,
+  // --vch), so a switch of target never moves the editor's top (105 px at
+  // 768 x 1024 when the fan's band was only as tall as its wide shape: the
+  // review's tablets 11). The band is the screen's width (the review's
+  // tablets 1, above), and the fan or the room fits inside it.
+  check(band !== "" && !/--v(a|cw|ch)\b/.test(band), `tablet: the band's height the screen's, not what it shows: ${band}`);
+  check(!tabletRules.some((r) => /data-target/.test(r.selector)), "tablet: nothing in the band's layout by target");
+  // The editor and the console are the stage's; nothing of the simulator's.
+  const consoleBox = folded.$("programState").parentNode.parentNode;
+  check(consoleBox.getAttribute("class") === "programConsole" && consoleBox.parentNode === folded.$("programStage"), "the console is in the stage");
+  // The state one line, on every layout: two or three lines of it took
+  // the editor's height a run at a time on a phone (the review's phones
+  // 7). Whole on hover, and on Run's title while Run is off; the line says
+  // a reason briefly ("Not connected.", tested above).
+  const stateRule = cssRules(outside(stylesheet("program.css"), "@")).filter((r) => r.selector === ".programState").map((r) => r.body).join("");
+  check(/white-space:\s*nowrap;/.test(stateRule) && /text-overflow:\s*ellipsis;/.test(stateRule) && /overflow:\s*hidden;/.test(stateRule), `the state one line: ${stateRule}`);
+  check(folded.$("programState").title !== "" && (folded.$("programState").title === folded.$("programState").textContent || folded.$("programState").title === folded.evalIn("targetSwitch.target.ready().why")), `the state whole on hover, where one line cuts it: '${folded.$("programState").title}'`);
+  check(!all(folded.$("programTab")).includes(folded.$("simSlot")), "no view of its own in the Program tab");
+  // The toolbar is the head of the editor's card on every layout: one slim
+  // row a cell's height, on the card's ground, with no gap between it and
+  // the editor, whose top corners give way to it. In the bands beside the
+  // top of a phone on its side, it was two rows, and four slabs before that
+  // (the critic's round 2: the on-its-side test holds that layout to this).
   const programCss = stylesheet("program.css");
-  const foldRule = '.programSim[data-collapsed="yes"] #simSlot';
-  check(cssRules(outside(programCss, "@media")).some((r) => r.selector === foldRule && /display:\s*none/.test(r.body)), "folded on every layout");
-  // Wide, the view takes its column's height, the console under the
-  // editor; tall enough, the console goes under the view. Folded, or with
-  // no simulator, the editor takes the width, the console under it.
-  const stageRules = (opening) => (blockRules(programCss, opening) || []).filter((r) => /^\.programStage\b/.test(r.selector));
-  const wideStage = stageRules("@media (min-width: 960px) and (min-height: 521px) {");
-  const areas = (rules, find) => ((rules.find(find) || {}).body || "").match(/grid-template-areas:([^;]*);/);
-  const unfolded = areas(wideStage, (r) => r.selector === ".programStage");
-  // Only with the view there and unfolded: folded, the editor's row would
-  // be as tall as its content, which is nothing.
-  const unfoldedOnly = '.programStage:not([data-sim="no"]):not(:has(> .programSim[data-collapsed="yes"]))';
-  const tallStage = stageRules("@media (min-width: 960px) and (min-height: 861px) {");
-  check(tallStage.every((r) => r.selector.startsWith(unfoldedOnly)), `wide and tall: the view unfolded only: ${tallStage.map((r) => r.selector)}`);
-  const tall = areas(tallStage, (r) => r.selector === unfoldedOnly);
-  const foldedRule = wideStage.find((r) => r.selector.includes(':has(> .programSim[data-collapsed="yes"])'));
-  const foldedAreas = areas(wideStage, (r) => r === foldedRule);
-  const noSim = areas(wideStage, (r) => r.selector === '.programStage[data-sim="no"]');
-  check(unfolded && /"editor\s+toggle sim"\s*"console toggle sim"/.test(unfolded[1]), `wide: the view the column's height: ${unfolded && unfolded[1]}`);
-  check(tall && /"editor toggle sim"\s*"editor toggle console"/.test(tall[1]), `wide and tall: the console under the view: ${tall && tall[1]}`);
-  check(foldedAreas && /"editor\s+toggle"\s*"console toggle"/.test(foldedAreas[1]), `wide, folded: under the editor, the heading still there: ${foldedAreas && foldedAreas[1]}`);
-  // A hidden view counts as folded: the no-simulator rule must win.
-  check(foldedRule && foldedRule.selector.includes(':not([data-sim="no"])'), `folded, never with no simulator: ${foldedRule && foldedRule.selector}`);
-  check(noSim && /^\s*"editor"\s*"console"\s*$/.test(noSim[1]), `no simulator: the editor the width: ${noSim && noSim[1]}`);
-  // The heading and the view take their areas only as the stage's own grid
-  // items, which they are through .programSim.
-  const wide = blockRules(programCss, "@media (min-width: 960px) and (min-height: 521px) {") || [];
-  check(wide.some((r) => r.selector === ".programSim" && /display:\s*contents/.test(r.body)), "the view's parts are the stage's grid items");
-  check(folded.$("simToggle").parentNode === folded.$("programSim") && folded.$("simSlot").parentNode === folded.$("programSim") &&
-    folded.$("programSim").parentNode === folded.$("programStage"), "the heading and the view in .programSim, in the stage");
-  check(folded.$("programState").parentNode.parentNode === folded.$("programStage"), "the console is in the stage");
-  // The narrowest wide pane (960 px windows) keeps the toolbar to one row
-  // on either target: the buttons a step narrower again.
-  const narrowPane = blockRules(programCss, "@container program (max-width: 599.98px) {") || [];
-  check(narrowPane.some((r) => /\.programBar > button/.test(r.selector) && /padding-inline:\s*var\(--s-2\)/.test(r.body)), "a narrow pane's toolbar a step narrower");
+  const programBase = cssRules(outside(programCss, "@"));
+  const baseOf = (selector) => programBase.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/--bar-h:\s*calc\(var\(--ctl\) \+ 7px\);/.test(baseOf(":root")) && /height:\s*var\(--bar-h\);/.test(baseOf(".programBar")) && /display:\s*flex;/.test(baseOf(".programBar")) && /border-bottom:\s*none;/.test(baseOf(".programBar")) && /border-radius:\s*var\(--r-lg\) var\(--r-lg\) 0 0;/.test(baseOf(".programBar")),
+    `the toolbar a row, the card's head: ${baseOf(".programBar")}`);
+  check(/border-radius:\s*0 0 var\(--r-lg\) var\(--r-lg\);/.test(baseOf(".programEditor")) && /gap:\s*0;/.test(baseOf("#programTab")), `the editor the card's body, straight under it: ${baseOf(".programEditor")} | ${baseOf("#programTab")}`);
+  // Blockly's toolbox along the top of an upright phone's editor, every
+  // category in sight there: wrapping to a second row, never a row that
+  // scrolls and cuts one mid-word ("Lo" at 375 px: the critic's round 2).
+  // On its side, down the left, so they never wrap: along the top they
+  // took 30 to 60 px of an editor 170 px tall (the review's phones 0).
+  // Down the left of a short editor the seven ran past its foot (round
+  // 2), so a short editor's pills are closer, all seven in its height.
+  const blocksJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
+  check(/static NARROW = "\(max-width: 600px\) and \(orientation: portrait\)";/.test(blocksJs), "the toolbox along the top of an upright phone alone");
+  const pills = baseOf('.blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup');
+  check(/flex-wrap:\s*wrap;/.test(pills) && !/overflow|mask/.test(pills), `every category in sight, wrapping: ${pills}`);
+  // Every block a query opens, wherever it is in the sheet.
+  const everyBlock = (css, opening) => {
+    const rules = [];
+    for (let rest = css.replace(/\/\*[\s\S]*?\*\//g, ""), at = rest.indexOf(opening); at >= 0; rest = rest.slice(at + opening.length), at = rest.indexOf(opening)) rules.push(...blockRules(rest.slice(at), opening));
+    return rules;
+  };
+  const shortPills = everyBlock(programCss, "@container editor (max-height: 299.98px) {").filter((r) => /blocklyToolbox:not\(\[layout="h"\]\)/.test(r.selector));
+  const pillPad = shortPills.filter((r) => /\.roverCategory/.test(r.selector)).map((r) => r.body).join("");
+  const pillLine = shortPills.filter((r) => /blocklyToolboxCategoryLabel/.test(r.selector)).map((r) => r.body).join("");
+  const pad = Number((pillPad.match(/padding:\s*(\d+)px/) || [])[1]);
+  const gap = Number((pillPad.match(/margin:\s*0 0 (\d+)px/) || [])[1]);
+  const line = Number((pillLine.match(/line-height:\s*(\d+)px/) || [])[1]);
+  // Seven pills and the toolbox's 4 px either end in 170 px, the editor's
+  // height at 568 x 320.
+  check(pad > 0 && line > 0 && 7 * (line + 2 * pad + gap) + 8 <= 170, `a short editor: the seven down the left in 170 px: ${7 * (line + 2 * pad + gap) + 8} (${pillPad} | ${pillLine})`);
+  check((blockRules(programCss, "@media (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint") && (blockRules(programCss, "@media not all and (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint"),
+    "the hint clear of the toolbox wherever blocks.js puts it");
+  // Shorter still (130 px at 480 x 320), closer again: at 23 px a pill,
+  // Variables was cut in half and Output out of sight (the review's
+  // phones 4; measured in a browser: all seven in 130 px).
+  const shorter = everyBlock(programCss, "@container editor (max-height: 169.98px) {");
+  const tight = (re) => shorter.filter((r) => re.test(r.selector)).map((r) => r.body).join("");
+  const tPad = Number((tight(/\.roverCategory$/).match(/padding:\s*(\d+)px/) || [])[1]);
+  const tLine = Number((tight(/blocklyToolboxCategoryLabel/).match(/line-height:\s*(\d+)px/) || [])[1]);
+  const tEnds = Number((tight(/^\.blocklyToolbox:not\(\[layout="h"\]\)$/).match(/padding:\s*(\d+)px/) || [])[1]);
+  check(tLine > 0 && 7 * (tLine + 2 * tPad) + 2 * tEnds <= 130 && /margin:\s*0;/.test(tight(/\.roverCategory$/)), `shorter still: the seven in 130 px: ${7 * (tLine + 2 * tPad) + 2 * tEnds}`);
+  // A short editor drops the zoom buttons, which ran up under the toolbox;
+  // a narrow one (a phone's) or a shorter one the trash can too, which on
+  // a phone lay over an example's inputs (the review's phones 3); and a
+  // short one puts the hint at its foot, or, too narrow for it beside the
+  // toolbox, nowhere: it ran five lines tall, its top cut off.
+  check(/container:\s*editor \/ size;/.test(baseOf(".programEditor")), "the editor a container for its height");
+  check(everyBlock(programCss, "@container editor (max-height: 299.98px) {").some((r) => r.selector === ".blocklyZoom" && /display:\s*none/.test(r.body)), "a short editor: no zoom buttons");
+  const small = everyBlock(programCss, "@container editor (max-width: 359.98px) or (max-height: 259.98px) {");
+  check(small.some((r) => r.selector.replace(/\s+/g, " ") === ".blocklyZoom, .blocklyTrash" && /display:\s*none/.test(r.body)), "under 360 px wide or 260 tall: no trash can, no zoom buttons");
+  const shortest = blockRules(programCss, "@container editor (max-height: 199.98px) {") || [];
+  check(shortest.some((r) => r.selector === ".programHint" && /bottom:/.test(r.body)), "shorter still: the hint at the foot");
+  const cramped = everyBlock(programCss, "@container editor (max-height: 199.98px) and (max-width: 399.98px) {");
+  check(cramped.some((r) => r.selector === ".programHint" && /display:\s*none/.test(r.body)), "and too narrow beside the toolbox, no hint");
+  // A program loaded (an example, a file) fitted to the editor's width,
+  // from its top-left, never zoomed in past the start scale (the review's
+  // phones 3: examples ran past a phone's editor); measured in a browser.
+  check(/load\(state\) \{[\s\S]*?this\.#showTopLeft\(true\);/.test(blocksJs) && /Math\.min\(this\.#startScale, \(view\.width - 2 \* margin\) \/ width\)/.test(blocksJs) && /workspace\.scroll\(margin - box\.left \* scale, margin - box\.top \* scale\)/.test(blocksJs), "a loaded program fitted to the width, from its top-left");
+  // The toolbar keeps to one row in a phone's tab: its icons go first.
+  const narrowPane = blockRules(programCss, "@container program (max-width: 459.98px) {") || [];
+  check(narrowPane.some((r) => /\.viewWord/.test(r.selector) && /display:\s*none/.test(r.body)), "a narrow tab's View toggle its icon alone");
+  // Narrower still (a 320 px phone), Run gives way, never Stop program:
+  // cut to "Stop", it was the one button on screen named Stop and not the
+  // one that stops an exploring rover (the review's phones 6). Run says
+  // "Run" on the rover ("Preview" on the simulator), titled in full, and
+  // no rule there hides a word of Stop program.
+  const narrowest = blockRules(programCss, "@container program (max-width: 339.98px) {") || [];
+  const haltWords = all(folded.$("programStop")).map((n) => (n.textContent || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  check(narrowest.some((r) => r.selector === ".programBar .runWord" && /display:\s*none/.test(r.body)) && narrowest.some((r) => r.selector === ".programBar .runShort" && /display:\s*inline/.test(r.body)) && /\.runShort\s*\{\s*display:\s*none;/.test(programCss.replace(/\/\*[\s\S]*?\*\//g, "")),
+    "the narrowest tab: Run's short word in place of its long one, and only there");
+  check(!narrowest.some((r) => /halt|#programStop/.test(r.selector) && /display:\s*none/.test(r.body)) && haltWords === "Stop program" && folded.$("programStop").getAttribute("aria-label") === "Stop program", `the narrowest tab's Stop program says both words: ${haltWords}`);
+  const shortRun = () => `${folded.$("programRunShort").textContent} / ${folded.$("programRunLabel").textContent}`;
+  check(shortRun() === "Run / Run on rover", `Run's words on the rover: ${shortRun()}`);
+  folded.fire(segments(folded)[1], "click");
+  check(shortRun() === "Preview / Preview", `on the simulator: ${shortRun()}`);
+  folded.fire(segments(folded)[0], "click");
 
   const again = loadPage({ stored: { "rover.target": "simulator" } });
   check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
@@ -3286,15 +4450,56 @@ test("program: a loop of stops, of stops and explores, or of very short drives c
   }
 });
 
+// With no link on the rover target the console's line says why Run is off,
+// and beside it Connect does the next thing while the view, with its
+// connect card, is folded: on a phone it starts folded on this tab, and the
+// chip was the only way to connect (the critic's round 2). Not while the
+// card is on screen too: two Connect buttons asked which to press (round
+// 1). Hidden by its attribute otherwise, so no style follows the link or
+// the target.
+test("program: the console offers Connect beside the line while the rover target has no link and the view is folded, and only then", () => {
+  const page = loadPage();
+  standInEditor(page);
+  const go = page.$("programConnect");
+  check(go.parentNode === page.$("programState").parentNode && /Connect to the rover/.test(go.getAttribute("title") || ""), "beside the state line, titled");
+  check(go.hidden, "the Drive tab: the scan's card offers it");
+  page.fire(page.$("tabProgram"), "click");
+  check(page.$("programTab").dataset.view === "hidden" && !go.hidden && page.$("programState").textContent === "Not connected." && /Connect to the rover/.test(page.$("programState").title), `no link, the view folded: offered, the line says why: ${page.$("programState").textContent}`);
+  page.fire(page.$("viewToggle"), "click");
+  check(go.hidden, "the view shown: its connect card offers it, not two at once");
+  page.fire(page.$("viewToggle"), "click");
+  check(!go.hidden, "folded again: back");
+  page.fire(go, "click");
+  check(page.sockets.length === 1 && page.doc.body.dataset.link === "connecting" && go.hidden, "a press is Connect's, and connecting it goes");
+  const ws = page.sockets[0];
+  ws.serverOpen();
+  check(go.hidden, "up: gone");
+  ws.serverDrop();
+  check(!go.hidden, "lost: back");
+  page.fire(page.$("target").children[1], "click");
+  check(go.hidden, "the simulator target needs no link: gone");
+  page.fire(page.$("target").children[0], "click");
+  check(!go.hidden, "the rover again, still no link: back");
+  const shown = cssRules(stylesheet("program.css")).filter((r) => /\.consoleConnect/.test(r.selector) && /display:/.test(r.body));
+  check(shown.every((r) => !/data-(link|target)/.test(r.selector)) && shown.some((r) => r.selector === ".consoleConnect[hidden]" && /display:\s*none/.test(r.body)), `by its attribute alone: ${shown.map((r) => r.selector)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("program: Run is off with nothing to run, and asks before running several stacks on the rover", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   standInEditor(page);
   page.evalIn("__editor.empty = true; __editor.stacks = 0; programTab.refresh();");
   check(page.$("programRun").disabled === true, "Run off on an empty editor");
-  check(/^Nothing to run yet/.test(page.$("programRun").title) && /^Nothing to run yet/.test(page.$("programState").textContent), `says why: ${page.$("programState").textContent}`);
-  // The examples are out of sight in the File menu: both lines say so.
-  check(/an example from the File menu\.$/.test(page.$("programState").textContent) && /an example in the File menu\.$/.test(page.$("programHint").textContent),
-    `says where the examples are: ${page.$("programState").textContent} / ${page.$("programHint").textContent}`);
+  check(/^Nothing to run yet/.test(page.$("programRun").title) && page.$("programState").textContent === "No blocks yet.", `says why: ${page.$("programRun").title} / ${page.$("programState").textContent}`);
+  // The examples are out of sight in the File menu: Run's title and the
+  // hint over the empty editor say so. The advice once on screen, not three
+  // times over (the critic's round 2): the state says only that there are
+  // no blocks, and the log stays empty, out of sight.
+  check(/an example from the File menu\.$/.test(page.$("programRun").title) && /an example in the File menu\.$/.test(page.$("programHint").textContent) && page.$("programHint").hidden === false,
+    `says where the examples are: ${page.$("programRun").title} / ${page.$("programHint").textContent}`);
+  check(!/File menu/.test(page.$("programState").textContent) && page.$("programLog").children.length === 0, `said once: ${page.$("programState").textContent}`);
+  const emptyLog = cssRules(stylesheet("program.css")).find((r) => r.selector === ".programLog:empty");
+  check(emptyLog && /display:\s*none/.test(emptyLog.body), "an empty log takes no room");
   page.fire(page.$("programRun"), "click");
   await flush();
   check(page.evalIn("runner.state") === "idle" && count(ws) === 0, "and pressing it anyway runs nothing");
@@ -3487,7 +4692,7 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   page.fire(button, "click");
   check(!menu.hidden && button.getAttribute("aria-expanded") === "true" && focused() === "Square", `opened on the first item: ${focused()}`);
   check(menu.scrolledIntoView === 1 && menu.scrollOptions && menu.scrollOptions.block === "nearest",
-    "scrolled into view as it opened, clear of the Stop bar on a phone, and no further: the button stays in sight");
+    "scrolled into view as it opened, clear of the top stuck over a phone's page, and no further: the button stays in sight");
   check(key(page.doc.activeElement, "ArrowDown").defaultPrevented, "Down moves in the menu, not the page");
   check(focused() === "Strafe box", `Down: ${focused()}`);
   key(page.doc.activeElement, "End");
@@ -3501,11 +4706,14 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   key(page.doc.activeElement, "Escape");
   check(menu.hidden && button.getAttribute("aria-expanded") === "false" && page.doc.activeElement === button, "Escape closes it, back on the button");
 
-  // An item that cannot act stays, disabled, and the keys pass it by.
+  // An item that cannot act stays, disabled, and the keys pass it by: an
+  // empty editor has nothing to clear and nothing to export (Export was
+  // on there while Clear was off: the review's tablets 17).
   page.evalIn("__editor.empty = true; programTab.refresh();");
   check(page.$("programClear").disabled && !page.$("programClear").hidden, "nothing to clear: Clear disabled, still there");
+  check(page.$("programExport").disabled && !page.$("programExport").hidden, "nothing to export: Export disabled, still there");
   check(key(button, "ArrowUp").defaultPrevented, "Up on the button opens the menu, and scrolls nothing");
-  check(!menu.hidden && focused() === "Export", `Up on the button opens on the last that can act: ${focused()}`);
+  check(!menu.hidden && focused() === "Import…", `Up on the button opens on the last that can act: ${focused()}`);
   key(page.doc.activeElement, "Tab");
   check(menu.hidden && button.getAttribute("aria-expanded") === "false", "Tab closes it");
   page.evalIn("__editor.empty = false; programTab.refresh();");
@@ -3584,15 +4792,18 @@ test("program: an item that asks leaves the focus on the File button once answer
   // Mid-run, the items that would change the editor say so; an empty
   // editor has nothing to clear.
   const titles = () => [...exampleItems(page), page.$("programImport"), page.$("programClear")].map((b) => `${b.disabled ? "off" : "on"}:${b.title}`);
-  check(titles().join("|") === "on:|on:|on:|on:|on:Open a program saved with Export|on:Remove every block", `idle: ${titles()}`);
+  check(titles().join("|") === "on:Load this example into the editor|".repeat(4) + "on:Open a program saved with Export|on:Remove every block", `idle: ${titles()}`);
   startProgram(page, "await api.wait(5);");
   await flush();
   check(titles().every((t) => t === "off:Stop the program first"), `mid-run: ${titles()}`);
-  check(page.$("programExport").disabled === false, "Export still works");
+  check(page.$("programExport").disabled === false && page.$("programExport").title === "Save the program as rover-program.json", `Export still works: ${page.$("programExport").title}`);
   page.evalIn("runner.abort('done')");
   await liveForAsync(page, ws, 200);
   page.evalIn("__editor.empty = true; programTab.refresh();");
   check(titles().at(-1) === "off:Nothing to clear", `empty: ${titles().at(-1)}`);
+  check(page.$("programExport").disabled === true && /^Nothing to export/.test(page.$("programExport").title), `empty, Export off and says why: ${page.$("programExport").title}`);
+  page.evalIn("__editor.empty = false; programTab.refresh();");
+  check(page.$("programExport").disabled === false && /^Save the program/.test(page.$("programExport").title), `blocks again: Export on: ${page.$("programExport").title}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3625,195 +4836,721 @@ test("program: Blockly's own questions are asked in the page's dialog, Cancel fo
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-// The wide layout's two columns are the same beside both tabs (F3, F3d):
-// two rail widths, one per tab, left the address, the scan and Autonomous
-// starting at different edges, and Autonomous under nothing on the Program
-// tab. Layout itself is measured in a browser; this holds the shape.
-test("wide: one rail width beside both tabs, for the address, the note, the rail and Autonomous; Stop under the left pane", () => {
+// The top is two cells on every layout and beside both tabs (F8, the
+// owner's ask: "squeeze all this in 2 cells at the top"): what the controls
+// drive and its state (the target first, Autonomous, then the link chip
+// with the rover's alerts), then how they drive it (the tabs, the scheme,
+// and Stop beside the gear at its far end). One row where the top is 900
+// px wide, the first cell as wide as it needs and the second the rest, a
+// cell a row below. Autonomous and Stop are in different cells, so a hand
+// reaching for Stop cannot start the rover exploring, and nothing of the
+// link sits beside Stop: Disconnect there left an exploring rover
+// exploring, and the panel no link to stop it. Beside the Program tab the rail is a column,
+// the scan and the readouts, one width from the viewport alone; the Drive
+// tab is split for the simulator's view (F3i, the next test). Layout itself
+// is measured in a browser; this holds the shape.
+test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomous in the other cell, beside both tabs", () => {
   const css = panelCss();
   const rules = cssRules(css);
   const root = rules.filter((r) => r.selector === ":root").map((r) => r.body).join("");
-  check(/--rail:\s*clamp\(320px, 30vw, 460px\);/.test(root), "one rail, from the viewport alone");
-  const setsRail = rules.filter((r) => r.selector !== ":root" && /--rail\s*:/.test(r.body));
-  check(setsRail.length === 0, `nothing narrows it per tab: ${setsRail.map((r) => r.selector)}`);
-  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  const perTab = wide.filter((r) => /#(programTab|driveTab)/.test(r.selector) && /\.shell/.test(r.selector) && /grid-template/.test(r.body));
-  check(perTab.length === 0, `no grid of its own beside either tab: ${perTab.map((r) => r.selector)}`);
-  // Where the left pane has room for it (DRIVE_BESIDE), the Drive tab splits
-  // only that pane, for the simulator's view (F1): the rail stays the last
-  // column, as wide, and the bar under all three.
-  const driveView = ".shell:has(> #driveTab:not([hidden]) + .driveView:not([hidden]))";
-  const beside = mediaRules(DRIVE_BESIDE) || [];
-  const others = beside.filter((r) => r.selector !== driveView && /grid-template/.test(r.body));
-  check(others.length === 0, `nothing else there sets a grid: ${others.map((r) => r.selector)}`);
-  const split = (beside.find((r) => r.selector === driveView) || {}).body || "";
-  check(/grid-template-columns:\s*auto minmax\(0, 1fr\) var\(--rail\);/.test(split), `the Drive tab's left pane split in two, the rail as ever: ${split}`);
-  const areas = (split.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || [];
-  check(areas.join(" ") === '"head head head" "main view fault" "main view scan" "main view read" "act  act  act"', `the dock, the view, then the rail; the bar across: ${areas}`);
-  const body = (selector) => (wide.find((r) => r.selector === selector) || {}).body || "";
-  for (const selector of [".shell", ".bar", ".actions"]) {
-    check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--rail\);/.test(body(selector)), `${selector}: the left pane, then the rail`);
-  }
-  for (const selector of [".link", "#note"]) check(!/\bwidth:/.test(body(selector)), `${selector} fills the rail's column: ${body(selector)}`);
-  check(/justify-self:\s*start/.test(body("#stop")) && /width:\s*min\(100%, 480px\)/.test(body("#stop")), `Stop from the left pane's edge, at most 480 px: ${body("#stop")}`);
-  check(/min-height:\s*calc\(var\(--tap\) \+ var\(--s-3\)\)/.test(body(".actions button")), "Stop and Autonomous 56 px");
-  check(/grid-area:\s*1 \/ 1;/.test(body("#stop")) && /grid-area:\s*1 \/ 2;/.test(body("#auto")), "Stop under the left pane, Autonomous under the rail");
-  // The short wide block (521 to 640 px tall) sizes the stick again, and
-  // keeps the bar's 56 px.
-  const short = mediaRules("@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {") || [];
-  for (const [where, rules] of [["wide", wide], ["short", short]]) {
-    const stick = (((rules.find((r) => r.selector === ":root" && /--stick:/.test(r.body)) || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(/var\(--rail\)/.test(stick), `${where}: the stick budgets the one rail: ${stick}`);
-  }
-  check(!short.some((r) => /\.actions button/.test(r.selector) && /min-height/.test(r.body)), "short: Stop and Autonomous stay 56 px");
-  // The scan fills its column beside both tabs: no card sized to its drawing.
-  check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
-});
+  // The panes: the view and the hands. On a wide screen the Drive tab's
+  // column is as wide as its two sticks need, from the viewport alone (the
+  // sticks' budget), and nothing narrows it per tab or per state.
+  const wide = mediaRules(WIDE) || [];
+  const wideRoot = wide.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `the Drive tab's column from the sticks alone: ${wideRoot}`);
+  const setsDrive = rules.filter((r) => r.selector !== ":root" && /--drive\s*:/.test(r.body));
+  check(setsDrive.length === 0, `nothing narrows it per tab: ${setsDrive.map((r) => r.selector)}`);
+  check(!rules.some((r) => /--rail\s*:/.test(r.body)) && !/var\(--rail\)/.test(css), "no rail left");
+  // A grid set on the shell itself, per tab: the Program tab's alone (the
+  // view shown, and hidden), the Drive tab's the shell's own.
+  const perTab = wide.filter((r) => /^\.shell:has\(> #(programTab|driveTab)[^ ]*\)$/.test(r.selector) && /grid-template/.test(r.body));
+  check(perTab.length === 2 && perTab.every((r) => /^\.shell:has\(> #programTab/.test(r.selector)), `a grid of its own beside the Program tab alone: ${perTab.map((r) => r.selector)}`);
+  const body = (selector, from = wide) => (from.find((r) => r.selector === selector) || {}).body || "";
+  const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((a) => a.replace(/\s+/g, " "));
+  check(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--drive\);/.test(body(".shell")), `the view, then the hands: ${body(".shell")}`);
+  check(areas(body(".shell")).join(" ") === '"head head" "view main"', `the top across both, and no bar across the foot: ${areas(body(".shell"))}`);
+  // The top spans the page beside either tab, so a tab switch moves none of
+  // its cells: the Program tab changes only where the panes meet.
+  const programShown = body(".shell:has(> #programTab:not([hidden]))");
+  check(/grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(programShown) && /--view-w:\s*clamp\(360px, 0\.5 \* /.test(programShown) && areas(programShown)[0] === '"head head"', `beside the Program tab, the view's column about half, the top across both: ${programShown}`);
+  const programHidden = body('.shell:has(> #programTab[data-view="hidden"]:not([hidden]))');
+  check(areas(programHidden).join(" ") === '"head" "main"' && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(programHidden), `the view hidden, the editor the page's width: ${programHidden}`);
+  const base = cssRules(outside(css, "@media"));
+  const baseBody = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(areas(baseBody(".shell")).join(" ") === '"head" "view" "main"', `a phone: the top, the view, then the hands, and no foot bar: ${areas(baseBody(".shell"))}`);
 
-// The Drive tab's view of the simulator (F1) sits beside the dock, never
-// around it: joy.js places a touch by its canvas's offsetParent, and the
-// view's box is positioned (wide) or a size container (phone). Its place
-// is kept on either target, so a switch moves nothing; on a phone it takes
-// the scan's row on the simulator, and shows the motion there when the row
-// is too short for the room. Layout itself is measured in a browser.
-test("drive view: beside the dock on a wide screen, in the scan's place on a phone, never around the stick", () => {
+  // The top: stuck to the screen's top when the page scrolls, over
+  // Blockly's widgets, and the container its cells are laid out by.
+  const bar = baseBody(".bar");
+  check(/grid-area:\s*head;/.test(bar) && /position:\s*sticky;/.test(bar) && /top:\s*0;/.test(bar) && /container:\s*bar \/ inline-size;/.test(bar), `the top stuck, and a container: ${bar}`);
+  check(Number((bar.match(/z-index:\s*(\d+);/) || [])[1]) > 100000, `over Blockly's widgets (100000): ${bar}`);
+  check(/grid-template-columns:\s*minmax\(0, 1fr\);/.test(baseBody(".cells")), `a cell a row below 900 px: ${baseBody(".cells")}`);
+  // One row from 900 px: the first cell as wide as what it holds, never
+  // squeezed below it, and the second the rest, Stop's at its far end, no
+  // page ground between them. Halves left dead ground inside both cells
+  // (the critic's round 2: 140 px in the first at 1280, 240 in the second);
+  // each cell as wide as it held left up to 580 px of bare ground between
+  // them (round 3). Nothing before the chip changes width with the state,
+  // so Autonomous never moves: a badge coming, or a switch to the
+  // simulator, moved it 58 px (the critic's round 2), when it came after
+  // the chip.
+  const oneRow = blockRules(outside(css, "@media"), "@container bar (min-width: 900px) {") || [];
+  const cellsRow = oneRow.find((r) => r.selector === ".cells");
+  check(cellsRow && /display:\s*flex;/.test(cellsRow.body) && !/justify-content/.test(cellsRow.body) && /column-gap:\s*var\(--s-2\);/.test(cellsRow.body), `one row from 900 px, the cells 8 px apart: ${cellsRow && cellsRow.body}`);
+  check(oneRow.some((r) => r.selector === ".hcell.drives" && /flex:\s*none;/.test(r.body)), "the first cell as wide as what it holds, never squeezed");
+  check(oneRow.some((r) => r.selector === ".hcell.hands" && /flex:\s*1 1 0;/.test(r.body)), "the second cell the rest of the row");
+  check(!oneRow.some((r) => r.selector === ".hcell"), "no rule for both cells alike");
+  // In one row the second cell's controls keep to its far end, its spare
+  // room at its start: the first cell growing as the chip says "Rover:" or
+  // an alert moves none of them (the reviewers' round 2: Advanced moved
+  // 227 px as telemetry came, and a click aimed at it landed on Normal).
+  check(oneRow.some((r) => r.selector === ".hcell.hands > .tabs" && /margin-left:\s*auto;/.test(r.body)) && oneRow.some((r) => r.selector === ".hcell.hands > .scheme" && /margin-right:\s*0;/.test(r.body)),
+    "in one row, the second cell's tabs and scheme at its far end, by Stop");
+  // Where the two would meet, the first clips what it cannot hold rather
+  // than spill over Stop's; the words step down first (below), so it never
+  // has to. Not the cells themselves: the gear's popover hangs from the
+  // second.
+  check(baseBody(".drives").includes("overflow-x: clip;") && !/overflow/.test(baseBody(".hcell")), "the first cell clips what it cannot hold, rather than spill over Stop's");
+  // The chip's word slot is as wide whatever it says: the word and a sizer
+  // for each word it can say (Link adds them) in one grid cell, the sizers
+  // out of sight.
+  const chipWord = baseBody(".chipWord");
+  check(/display:\s*inline-grid;/.test(chipWord) && /grid-area:\s*1 \/ 1;/.test(baseBody(".chipWord > *")) && /visibility:\s*hidden;/.test(baseBody(".chipSizer")), `the chip's words in one cell, sized by the longest: ${chipWord}`);
+  // Words only where all of them fit, measured (fitSteps, app.js): each
+  // cell tries its steps from the most it says and keeps the first whose
+  // content fits, so the words follow the fonts the device has and the
+  // cell's width, and nothing else. The first cell: the address on the chip
+  // (wherever it fits: the reviewers' round 2, an iPad upright), every
+  // word, Sim and Auto, every control closer, the rover's glyph for its
+  // name keeping the alerts' words (on an iPad on its side they were
+  // glyphs that look alike), or else "Rover:" kept and the alerts' glyphs
+  // (a phone on its side), both glyphs, 12 px words, the chip's word in
+  // the room left. The second: every word, the segments closer, and closer
+  // still, both at 13 px (a 375 px phone), 12 px words, and Adv only where
+  // nothing else fits (a 320 px phone: 15 px short of Advanced). What comes and goes in the chip (the
+  // rover's name, both alerts) is measured shown (data-fitting), so the
+  // step never depends on the state; where the cells share a row, either
+  // cell running over counts, and the row.
+  const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\], runsOver\)/.test(appJs) && /fitSteps\(firstCell, \["host", "words", "short", "snug", "rover", "glyphs", "icons", "small", "lamp"\], runsOver\)/.test(appJs), "each cell's steps, from the most it says");
+  check(!/matchMedia\("\(min-width: 1280px\)"\)/.test(appJs) && /const runsOver = \(\) => runsPast\(firstCell\) \|\| runsPast\(secondCell\) \|\| cellsRow\.scrollWidth > cellsRow\.clientWidth;/.test(appJs), "the address wherever it fits, and either cell's overflow or the row's counts");
+  // A cell runs over when its last control laid out ends past its content
+  // box, not only when it scrolls: a chip in the cell's padding touched
+  // its outline (the reviewers' round 2, tablets 3).
+  const runsPast = (cellRight, lastRight) => page0Run(cellRight, lastRight);
+  function page0Run(cellRight, lastRight) {
+    const p = loadPage();
+    const cell = p.doc.documentElement.querySelector(".hcell.drives");
+    cell.clientWidth = cellRight;
+    for (const child of cell.children) child.clientWidth = 0;
+    p.$("linkChip").clientWidth = lastRight;
+    return p.evalIn("runsPast(document.querySelector('.hcell.drives'))");
+  }
+  check(runsPast(300, 300) === false && runsPast(300, 301) === true, "past the content box's end by a pixel runs over");
+  check(/cellsRow\.dataset\.fitting = "yes";[\s\S]*fitSteps\(firstCell[\s\S]*delete cellsRow\.dataset\.fitting;/.test(appJs), "measured with the chip's coming and going parts shown");
+  const fitting = rules.find((r) => r.selector === ".cells[data-fitting] :is(.chipFor, .chipAlert)[hidden]");
+  check(fitting && /display:\s*inline-flex;/.test(fitting.body) && /visibility:\s*hidden;/.test(fitting.body), `shown, out of sight, while measured: ${fitting && fitting.body}`);
+  // The address is the chip's data-host (Link), which only connecting
+  // somewhere else changes; the state never refits the cells.
+  check(/new ResizeObserver\(fitTheTop\)/.test(appJs) && /new MutationObserver\(fitTheTop\)\.observe\(byId\("linkChip"\), \{ attributes: true, attributeFilter: \["data-host"\] \}\)/.test(appJs), "measured again as the cells' width or the address changes, never the state");
+  const page0 = loadPage();
+  check(page0.doc.documentElement.querySelector(".hcell.drives").dataset.fit === "host" && page0.doc.documentElement.querySelector(".hcell.hands").dataset.fit === "words", "a page that cannot measure keeps every word");
+  // A box that fits at some steps and not others, and one that fits at none.
+  const box = (fits) => ({ dataset: {}, clientWidth: 100, get scrollWidth() { return fits.includes(this.dataset.fit) ? 100 : 101; } });
+  const some = box(["short", "glyphs"]);
+  const none = box([]);
+  const fit = { first: fitSteps(some, ["host", "words", "short", "glyphs", "lamp"]), none: fitSteps(none, ["host", "words", "lamp"]) };
+  check(fit.first === "short" && some.dataset.fit === "short" && fit.none === "lamp" && none.dataset.fit === "lamp", `the first step that fits, or the last: ${JSON.stringify(fit)}`);
+  // A row whose parts shrink to fit says it does not fit by its parts.
+  const parts = { dataset: {}, clientWidth: 100, scrollWidth: 100 };
+  check(fitSteps(parts, ["words", "bare"], (b) => b.dataset.fit === "words") === "bare", "its own test of fitting");
+  const wordRules = cssRules(css.replace(/@(media|container)[^{]*\{/g, "")).filter((r) => /\.(chipWord|chipForWord|chipSay|alertWord|segShort|segWord|autoShort|autoWord|roverGlyph)\b/.test(r.selector) && /display\s*:/.test(r.body));
+  const byFit = (pattern) => wordRules.filter((r) => pattern.test(r.selector) && /data-fit/.test(r.selector));
+  // The address (the chip's --host) drawn after the link's word, and in
+  // each sizer, so the word's slot is as wide with it whatever it says and
+  // the address 8 px after the word: only at the first cell's first step.
+  const hosts = cssRules(css.replace(/@(media|container)[^{]*\{/g, "")).filter((r) => /content:\s*var\(--host/.test(r.body));
+  check(hosts.length === 1 && hosts[0].selector === '.drives[data-fit="host"] :is(.chipSay, .chipSizer)::after' && /margin-left:\s*var\(--s-2\);/.test(hosts[0].body) && /color:\s*var\(--dim\);/.test(hosts[0].body),
+    `the address only at the first cell's first step, after the word and in the sizers: ${hosts.map((r) => r.selector)}`);
+  // No slot of its own for it: one left a gap after a short word
+  // ("Connected", then the room "Not connected" needs: the critic's round 1).
+  check(page0.doc.getElementById("linkHost") === null && !cssRules(css).some((r) => /\.chipHost\b/.test(r.selector)), "no slot of its own for the address");
+  // The link's words are one set at every width, never short ones of their
+  // own: "Connect" and "Linking…" on a phone said other things than the
+  // words elsewhere (the critics' round 3).
+  check(!rules.some((r) => /\.chip(Short|Long)\b/.test(r.selector)) && page0.evalIn("Link.SHORT") === undefined && page0.doc.getElementById("linkShort") === null, "no short words of the link's own");
+  const alertWords = byFit(/\.alertWord/).filter((r) => /display:\s*none/.test(r.body));
+  check(alertWords.length === 1 && /\[data-fit="glyphs"\]/.test(alertWords[0].selector) && /\[data-fit="icons"\]/.test(alertWords[0].selector) && /\[data-fit="lamp"\]/.test(alertWords[0].selector) && !/\[data-fit="(words|short|snug|rover)"\]/.test(alertWords[0].selector), "the alerts' words go only from the glyphs step, after Sim, Auto and Rover:; their glyphs stay");
+  check(byFit(/\.autoShort/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /\.target \.segShort/.test(r.selector) && /display:\s*inline/.test(r.body)), "Sim and Auto from the short step");
+  const roverWord = byFit(/\.chipForWord/).filter((r) => /display:\s*none/.test(r.body));
+  check(roverWord.length === 1 && /\[data-fit="rover"\]/.test(roverWord[0].selector) && /\[data-fit="icons"\]/.test(roverWord[0].selector) && !/\[data-fit="(short|snug|glyphs)"\]/.test(roverWord[0].selector) && byFit(/\.roverGlyph/).some((r) => /\[data-fit="rover"\]/.test(r.selector) && !/\[data-fit="(short|snug|glyphs)"\]/.test(r.selector) && /display:\s*block/.test(r.body)),
+    "Rover: gives way to the rover's glyph only after Sim, Auto and snug, and is kept beside the alerts' glyphs (the reviewers' round 2: phones on their side had room)");
+  check(byFit(/\.chipWord/).length === 0, "the chip's word never put out of sight by a step: at the last, it says what fits");
+  const byElse = wordRules.filter((r) => !/data-fit/.test(r.selector) && !/display:\s*none/.test(r.body) && !/^\.chipWord$/.test(r.selector));
+  check(byElse.length === 0, `no viewport or container rule shows a word the cell may not hold: ${byElse.map((r) => r.selector)}`);
+  // A cell is one line of controls, 40 px tall whatever they say: nothing
+  // in it wraps, and no layout changes its height.
+  check(/--cell-h:\s*40px;/.test(root) && /--ctl:\s*32px;/.test(root) && /--seg:\s*28px;/.test(root) && /--t-ctl:\s*13px;/.test(root), "40 px cells, 32 px controls, 28 px segments, 13 px words");
+  const cell = baseBody(".hcell");
+  check(/height:\s*var\(--cell-h\);/.test(cell) && /white-space:\s*nowrap;/.test(cell) && /display:\s*flex;/.test(cell) && !/flex-wrap:\s*wrap/.test(cell), `one line, 40 px: ${cell}`);
+  const cellItself = (selector) => selector.split(",").some((part) => /^\.(hcell|cells)(\.[\w-]+)*$/.test(part.trim()));
+  const sized = rules.filter((r) => cellItself(r.selector) && /(^|[\s;{])(min-|max-)?height\s*:/.test(r.body));
+  check(sized.length === 1 && sized[0].selector === ".hcell", `nothing but the base rule sets a cell's height: ${sized.map((r) => r.selector)}`);
+  check(/height:\s*var\(--ctl\);/.test(baseBody(".hcell button")), `its controls 32 px: ${baseBody(".hcell button")}`);
+
+  // The page: two cells, in order, and none of what they replaced.
   const page = loadPage();
-  const view = page.$("driveView");
-  const siblings = view.parentNode.children.filter((n) => n.tagName);
-  check(view.parentNode === page.$("driveTab").parentNode && siblings[siblings.indexOf(page.$("driveTab")) + 1] === view, "the dock's next sibling, as the wide grid's selector reads it");
-  check(page.$("driveSimSlot").parentNode === view, "the view's slot inside it");
-  for (const canvas of [page.canvas, page.pivotCanvas]) {
-    for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
+  const html = page.doc.documentElement;
+  const cells = html.querySelector(".cells");
+  const kids = (el) => el.children.filter((n) => !(n.tagName === "OUTPUT" && n.hidden)).map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
+  check(cells && cells.children.length === 2, `two cells: ${cells && cells.children.length}`);
+  const [drives, hands] = cells ? cells.children : [];
+  check(drives && kids(drives).join() === "target,auto,linkChip,linkPanel", `the first cell: the target first, Autonomous, then the link chip and its popover: ${drives && kids(drives)}`);
+  check(hands && kids(hands).join() === "tabs,scheme,stop,menuHolder", `the second: the tabs, the scheme, Stop and the gear: ${hands && kids(hands)}`);
+  for (const gone of [".wordmark", ".masthead", ".status", ".pill", ".link", ".actions", ".switches", ".segIcon", ".actionWord"]) {
+    check(html.querySelectorAll(gone).length === 0, `no ${gone} left`);
   }
+  check(!rules.some((r) => /\.(wordmark|masthead|pill|actions|switches|segIcon|actionWord)\b/.test(r.selector)), "and no rule for any of them");
 
-  // Wide, from 1180 px: the left pane split, and the view in its column on
-  // either target (the rail test holds the grid). Nothing there follows the
-  // target, so a switch moves nothing.
-  const beside = mediaRules(DRIVE_BESIDE) || [];
-  const wideView = beside.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) > .driveView:not([hidden])");
-  check(wideView && /grid-area:\s*view;/.test(wideView.body) && /display:\s*flex;/.test(wideView.body), `wide: the view in its column: ${wideView && wideView.body}`);
-  const wide = mediaRules("@media (min-width: 960px) and (min-height: 521px) {") || [];
-  check(![...wide, ...beside].some((r) => /data-target/.test(r.selector)), "wide: nothing follows the target, so a switch moves nothing");
-  const anywhere = cssRules(outside(panelCss(), "@media")).filter((r) => /data-target/.test(r.selector));
-  const strays = anywhere.flatMap((r) => r.selector.split(",").map((x) => x.trim())).filter((x) => !/(\.driveViewOff|#driveSimSlot)$/.test(x));
-  check(anywhere.length > 0 && strays.length === 0, `outside every @media, the target picks only the card or the view: ${strays}`);
-  // The dock's two sticks side by side, each a share of the left pane and
-  // of the height left over: half of the pane's width less the dock's own,
-  // and beside the view a quarter, which leaves the view about half. The
-  // pixels are the sums css/panel.css lists; the short block's height is
-  // its own.
-  for (const [opening, height, width] of [
-    ["@media (min-width: 960px) and (min-height: 521px) {", 452, "140px) / 2"],
-    ["@media (min-width: 960px) and (min-height: 521px) and (max-height: 640px) {", 388, "140px) / 2"],
-    [DRIVE_BESIDE, 452, "88px) / 4"],
-    ["@media (min-width: 1180px) and (min-height: 521px) and (max-height: 640px) {", 388, "88px) / 4"],
-  ]) {
-    const formula = ((((mediaRules(opening) || []).find((r) => r.selector === ":root") || {}).body || "").match(/--stick:([^;]*);/) || [])[1] || "";
-    check(formula.includes(`100 * var(--svh) - ${height}px`) && formula.includes(`(100vw - var(--rail) - ${width}`), `${opening}: the stick from the viewport and the rail: ${formula}`);
+  // Stop: red, its square alone, named and titled with its key, as wide as
+  // a key and the cell's height; nothing of the link beside it.
+  const stop = page.$("stop");
+  check(stop.getAttribute("aria-label") === "Stop" && /\(Space\)/.test(stop.getAttribute("title") || "") && stop.children.length === 1 && stop.children[0].tagName === "SVG", "Stop: an icon, named Stop, titled with its key");
+  const stopCss = baseBody("#stop");
+  check(/width:\s*40px;/.test(stopCss) && /background:\s*var\(--stop\);/.test(stopCss) && /(^|[^-])color:\s*var\(--on-stop\);/.test(stopCss), `Stop 40 x 32, red: ${stopCss}`);
+  check(!all(hands).some((n) => ["connect", "host", "linkChip", "auto"].includes(n.id)), "neither the link nor Autonomous in Stop's cell");
+  check(/\(T\)/.test(page.$("auto").getAttribute("title") || "") && page.$("auto").getAttribute("aria-label") === "Autonomous", "Autonomous named, and titled with its key");
+
+  // Sleek segments, words only: a pill track 2 px inset, segments 28 px
+  // tall in 13 px words, the chosen one inverted; the tabs words over an
+  // underline. Each titled with what it does.
+  const track = baseBody(".segmented");
+  check(/padding:\s*2px;/.test(track) && /border-radius:\s*var\(--r-full\);/.test(track) && /background:\s*var\(--raised\);/.test(track), `the track: ${track}`);
+  const seg = base.find((r) => r.selector.split(",").map((x) => x.trim()).includes(".segmented button"));
+  check(seg && /height:\s*var\(--seg\);/.test(seg.body) && /font-size:\s*var\(--t-ctl\);/.test(seg.body) && /border-radius:\s*var\(--r-full\);/.test(seg.body), `a segment: ${seg && seg.body}`);
+  const segs = [page.$("tabDrive"), page.$("tabProgram"), ...page.$("schemeChoice").children, ...page.$("target").children];
+  check(segs.length === 6, `six segments: ${segs.length}`);
+  for (const one of segs) {
+    const words = all(one).filter((n) => n !== one && n.tagName !== "#TEXT");
+    check(!words.some((n) => n.tagName === "SVG") && (one.getAttribute("title") || one.title || "").length > 0, `${one.id || one.dataset.scheme || one.dataset.target}: words alone, and a hint`);
   }
-  // Narrower, the view takes the fan's place in the rail on the simulator,
-  // as on a phone, and the dock is left alone: the target there picks only
-  // the scan or the view.
-  const rail = mediaRules("@media (min-width: 960px) and (max-width: 1179.98px) and (min-height: 521px) {") || [];
-  const onTarget = rail.filter((r) => /data-target/.test(r.selector));
-  check(onTarget.length === 2 && onTarget.every((r) => /(\.scan|> \.driveView:not\(\[hidden\]\))$/.test(r.selector)), `the rail: the target picks the scan or the view: ${onTarget.map((r) => r.selector)}`);
-  const inRail = onTarget.find((r) => /\.driveView/.test(r.selector));
-  check(inRail && /grid-area:\s*scan;/.test(inRail.body), `the rail: the view in the scan's cell: ${inRail && inRail.body}`);
-  check(onTarget.some((r) => /\.scan$/.test(r.selector) && /display:\s*none;/.test(r.body)), "the rail: the scan gives way");
-  // The row's height, so that sim.css's steps for a short view apply.
-  const railSim = rail.find((r) => r.selector === "#driveSimSlot .sim");
-  check(railSim && /container-type:\s*size;/.test(railSim.body), `the rail: the view a size container: ${railSim && railSim.body}`);
-  // The dock's grid is the same at every height: no block for tall screens
-  // stacks its controls, which would put the family under the stick.
-  check(!/min-height: 761px/.test(panelCss()), "no tall-screen layout of its own");
-  // From 960 to 999 px wide the tabs, the scheme and the target share a row:
-  // a step narrower, or Advanced ran under Rover.
-  const narrow = mediaRules("@media (min-width: 960px) and (max-width: 999.98px) and (min-height: 521px) {") || [];
-  check(narrow.some((r) => /\.tabs \[role="tab"\]/.test(r.selector) && /\.scheme \.segmented button/.test(r.selector) && /padding-inline/.test(r.body)), "960 to 999 px: the switches a step narrower");
+  check(segs.slice(2).every((one) => all(one).some((n) => n.getAttribute && n.getAttribute("class") === "segWord")), "each switch's segment its word");
 
-  // A phone: on the simulator, the Drive tab's view in place of the scan,
-  // sized by its row (a size container), a motor fault still winning the
-  // place. On the rover, the scan as ever.
-  const phone = mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
-  const onSim = phone.filter((r) => /^body\[data-target="simulator"\] \.shell:has\(> #driveTab:not\(\[hidden\]\)\):not\(:has\(#motorsFault:not\(\[hidden\]\)\)\)/.test(r.selector));
-  const hidesScan = onSim.find((r) => / \.scan$/.test(r.selector));
-  const showsView = onSim.find((r) => / > \.driveView:not\(\[hidden\]\)$/.test(r.selector));
-  check(hidesScan && /display:\s*none;/.test(hidesScan.body), `phone: the scan gives way on the simulator: ${onSim.map((r) => r.selector)}`);
-  check(showsView && /display:\s*flex;/.test(showsView.body) && /container:\s*driveview \/ size;/.test(showsView.body), `phone: the view in its place, sized by the row: ${showsView && showsView.body}`);
-  const base = cssRules(outside(panelCss(), "@media"));
-  const which = base.find((r) => /body\[data-target="simulator"\] \.driveViewOff/.test(r.selector));
-  check(which && /body:not\(\[data-target="simulator"\]\) #driveSimSlot/.test(which.selector) && /display:\s*none;/.test(which.body), "the card on the rover, the view on the simulator");
-  // The row sets the view's height: sim.css's floor for the view elsewhere
-  // would hold it at 280 px, past the row, and no short step would apply.
-  const floor = base.find((r) => r.selector === "#driveSimSlot .sim");
-  check(floor && /min-height:\s*0;/.test(floor.body), `the row's height, not the view's floor: ${floor && floor.body}`);
-  // A phone's switch row has room for two switches: the target goes under.
-  const row = base.find((r) => r.selector === ".switches > .target");
-  check(row && /grid-column:\s*1 \/ -1;/.test(row.body), `the target a row of its own on a phone: ${row && row.body}`);
-  // 600 px tall or less its row left the scan nothing to give (a pivot
-  // moved the stick at 375 x 548) or ran the head past a phone on its side:
-  // the Drive tab leaves the target to the Program tab there.
-  const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
-  const side = short600.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])) .switches > .target");
-  check(side && /display:\s*none;/.test(side.body), `a short phone: no target on the Drive tab: ${side && side.body}`);
-  // Under 600 px tall the scan's row gives way to nothing: with its padding
-  // it could not, and the family's slot opening moved the stick.
-  const scan = short600.find((r) => r.selector === ".scan");
-  check(scan && /padding-block:\s*var\(--s-1\) 0;/.test(scan.body), `short phone: the scan's padding cut: ${scan && scan.body}`);
-  // And the fault in its place on the Drive tab, on every phone 760 px tall
-  // or less: its padding and margin held more than the row, and a fault
-  // moved the sticks (360 x 560, and 360 x 640 by 2 px).
-  const short760 = mediaRules("@media (max-width: 959.98px) and (max-height: 760px) {") || [];
-  const fault = short760.find((r) => r.selector === ".shell:has(> #driveTab:not([hidden])):has(#motorsFault:not([hidden])) .fault");
-  check(fault && /margin-bottom:\s*0;/.test(fault.body) && /padding-block:\s*0;/.test(fault.body), `short phone: the fault card gives way as the scan does: ${fault && fault.body}`);
-  // There too the address waits on the Program tab while the simulator is
-  // driven, whatever the link: its row coming as the rover's link went
-  // moved both sticks, which a lost link must not do to the simulator's.
-  const address = short760.find((r) => r.selector === 'body[data-target="simulator"] .shell:has(> #driveTab:not([hidden])) .link');
-  check(address && /display:\s*none;/.test(address.body), `short phone: no address on the Drive tab on the simulator: ${address && address.body}`);
+  // The link's address, Connect and note in the chip's popover; the whole
+  // note on hover too.
+  const panel = page.$("linkPanel");
+  check(["host", "connect", "note"].every((id) => all(panel).includes(page.$(id))), "the address, Connect and the note in the chip's popover");
+  check(page.$("linkChip").getAttribute("aria-controls") === "linkPanel", "the chip opens it");
+  // Open, its Connect is the one: the card's over the scan gives way,
+  // keeping its place.
+  // The Program tab console's Connect too (the critic's round 2).
+  const cardAway = rules.find((r) => r.selector === ".shell:has(#linkPanel:not([hidden])) :is(.connectCard, .consoleConnect)");
+  check(cardAway && /visibility:\s*hidden;/.test(cardAway.body) && !/display/.test(cardAway.body), `the connect card and the console's Connect give way to the popover: ${cardAway && cardAway.body}`);
+  check((page.$("programConnect").getAttribute("class") || "").split(/\s+/).includes("consoleConnect"), "the console's Connect is the one that gives way");
+  page.$("host").value = "";
+  page.fire(page.$("connect"), "click");
+  check(page.$("note").title === page.$("note").textContent && page.$("note").textContent !== "", `the whole note on hover: ${page.$("note").title}`);
 
-  // The view too short for its room: height queries on the view itself,
-  // outside every @media so a phone's and the rail's apply, while a wide
-  // view's container elsewhere measures width only, so they never apply
-  // there.
-  const sim = stylesheet("sim.css");
-  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 299.98px) {") || [];
-  const hidden = short.find((r) => /display:\s*none;/.test(r.body));
-  check(hidden && [".sim-stage", ".sim-room", ".sim-settings"].every((c) => hidden.selector.includes(c)), `short: the room and what only it needs go: ${hidden && hidden.selector}`);
-  check(!short.some((r) => /\.sim-(foot|inset|move|bar)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
-  const shorter = blockRules(outside(sim, "@media"), "@container sim (max-height: 119.98px) {") || [];
-  const goes = (shorter.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
-  check([".sim-bar", ".sim-log"].every((c) => goes.includes(c)), `shorter: the bar goes, and the log, whose lines ran over the motion: ${goes}`);
-  const line = blockRules(outside(sim, "@media"), "@container sim (max-height: 31.98px) {") || [];
-  const gone = (line.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
-  check([".sim-inset", ".sim-twist", ".sim-said"].every((c) => gone.includes(c)) && !/\.sim-move/.test(gone), `a line: the move alone: ${gone}`);
-  const wideSim = (blockRules(sim, "@media (min-width: 960px) and (min-height: 521px) {") || []).find((r) => r.selector === ".sim");
-  check(wideSim && /container-type:\s*inline-size;/.test(wideSim.body), `wide: the view's container measures width only: ${wideSim && wideSim.body}`);
+  // Nothing makes the cells taller or shorter on a short screen.
+  check(mediaRules(WIDE_SHORT) === null, "no short layout of its own: the sticks' budget takes the height");
+  const baseKeys = new Set(cssRules(outside(css, "@media")).map((r) => `${r.selector}{${r.body}`));
+  const inMedia = rules.filter((r) => !baseKeys.has(`${r.selector}{${r.body}`));
+  check(!inMedia.some((r) => /\.hcell|\.cells|#stop|#auto/.test(r.selector) && /(grid-template-rows|min-height|(^|[\s;{])height)\s*:/.test(r.body)), "no layout makes the cells taller or shorter");
+  check(mediaRules(WIDE_LAMPS) === null, "no layout of its own for the pills' lamps");
+  // The scan fills its place beside both tabs: no card sized to its drawing.
+  check(!rules.some((r) => /\.scan\b/.test(r.selector) && /aspect-ratio/.test(r.body)), "the scan's card is the column's");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: the File menu opens over the page but under the Stop bar, and on a phone scrolls clear of it", () => {
-  // Nothing may cover Stop. The menu hangs over the editor and the
-  // simulator, and opened near the foot of a phone it scrolls up clear of
-  // the bar stuck there rather than hide under it.
+// Where the cells stack (under 900 px, and the middle column of a phone on
+// its side), the first cell is over the second: Autonomous must never sit
+// over Stop, or a press that misses Stop starts the rover exploring (the
+// critics' round 3, a blocker: Autonomous at the first cell's far end, right
+// over Stop at the second's). So the first cell runs from its start, the
+// target, Autonomous, then the link chip, and nothing pushes Autonomous to
+// the far end: no order, no auto margin, no justification, no reversal.
+// Stop and the gear keep the second cell's far end. The fit's last steps
+// keep 48 px or more between them, measured in a browser at every size the
+// panel is checked at; this pins the rules that measurement rests on.
+test("safety: where the cells stack, Autonomous sits at the first cell's start, never over Stop", () => {
+  const css = panelCss();
+  const rules = cssRules(css);
+  const page = loadPage();
+  const [drives, hands] = page.doc.documentElement.querySelector(".cells").children;
+  const ids = (cell) => cell.children.filter((n) => !n.hidden).map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
+  check(ids(drives).indexOf("auto") === 1 && ids(drives)[0] === "target", `Autonomous second, after the target: ${ids(drives)}`);
+  check(ids(hands).slice(-2).join() === "stop,menuHolder", `Stop and the gear last in the second cell: ${ids(hands)}`);
+  // What each selector in a rule's list picks: its last compound.
+  const picks = (r) => selectorsOf(r.selector).map((each) => each.split(/\s*[\s>+~]\s*/).pop());
+  const child = /^(\.target|#target|\.autoSwitch|#auto|\.linkChip|#linkChip|\.tabs|#tabs|\.scheme|#scheme|#stop|\.menuHolder)([:[.]|$)/;
+  const reorders = rules.filter((r) => picks(r).some((each) => child.test(each)) && /(^|[\s;])order\s*:/.test(r.body));
+  check(reorders.length === 0, `nothing in the cells reordered: ${reorders.map((r) => r.selector)}`);
+  const firsts = /^(\.target|#target|\.autoSwitch|#auto|\.linkChip|#linkChip)([:[.]|$)/;
+  const pushed = rules.filter((r) => picks(r).some((each) => firsts.test(each)) && /margin(-left|-inline-start|-inline)?\s*:[^;]*\bauto\b/.test(r.body));
+  check(pushed.length === 0, `nothing in the first cell pushed along it: ${pushed.map((r) => r.selector)}`);
+  const cellRule = (r) => picks(r).some((each) => /^(\.hcell|\.drives|\.hcell\.drives)(\[[^\]]*\]|:is\(.*\))*$/.test(each));
+  const turned = rules.filter((r) => cellRule(r) && (/justify-content\s*:\s*(?!normal|flex-start|start)/.test(r.body) || /flex-direction\s*:\s*row-reverse|(^|[\s;])direction\s*:\s*rtl/.test(r.body)));
+  check(turned.length === 0, `the first cell neither justified to its end nor reversed: ${turned.map((r) => r.selector)}`);
+  check(/margin-right:\s*auto;/.test((rules.find((r) => r.selector === ".hands > .scheme") || {}).body || ""), "the scheme's auto margin puts Stop and the gear at the far end");
+  // The cells stack, a row each, until the top is 900 px wide: a single
+  // column outside the container query, and a row only inside it.
+  const base = outside(css, "@container");
+  check(/grid-template-columns:\s*minmax\(0, 1fr\);/.test((cssRules(base).find((r) => r.selector === ".cells") || {}).body || ""), "stacked, a cell a row, below 900 px");
+  const row = blockRules(css, "@container bar (min-width: 900px) {");
+  check(row && /display:\s*flex;/.test((row.find((r) => r.selector === ".cells") || {}).body || ""), "one row only from 900 px");
+  // The fit's last step closes the target up, so the first cell ends short
+  // of Stop on a 320 px phone and in a phone's middle column on its side.
+  check(/--seg-x:\s*4px;/.test((rules.find((r) => r.selector === '.drives[data-fit="lamp"]') || {}).body || ""), "the last step's segments closer");
+  // AutoToggle's contract says so too.
+  const autoJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "autotoggle.js"), "utf8");
+  check(/never (over|in) Stop/i.test(autoJs), "autotoggle.js's header says where it sits, and why");
+});
+
+// Every button says on hover what it does, the owner's ask with Stop's
+// icon ("all buttons should have that"): Stop and the link chip above all,
+// whose words a narrow cell drops or never shows, and every other button
+// on the page, in each state of the link (connecting and stale too), of
+// the editor and of a program, on either target, and the question
+// dialog's answers, which were the two left untitled (the reviewer's
+// round 1).
+test("every button titled with what it does, in every state of the link and of a program", async () => {
+  const page = loadPage();
+  const untitled = () => all(page.doc.documentElement)
+    .filter((n) => n.tagName === "BUTTON")
+    .filter((n) => !(n.getAttribute("title") || n.title))
+    .map((n) => n.id || n.dataset.family || n.dataset.target || n.dataset.scheme || n.textContent);
+  check(untitled().length === 0, `untitled with no link: ${untitled()}`);
+  const tabTitle = page.$("tabProgram").getAttribute("title");
+  check(/^Program/.test(tabTitle), `the Program tab: ${tabTitle}`);
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("connect"), "click");
+  check(page.doc.body.dataset.link === "connecting" && untitled().length === 0 && /^Cancel/.test(page.$("connect").title), `untitled while connecting: ${untitled()}, connect '${page.$("connect").title}'`);
+  const ws = page.sockets.at(-1);
+  ws.serverOpen();
+  check(untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled with a link: ${untitled()}, connect '${page.$("connect").title}'`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(untitled().length === 0, `untitled with telemetry: ${untitled()}`);
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale" && untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled while stale: ${untitled()}, connect '${page.$("connect").title}'`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  // Off under NORMAL, the family's segments say why too.
+  const familySegs = all(page.$("familyChoice")).filter((n) => n.dataset.family);
+  const offTitle = page.evalIn("FamilySelector.OFF_TITLE");
+  check(/Advanced/.test(offTitle) && familySegs.length === 2 && familySegs.every((b) => b.disabled && b.title.endsWith(offTitle)), `the family off, saying what it needs: ${familySegs.map((b) => b.title)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(familySegs.every((b) => !b.disabled && !b.title.includes(offTitle) && b.title !== ""), `the family on: ${familySegs.map((b) => b.title)}`);
+
+  // The editor up, then a program run on the rover, and after it.
+  standInEditor(page);
+  check(untitled().length === 0 && page.$("programRun").title === "Run the program on the rover" && /Import/.test(page.$("programMenu").title), `with the editor: ${untitled()}, Run '${page.$("programRun").title}', File '${page.$("programMenu").title}'`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && untitled().length === 0, `running: ${untitled()}`);
+  check(/^A program is running/.test(page.$("programRun").title) && /driving the rover/.test(page.$("tabProgram").getAttribute("title")), `running: Run '${page.$("programRun").title}', tab '${page.$("tabProgram").getAttribute("title")}'`);
+  await liveForAsync(page, ws, 2000);
+  check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the run: ${untitled()}, tab '${page.$("tabProgram").getAttribute("title")}'`);
+  // A question: Yes says what it answers, Cancel that it answers no.
+  check(page.$("askNo").title === page.evalIn("AskDialog.NO_TITLE") && /^Cancel \(Escape\): answer no/.test(page.$("askNo").title), `Cancel before any question: '${page.$("askNo").title}'`);
+  page.fire(page.$("programClear"), "click");
+  await flush();
+  check(page.$("ask").open && untitled().length === 0, `asked: ${page.$("ask").open}, untitled ${untitled()}`);
+  check(page.$("askYes").title === "Clear: answer yes to “Clear the program?”", `Yes, titled with its question: '${page.$("askYes").title}'`);
+  check(page.$("askNo").title === page.evalIn("AskDialog.NO_TITLE"), `Cancel: '${page.$("askNo").title}'`);
+  await answer(page, "cancel");
+  check(!page.$("ask").open && page.evalIn("__editor.cleared") === 0, "answered no: nothing cleared");
+
+  // The view's toggle, both ways, titled with what a press does.
+  // The fake page has no matchMedia, so it starts as a phone does: hidden.
+  const view = page.$("viewToggle");
+  check(view.getAttribute("aria-pressed") === "false" && /^View: show/.test(view.title), `the view hidden: '${view.title}'`);
+  page.fire(view, "click");
+  check(view.getAttribute("aria-pressed") === "true" && /^View: hide/.test(view.title) && untitled().length === 0, `the view shown: '${view.title}' ${untitled()}`);
+  page.fire(view, "click");
+  check(view.getAttribute("aria-pressed") === "false" && /^View: show/.test(view.title) && untitled().length === 0, `hidden again: '${view.title}' ${untitled()}`);
+  // The simulator target: its view still folded on a phone, a preview,
+  // and after it.
+  page.fire(segments(page)[1], "click");
+  check(view.getAttribute("aria-pressed") === "false" && /^View: show/.test(view.title), `the view folded with the simulator, on a phone: ${view.title}`);
+  check(untitled().length === 0 && page.$("programRun").title === "Preview the program on the simulator", `the simulator: ${untitled()}, Run '${page.$("programRun").title}'`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && untitled().length === 0, `previewing: ${untitled()}`);
+  page.fire(page.$("programStop"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the preview: ${page.evalIn("runner.state")} ${untitled()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// On the simulator target the Autonomous switch shows the simulated rover's
+// mode, so the link chip says, after its word, that a rover sent exploring
+// before the switch is still moving by itself: nothing else on screen would.
+// A motor shield that did not answer is said by the fault line in the
+// scan's card while the view shows the scan, and by the chip while it does
+// not (the simulator target, or the view folded on the Program tab): one
+// place at a time, never both (the critic's round 2: a badge beside a fault
+// bar said it twice). Each in a slot of its own, both at once where both
+// are so, the link's word always readable beside them (the critics' round
+// 3: one alert in the word's place hid the other, and hid "No data"),
+// amber, titled in full, and said in words at the top of the chip's
+// popover, which a touch screen opens with a press where it cannot hover.
+// A rover last seen exploring stays said, dashed, as the Autonomous
+// switch's track is, after its link goes quiet or is lost: until a frame
+// says MANUAL, or a Stop goes out over the link (one with no link reaches
+// nothing, and the rover may be exploring still).
+test("alerts: the chip keeps the link's word, and says No motors and a rover exploring each in its own slot, the rover last seen exploring until it says otherwise", () => {
+  const { page, ws } = connected(telemetry({ mode: "AUTONOMOUS" }));
+  const chip = page.$("linkChip");
+  const alerts = () => chip.dataset.alert;
+  const shown = (id) => !page.$(id).hidden;
+  const word = () => page.$("linkState").textContent;
+  const known = () => page.$("alertExploring").dataset.known;
+  const titleOf = (el) => el.getAttribute("title") || el.title || "";
+  const toSim = () => page.fire(page.$("target").children[1], "click");
+  const toRover = () => page.fire(page.$("target").children[0], "click");
+  check(alerts() === "" && page.$("linkAlert").hidden && !shown("alertExploring"), "on the rover target the switch says it itself: no alert");
+  check(page.$("auto").getAttribute("aria-pressed") === "true", "the switch on, the rover's");
+  // Whose link: named only on the simulator target, where the word could
+  // read as the simulator's; on the rover target the target says it.
+  check(page.$("chipFor").hidden, "on the rover target the chip names nobody");
+  toSim();
+  const forWord = all(page.$("chipFor")).find((n) => n.getAttribute && n.getAttribute("class") === "chipForWord");
+  check(!page.$("chipFor").hidden && forWord && forWord.textContent === "Rover:", "on the simulator target: Rover:");
+  check(alerts() === "exploring" && shown("alertExploring") && !shown("alertMotors") && known() === "now", `on the simulator: the chip says the rover explores: ${alerts()} ${known()}`);
+  check(word() === "Connected" && chip.dataset.say === "up", `the link's word kept beside it: ${word()}`);
+  check(page.$("auto").getAttribute("aria-pressed") === "false", "the switch the simulator's, off");
+  check(/^Rover exploring: /.test(titleOf(chip)) && /Connected to the rover/.test(titleOf(chip)) && /^Rover exploring: /.test(titleOf(page.$("alertExploring"))), `titled in full, the link's own title after it: ${titleOf(chip)}`);
+  check(!page.$("linkAlert").hidden && /^Rover exploring: /.test(page.$("linkAlert").textContent), `said in the popover too: ${page.$("linkAlert").textContent}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(alerts() === "" && !shown("alertExploring") && page.$("linkAlert").hidden && /^Connected to the rover/.test(titleOf(chip)), `gone once the rover reports manual, the title the link's again: ${titleOf(chip)}`);
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(alerts() === "exploring" && known() === "now", "back as it explores again");
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale" && alerts() === "exploring" && word() === "No data", `stale: the word says so, the rover last seen exploring beside it: ${word()} ${alerts()}`);
+  check(known() === "last" && /as last reported/.test(titleOf(page.$("alertExploring"))), `dashed, as last reported: ${known()}`);
+  // A Stop down a stale link, which may be half-open, proves nothing: the
+  // warning stays, and stays when the link then drops (the reviewers'
+  // round 2: it was cleared, and nothing was left to say the rover might
+  // be exploring still).
+  page.fire(page.$("stop"), "click");
+  check(alerts() === "exploring" && known() === "last", `a Stop over a stale link leaves it said: ${alerts()}`);
+  ws.serverDrop();
+  check(alerts() === "exploring" && known() === "last" && word() === "Link lost", `lost: still said, as last reported: ${alerts()} ${word()}`);
+  // A Stop with no link reaches nothing: the rover may be exploring still.
+  page.fire(page.$("stop"), "click");
+  check(alerts() === "exploring", "a Stop with no link leaves it said");
+  // The chip said again with no change of state (down to down: an address
+  // no socket can be opened for) keeps the alerts' words in its title.
+  page.evalIn(`globalThis.RealWebSocket = WebSocket; WebSocket = class extends RealWebSocket {
+    constructor(url) { if (/bad/.test(url)) throw new SyntaxError("not a URL"); super(url); } };`);
+  page.$("host").value = "bad host";
+  page.fire(page.$("connect"), "click");
+  page.evalIn("WebSocket = RealWebSocket;");
+  check(word() === "Not reachable" && page.doc.body.dataset.link === "down", `no socket for it: ${word()}`);
+  check(/^Rover exploring, as last reported: /.test(titleOf(chip)) && /Not reachable: no rover answered at bad host/.test(titleOf(chip)), `the alert kept in the chip's title: ${titleOf(chip)}`);
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("host"), "input");
+  check(/^Rover exploring, as last reported: /.test(titleOf(chip)) && /10\.0\.0\.7/.test(titleOf(chip)), `and as an address is typed: ${titleOf(chip)}`);
+  // A new link, before its first frame, knows nothing new.
+  let again = connectOpen(page);
+  check(alerts() === "exploring" && known() === "last", `a new link, before its first frame: ${known()}`);
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(alerts() === "exploring" && known() === "now", "its first frame: exploring now");
+  // Even a Stop over a link that is up only asks: the warning goes with
+  // the frame that reports MANUAL, and with nothing else.
+  page.fire(page.$("stop"), "click");
+  check(alerts() === "exploring" && known() === "now", `a Stop over the link leaves it until a frame answers: ${alerts()}`);
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(alerts() === "exploring", "the rover says it explores still");
+  again.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(alerts() === "", "and gone with MANUAL");
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  toRover();
+  check(alerts() === "" && page.$("chipFor").hidden, "gone on the rover target, with the rover's name");
+
+  // The simulator target says it in words too, over the simulator: on a
+  // phone the chip's glyph alone was the one cue (the reviewers' round 2).
+  const away = page.$("roverAway");
+  toSim();
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(!away.hidden && away.dataset.known === "now" && /exploring on its own/.test(away.textContent) && /Stop stops it/.test(away.textContent), `the view's line: ${away.hidden} ${away.textContent}`);
+  check(away.parentNode === page.$("view") && away.getAttribute("role") === "status" && /^Rover exploring: /.test(titleOf(away)), "in the view, a status, titled in full");
+  again.serverDrop();
+  check(!away.hidden && away.dataset.known === "last" && /^Last seen exploring/.test(away.textContent) && /as last reported/.test(titleOf(away)), `the link gone: last known, dashed: ${away.textContent}`);
+  again = connectOpen(page);
+  again.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(away.hidden, "gone with MANUAL");
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  toRover();
+  check(away.hidden, "the rover target: the switch says it");
+  const awayCss = cssRules(panelCss()).filter((r) => /\.roverAway\b/.test(r.selector));
+  const awayBase = awayCss.filter((r) => r.selector === ".roverAway").map((r) => r.body).join("");
+  check(/flex:\s*none;/.test(awayBase) && /(^|[^-])color:\s*var\(--warn\);/.test(awayBase) && /background:\s*var\(--warn-soft\);/.test(awayBase)
+    && awayCss.some((r) => r.selector === '.roverAway[data-known="last"]' && /dashed var\(--warn\)/.test(r.body)), `one amber line, dashed once last known: ${awayBase}`);
+  // Wrapped to two lines at most, never cut with an ellipsis: cut, at 480 x
+  // 320 it lost what to do, "Stop stops it." and "Reconnect, then Stop."
+  // (the reviewers' round 3). The view is size-contained, so the second
+  // line moves nothing outside it.
+  const awayAll = awayCss.map((r) => r.body).join("");
+  check(/-webkit-line-clamp:\s*2;/.test(awayBase) && /display:\s*-webkit-box;/.test(awayBase) && /overflow-wrap:\s*anywhere;/.test(awayBase) && !/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(awayAll), `wraps to two lines at most: ${awayBase}`);
+  // A display of its own outranks the browser's [hidden] rule, so hidden
+  // must say display: none itself, or the warning stays on screen with the
+  // rover not exploring.
+  check(!/display:/.test(awayBase) || awayCss.some((r) => r.selector === ".roverAway[hidden]" && /display:\s*none;/.test(r.body)), "hidden, the line is gone: its own display does not keep it on screen");
+  const viewBody = cssRules(panelCss()).filter((r) => r.selector === ".view").map((r) => r.body).join("");
+  check(/contain:\s*size;/.test(viewBody) && page.$("roverAway").parentNode === page.$("view"), "inside the size-contained view");
+  // Each alert its own shape, neither two circles (the reviewers' round 2:
+  // a slashed circle and a circled needle looked alike at 14 px): a motor
+  // struck through, and a route. The rover's own glyph a side view with
+  // its aerial, not the simulator's rover seen from above.
+  const shapes = (el) => all(el).filter((n) => ["CIRCLE", "RECT", "PATH"].includes(n.tagName)).map((n) => n.tagName).join();
+  check(shapes(page.$("alertMotors")) === "RECT,PATH" && shapes(page.$("alertExploring")) === "PATH", `the alerts' shapes: ${shapes(page.$("alertMotors"))} | ${shapes(page.$("alertExploring"))}`);
+  const glyph = all(page.$("chipFor")).find((n) => n.tagName === "SVG");
+  check(glyph && shapes(glyph) === "RECT,CIRCLE,CIRCLE,PATH", `the rover's glyph, side on, wheels and aerial: ${glyph && shapes(glyph)}`);
+
+  // No motors: the fault line in the scan's card on the rover target, the
+  // chip on the simulator's, whose view shows no scan.
+  again.serverMsg(telemetry({ motorsReady: false, mode: "MANUAL" }));
+  check(!page.$("motorsFault").hidden && alerts() === "", "the rover target: the fault in the scan's card, not the chip as well");
+  toSim();
+  check(alerts() === "motors" && shown("alertMotors") && /motor shield/i.test(titleOf(chip)) && /motor shield/.test(titleOf(page.$("alertMotors"))) && /motor shield/.test(page.$("linkAlert").textContent), `the simulator target: the chip says it: ${alerts()} ${titleOf(chip)}`);
+  // Both at once, each in its slot, and the link's word with them.
+  again.serverMsg(telemetry({ motorsReady: false, mode: "AUTONOMOUS" }));
+  check(alerts() === "motors exploring" && shown("alertMotors") && shown("alertExploring") && word() === "Connected", `both, and the word: ${alerts()} ${word()}`);
+  check(/^No motors: [\s\S]* Rover exploring: [\s\S]* Connected to the rover/.test(titleOf(chip)) && /No motors[\s\S]*Rover exploring/.test(page.$("linkAlert").textContent), `both in the title and the popover: ${titleOf(chip)}`);
+  again.serverMsg(telemetry({ motorsReady: true, mode: "MANUAL" }));
+  check(alerts() === "" && !shown("alertMotors") && !shown("alertExploring"), "gone when the shield answers and the rover stops");
+  toRover();
+  // The Program tab with the view folded shows no scan: the chip says it,
+  // and the view shown again takes it back.
+  again.serverMsg(telemetry({ motorsReady: false }));
+  page.fire(page.$("tabProgram"), "click");
+  check(page.$("programTab").dataset.view === "hidden" && alerts() === "motors", `the view folded: the chip: ${page.$("programTab").dataset.view} ${alerts()}`);
+  page.fire(page.$("viewToggle"), "click");
+  check(page.$("programTab").dataset.view === "shown" && alerts() === "", `the view shown: the fault line again: ${alerts()}`);
+  page.fire(page.$("viewToggle"), "click");
+  check(alerts() === "motors", "folded again: the chip");
+  page.fire(page.$("tabDrive"), "click");
+  check(alerts() === "", "the Drive tab: the scan, and its fault line");
+
+  // Width, never height: the chip is a cell's button, 32 px. Its word's
+  // slot is as wide as the longest word it says: the word and a sizer for
+  // each of Link's words share one grid cell. What comes and goes in it
+  // (the rover's name, the alerts) takes room the fit keeps for it (the
+  // top's test), never a state's size.
+  const css = panelCss();
+  const cellButton = cssRules(outside(css, "@media")).find((r) => r.selector === ".hcell button");
+  check(cellButton && /height:\s*var\(--ctl\);/.test(cellButton.body) && /flex:\s*none;/.test(cellButton.body), `a cell's button 32 px, never squeezed: ${cellButton && cellButton.body}`);
+  const sizers = all(chip).filter((n) => /(^|\s)chipSizer(\s|$)/.test((n.getAttribute && n.getAttribute("class")) || ""));
+  const labels = [...new Set(Object.values(page.evalIn("Link.LABEL")))];
+  check(sizers.length === labels.length && sizers.every((n) => n.getAttribute("aria-hidden") === "true" && n.parentNode === page.$("linkState").parentNode) && labels.every((w) => sizers.some((n) => n.textContent === w)),
+    `a sizer for each word, beside the word, out of the reading order: ${sizers.map((n) => n.textContent)}`);
+  const sizesChip = cssRules(css).filter((r) => /\.linkChip/.test(r.selector) && /\[data-(say|alert)/.test(r.selector) && /(^|[\s;{])(min-|max-)?(height|width)\s*:|padding|font-size|gap/.test(r.body));
+  check(sizesChip.length === 0, `no state of the chip's sizes it: ${sizesChip.map((r) => r.selector)}`);
+  // Amber, the words saying which, never hue alone: tinted while the link
+  // went, went quiet or never came, or while the rover needs the operator.
+  const amber = cssRules(css).find((r) => r.selector === '.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"], :not([data-alert=""]))');
+  check(amber && /background:\s*var\(--warn-soft\);/.test(amber.body), `an alert or a link gone tints the chip: ${amber && amber.body}`);
+  const alertCss = cssRules(outside(css, "@media")).find((r) => r.selector === ".chipAlert");
+  check(alertCss && /(^|[^-])color:\s*var\(--warn\);/.test(alertCss.body), `each alert amber: ${alertCss && alertCss.body}`);
+  const dashed = cssRules(css).find((r) => r.selector === '.chipAlert[data-known="last"]');
+  check(dashed && /outline:\s*1px dashed var\(--warn\);/.test(dashed.body), `as last reported: dashed: ${dashed && dashed.body}`);
+  // A press opens the popover, its first line the alerts.
+  toSim();
+  page.fire(chip, "click");
+  check(!page.$("linkPanel").hidden && page.$("linkPanel").children[0] === page.$("linkAlert") && !page.$("linkAlert").hidden, "a press opens the popover, the alert its first line");
+  for (const gone of ["motorsBadge", "exploringBadge", "motorsNote", "exploringNote", "chipAlert"]) check(page.doc.getElementById(gone) === null, `no #${gone} left`);
+  check(!cssRules(css).some((r) => /\.badge\b/.test(r.selector)), "and no rule for a badge");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The view (F8): one pane, a sibling of both tabs, showing what the
+// controls drive: the scan, with its fault card and its readouts line, on
+// the rover target, and the simulated room on the simulator target, on
+// either tab. Never around a stick: joy.js places a touch by its canvas's
+// offsetParent, and the view is positioned. Its size is the shell grid's
+// alone, so nothing it holds, and no switch of target, moves the dock under
+// a held stick. Layout itself is measured in a browser.
+test("the view: one pane beside both tabs, its content picked by the target, never around a stick", () => {
+  const page = loadPage();
+  const view = page.$("view");
+  const shell = page.$("driveTab").parentNode;
+  check(view.parentNode === shell && page.$("programTab").parentNode === shell, "a sibling of both tabs, a cell of the shell's grid");
+  const kids = view.children.filter((n) => n.tagName && n.tagName !== "#TEXT").map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
+  check(kids.join() === "scan,roverAway,simSlot,readouts", `the scan, the line saying the rover explores, the simulator's slot and the readouts: ${kids}`);
+  check(page.$("motorsFault").parentNode === page.$("scan").parentNode, "the fault in the scan's card");
+  for (const canvas of [page.canvas, page.pivotCanvas]) {
+    for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
+  }
+  // One view of the simulator, in one slot: none of the slots and folds it
+  // used to move between.
+  for (const gone of ["driveView", "driveSimSlot", "programSim", "simToggle", "scanEmpty"]) {
+    check(page.doc.getElementById(gone) === null, `no #${gone} left`);
+  }
+  const slots = all(page.doc.documentElement).filter((n) => n.getAttribute && /(^|\s)(simSlot|driveView|programSim)(\s|$)/.test(n.getAttribute("class") || ""));
+  check(slots.length === 1 && slots[0] === page.$("simSlot"), `one slot: ${slots.length}`);
+  check(!/moveTo/.test(page.evalIn("String(SimView.prototype.constructor)")), "SimView never moves");
+  // The readouts are the view's, not a card of their own beside the dock.
+  check(page.doc.documentElement.querySelectorAll(".readouts").length === 1 && page.$("move").parentNode.parentNode.parentNode === view, "the readouts at the view's foot");
+
+  const css = panelCss();
+  const base = cssRules(outside(css, "@media"));
+  const rule = (rules, selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  // Its size the grid's alone: size containment, and every part of it
+  // giving way inside it but the readouts' one line.
+  const v = rule(base, ".view");
+  check(/grid-area:\s*view;/.test(v) && /min-height:\s*0;/.test(v) && /contain:\s*size;/.test(v) && /display:\s*flex;/.test(v), `the grid's size, never its content's: ${v}`);
+  for (const part of [".scan", ".simSlot"]) {
+    const body = rule(base, part);
+    check(/flex:\s*1 1 0;/.test(body) && /min-height:\s*0;/.test(body), `${part} takes what is left, down to nothing: ${body}`);
+  }
+  const fault = rule(base, ".fault");
+  check(/min-height:\s*0;/.test(fault) && /max-height:\s*50cqh;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault takes height from the fan, at most half the card: ${fault}`);
+  // The connect card shares the fan's cell, over it, under the legend's
+  // row, where the fault takes the legend's place, and the scan is
+  // size-contained: the card or the fault coming and going moves nothing
+  // outside it.
+  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*2 \/ 1;/.test(rule(base, ".scan > *")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > :is(.fault, .scanLegend)")), "the connect card over the fan, in its one cell, the legend's row over both, the fault in its place");
+  // The fan centred in its card, as large as it fits: pinned to the foot,
+  // it left the card's top half empty (the critic's round 2).
+  check(/preserveAspectRatio", "xMidYMid meet"/.test(fs.readFileSync(path.join(PANEL_ROOT, "js", "scan.js"), "utf8")), "the fan centred in its card");
+
+  // The target picks only what fills the view and its shape: one rule,
+  // outside every @media, hiding the rover's parts on the simulator, and
+  // the simulator's slot hidden on the rover (app.js), so its view knows it
+  // is out of sight; and one giving the shell the room's aspect in the
+  // fan's place (--va, what the card adds: --vcw, --vch), which only the
+  // Program tab's layouts read, so the view there is as tall as the room
+  // needs. Never the view itself, the dock or the top's cells, so a switch
+  // moves no stick; anything else that follows the target is a colour.
+  // (What the chip says for the rover on the simulator target, app.js
+  // says in a chip as wide whatever it says.)
+  const paintOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^(color|background|border-style)\s*:/.test(d));
+  const onTarget = cssRules(css).filter((r) => /data-target/.test(r.selector) && !paintOnly(r.body));
+  const picks = 'body[data-target="simulator"] .view > :is(.scan, .readouts)';
+  const shape = 'body[data-target="simulator"] .shell';
+  const shapeOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^--(va|vcw|vch)\s*:/.test(d));
+  check(onTarget.length >= 2 && onTarget.some((r) => r.selector.replace(/\s+/g, " ") === picks && /^\s*display:\s*none;\s*$/.test(r.body)) && onTarget.every((r) => r.selector.replace(/\s+/g, " ") === picks || (r.selector === shape && shapeOnly(r.body))),
+    `the target picks what fills the view and its shape, and nothing else: ${onTarget.map((r) => r.selector)}`);
+  check(base.some((r) => r.selector.replace(/\s+/g, " ") === picks) && base.some((r) => r.selector === shape), "outside every @media: the same on every layout");
+  const readsShape = cssRules(css).filter((r) => /var\(--(va|vcw|vch)\)/.test(r.body));
+  check(readsShape.length > 0 && readsShape.every((r) => /#programTab/.test(r.selector)), `only the Program tab's layouts read the shape, where no stick is: ${readsShape.map((r) => r.selector)}`);
+  check(/display:\s*none;/.test(rule(base, ".simSlot[hidden]")), "the slot's hidden attribute outranks its display");
+  check(page.$("simSlot").hidden && page.doc.body.dataset.target === "rover", "the rover target: the slot hidden");
+  page.fire(page.$("target").children[1], "click");
+  check(!page.$("simSlot").hidden && page.doc.body.dataset.target === "simulator", "the simulator target: shown");
+  page.fire(page.$("target").children[0], "click");
+  check(page.$("simSlot").hidden, "and hidden again on the rover");
+  for (const file of ["program.css", "sim.css"]) {
+    check(!/data-target/.test(stylesheet(file)), `${file}: nothing follows the target`);
+  }
+
+  // The readouts keep one height while a stick is held: one line, a value
+  // too long cut short, never wrapped, the phase coming and going at its end.
+  const line = rule(base, ".readouts");
+  check(/height:\s*var\(--readouts-h\);/.test(line) && /white-space:\s*nowrap;/.test(line) && /overflow:\s*hidden;/.test(line) && /flex:\s*none;/.test(line) && !/flex-wrap:\s*wrap/.test(line), `one line: ${line}`);
+  const value = rule(base, ".cell output");
+  check(/overflow:\s*hidden;/.test(value) && /text-overflow:\s*ellipsis;/.test(value), `a value cut short: ${value}`);
+  const cells = page.$("move").parentNode.parentNode.children.filter((n) => n.tagName && n.tagName !== "#TEXT");
+  check(cells[cells.length - 1] === page.$("phaseCell"), "the phase last");
+  check(!cssRules(css).some((r) => /#phaseCell\[hidden\]/.test(r.selector)) && /display:\s*none;/.test(rule(base, ".cell[hidden]")), "a hidden phase takes no room on the line");
+  const baseKeys = new Set(base.map((r) => `${r.selector}{${r.body}`));
+  const inMedia = cssRules(css).filter((r) => !baseKeys.has(`${r.selector}{${r.body}`));
+  check(!inMedia.some((r) => /\.readouts|\.cell\b/.test(r.selector) && /(^|[\s;{])(min-|max-)?height\s*:/.test(r.body)), "no layout changes the line's height");
+
+  // Wide: the sticks' budget from the viewport alone, the Drive tab's
+  // column as wide as they need, and no layout of its own for a short,
+  // tall or narrower wide screen.
+  const wideRoot = rule(mediaRules(WIDE) || [], ":root");
+  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 228px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
+  check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `wide: the column: ${wideRoot}`);
+  check(mediaRules(WIDE_SHORT) === null && !css.includes("@media (min-width: 1180px)") && !/@media \(min-width: 960px\)[^{]*(min-height: 761px|max-height: 738\.98px)/.test(css), "no layout of its own for a short, a tall or a wider wide screen");
+  // A tablet upright fills its screen's width, and its dock is a card as
+  // wide as the cells and the view, as far off the foot as off the sides
+  // (16 px off it, 24 off them, the critic's round 1).
+  const tablet = mediaRules("@media (min-width: 720px) and (max-width: 959.98px) and (min-height: 761px) {") || [];
+  check(/--shell-max:\s*960px;/.test(rule(tablet, ":root")) && /margin:\s*0 0 calc\(var\(--gutter\) \+ env\(safe-area-inset-bottom, 0px\)\);/.test(rule(tablet, ".dock")) && /border-radius:\s*var\(--r-xl\);/.test(rule(tablet, ".dock")),
+    `a tablet upright: the screen's width, the dock a card: ${rule(tablet, ":root")} ${rule(tablet, ".dock")}`);
+  check(!css.includes("@media (min-width: 960px) and (max-width: 999.98px)"), "no narrower switches from 960 to 999 px");
+
+  // A phone: the view between the top and the dock on the Drive tab; on
+  // the Program tab a band over the editor, or gone with its toggle off.
+  const phone = mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
+  // No taller than what it shows needs at the screen's width (--va), so
+  // the room is not letterboxed in a band taller than itself (the critic's
+  // round 2).
+  check(/height:\s*clamp\(120px, min\(33 \* var\(--svh\), 100 \* var\(--svh\) - 400px, \(100vw - 2 \* var\(--gutter\) - var\(--vcw\)\) \/ var\(--va\) \+ var\(--vch\)\), 480px\);/.test(rule(phone, ".shell:has(> #programTab:not([hidden])) > .view")), "phone: the Program tab's view a band a third of the screen at most, giving way to the editor on a short one");
+  // The page the screen's height beside the Program tab, so the editor and
+  // its console are on it whole (at 375 x 667 they ran 143 px past it).
+  const programShell = rule(phone, ".shell:has(> #programTab:not([hidden]))");
+  check(/height:\s*100dvh;/.test(programShell) && /grid-template-rows:\s*auto auto minmax\(0, 1fr\);/.test(programShell), `phone: the Program tab the screen's height: ${programShell}`);
+  const programPhone = blockRules(stylesheet("program.css"), "@media (max-width: 959.98px), (max-height: 520.98px) {") || [];
+  const floor = Number((rule(programPhone, ".programEditor").match(/min-height:\s*(\d+)px;/) || [])[1]);
+  check(floor > 0 && floor <= 160, `phone: the editor's floor low enough to stay on the screen: ${floor}`);
+  check(/display:\s*none;/.test(rule(phone, '.shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view')), "phone: gone with its toggle off, no strip");
+  check(!phone.some((r) => /#driveTab/.test(r.selector) && /\.view\b/.test(r.selector)), "phone: the Drive tab's view never hidden or sized by the tab");
+  // The target is the first cell's first control on every phone, on both
+  // tabs: the cell is there anyway, one height whatever it holds, so no
+  // layout leaves the target out. (A row of its own, before, left the scan
+  // nothing to give on a short phone and moved a stick at 375 x 548.)
+  const hidesTarget = cssRules(css).filter((r) => r.selector.split(",").some((part) => /(\.target|#target)$/.test(part.trim())) && /display:\s*none/.test(r.body));
+  check(hidesTarget.length === 0, `the target never hidden: ${hidesTarget.map((r) => r.selector)}`);
+  // Under 600 px tall the scan gives way to nothing: with its padding it
+  // could not, and the family's slot opening moved the stick.
+  const short600 = mediaRules("@media (max-width: 959.98px) and (max-height: 600px) {") || [];
+  check(/padding-block:\s*var\(--s-1\) 0;/.test(rule(short600, ".scan")), `short phone: the scan's padding cut: ${rule(short600, ".scan")}`);
+  // A lost link must not move the simulator's sticks: the address, Connect
+  // and the note hang in the chip's popover, over the page and in no row,
+  // and the chip's word keeps the width of the longest it says: a sizer for
+  // each of its words in its slot.
+  check((page.$("linkPanel").getAttribute("class") || "").split(/\s+/).includes("menu"), "the link's popover a .menu");
+  check(/position:\s*absolute;/.test(rule(base, ".menu")), `a .menu over the page, in no row: ${rule(base, ".menu")}`);
+  const sizers = all(page.$("linkChip")).filter((n) => n.getAttribute && n.getAttribute("class") === "chipSizer").map((n) => n.textContent);
+  const labels = Object.values(page.evalIn("Link.LABEL"));
+  check(labels.every((label) => sizers.includes(label)), `the chip's word as wide as its longest: ${sizers} of ${labels}`);
+  const hidesLink = cssRules(css).filter((r) => /data-(link|target)/.test(r.selector) && /\.(linkChip|linkPanel|hcell|cells|view|dock)\b|#(host|connect|note|view|driveTab)\b/.test(r.selector) && /display:/.test(r.body) && !/\.view > /.test(r.selector));
+  check(hidesLink.length === 0, `nothing of the link, the view or the dock shown or hidden by the link's state or the target: ${hidesLink.map((r) => r.selector)}`);
+
+  // The room too short for itself: height queries on the simulator's view,
+  // outside every @media, so they apply wherever the pane is short.
+  const sim = stylesheet("sim.css");
+  check(!/@media \(min-width: 960px\)/.test(sim), "sim.css: no layout of its own, the pane's size alone");
+  const simBase = cssRules(outside(sim, "@media"));
+  check(/container:\s*sim \/ size;/.test(rule(simBase, ".sim")) && /height:\s*100%;/.test(rule(simBase, ".sim")), `the view fills its slot, a size container: ${rule(simBase, ".sim")}`);
+  check(/min-height:\s*0;/.test(rule(base, ".simSlot .sim")), `the pane's height, not the view's floor: ${rule(base, ".simSlot .sim")}`);
+  // Too short for the room, the room goes and the bar stays, with the
+  // wheels and the motion in it. Never a row of words under the room:
+  // they are in the bar's one row (sim.test.js).
+  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 99.98px) {") || [];
+  const hidden = short.find((r) => /display:\s*none;/.test(r.body));
+  check(hidden && hidden.selector.trim() === ".sim-stage", `short: the room goes: ${hidden && hidden.selector}`);
+  const heights = [...outside(sim, "@media").matchAll(/@container sim \(max-height: [\d.]+px\) \{/g)].flatMap((m) => blockRules(outside(sim, "@media"), m[0]) || []);
+  check(!heights.some((r) => /\.sim-(bar|status|inset|move)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "however short, the bar, the wheels and the motion stay");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("program: the File menu opens over the page but under the top, and on a phone scrolls clear of it", () => {
+  // Nothing may cover Stop, in the top's second cell. The menu hangs over
+  // the editor and the simulator, and opened under the top stuck over a
+  // scrolled phone it scrolls down clear of the top rather than hide under
+  // it. Nothing sticks to the foot now, so nothing needs clearing there.
   const zIndex = (selector) => {
     const rule = cssRules(panelCss()).find((r) => r.selector === selector && /z-index/.test(r.body));
     return rule && Number(/z-index:\s*(\d+)/.exec(rule.body)[1]);
   };
-  check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".actions"), `the menu at ${zIndex(".menu")}, the Stop bar at ${zIndex(".actions")}`);
+  check(zIndex(".menu") >= 1 && zIndex(".menu") < zIndex(".bar"), `the menu at ${zIndex(".menu")}, the top at ${zIndex(".bar")}`);
   const margin = (mediaRules("@media (max-width: 959.98px), (max-height: 520.98px) {") || [])
-    .find((r) => /scroll-margin-bottom:[^;]*var\(--tap-lg\)/.test(r.body));
+    .find((r) => /scroll-margin-top:[^;]*2 \* var\(--cell-h\)/.test(r.body));
   const popups = margin ? margin.selector.split(",").map((part) => part.trim()) : [];
-  check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the Stop bar, wherever the bar sticks to the foot: ${popups}`);
-  // A phone on its side is too short for one: a margin there pushed the
-  // File button off the top of the screen as its menu opened.
-  const side = (mediaRules("@media (orientation: landscape) and (max-height: 520px) {") || []).find((r) => /scroll-margin-bottom/.test(r.body));
-  const sidePopups = side ? side.selector.split(",").map((part) => part.trim()) : [];
-  check(sidePopups.includes(".menu") && sidePopups.includes(".sim-more") && /scroll-margin-bottom:\s*0\s*;/.test(side.body), `no margin on a phone on its side: ${side && side.body}`);
+  check(popups.includes(".menu") && popups.includes(".sim-more"), `a scroll margin as tall as the top's two rows of cells, wherever the top sticks over the page: ${popups}`);
+  const bottom = cssRules(panelCss()).filter((r) => /scroll-margin-bottom/.test(r.body));
+  check(bottom.length === 0, `no foot bar to clear: ${bottom.map((r) => r.selector)}`);
   // The simulator's box clips its room without being a scroll container,
   // which would swallow the settings' margin before the window scrolled.
-  const slot = cssRules(stylesheet("program.css")).filter((r) => r.selector === "#simSlot").map((r) => r.body).join("");
-  check(/overflow:\s*clip\s*;/.test(slot), `#simSlot clips, not scrolls: ${slot}`);
+  const slot = cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".simSlot").map((r) => r.body).join("");
+  check(/overflow:\s*clip\s*;/.test(slot), `.simSlot clips, not scrolls: ${slot}`);
+  const view = cssRules(panelCss()).filter((r) => /(^|[\s,])\.view$/.test(r.selector)).map((r) => r.body).join("");
+  check(!/overflow(-[xy])?:\s*(auto|scroll|hidden)/.test(view), `nor is the view a scroll container: ${view}`);
 });
 
 test("program: an example, Import and Clear ask in the page before they replace a program, never with confirm()", async () => {
@@ -3951,7 +5688,7 @@ test("program: its own stop and start exploring are no press: a stick let go of 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: the Program tab is marked while a program drives the rover, not while it previews", async () => {
+test("program: the Program tab is marked while a program drives the rover, and otherwise while it previews", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const tab = page.$("tabProgram");
   const marked = () => tab.dataset.running === "yes" && /driving the rover/.test(tab.getAttribute("title") || "");
@@ -3963,14 +5700,21 @@ test("program: the Program tab is marked while a program drives the rover, not w
   check(marked(), "and while the Drive tab shows");
   press(page, page.$("cw"), 1); // any press takes over
   await flush();
-  check(page.evalIn("runner.state") === "idle" && !marked() && tab.getAttribute("title") === null, "unmarked once it stopped");
+  check(page.evalIn("runner.state") === "idle" && !marked() && /^Program: /.test(tab.getAttribute("title")), `unmarked once it stopped, its own title back: ${tab.getAttribute("title")}`);
   lift(page, page.$("cw"), 1);
   if (page.evalIn("'simulator' in targets")) {
     page.evalIn("runner.run(async (api) => { await api.wait(5); }, targets.simulator);");
     await flush();
-    check(page.evalIn("runner.target && runner.target.kind") === "simulator" && !marked(), "a preview drives nothing: not marked");
+    // A preview marks the tab too, another way: the simulated rover drove
+    // itself under the Drive tab with nothing to say why (the review's
+    // laptops 6).
+    const previewing = () => tab.dataset.running === "preview" && /preview is running on the simulator/.test(tab.getAttribute("title") || "");
+    check(page.evalIn("runner.target && runner.target.kind") === "simulator" && !marked() && previewing(), `a preview drives no rover: marked as a preview: ${tab.dataset.running} ${tab.getAttribute("title")}`);
     page.evalIn("runner.abort('done')");
     await flush();
+    check(!previewing() && !tab.dataset.running && /^Program: /.test(tab.getAttribute("title")), "unmarked once it ends");
+    const ring = cssRules(stylesheet("program.css")).find((r) => r.selector === '.tabs [role="tab"][data-running="preview"]::after');
+    check(ring && /position:\s*absolute/.test(ring.body) && /border:\s*1\.5px solid var\(--ok\)/.test(ring.body) && !/animation/.test(ring.body), `a still ring in the dot's corner: ${ring && ring.body}`);
   }
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
@@ -4007,7 +5751,167 @@ test("program: the two Stops are named apart", () => {
   const words = all(page.$("programStop")).map((n) => n.textContent).join(" ");
   check(/Stop program/.test(words), `the Program tab's: ${words}`);
   check(/End the program/.test(page.$("programStop").getAttribute("title") || ""), "its title says what it does");
-  check(page.$("stop").textContent === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the bar's always stops the rover, and says so");
+  // The top's is its square alone, named Stop, and its title says it
+  // always stops the rover.
+  check(page.$("stop").getAttribute("aria-label") === "Stop" && /whatever is driving it/.test(page.$("stop").getAttribute("title") || ""), "the top's always stops the rover, and says so");
+  check(page.$("programStop").getAttribute("aria-label") !== "Stop", "the Program tab's is not named Stop alone");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A preview drives what the operator watches: pressed with the view
+// folded (a phone, where it starts folded), it shows the view for the run,
+// and leaves it shown after, the toggle saying so. Folded, Preview ran a
+// room nobody could see (the review's phones 1). A run on the rover leaves
+// the fold as it is, and a preview that cannot start shows nothing.
+test("program: Preview with the view folded shows it; a run on the rover leaves it folded", async () => {
+  const page = loadPage();
+  if (!page.evalIn("'simulator' in targets")) return;
+  standInEditor(page, "await api.wait(0.2);");
+  page.fire(page.$("tabProgram"), "click");
+  const view = () => `${page.$("programTab").dataset.view} ${page.$("viewToggle").getAttribute("aria-pressed")}`;
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(view() === "hidden false", `folded on a phone: ${view()}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && view() === "hidden false", `a run on the rover leaves it folded: ${page.evalIn("runner.state")} ${view()}`);
+  page.fire(page.$("programStop"), "click");
+  await flush();
+  toSimulator(page);
+  check(view() === "hidden false" && page.$("programRunLabel").textContent === "Preview", `folded on the simulator: ${view()}`);
+  page.evalIn(`__editor.compile = () => { throw new Error("A drive until block has nothing to wait for."); };`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "idle" && view() === "hidden false", `a preview that cannot start shows nothing: ${view()}`);
+  page.evalIn(`__editor.compile = () => async (api) => { await api.wait(0.2); };`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.target && runner.target.kind") === "simulator" && view() === "shown true" && /hide/i.test(page.$("viewToggle").title), `Preview shows the view: ${view()} ${page.$("viewToggle").title}`);
+  await pageFrames(page, 600, page.evalIn("targets.simulator"));
+  check(page.evalIn("runner.state") === "idle" && view() === "shown true", `shown after the preview, until View folds it: ${page.evalIn("runner.state")} ${view()}`);
+  page.fire(page.$("viewToggle"), "click");
+  check(view() === "hidden false", `View folds it: ${view()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A phone's console is one line, and its log a press of Log away: Log
+// shows with the first line and counts them, and opens and closes the
+// log, saying which a press does. The log opens over the editor's foot,
+// out of the flow, so the editor's height never follows what was said:
+// after one run the console grew to 155 px and the editor shrank from
+// 470 px to 300 at 375 x 667 (the review's phones 7). Wider, the log is
+// under the state, only as tall as it needs, up to five lines, on the
+// console's own ground: a box the column's height under the view, it held
+// one line (laptops 0), and pure black, it read as a hole (laptops 14).
+test("program: a phone's Log shows with the first line, counts them, and opens over the editor", async () => {
+  const page = loadPage();
+  standInEditor(page);
+  const toggle = page.$("programLogToggle");
+  const log = page.$("programLog");
+  const shut = () => `${toggle.getAttribute("aria-expanded")} ${log.dataset.open}`;
+  check(toggle.hidden && log.children.length === 0, "no log, no Log");
+  check(toggle.getAttribute("aria-controls") === "programLog" && toggle.parentNode === page.$("programState").parentNode, "beside the state, naming the log");
+  check(shut() === "false no" && /^Show/.test(toggle.title), `shut at first: ${shut()} ${toggle.title}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(!toggle.hidden && page.$("programLogCount").textContent === "1", `the first line: Log, counting it: ${page.$("programLogCount").textContent}`);
+  page.fire(toggle, "click");
+  check(shut() === "true yes" && /^Hide/.test(toggle.title), `open: ${shut()} ${toggle.title}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.$("programLogCount").textContent === "2" && shut() === "true yes", `counts as lines come, open as it was: ${page.$("programLogCount").textContent}`);
+  page.fire(toggle, "click");
+  check(shut() === "false no" && /^Show/.test(toggle.title), `shut again: ${shut()}`);
+  const programCss = stylesheet("program.css");
+  const base = cssRules(outside(programCss, "@"));
+  const baseOf = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/display:\s*none;/.test(baseOf(".logToggle")), "Log a phone's alone");
+  const logRule = baseOf(".programLog");
+  check(/flex:\s*none;/.test(logRule) && /max-height:\s*calc\(5 \* var\(--t-sm\) \* 1\.6 \+ var\(--s-1\) \+ var\(--s-2\)\);/.test(logRule) && /overflow-y:\s*auto;/.test(logRule) && /background:\s*var\(--panel\);/.test(logRule),
+    `wider, the log as tall as it needs up to five lines, on the console's ground: ${logRule}`);
+  const phone = blockRules(programCss, "@media (max-width: 599.98px), (max-height: 520.98px) {") || [];
+  const phoneOf = (selector) => phone.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/display:\s*inline-flex;/.test(phoneOf(".logToggle:not([hidden])")), "a phone's Log, once there is a log");
+  check(/display:\s*none;/.test(phoneOf('.programLog:not([data-open="yes"])')), "shut, the log takes no room");
+  const open = phoneOf('.programLog[data-open="yes"]');
+  check(/position:\s*absolute;/.test(open) && /bottom:\s*calc\(100% \+ 6px\);/.test(open) && /position:\s*relative;/.test(phoneOf(".programConsole")), `open, over the editor's foot, out of the flow: ${open}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The View toggle is quiet: shown, the raised ground and the ink, never
+// the chosen segment's inversion, which made it the loudest thing in the
+// toolbar, louder than Run and the only bright thing while Run was off
+// (the review's tablets 10, laptops 14). Run is the one loud control.
+test("program: the View toggle is quiet, shown or folded", () => {
+  const rules = cssRules(outside(stylesheet("program.css"), "@media"));
+  const of = (selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/color:\s*var\(--readout\);/.test(of('.viewToggle[aria-pressed="true"]')) && /background:\s*var\(--raised\);/.test(of('.viewToggle[aria-pressed="true"]')), `shown: ${of('.viewToggle[aria-pressed="true"]')}`);
+  check(/color:\s*var\(--dim\);/.test(of('.viewToggle[aria-pressed="false"]')), `folded: ${of('.viewToggle[aria-pressed="false"]')}`);
+  const loud = cssRules(stylesheet("program.css")).filter((r) => /viewToggle/.test(r.selector) && /--chosen|--on-chosen|--live/.test(r.body));
+  check(loud.length === 0, `nothing paints it as a choice or a live control: ${loud.map((r) => r.selector)}`);
+});
+
+// In a short view (a phone's band over the editor, under 170 px), the
+// connect card is one compact row under the fan, its button and Change
+// address: sized for a tall pane, it covered most of a short fan (the
+// review's tablets 2). Only that short: from 260 px, a 375 x 667 phone's
+// Drive tab (229 px) showed the row at its foot under bare ground where
+// the whole card fits (the reviewers' round 2).
+test("program: the connect card is a compact row under the fan in a short view", () => {
+  check(blockRules(panelCss(), "@container scan (max-height: 259.98px) {") !== null && !(blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || []).some((r) => /grid-row|background:\s*none/.test(r.body)), "under 260 px, still the card: only tighter");
+  const short = blockRules(panelCss(), "@container scan (max-height: 169.98px) {") || [];
+  const card = short.filter((r) => r.selector === ".scan > .connectCard").map((r) => r.body).join("");
+  check(/grid-row:\s*9;/.test(card) && /place-self:\s*end stretch;/.test(card) && /background:\s*none;/.test(card) && /box-shadow:\s*none;/.test(card), `one row, at the foot, across the card, with no card around it: ${card}`);
+  check(short.some((r) => r.selector.split(/,\s*/).includes(".connectTitle") && /display:\s*none;/.test(r.body)), "its title in the top's chip, not over the fan");
+  check(!short.some((r) => /connectGo|connectAddress/.test(r.selector) && /display:\s*none/.test(r.body)), "Connect and Change address both there");
+  // Narrow too (a phone on its side at 480 px), Connect alone, whole: beside
+  // it, Change address wrapped and cut the button to "ct to 192.16". The
+  // top's link chip changes the address there. So in the card of a short,
+  // narrow view.
+  const narrow = blockRules(panelCss(), "@container scan (max-height: 169.98px) and (max-width: 329.98px) {") || [];
+  check(narrow.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector) && /display:\s*none/.test(r.body)), "a short, narrow view: Connect alone");
+  const narrowCard = blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 229.98px) {") || [];
+  check(narrowCard.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)), "a short, narrow card: Connect alone");
+  check(/grid-template-columns:\s*minmax\(0, 1fr\) repeat\(2, minmax\(0, max-content\)\) minmax\(0, 1fr\);/.test(card) && short.some((r) => r.selector === ".connectAddress" && /white-space:\s*nowrap;/.test(r.body)), "each on one line, the button giving way first");
+});
+
+// The card's button names the address a press goes to; where the card is
+// too narrow for both, measured, it says the verb alone and a line of the
+// card the address (the reviewers' round 2: at 480 x 320 "Connect to
+// 192.168.0.115" ran into its pill's ends).
+test("the connect card: the verb alone and the address on a line of its own where the button would be cut", () => {
+  const page = loadPage();
+  const go = page.$("connectGo");
+  const card = go.parentNode;
+  check(card.dataset.fit === "full" && go.textContent === "Connect to 192.168.0.115" && page.$("connectHost").textContent === "192.168.0.115", `wide enough: ${card.dataset.fit} ${go.textContent}`);
+  // Cut short: what a browser measures of a pill too narrow for its words.
+  Object.defineProperty(go, "scrollWidth", { configurable: true, get: () => (go.textContent.length > 10 ? 200 : 80) });
+  go.clientWidth = 150;
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "verb" && go.textContent === "Connect" && page.$("connectHost").textContent === "10.0.0.7" && /10\.0\.0\.7/.test(go.title), `narrow: ${card.dataset.fit} ${go.textContent} | ${page.$("connectHost").textContent}`);
+  const ws = connectOpen(page);
+  ws.serverDrop();
+  check(card.dataset.fit === "verb" && go.textContent === "Reconnect" && page.$("connectHost").textContent === "10.0.0.7", `lost: ${go.textContent} | ${page.$("connectHost").textContent}`);
+  go.clientWidth = 400;
+  page.$("host").value = "10.0.0.8";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "full" && go.textContent === "Connect to 10.0.0.8", `room again, another address: ${card.dataset.fit} ${go.textContent}`);
+  // A long hostname, narrow, after a lost link: the line holds it whole,
+  // and wraps rather than cutting it, so two that start alike
+  // (rover-kitchen.local, rover-kitchen-2.local) never look the same (the
+  // reviewers' round 3: cut with an ellipsis, the press went to one the
+  // card did not show whole).
+  go.clientWidth = 150;
+  page.$("host").value = "my-second-rover-name.local";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "verb" && go.textContent === "Connect" && page.$("connectHost").textContent === "my-second-rover-name.local", `a long name, narrow: ${card.dataset.fit} ${go.textContent} | ${page.$("connectHost").textContent}`);
+  const rules = cssRules(panelCss());
+  const own = rules.filter((r) => r.selector === ".connectHost").map((r) => r.body).join("");
+  const shown = rules.filter((r) => r.selector === '.connectCard[data-fit="verb"] .connectHost').map((r) => r.body).join("");
+  check(/display:\s*none;/.test(own) && /color:\s*var\(--dim\);/.test(own) && /display:\s*-webkit-box;/.test(shown), `the line only with the verb alone: ${own} | ${shown}`);
+  const hostRules = rules.filter((r) => /\.connectHost\b/.test(r.selector)).map((r) => r.body).join("");
+  check(/overflow-wrap:\s*anywhere;/.test(own) && /-webkit-line-clamp:\s*2;/.test(shown) && !/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(hostRules), `wrapped, at most two lines, never cut with an ellipsis: ${hostRules}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4033,11 +5937,13 @@ function simCommands(page) {
 const toSimulator = (page) => page.fire(segments(page)[1], "click");
 const toRover = (page) => page.fire(segments(page)[0], "click");
 
-test("target: one switch in the header, after the tabs and the scheme, for both tabs", () => {
+// The owner's ask (F8): "Rover or simulator should be the first option".
+test("target: one switch, the first thing in the top's first cell, for both tabs", () => {
   const page = loadPage();
-  const switches = page.doc.documentElement.querySelectorAll(".switches")[0];
-  const order = switches.children.map((n) => n.id || n.getAttribute("class"));
-  check(order.join() === "tabs,schemeSlot,target", `the switch row: ${order}`);
+  const first = page.doc.documentElement.querySelector(".cells").children[0];
+  check(first.children[0] === page.$("target"), `the first cell starts with the target: ${first.children.map((n) => n.id)}`);
+  const word = (b) => all(b).filter((n) => n.getAttribute && n.getAttribute("class") === "segWord").map((n) => n.textContent).join("");
+  check(page.$("target").children.map(word).join(" | ") === "Rover | Simulator", `Rover | Simulator, the rover first: ${page.$("target").children.map(word)}`);
   check(page.$("target").getAttribute("role") === "group" && /Drive and run programs on/.test(page.$("target").getAttribute("aria-label")),
     "named for what it picks");
   check(!all(page.$("programTab")).some((n) => n.getAttribute("class") === "segmented" && n.parentNode.getAttribute("role") === "toolbar"),
@@ -4084,9 +5990,19 @@ test("target: on the simulator the Drive tab drives it, and nothing but Stop rea
 
   check(count(ws) === 0, `the rover got ${names(ws)}`);
   // Autonomous: the simulator alone, which says exploring is not simulated.
+  // The toggle shows the simulated rover's mode, at once, never the rover's.
+  const lit = () => page.$("auto").getAttribute("aria-pressed");
   page.fire(page.$("auto"), "click");
   check(count(ws) === 0 && state().mode === "AUTONOMOUS", `Autonomous: ${names(ws)}, ${state().mode}`);
+  check(lit() === "true", "on: the simulated rover explores");
   check(/exploring is not simulated/.test(page.$("auto").getAttribute("title")), `its title says so: ${page.$("auto").getAttribute("title")}`);
+  page.fire(page.$("auto"), "click");
+  check(count(ws) === 0 && sim().slice(-1)[0] === "STOP" && state().mode === "MANUAL" && lit() === "false",
+    `off again, the rover left alone: ${names(ws)}, ${sim()}, ${state().mode}, ${lit()}`);
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(lit() === "false", "the rover exploring does not light it on the simulator");
+  page.fire(page.$("auto"), "click");
+  check(count(ws) === 0 && lit() === "true", "on again");
   // Stop: everything, the rover included.
   page.fire(page.$("stop"), "click");
   check(names(ws).join() === "STOP", `Stop reached the rover: ${names(ws)}`);
@@ -4095,8 +6011,10 @@ test("target: on the simulator the Drive tab drives it, and nothing but Stop rea
   ws.serverDrop();
   page.fire(page.$("stop"), "click");
   check(sim().slice(-1)[0] === "STOP", "Stop with the link down");
+  check(lit() === "false", "Stop turned the simulated rover's off");
   toRover(page);
-  check(/Let the rover explore/.test(page.$("auto").getAttribute("title")), "back on the rover, Autonomous's own title");
+  check(/^Autonomous \(T\): on, the rover explores by itself/.test(page.$("auto").getAttribute("title")), "back on the rover, Autonomous's own title");
+  check(lit() === "true", "and the mode the rover last reported, kept meanwhile");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4181,8 +6099,11 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   // With no socket a send goes nowhere, so the Link is watched instead.
   page.evalIn("globalThis.__linkSent = []; const send = link.send.bind(link); link.send = (frame) => (__linkSent.push(frame), send(frame));");
   const scheme = () => page.evalIn("targets.simulator.scheme");
-  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => schemeButton(page, x).disabled), "the rover's, unknown, at first");
+  check(shownScheme(page) === "unknown" && SCHEMES.every((x) => !schemeButton(page, x).disabled), "the rover's, unknown, at first, taking a wish");
+  page.fire(schemeButton(page, "ADVANCED"), "click"); // a wish for the rover, kept unseen on the simulator
+  check(pendingScheme(page) === "ADVANCED", `the wish marked: ${pendingScheme(page)}`);
   toSimulator(page);
+  check(pendingScheme(page) === null && page.evalIn("schemeToggle.wanted") === "ADVANCED", `the rover's wish unseen on the simulator, and kept: ${pendingScheme(page)}`);
   check(shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "known", `the simulator's: ${shownScheme(page)} ${page.$("scheme").dataset.state}`);
   check(SCHEMES.every((x) => !schemeButton(page, x).disabled), "offered");
   check(/simulator/i.test(page.$("scheme").title), `its title says whose: ${page.$("scheme").title}`);
@@ -4200,8 +6121,73 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(scheme() === "NORMAL" && pivotsState(page) === "off" && sim().slice(-1)[0] === "STOP", `NORMAL: pivots ${pivotsState(page)}, ${sim()}`);
   s.end();
+  toRover(page);
+  check(shownScheme(page) === "unknown" && pendingScheme(page) === "ADVANCED", `back on the rover, its wish again: ${shownScheme(page)}, ${pendingScheme(page)}`);
   check(page.sockets.length === 0, `no socket: ${page.sockets.length}`);
   check(page.evalIn("__linkSent.length") === 0, `the Link was handed ${page.evalIn("JSON.stringify(__linkSent)")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A wish for the rover's scheme waits while the simulator is the target:
+// from there nothing goes to the rover but Stop (targetswitch.js), and the
+// toggle shows the simulator's scheme, so a wish sent then changed the
+// rover unseen (the reviewer's round 1). It goes as the rover is the
+// target again, if the rover has named the other scheme by then (once,
+// pending as a press's), nowhere if it named the one wished for, and on
+// the next frame if the link is stale then or the rover has named none.
+test("target: a scheme wish waits, unsent, while the simulator is the target, and goes once the rover is the target again", () => {
+  let page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  let ws = connectOpen(page);
+  liveFor(page, ws, 1500, { mode: "MANUAL", scheme: "NORMAL" });
+  check(count(ws) === 0, `sent from the simulator target: ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === "ADVANCED" && pendingScheme(page) === null && shownScheme(page) === "NORMAL", `kept, unseen: ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}, shows the simulator's ${shownScheme(page)}`);
+  check(page.$("linkWish").hidden && page.$("connectWish").hidden, "not said either, while the simulator is the target");
+  toRover(page);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent as the rover is the target again: ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === "ADVANCED" && shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "pending", `pending as a press's: ${pendingScheme(page)}, shows ${shownScheme(page)}`);
+  check(page.$("linkWish").hidden, "a request, no longer a wish");
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && count(ws) === 1, `confirmed, sent once: ${shownScheme(page)}, ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // The rover named the scheme wished for: nothing to send.
+  page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  toRover(page);
+  check(count(ws) === 0 && page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === null && shownScheme(page) === "ADVANCED", `met: sent ${ws.sent}, wanted ${page.evalIn("schemeToggle.wanted")}, shows ${shownScheme(page)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // Stale as the rover is the target again: no request on a link whose
+  // telemetry cannot confirm it. The next frame sends it.
+  page = loadPage();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale", `stale: ${page.doc.body.dataset.link}`);
+  toRover(page);
+  check(count(ws) === 0 && page.evalIn("schemeToggle.wanted") === "NORMAL" && pendingScheme(page) === "NORMAL", `stale: sent ${ws.sent}, wanted ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(ws.sent.join() === '{"scheme":"NORMAL"}' && page.evalIn("schemeToggle.wanted") === null, `the next frame sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // A rover that names no scheme leaves the wish waiting, on either
+  // target; back on the rover's, the first frame that names one sends it.
+  page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: undefined });
+  toRover(page);
+  check(count(ws) === 0 && pendingScheme(page) === "ADVANCED", `no scheme named: sent ${ws.sent}, marked ${pendingScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the first frame naming one sent ${ws.sent}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4346,6 +6332,126 @@ test("program: the editor warns each pivot that runs, under NORMAL only, and cle
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// Blockly's scrollbars only while the program runs past the view: on an
+// empty workspace, or one whose blocks all show, they said there was more
+// to see when there was nothing (the review's laptops 14). Marked on the
+// editor's box at once, on every change (a scroll or a zoom among them)
+// and on a resize; where Blockly cannot say, they show.
+test("program: the editor marks whether the program runs past its view, and the scrollbars show only then", () => {
+  const page = loadPage();
+  page.evalIn(`
+    globalThis.__metrics = { view: { left: 0, top: 0, width: 400, height: 300 }, content: { left: 0, top: 0, width: 0, height: 0 } };
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    const workspace = new Proxy({
+      getMetricsManager: () => ({ getViewMetrics: () => __metrics.view, getContentMetrics: () => __metrics.content }),
+      addChangeListener: (fn) => { globalThis.__changed = fn; },
+    }, { get: (t, key) => t[key] || any });
+    const stub = { inject: () => workspace, Theme: { defineTheme: (_, theme) => theme } };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const mark = () => page.$("programWorkspace").dataset.overflow;
+  check(mark() === "no", `empty: nothing past the view: ${mark()}`);
+  page.evalIn("__metrics.content = { left: 20, top: 20, width: 200, height: 100 }; __changed({ isUiEvent: false });");
+  check(mark() === "no", `blocks that all show: ${mark()}`);
+  page.evalIn("__metrics.content = { left: 20, top: 20, width: 200, height: 400 }; __changed({ isUiEvent: false });");
+  check(mark() === "yes", `a program longer than the view: ${mark()}`);
+  page.evalIn("__metrics.view = { left: 0, top: 150, width: 400, height: 300 }; __metrics.content = { left: 20, top: 20, width: 200, height: 100 }; __changed({ isUiEvent: true });");
+  check(mark() === "yes", `scrolled past it, a scroll is a UI event: ${mark()}`);
+  page.evalIn("__metrics.view = { left: 0, top: 0, width: 400, height: 300 }; __editor.resize();");
+  check(mark() === "no", `back in sight on a resize: ${mark()}`);
+  page.evalIn("__metrics.view = { left: NaN, top: 0, width: 400, height: 300 }; __changed({ isUiEvent: true });");
+  check(mark() === "yes", `Blockly cannot say: they show: ${mark()}`);
+  const rules = cssRules(outside(stylesheet("program.css"), "@media")).filter((r) => /data-overflow="no"/.test(r.selector));
+  check(rules.some((r) => /blocklyScrollbarHorizontal/.test(r.selector) && /blocklyScrollbarVertical/.test(r.selector) && /visibility:\s*hidden;/.test(r.body)), `the scrollbars hidden while nothing is past the view: ${rules.map((r) => r.selector)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A loaded program, fitted to the editor's width, is fitted again as that
+// width changes, until the operator zooms or pans: on a phone on its side
+// Preview put the view beside the editor, 534 px wide down to 302 at 568
+// x 320, and an example fitted a moment before ran 166 px past its right
+// edge (the reviewers' round 3). Never past the start scale, never under
+// 0.4; a run's own scroll is not the operator's.
+test("program: a loaded program is fitted again as the editor's width changes, until the operator zooms or pans", () => {
+  const page = loadPage();
+  page.fire(page.$("tabProgram"), "click");
+  page.$("programWorkspace").clientWidth = 600;
+  page.evalIn(`
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    // The program 500 workspace units wide; Blockly's view the editor's
+    // width less 100 px of categories.
+    const box = { left: 0, top: 0, right: 500, bottom: 200 };
+    const block = { getBoundingRectangleWithoutChildren: () => box };
+    const target = {
+      scale: 0.85, scrollX: 0, scrollY: 0,
+      setScale(scale) { target.scale = scale; },
+      scroll(x, y) { target.scrollX = x; target.scrollY = y; },
+      // A run's highlight scrolls its block into view.
+      scrollBoundsIntoView() { target.scrollY -= 30; },
+      getBlocksBoundingBox: () => box,
+      getTopBlocks: () => [block],
+      getBlockById: () => block,
+      getAllBlocks: () => [],
+      getMetricsManager: () => ({ getViewMetrics: () => ({ left: 0, top: 0, width: byId("programWorkspace").clientWidth - 100, height: 300 }), getContentMetrics: () => ({ left: 0, top: 0, width: 0, height: 0 }) }),
+      addChangeListener() {},
+    };
+    globalThis.__ws = target;
+    const workspace = new Proxy(target, { get: (t, key) => (key in t ? t[key] : any) });
+    // Blockly's own resize may scroll the view itself: not the operator.
+    globalThis.__nudge = 0;
+    const stub = { inject: () => workspace, Theme: { defineTheme: (_, theme) => theme }, svgResize: () => { target.scrollY += __nudge; __nudge = 0; } };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const scale = () => Number(page.evalIn("__ws.scale").toFixed(3));
+  const width = (px) => {
+    page.$("programWorkspace").clientWidth = px;
+    page.evalIn("__editor.resize()");
+  };
+  page.evalIn('__editor.load({ blocks: { blocks: [] } })');
+  check(scale() === 0.85 && page.evalIn("__ws.scrollX") === 16 && page.evalIn("__ws.scrollY") === 16, `loaded: from its top-left, never past the start scale: ${scale()}`);
+  width(400);
+  check(scale() === Number(((300 - 32) / 500).toFixed(3)) && page.evalIn("__ws.scrollX") === 16, `narrower, the view beside it: fitted again: ${scale()}`);
+  width(300);
+  check(scale() === 0.4, `narrower still: never under 0.4: ${scale()}`);
+  // A run's highlight scrolls; the program stays fitted.
+  page.evalIn('__editor.highlight("x")');
+  check(page.evalIn("__ws.scrollY") === -14, "the run scrolled to its block");
+  width(600);
+  check(scale() === 0.85 && page.evalIn("__ws.scrollY") === 16, `the view hidden again: the width back, the fit back: ${scale()}`);
+  // The same width, the height alone: left as Blockly leaves it, and
+  // still fitted.
+  page.evalIn("__nudge = -6; __editor.resize()");
+  check(page.evalIn("__ws.scrollY") === 10 && scale() === 0.85, "a resize that keeps the width moves nothing");
+  // A hidden tab (no width), then shown narrower: fitted then.
+  width(0);
+  check(scale() === 0.85, "hidden: nothing to fit to");
+  width(400);
+  check(scale() === Number(((300 - 32) / 500).toFixed(3)), `shown narrower: fitted: ${scale()}`);
+  // The operator zooms (a wheel, a pinch, the buttons): their scale stays.
+  page.evalIn("__ws.scale = 0.7");
+  width(600);
+  check(scale() === 0.7, `zoomed by the operator: kept: ${scale()}`);
+  width(300);
+  check(scale() === 0.7, `and kept after: ${scale()}`);
+  // Loaded again, fitted again; then the operator pans: left where it is.
+  page.evalIn('__editor.load({ blocks: { blocks: [] } })');
+  check(scale() === 0.4, `loaded again at 300 px: fitted: ${scale()}`);
+  page.evalIn("__ws.scrollX += 40");
+  width(600);
+  check(scale() === 0.4 && page.evalIn("__ws.scrollX") === 56, `panned by the operator: kept: ${scale()}`);
+  // Cleared, nothing is fitted to a width.
+  page.evalIn('__editor.load({ blocks: { blocks: [] } }); __editor.clear(); __ws.scale = 0.6');
+  width(400);
+  check(scale() === 0.6, `cleared: no fit: ${scale()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("target: leaving the Drive tab on the simulator lets go of a held rotate button too", () => {
   // Off the Drive tab the view plays at the operator's speed, and at 4x each
   // re-sent move ran out before the next: the simulated rover drove in jerks.
@@ -4397,41 +6503,54 @@ test("target: a drive press takes the simulated rover over from a preview, and o
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("target: one view of the simulator, on the Drive tab while it is driven, held at 1x there", () => {
+// One view of the simulator, in the view pane's one slot whatever the tab
+// and the target: it never moves. On the Drive tab with the simulator the
+// target, the Driver re-sends in real time, so the view plays at 1x there,
+// and a pause left on the Program tab is lifted.
+test("target: one view of the simulator, in one slot, held at 1x while the Drive tab drives it", () => {
   const page = loadPage();
   const view = () => page.doc.documentElement.querySelectorAll(".sim")[0];
-  const slot = () => view().parentNode.id;
+  const slot = () => view().parentNode;
+  const home = page.$("simSlot");
   const sim = page.evalIn("targets.simulator");
-  const speeds = () => all(view()).filter((n) => n.parentNode && n.parentNode.getAttribute("class") === "segmented sim-speed");
+  const pick = () => view().querySelectorAll(".sim-speed-pick")[0];
   const options = () => all(view()).filter((n) => n.tagName === "OPTION" && n.parentNode.getAttribute("class") === "sim-speed-pick");
+  const play = (rate) => {
+    pick().value = String(rate);
+    page.fire(pick(), "change");
+  };
+  const why = () => view().querySelectorAll(".sim-held")[0];
   check(page.doc.documentElement.querySelectorAll(".sim").length === 1, "one view");
-  check(slot() === "simSlot", "on the Program tab's slot, at first");
-  page.fire(speeds()[2], "click");
-  check(sim.playback === 4, "4x chosen on the Program tab's view");
+  check(slot() === home && home.parentNode === page.$("view"), "in the view pane's slot");
+  page.fire(page.$("tabProgram"), "click");
+  play(4);
+  check(sim.playback === 4, "4x chosen on the Program tab");
 
   toSimulator(page);
-  check(slot() === "driveSimSlot", `beside the Drive tab's controls: ${slot()}`);
-  check(sim.playback === 1, `held at 1x: ${sim.playback}`);
-  check(page.$("driveSimSlot").style.getPropertyValue("--room-aspect") === (4 / 3).toFixed(4), "the room's shape went with it");
-  for (const list of [speeds(), options()]) {
-    const [one, two, four] = list;
-    check(!one.disabled && two.disabled && four.disabled, `2x and 4x disabled: ${list.map((b) => b.disabled)}`);
-    check(/real time/.test(two.getAttribute("title")) && /real time/.test(four.getAttribute("title")) && /Play at 1 times/.test(one.getAttribute("title")),
-      `the disabled ones say why: ${two.getAttribute("title")}`);
-  }
-  check(/real time/.test(view().querySelectorAll(".sim-speed-pick")[0].getAttribute("title")), "and so does the list");
-  check(speeds()[0].getAttribute("aria-pressed") === "true", "1x shows pressed");
-  page.fire(speeds()[2], "click");
-  const pick = view().querySelectorAll(".sim-speed-pick")[0];
-  pick.value = "4";
-  page.fire(pick, "change");
+  check(slot() === home && page.doc.documentElement.querySelectorAll(".sim").length === 1, "the same slot on the simulator");
+  check(sim.playback === 4, `the Program tab keeps its speed on the simulator: ${sim.playback}`);
+  page.fire(page.$("tabDrive"), "click");
+  check(slot() === home, "and on the Drive tab");
+  check(sim.playback === 1, `held at 1x while the Drive tab drives it: ${sim.playback}`);
+  // Held: the list leaves the bar (sim.css) and the settings say why, in
+  // words on screen rather than a title on greyed-out speeds; the faster
+  // speeds are refused all the same.
+  check(view().dataset.held === "yes", "the view knows it is held");
+  check(!why().hidden && /^Held at 1× on the Drive tab$/.test(why().textContent) && /real time/.test(why().getAttribute("title")), `the settings say why, in a line that fits, the rest in its title: ${why().textContent}`);
+  const [one, two, four] = options();
+  check(!one.disabled && two.disabled && four.disabled, `2x and 4x refused: ${options().map((o) => o.disabled)}`);
+  check(/real time/.test(two.getAttribute("title")) && /real time/.test(four.getAttribute("title")) && /Play at 1 times/.test(one.getAttribute("title")),
+    `and say why: ${two.getAttribute("title")}`);
+  check(/real time/.test(pick().getAttribute("title")), "and so does the list");
+  play(4);
   check(sim.playback === 1, `a choice past the hold does nothing: ${sim.playback}`);
 
   page.fire(page.$("tabProgram"), "click");
-  check(slot() === "simSlot" && sim.playback === 4, `back on the Program tab, at the speed chosen there: ${slot()} ${sim.playback}`);
-  check(!speeds()[2].disabled && /Play at 4 times/.test(speeds()[2].getAttribute("title")), "4x offered again");
+  check(slot() === home && sim.playback === 4, `back on the Program tab, at the speed chosen there: ${sim.playback}`);
+  check(view().dataset.held === "no" && why().hidden, "the list back on the bar, the line gone");
+  check(!options()[2].disabled && /Play at 4 times/.test(options()[2].getAttribute("title")), "4x offered again");
   page.fire(page.$("tabDrive"), "click");
-  check(slot() === "driveSimSlot" && sim.playback === 1, "and held again on the Drive tab");
+  check(slot() === home && sim.playback === 1, "and held again on the Drive tab");
   // A pause left on the Program tab would freeze what the Drive tab drives,
   // on a phone with no bar to resume it from: driven, the view plays.
   page.fire(page.$("tabProgram"), "click");
@@ -4439,8 +6558,10 @@ test("target: one view of the simulator, on the Drive tab while it is driven, he
   check(sim.paused, "paused on the Program tab");
   page.fire(page.$("tabDrive"), "click");
   check(!sim.paused && sim.playback === 1, `playing at 1x on the Drive tab: paused ${sim.paused}`);
+  // On the rover target the Drive tab drives the rover, not the view: the
+  // hold lifts, and the view keeps its own speed for a preview.
   toRover(page);
-  check(slot() === "simSlot" && sim.playback === 4, "on the rover, the Program tab's view keeps it");
+  check(slot() === home && sim.playback === 4, `on the rover, the speed chosen: ${sim.playback}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4515,6 +6636,30 @@ test("look: Dark | Light and a tile per theme in the gear's popover, the look in
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// Options, sized to what it holds (the reviewer's round 1): Dark | Light as
+// wide as its words, as every other toggle is, not stretched across the
+// popover; and on a touch screen with nothing to hover, where no keyboard
+// is likely, no list of keys over Update. The rest stays: the looks and
+// the firmware update.
+test("look: Dark | Light as wide as its words, and a touch screen's Options leaves out the keys", () => {
+  const rules = cssRules(panelCss());
+  const flavours = rules.filter((r) => /\.flavours\b/.test(r.selector));
+  check(flavours.some((r) => r.selector === ".options .flavours" && /align-self:\s*flex-start/.test(r.body)), `as wide as its words: ${flavours.map((r) => `${r.selector}{${r.body}}`)}`);
+  check(!flavours.some((r) => /(^|[\s;{])(width|flex|flex-grow)\s*:/.test(r.body)), `nothing stretches it: ${flavours.map((r) => r.body)}`);
+
+  const touch = blockRules(panelCss(), "@media (hover: none) and (pointer: coarse) {");
+  const gone = touch.filter((r) => /display:\s*none/.test(r.body)).flatMap((r) => r.selector.split(/\s*,\s*/));
+  check(["#keysLabel", "#keyList", ".keysNote"].every((s) => gone.includes(s)), `the keys left out: ${gone}`);
+  check(gone.every((s) => ["#keysLabel", "#keyList", ".keysNote"].includes(s)), `nothing else left out: ${gone}`);
+  // What it leaves out is the whole Keys section, between the looks and
+  // the firmware update.
+  const page = loadPage();
+  const kids = page.$("optionsPanel").children.map((n) => n.id || (n.getAttribute("class") || ""));
+  const at = (id) => kids.indexOf(id);
+  check(at("lookChoice") < at("keysLabel") && at("keysLabel") + 1 === at("keyList") && at("keyList") + 1 === at("keysNote") && at("keysNote") + 1 === at("firmwareLabel"), `the Keys section, whole: ${kids}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 // The owner's ask: Dark or Light as a toggle, apart from the theme.
 test("look: the toggle keeps the theme, a tile keeps the flavour, and the tiles preview the flavour in force", () => {
   const { page, ws } = connected(telemetry(), { stored: { "rover.look": "blueprint-dark" } }); // exploring: any frame would take control
@@ -4571,8 +6716,20 @@ test("look: what else marks the chosen chip is drawn in its ink, not in blue or 
   const pending = rule("panel.css", '.segmented button[aria-pressed="true"][data-pending="yes"]');
   check(/(^|[^-])color:\s*var\(--on-chosen\)/.test(pending) && /outline-color:\s*var\(--on-chosen\)/.test(pending),
     `a chosen scheme also asked for: its word and frame in --on-chosen: ${pending}`);
-  const dot = rule("program.css", '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
-  check(/background:\s*var\(--on-chosen\)/.test(dot), `the open Program tab's running dot in --on-chosen: ${dot}`);
+  // The tabs are words on the cell's panel, not chips: the open tab is its
+  // ink over an underline in --chosen, a straight 2 px bar with square
+  // ends under its word (an inset shadow on a rounded box curled up at its
+  // ends: the critics' round 3), and the running dot stays green on the
+  // panel, open or not (paired in looks.test.js), with nothing chosen
+  // under it to take its ink from.
+  const open = rule("panel.css", '.hcell .tabs [role="tab"][aria-selected="true"]');
+  check(/(^|[^-])color:\s*var\(--readout\)/.test(open) && /background:\s*linear-gradient\(var\(--chosen\), var\(--chosen\)\) center bottom 3px \/ calc\(100% - 2 \* var\(--tab-x, 10px\)\) 2px no-repeat;/.test(open) && !/box-shadow/.test(open),
+    `the open tab: its word in the ink over a straight --chosen bar, no chip: ${open}`);
+  const tab = rule("panel.css", '.hcell .tabs [role="tab"]');
+  check(/border-radius:\s*0;/.test(tab) && !/box-shadow/.test(tab), `the tab square, no shadow: ${tab}`);
+  const dots = cssRules(stylesheet("program.css")).filter((r) => /data-running="yes"\]::after/.test(r.selector) && /background:/.test(r.body));
+  check(dots.length === 1 && /background:\s*var\(--ok\)/.test(dots[0].body) && !/aria-selected/.test(dots[0].selector),
+    `the running dot green on either tab, no override for the open one: ${dots.map((r) => `${r.selector} { ${r.body.trim()} }`)}`);
 });
 
 test("look: a disabled Run keeps the edge its filled state drops", () => {
@@ -4581,36 +6738,154 @@ test("look: a disabled Run keeps the edge its filled state drops", () => {
   check(/border-color:\s*var\(--edge\)/.test(rule(".programBar .run:disabled")), "disabled, unfilled, it is edged as every other control");
 });
 
-test("look: on a phone on its side the all-well pills keep their green lamp, the only colour they have", () => {
-  // The block drops the pills' lamps to keep "No link" whole at 480 x 320;
-  // a tinted pill's colour shows without one, an all-well pill's does not.
-  const block = blockRules(panelCss(), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 779.98px) {") || [];
-  check(block.some((r) => r.selector === ".pill > .lamp" && /display:\s*none/.test(r.body)), "the lamps dropped there");
-  const keeps = (selector) => block.find((r) => r.selector.split(",").map((each) => each.trim()).includes(selector) && /display:\s*block/.test(r.body));
-  const link = keeps('body[data-link="up"] .linkPill > .lamp');
-  check(link, "Link's lamp kept while the link is up");
-  check(keeps('body[data-link="up"]:has(#motorsFault[data-ready="yes"]) .motorsPill > .lamp'), "Motors OK's lamp kept");
+// The link chip is quiet when all is well: its lamp is the only colour it
+// has, so no width may drop it but for the rover's glyph, which takes its
+// place and its colour; and a link that went is told by more than hue:
+// tinted and worded (its title where the word gives way). One outline per
+// cell, the cell's: the chip is told from it by its fill, never an edge of
+// its own, and so are the cell's tracks, and the gear has neither (the
+// critics' round 3: three and four nested hairlines in a cell). The caret
+// turns over while its popover is open, and the gear is lit then too.
+test("look: the link chip keeps its lamp's colour at every width, a link that went is tinted and worded, and a cell has one outline", () => {
+  const css = panelCss();
+  const rules = cssRules(css.replace(/@(media|container)[^{]*\{/g, ""));
+  const dropped = rules.filter((r) => selectorsOf(r.selector).some((each) => /\.lamp\b/.test(each)) && /display:\s*none/.test(r.body));
+  check(dropped.length === 1 && selectorsOf(dropped[0].selector).every((each) => /\.chipFor:not\(\[hidden\]\) \+ \.lamp$|^\.cells\[data-fitting\] /.test(each)),
+    `the lamp gives way only to the rover's glyph, or while the fit measures: ${dropped.map((r) => r.selector)}`);
+  const up = rules.find((r) => r.selector === '.linkChip[data-say="up"] .lamp');
+  check(up && /background:\s*var\(--ok\)/.test(up.body), `up: the lamp green: ${up && up.body}`);
+  const upGlyph = rules.find((r) => r.selector === '.linkChip[data-say="up"] .roverGlyph');
+  check(upGlyph && /color:\s*var\(--ok\)/.test(upGlyph.body), `up: the rover's glyph green in its place: ${upGlyph && upGlyph.body}`);
   // A browser without :has() drops a whole selector list that holds one.
-  check(link && !/:has\(/.test(link.selector), `Link's lamp in a rule with no :has(): ${link && link.selector}`);
+  check(rules.filter((r) => /\.linkChip|\.chipFor|\.lamp\b/.test(r.selector)).every((r) => !/:has\(/.test(r.selector)), "no chip rule leans on :has()");
+  // A link that went, went quiet or never came: amber, worded and tinted.
+  const went = rules.find((r) => r.selector === '.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"])');
+  check(went && /(^|[^-])color:\s*var\(--warn\)/.test(went.body), `lost, stale or never reached: worded in amber: ${went && went.body}`);
+  const tint = rules.find((r) => r.selector === '.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"], :not([data-alert=""]))');
+  check(tint && /background:\s*var\(--warn-soft\)/.test(tint.body), `and tinted, as an alert tints it: ${tint && tint.body}`);
+  // Where its cell cannot hold a word (the first cell's last step,
+  // measured), the chip is its lamp, the alerts' glyphs and its caret
+  // alone, its title saying the rest. The caret never goes: a press opens
+  // the popover at every width.
+  const hides = rules.filter((r) => /^\.drives/.test(r.selector) && /data-fit/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector);
+  check(!hides.some((each) => /\.chipWord|\.caret\b/.test(each)), `at the last step the chip's word and its caret stay: ${hides}`);
+  // There the chip takes the rest of its cell, its word the room left,
+  // said only where it fits whole (app.js, data-word): a lamp and a caret
+  // alone left the cell's last 90 px bare (the reviewers' round 2).
+  const bodyOf = (selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  const lampChip = bodyOf('.drives[data-fit="lamp"] .linkChip');
+  const lampWord = bodyOf('.drives[data-fit="lamp"] .chipWord');
+  const cut = bodyOf('.linkChip[data-word="cut"] .chipSay');
+  check(/flex:\s*1 1 auto;/.test(lampChip) && /min-width:\s*0;/.test(lampChip) && /flex:\s*1 1 0;/.test(lampWord) && /overflow:\s*hidden;/.test(lampWord) && /visibility:\s*hidden;/.test(cut),
+    `the last step: the chip the rest of the cell, its word what fits: ${lampChip} | ${lampWord} | ${cut}`);
+  check(!rules.some((r) => r.selector.split(",").some((each) => /\.caret\b/.test(each) && /linkChip|drives/.test(each)) && /display:\s*none/.test(r.body)), "the chip's caret at every width");
+  // One outline per cell: no edge on the chip, a track or the gear in a
+  // cell, the chip and the tracks on their fill.
+  const base = cssRules(outside(css, "@media"));
+  const chipBase = base.find((r) => r.selector === ".linkChip");
+  check(chipBase && /border-radius:\s*var\(--r-full\)/.test(chipBase.body) && /border-color:\s*transparent;/.test(chipBase.body) && /background:\s*var\(--raised\);/.test(chipBase.body), `the chip a pill on its fill, no edge: ${chipBase && chipBase.body}`);
+  check(!rules.some((r) => /\.linkChip\b/.test(r.selector) && /border-color:\s*var\(/.test(r.body)), "no state gives it an edge");
+  const track = base.find((r) => r.selector === ".hcell .segmented");
+  check(track && /box-shadow:\s*none;/.test(track.body), `a track in a cell, no hairline: ${track && track.body}`);
+  const gear = base.find((r) => r.selector === ".optionsButton");
+  check(gear && /border-color:\s*transparent;/.test(gear.body) && /background:\s*none;/.test(gear.body), `the gear, no edge or fill: ${gear && gear.body}`);
+  // Open: the caret turned over, the chip and the gear lit.
+  const turned = rules.find((r) => r.selector === '.linkChip[aria-expanded="true"] .caret');
+  check(turned && /transform:\s*rotate\(180deg\);/.test(turned.body), `the caret turned over while open: ${turned && turned.body}`);
+  for (const selector of ['.linkChip[aria-expanded="true"]', '.optionsButton[aria-expanded="true"]']) {
+    const lit = rules.find((r) => r.selector === selector);
+    check(lit && /background:\s*var\(--raised-hi\)/.test(lit.body), `${selector}: lit while open: ${lit && lit.body}`);
+  }
+  const page = loadPage();
+  page.fire(page.$("linkChip"), "click");
+  check(page.$("linkChip").getAttribute("aria-expanded") === "true", "open, the chip says so");
+  page.fire(page.$("linkChip"), "click");
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry());
+  ws.serverDrop();
+  check(page.$("linkChip").dataset.say === "lost" && /^Link lost/.test(page.$("linkChip").title), `a link lost under the panel: ${page.$("linkChip").dataset.say}, '${page.$("linkChip").title}'`);
+  const again = connectOpen(page);
+  again.serverMsg(telemetry());
+  page.fire(page.$("connect"), "click");
+  check(page.$("linkChip").dataset.say === "down" && /^Not connected/.test(page.$("linkChip").title), `put down by the panel: ${page.$("linkChip").dataset.say}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Stop's square most of its glyph's box, 14 to 16 px in its 16 px glyph:
+// at 8 px it was a dot, and the red alone said what it was (the critics'
+// round 3).
+test("look: Stop's square fills its glyph", () => {
+  const page = loadPage();
+  const rect = all(page.$("stop")).find((n) => n.tagName === "RECT");
+  const svg = all(page.$("stop")).find((n) => n.tagName === "SVG");
+  const box = Number(((svg && svg.getAttribute("viewBox")) || "").split(/\s+/)[2]);
+  const glyph = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === "#stop .icon");
+  const px = glyph && /width:\s*var\(--glyph\);/.test(glyph.body) ? 16 : NaN;
+  const side = rect ? (Number(rect.getAttribute("width")) / box) * px : NaN;
+  check(side >= 14 && side <= 16 && rect.getAttribute("width") === rect.getAttribute("height"), `a square of ${side} px`);
 });
 
 test("look: the chosen segment's word stays on its chip, the only ground its ink reads on, at the narrowest layouts", () => {
-  // Measured headless: at 320 px upright "Advanced" at --t-md ran past its
-  // chip, and on a phone on its side under about 570 px "sideways" at
-  // --t-sm; the part past the chip lay on its frame in --on-chosen.
-  const narrow = mediaRules("@media (max-width: 359.98px) {") || [];
-  const smaller = narrow.find((r) => /font-size:\s*var\(--t-sm\)/.test(r.body));
-  const selectors = smaller ? smaller.selector.split(",").map((each) => each.trim()) : [];
-  check(selectors.includes('.tabs [role="tab"]') && selectors.includes(".segmented button"), `the tabs and every switch a size down under 360 px: ${selectors}`);
-  const side = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
-  check(side.some((r) => r.selector === ".family .segmented button" && /font-size:\s*var\(--t-xs\)/.test(r.body)), "the family's words a size down on a narrow phone on its side");
+  // Measured headless: at 375 px upright the second cell's words at 13 px
+  // ran past it, at 414 px the first cell's at their widest, and on a phone
+  // on its side under about 570 px "sideways" at --t-sm ran past its chip;
+  // the part past a chip lay on its frame in --on-chosen. So each cell
+  // steps its words down until they fit it, measured (fitSteps), wherever
+  // it is: the long words short, the segments closer, and in the second
+  // cell a size down at its last steps. Measured headless at 320 to 1440
+  // px, with the chip's alerts shown, neither cell overflows.
+  const css = panelCss();
+  const flat = cssRules(css.replace(/@(media|container)[^{]*\{/g, ""));
+  const smaller = flat.find((r) => r.selector === '.hands:is([data-fit="short"], [data-fit="small"]) :is(button, .segmented button)');
+  check(smaller && /font-size:\s*var\(--t-sm\)/.test(smaller.body), `the tabs and every switch in the second cell a size down at its last step: ${smaller && smaller.body}`);
+  const shows = flat.filter((r) => /data-fit/.test(r.selector) && /display:\s*inline/.test(r.body)).map((r) => r.selector);
+  check(shows.some((each) => /^\.drives:is\(\[data-fit="short"\]/.test(each) && /\.target \.segShort/.test(each) && /\.autoShort/.test(each)), `Sim and Auto from the first cell's short step: ${shows}`);
+  // "Advanced" whole wherever it fits, Adv only at the second cell's last
+  // step, where nothing else does (a 320 px phone): the critic's round 2.
+  check(shows.some((each) => each === '.hands[data-fit="short"] .scheme .segShort'), `Adv only at the second cell's last step: ${shows}`);
+  const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\]/.test(appJs), "the short step the second cell's last");
+  // 13 px words, the first cell's size, down to "snug" (a 375 px phone and
+  // one on its side, measured headless): the segments and the tabs closer,
+  // never smaller. A size down only at "small" and "short".
+  const snug = flat.find((r) => r.selector === '.hands[data-fit="snug"]');
+  check(snug && /--seg-x:\s*5px/.test(snug.body) && /--tab-x:\s*3px/.test(snug.body) && !/font-size/.test(snug.body), `snug: closer, at 13 px: ${snug && snug.body}`);
+  check(!flat.some((r) => /^\.hands/.test(r.selector) && /tight|snug/.test(r.selector) && /font-size/.test(r.body)), "no size down at tight or snug");
+  // Stop at least 16 px from the scheme at every step.
+  const steps = '.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"])';
+  const stopGap = flat.find((r) => r.selector === `${steps} #stop`);
+  const tightGap = flat.find((r) => r.selector === steps);
+  check(stopGap && /margin-left:\s*12px/.test(stopGap.body) && tightGap && /gap:\s*4px/.test(tightGap.body) && !flat.some((r) => /^\.hands/.test(r.selector) && /(^|[\s;{])gap:\s*[0-3]px|margin-left:\s*([0-9]|1[01])px/.test(r.body)), "Stop 12 px and the cell's 4 px gap from the scheme when tight: 16 px, at every step");
+  const bar = cssRules(outside(css, "@media")).find((r) => r.selector === ".bar");
+  check(bar && /container:\s*bar \/ inline-size;/.test(bar.body), `the top a container the cells ask: ${bar && bar.body}`);
+  // The pivot stick's family steps down by its own area's width, as the
+  // cells do by theirs: 13 px where its words fit with the top's sides,
+  // 12 px and closer under 152 px (a 320 px phone, a phone on its side at
+  // the stick's floor), never 11 (the review's phones 20), and its
+  // segments 28 px as every switch's (24 were the page's smallest
+  // targets: the review's phones 21).
+  const familyStep = blockRules(outside(css, "@media"), "@container family (max-width: 151.98px) {") || [];
+  check(familyStep.length === 1 && familyStep[0].selector === ".family .segmented button" && /font-size:\s*var\(--t-sm\)/.test(familyStep[0].body) && /--seg-x:\s*5px/.test(familyStep[0].body), `the family's words a size down where its area is narrow: ${familyStep.map((r) => r.body)}`);
+  check(!flat.some((r) => /\.family/.test(r.selector) && (/font-size:\s*var\(--t-xs\)/.test(r.body) || /--seg\s*:/.test(r.body))), "never 11 px, never a smaller segment");
+  // A narrow phone on its side has a block of its own for the top (the
+  // cells spanning the screen), but no family step: the container query
+  // above is the family's one step, wherever its area is narrow.
+  const narrowSide = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
+  check(!narrowSide.some((r) => /\.family|\.segmented/.test(r.selector)), `no family step of its own for a narrow phone on its side: ${narrowSide.map((r) => r.selector)}`);
+  // The short words stand in for the long ones, and are never what is read.
+  const page = loadPage();
+  const sim = page.$("target").children[1];
+  check(sim.getAttribute("aria-label") === "Simulator" && all(sim).some((n) => n.getAttribute && n.getAttribute("class") === "segShort" && n.textContent === "Sim" && n.getAttribute("aria-hidden") === "true"),
+    "Sim, hidden from a reader, in the segment named Simulator");
 });
 
-test("look: on an upright phone the open Program tab's running dot sits in its chip's corner, not past the word", () => {
-  const phone = blockRules(stylesheet("program.css"), "@media (max-width: 439.98px) {") || [];
-  const dot = phone.find((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]::after');
-  check(dot && /position:\s*absolute/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
-  check(phone.some((r) => r.selector === '.tabs [role="tab"][aria-selected="true"][data-running="yes"]' && /position:\s*relative/.test(r.body)), "placed by its own tab");
+test("look: the Program tab's running dot sits in its tab's corner, so it widens nothing as it comes and goes", () => {
+  const dot = cssRules(stylesheet("program.css")).find((r) => r.selector === '.tabs [role="tab"][data-running="yes"]::after');
+  check(dot && /position:\s*absolute/.test(dot.body) && /top:/.test(dot.body) && /right:/.test(dot.body), `the dot out of the word's line: ${dot && dot.body}`);
+  const button = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".hcell button");
+  check(button && /position:\s*relative/.test(button.body), `placed by its own tab: ${button && button.body}`);
+  const page = loadPage();
+  check(all(page.doc.documentElement.querySelector(".hands")).includes(page.$("tabProgram")), "the tab in a cell");
 });
 
 test("look: a tile's preview is painted only in the tokens every look declares for it", () => {
@@ -4674,11 +6949,21 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   check(gear.getAttribute("aria-controls") === "optionsPanel" && gear.getAttribute("aria-expanded") === "false" && panel.hidden, "closed at first");
   check(!gear.hasAttribute("aria-haspopup") && panel.getAttribute("role") === "group" && panel.tagName === "DIV" && !panel.hasAttribute("aria-modal"),
     `a group, not a menu or a dialog: ${panel.tagName} role=${panel.getAttribute("role")}`);
-  check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, under the Stop bar");
+  check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, hanging below the top");
+  // Its scroll fades take a layer over its own lines, inside the popover's
+  // (a positioned .menu with a z-index stacks what it holds), which can
+  // never rise over the top: the popover itself takes none.
   const layered = cssRules(panelCss()).filter((rule) => /\.options\b|#optionsPanel\b/.test(rule.selector) && /z-index/.test(rule.body));
-  check(layered.length === 0, `.menu's layer, never one of its own over Stop: ${layered.map((rule) => rule.selector)}`);
-  check(gear.parentNode.parentNode.getAttribute("class") === "masthead" && gear.parentNode.parentNode.children.at(-1) === gear.parentNode,
-    "at the end of the masthead's row");
+  const fades = layered.filter((rule) => rule.selector.split(/,(?![^(]*\))/).every((part) => /::(before|after)$/.test(part.trim())) && /pointer-events:\s*none;/.test(rule.body));
+  check(layered.length === fades.length, `.menu's layer, never one of its own over Stop: ${layered.filter((rule) => !fades.includes(rule)).map((rule) => rule.selector)}`);
+  const menuRule = cssRules(outside(panelCss(), "@media")).find((rule) => rule.selector === ".menu");
+  check(menuRule && /position:\s*absolute;/.test(menuRule.body) && /z-index:\s*1;/.test(menuRule.body), `a .menu stacks its own fades: ${menuRule && menuRule.body}`);
+  // The last thing in the top's second cell, beside Stop: the hand that
+  // reaches for the gear lands, at worst, on Stop.
+  const holder = gear.parentNode;
+  const cell = holder.parentNode;
+  check(/\bhands\b/.test(cell.getAttribute("class") || "") && cell.children.at(-1) === holder && cell.children.at(-2) === page.$("stop"),
+    `at the end of the second cell, after Stop: ${cell.children.map((n) => n.id || n.getAttribute("class"))}`);
   const key = (target, k) => page.fire(target, "keydown", { key: k });
 
   page.fire(gear, "click");
@@ -4711,6 +6996,71 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   page.fire(gear, "click");
   key(page.$("programMenu"), "ArrowDown");
   check(panel.hidden && !page.$("programMenuList").hidden, "the File menu, opening, closes it");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: Options hangs from the top below the cells, never runs off the screen, and fades an end with more past it", () => {
+  // From the foot of the cells, 6 px below them, as the link's popover
+  // does, so it hangs as far below the cells in every layout: hung from
+  // the gear, it touched them; hung from the top's foot, it lay flush on
+  // the view's edge (the critics' round 3). Never taller than the screen
+  // under it, 8 px clear of the foot, scrolling inside rather than move
+  // the page and the sticks with it; at 844 x 390 its Firmware section was
+  // past the foot with nothing to say so (the critic's round 2).
+  const base = cssRules(outside(panelCss(), "@media"));
+  const rule = (selector) => base.filter((r) => r.selector.replace(/\s+/g, " ") === selector).map((r) => r.body).join("");
+  check(/position:\s*static;/.test(rule(".hands > .menuHolder")), `the gear's holder not positioned: the popover hangs from the cells: ${rule(".hands > .menuHolder")}`);
+  check(/position:\s*sticky;/.test(rule(".bar")) && /position:\s*relative;/.test(rule(".cells")), "the cells are what it hangs from, in the top stuck to the screen");
+  const below = /max-height:\s*calc\(100 \* var\(--svh\) - 100% - var\(--shell-top\) - 6px - var\(--s-2\) - env\(safe-area-inset-bottom, 0px\)\);/;
+  const options = rule(".options");
+  check(/(^|[\s;])top:\s*calc\(100% \+ 6px\);/.test(options) && below.test(options) && /overflow-y:\s*auto;/.test(options),
+    `6 px below the cells, never past the screen's foot, scrolling inside: ${options}`);
+  const link = rule(".linkPanel");
+  const linkTop = (link.match(/(?:^|[\s;])top:\s*([^;]+);/) || [])[1];
+  check(linkTop === "calc(100% + 6px)", `the link's popover from the same line: ${linkTop}`);
+  check(below.test(link) && /overflow-y:\s*auto;/.test(link),
+    `nor the link's, whose fault and note together ran past a phone on its side: ${link}`);
+  // The link's from the chip's left edge (app.js gives its place), as far
+  // right as the cells let it: from the cells' left edge it read as the
+  // target's (the critics' round 3).
+  check(/(^|[\s;])left:\s*clamp\(0px, var\(--chip-x, 0px\), 100% - min\(22rem, 100%\)\);/.test(link), `from the chip's left edge: ${link}`);
+  const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
+  check(/byId\("linkPanel"\)\.style\.setProperty\("--chip-x"/.test(appJs) && /placeLinkPanel\(\);\n\}/.test(appJs), "its place set as the top is fitted");
+  const atLoad = loadPage().$("linkPanel").style.getPropertyValue("--chip-x");
+  check(/^\d+px$/.test(atLoad), `set at load: ${atLoad}`);
+  // The fades: the panel's own ground over each end, under nothing it
+  // could take a press from, shown only by data-more, and weightless while
+  // hidden so data-more outweighs the File menu's id.
+  const hidden = rule(":where(.options, .linkPanel, #programMenuList)::before, :where(.options, .linkPanel, #programMenuList)::after");
+  check(/position:\s*sticky;/.test(hidden) && /pointer-events:\s*none;/.test(hidden) && /opacity:\s*0;/.test(hidden), `the fades sticky, hidden and pressed through: ${hidden}`);
+  for (const end of ["before", "after"]) {
+    const ground = rule(`.options::${end}, .linkPanel::${end}, #programMenuList::${end}`);
+    check(/linear-gradient\(to (top|bottom), var\(--panel\) 20%, transparent\)/.test(ground), `${end}: the panel's own ground: ${ground}`);
+  }
+  check(/opacity:\s*1;/.test(rule('.menu[data-more~="above"]::before, .menu[data-more~="below"]::after')), "shown by data-more");
+
+  // popover.js marks the ends with more past them, as it opens and scrolls,
+  // and clears them as it closes.
+  const page = loadPage();
+  const gear = page.$("options");
+  const panel = page.$("optionsPanel");
+  panel.clientHeight = 280;
+  panel.scrollHeight = 531;
+  panel.scrollTop = 0;
+  page.fire(gear, "click");
+  check(panel.getAttribute("data-more") === "below", `open at its top: ${panel.getAttribute("data-more")}`);
+  panel.scrollTop = 120;
+  page.fire(panel, "scroll", { bubbles: false });
+  check(panel.getAttribute("data-more") === "above below", `scrolled part way: ${panel.getAttribute("data-more")}`);
+  panel.scrollTop = 251;
+  page.fire(panel, "scroll", { bubbles: false });
+  check(panel.getAttribute("data-more") === "above", `scrolled to its end: ${panel.getAttribute("data-more")}`);
+  page.fire(gear, "click");
+  check(panel.hidden && !panel.hasAttribute("data-more"), "closed, nothing marked");
+  panel.scrollHeight = 280;
+  panel.scrollTop = 0;
+  page.fire(gear, "click");
+  check(!panel.hasAttribute("data-more"), "all of it in sight: nothing marked");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

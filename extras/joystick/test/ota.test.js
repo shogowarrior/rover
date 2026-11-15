@@ -212,13 +212,16 @@ test("link: sendBinary sends the bytes as they are, and nothing without an open 
 
 /* --- when Update can start ---------------------------------------------- */
 
+// Off says why in Update's title, and in the status line under it, which
+// a touch screen shows where it shows no title: Update greyed out over an
+// empty line said nothing (the reviewer's round 1).
 test("Update stays off, saying why, until the link is up, the rover reports its firmware and a file is chosen; a press then sends nothing", async () => {
   const page = loadPage();
   const pressSends = (ws) => {
     page.fire(start(page), "click");
     return ws ? ota(ws).length : 0;
   };
-  const off = (why) => start(page).disabled && start(page).title === why;
+  const off = (why) => start(page).disabled && start(page).title === why && status(page).textContent === why && status(page).dataset.tone === "";
   assert.ok(off("Connect to the rover first."), start(page).title);
   assert.equal(page.$("firmwareBuild").textContent, "—");
   assert.equal(pressSends(null), 0);
@@ -245,7 +248,7 @@ test("Update stays off, saying why, until the link is up, the rover reports its 
   ws.serverMsg(telemetry({ firmware: RUNNING }));
   assert.equal(status(page).textContent, "", "and gone with the old firmware");
   assert.equal(page.$("firmwareBuild").textContent, RUNNING.slice(0, 8));
-  assert.ok(!start(page).disabled && start(page).title === "", start(page).title);
+  assert.ok(!start(page).disabled && /^Send the file to the rover/.test(start(page).title), start(page).title);
   assert.ok(cancel(page).disabled && cancel(page).title === "No update to cancel.");
   assert.ok(progress(page).hidden, "no bar before an update");
 
@@ -254,6 +257,17 @@ test("Update stays off, saying why, until the link is up, the rover reports its 
   ws.serverDrop();
   assert.ok(off("Connect to the rover first."), start(page).title);
   assert.equal(page.$("firmwareBuild").textContent, "—", "what the rover ran belongs to its link");
+
+  // What became of a pick is said over why Update is off, and says why
+  // itself; the next pick clears it, and the line says why again.
+  const bootloader = appImage();
+  bootloader.set([0, 0, 0, 0], 32);
+  await choose(page, bootloader, "bootloader.bin");
+  assert.equal(status(page).textContent, page.evalIn("FirmwareUpdate.NOT_FIRMWARE"));
+  assert.equal(status(page).dataset.tone, "bad");
+  assert.ok(start(page).disabled && start(page).title === "Connect to the rover first.", start(page).title);
+  await choose(page, appImage());
+  assert.ok(off("Connect to the rover first."), status(page).textContent);
   assert.equal(ws.sent.length, 0, `sent ${ws.sent}`);
   assert.deepEqual(page.errors, []);
 });
