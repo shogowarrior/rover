@@ -1490,15 +1490,43 @@ body[data-link="connecting"] .connectGo {
   .connectAddress:hover { color: var(--readout); background: none; }
 }
 
-/* A card too short for all of it (a phone on its side, a short screen):
-   the button first. */
-@container scan (max-height: 139.98px) {
+/* A short view (a phone's band over the Program tab's editor, or the
+   middle of a phone on its side): the card one compact row, its button
+   and Change address, under the fan in a row of the card's own, where it
+   covers nothing. Over the middle of a short fan, the card sized for a
+   tall pane hid most of it (the review's tablets 2). The row is the
+   scan's last, whatever rows come before it; its title is the link
+   chip's word, in the top. */
+@container scan (max-height: 259.98px) {
+  .scan > .connectCard {
+    grid-row: 9;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, max-content);
+    align-items: center;
+    place-self: end center;
+    gap: var(--s-1);
+    margin-top: var(--s-1);
+    padding: 2px;
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
+
   .connectTitle { display: none; }
+
+  .connectAddress { white-space: nowrap; }
+}
+
+/* A short view that is narrow too (the middle of a phone on its side, at
+   480 px): Connect alone, whole, its address in it; the top's link chip,
+   over it, changes the address. Beside it, Change address wrapped to two
+   lines and cut the button to "ct to 192.16". */
+@container scan (max-height: 259.98px) and (max-width: 329.98px) {
+  .connectAddress { display: none; }
 }
 
 @container scan (max-height: 99.98px) {
   .connectAddress { display: none; }
-  .connectCard { padding: var(--s-2); }
 }
 
 /* The fan draws at --scan-k screen pixels a unit (scan.js, which picks
@@ -2126,6 +2154,20 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   :root { --gutter: var(--s-6); }
 }
 
+/* A tablet upright, or any screen 600 to 959 px wide over 520 px tall:
+   on the Program tab the view, when shown, is a band over the editor's
+   card the screen's width, one height whatever the target (the fan or
+   the room fits inside it: a band as tall as the fan's wide shape needed
+   moved the editor's top 105 px at 768 x 1024 on a switch of target, the
+   review's tablets 11), giving way on a short screen so the editor keeps
+   its floor, as a phone's band does. The console is under the editor, as
+   on every layout: beside the band it was a box 284 to 389 px tall
+   holding one line, and the fan a thumbnail beside it (the review's
+   tablets 1). */
+@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {
+  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(120px, min(38 * var(--svh), 100 * var(--svh) - 400px), 460px); }
+}
+
 /* A tablet upright (720 to 959 px wide, over 760 px tall): the shell the
    screen's width less its gutters, not 720 px between black bands, and
    the dock a card as wide as the cells and the view over it, a gutter off
@@ -2133,67 +2175,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    the sheet was wider than everything over it and flush to the foot (the
    critic's round 1, at 820 x 1180). The sticks keep their 240 px cap; the
    view takes the gutter from its own height. */
-/* A tablet upright, or any screen 600 to 959 px wide over 520 px tall:
-   on the Program tab the view, when shown, is a band over the editor, as
-   wide as what it shows needs at the band's height (the room's shape, or
-   the fan's: --va), and the console beside it, at least 200 px wide,
-   takes the rest of the band. The room filled 315 to 380 px of a 720 px
-   band, black bars either side (the critic's round 2). A band whose view
-   reaches the console's floor (the fan's wide shape) is only as tall as
-   that view needs. The editor's card under the band, the whole width,
-   its toolbar its head; with the view hidden the console goes back under
-   the editor. */
-@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {
-  .shell:has(> #programTab[data-view="shown"]:not([hidden])) {
-    --band-0: clamp(200px, 38 * var(--svh), 460px);
-    --view-w: min((var(--band-0) - var(--vch)) * var(--va) + var(--vcw), min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-2) - 200px);
-    --band-h: min(var(--band-0), (var(--view-w) - var(--vcw)) / var(--va) + var(--vch));
-    grid-template-columns: var(--view-w) minmax(0, 1fr);
-    grid-template-rows: auto var(--band-h) minmax(0, 1fr);
-    grid-template-areas:
-      "head head"
-      "view ."
-      ".    .";
-    column-gap: var(--s-2);
-  }
-
-  .shell:has(> #programTab[data-view="shown"]:not([hidden])) > .view {
-    height: auto;
-    margin-bottom: 0;
-  }
-
-  #programTab[data-view="shown"]:not([hidden]) {
-    grid-row: 2 / -1;
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: subgrid;
-    grid-template-rows: subgrid;
-    gap: 0 var(--s-2);
-    container-type: normal;
-  }
-
-  #programTab[data-view="shown"] .programStage { display: contents; }
-
-  #programTab[data-view="shown"] .programConsole {
-    grid-area: 1 / 2;
-    min-height: 0;
-  }
-
-  #programTab[data-view="shown"] .programLog { max-height: none; }
-
-  #programTab[data-view="shown"] .programBar {
-    grid-area: 2 / 1 / 3 / 3;
-    align-self: start;
-    margin-top: var(--s-2);
-  }
-
-  #programTab[data-view="shown"] .programEditor {
-    grid-area: 2 / 1 / 3 / 3;
-    min-height: 0;
-    margin-top: calc(var(--s-2) + var(--bar-h));
-  }
-}
-
 @media (min-width: 720px) and (max-width: 959.98px) and (min-height: 761px) {
   :root { --shell-max: 960px; }
 
@@ -2242,22 +2223,20 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   }
 
   /* The Program tab: the view about 40% of the width (from 320 to 560
-     px) on the left, as tall as what it shows needs at that width (the
-     fan's shape, or the room's: --va, above), and the console under it
-     taking the rest of the column; the editor, its toolbar over it, the
-     whole of the right. In a pane the screen's height the fan filled
-     only its foot, 450 px empty over it at 1280 x 800, and the room had
-     150 px of black over and under it (the critic's round 2). At least
-     240 px of the height is the console's, the top's and the padding's. */
+     px) on the left, the whole column's height, and the editor's card
+     the rest, its toolbar its head and the console under it, the view
+     shown or hidden: the same column either way, so View moves nothing
+     in it. Under the view, the console was a box the column's height
+     holding one line (685 px of it at 1920 x 1080) and the fan a strip
+     over it (the review's laptops 0); now the fan or the room has the
+     column, and draws in whichever shape fills it. */
   .shell:has(> #programTab:not([hidden])) {
     --view-w: clamp(320px, 0.4 * (min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-4)), 560px);
-    --view-h: min((var(--view-w) - var(--vcw)) / var(--va) + var(--vch), 100 * var(--svh) - 240px);
     grid-template-columns: var(--view-w) minmax(0, 1fr);
-    grid-template-rows: auto var(--view-h) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "head head"
-      "view main"
-      ".    main";
+      "view main";
   }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
@@ -2269,44 +2248,6 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
-
-  /* The tab spans both columns on the shell's own tracks (subgrid): the
-     editor's card in the right column, its toolbar its head, and the
-     console in the left under the view, 8 px clear of it. The card's top
-     is the view's: the toolbar over the editor alone put the two tops
-     40 px apart (the critic's round 1). No container here: a container is
-     laid out on its own (layout containment), and a subgrid that is one
-     gets no tracks at all. */
-  #programTab[data-view="shown"]:not([hidden]) {
-    grid-row: 2 / -1;
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: subgrid;
-    grid-template-rows: subgrid;
-    gap: 0 var(--s-4);
-    container-type: normal;
-  }
-
-  #programTab[data-view="shown"] .programStage { display: contents; }
-
-  #programTab[data-view="shown"] .programBar {
-    grid-area: 1 / 2;
-    align-self: start;
-  }
-
-  #programTab[data-view="shown"] .programEditor {
-    grid-area: 1 / 2 / 3 / 3;
-    min-height: 0;
-    margin-top: var(--bar-h);
-  }
-
-  #programTab[data-view="shown"] .programConsole {
-    grid-area: 2 / 1;
-    min-height: 0;
-    margin-top: var(--s-2);
-  }
-
-  #programTab[data-view="shown"] .programLog { max-height: none; }
 
   .view { margin-bottom: 0; }
 
@@ -2427,17 +2368,16 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
   /* The view ends the middle column, clear of the home bar. */
   .view { margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
 
-  /* The Program tab: the top keeps to the middle column, as beside the
-     sticks, so a switch of tab moves neither Stop nor anything else in its
-     two cells. Under it the tab takes the screen's width: the editor's
-     card, its toolbar its head as on every layout, and the console under
-     it (program.css). Shown, the view takes the left of the screen, about
-     40% of it, its top level with the card's, and the editor the rest:
-     two panes, never three columns (the critic's round 1: the view, the
-     editor and the console side by side left the editor 262 px of a 568
-     px screen). The second column is what makes the 40%, and the top
-     spans it with the third, so its cells stay where the three columns
-     put them. */
+  /* The Program tab: under 700 px wide the top keeps to the middle
+     column, as beside the sticks, a cell a row, and the toolbar takes the
+     bands either side of it (below); from 700 px the cells go in one row
+     across the screen, where they fit (further below). Under the top the
+     tab takes the screen's width: the editor's card and the console
+     under it (program.css). Shown, the view takes the left of the screen,
+     about 40% of it, its top level with the card's, and the editor the
+     rest: two panes, never three columns (the critic's round 1: the view,
+     the editor and the console side by side left the editor 262 px of a
+     568 px screen). The second column is what makes the 40%. */
   .shell:has(> #programTab:not([hidden])) {
     grid-template-columns: var(--stick) max(0px, 40% - var(--stick)) minmax(0, 1fr) var(--stick);
     grid-template-rows: auto minmax(0, 1fr);
@@ -2495,6 +2435,78 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
      Inter and 123 in DejaVu Sans, measured headless, and the column is
      112 px at the stick's floor (568 x 320). */
   .noteLine { margin-inline-start: calc(-1 * var(--s-3)); }
+}
+
+/* The Program tab on its side, under 700 px wide (568 x 320, 667 x 375):
+   the cells, a row each in the middle, leave a band either side of them,
+   which were empty while the editor under them had about 90 px of height
+   (the review's phones 0). The toolbar takes the bands: Run over Stop
+   program in the left, level with the cells' controls, File over View in
+   the right, and the editor's card starts under the cells, the screen's
+   width (or what the view leaves it). The tab spans the shell on its own
+   tracks (subgrid) for it. No container here: a container is laid out on
+   its own (layout containment), and a subgrid that is one gets no tracks
+   at all. The view, positioned (above), lies over the tab's empty
+   corner; the top, its own layer, over its middle. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 699.98px) {
+  #programTab:not([hidden]) {
+    grid-area: 1 / 1 / -1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    container-type: normal;
+  }
+
+  #programTab .programBar {
+    grid-area: 1 / 1 / 2 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: var(--ctl) var(--ctl);
+    row-gap: calc(var(--cell-h) - var(--ctl) + 6px);
+    align-self: start;
+    padding-top: calc((var(--cell-h) - var(--ctl)) / 2);
+  }
+
+  #programRun { grid-area: 1 / 1; justify-self: start; }
+  #programStop { grid-area: 2 / 1; justify-self: start; }
+  #programTab .menuHolder { grid-area: 1 / -2; justify-self: end; margin-left: 0; }
+  #viewToggle { grid-area: 2 / -2; justify-self: end; }
+
+  #programTab .programStage { grid-area: 2 / 3 / 3 / -1; }
+  #programTab[data-view="hidden"] .programStage { grid-area: 2 / 1 / 3 / -1; }
+}
+
+/* The Program tab on its side, 700 px wide or more (732 x 412 up): the
+   cells fit one row there, so they take it, across the screen, as on a
+   wide screen (the second cell the rest of the row, Stop and the gear at
+   its end), and the editor's card and the console have the height under
+   it: a row each, they left the editor 150 to 200 px (the review's phones
+   0). The sticks' columns go with the dock; the view, when shown, takes
+   40% of the width on the left, and the cells line up with nothing but
+   the screen's edges (the review's phones 23). */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 700px) {
+  .shell:has(> #programTab:not([hidden])) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-areas:
+      "head head"
+      "view main";
+  }
+
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "main";
+  }
+
+  .shell:has(> #programTab:not([hidden])) .cells {
+    display: flex;
+    column-gap: var(--s-2);
+  }
+
+  .shell:has(> #programTab:not([hidden])) .hcell.drives { flex: none; }
+
+  .shell:has(> #programTab:not([hidden])) .hcell.hands { flex: 1 1 0; }
 }
 
 /* On its side and narrower than about 780 px (640 x 360, 732 x 412), the

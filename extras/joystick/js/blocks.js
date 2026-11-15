@@ -689,14 +689,21 @@ class RoverBlocks {
  *                      blocks keep PALETTE.
  *   onChange(fn)       fn() after the program changes.
  *
- * Under 600 px of screen, or 520 px of height (a phone on its side), the
+ * On an upright phone (600 px wide or less, taller than wide) the
  * toolbox runs across the top, as rows of pills (program.css), and the
- * workspace is rebuilt when the screen crosses either. Down the left of a
- * short editor, the seven categories ran past its foot (the critic's
- * round 2); across the top of a wide one they fit in one row.
+ * workspace is rebuilt when the screen crosses that. Everywhere else, a
+ * phone on its side too, it runs down the editor's left: across the top
+ * of a phone on its side it wrapped, Output alone on a second row, and
+ * cost the editor 30 px of its little height (the review's phones 0 and
+ * 23); a short editor's pills are closer there, so the seven fit.
+ *
+ * Blockly's scrollbars show only while the program runs past the view
+ * (the container's data-overflow, program.css): on an empty workspace
+ * they said there was more to see when there was nothing (the review's
+ * laptops 14). The workspace pans by a drag anywhere either way.
  */
 class BlockEditor {
-  static NARROW = "(max-width: 600px), (max-height: 520px)";
+  static NARROW = "(max-width: 600px) and (orientation: portrait)";
   static SAVE_DELAY_MS = 400;
 
   static #AsyncFunction = (async () => {}).constructor;
@@ -823,6 +830,7 @@ class BlockEditor {
     // Built in a hidden tab, the workspace had no view to scroll the program
     // into; it has one now.
     if (!this.#placed) this.#showTopLeft();
+    this.#markOverflow();
   }
 
   restyle() {
@@ -866,12 +874,37 @@ class BlockEditor {
     this.#showTopLeft();
 
     this.#markPivots();
+    this.#markOverflow();
     workspace.addChangeListener((event) => {
+      // Any event, a scroll or a zoom among them, may bring the program
+      // into the view or take it past it.
+      this.#markOverflow();
       if (event.isUiEvent) return;
       this.#markPivots();
       this.#scheduleSave();
       this.#changeListeners.emit();
     });
+  }
+
+  // Whether the program runs past the view, for program.css: the scrollbars
+  // show only then. Where Blockly cannot say, they show.
+  #markOverflow() {
+    let over = true;
+    try {
+      const metrics = this.#workspace.getMetricsManager();
+      const view = metrics.getViewMetrics(true);
+      const content = metrics.getContentMetrics(true);
+      const edges = [view.left, view.top, view.width, view.height, content.left, content.top, content.width, content.height];
+      if (edges.every((edge) => typeof edge === "number" && Number.isFinite(edge))) {
+        over = content.width > 0 && content.height > 0 &&
+          (content.left < view.left || content.top < view.top ||
+           content.left + content.width > view.left + view.width ||
+           content.top + content.height > view.top + view.height);
+      }
+    } catch {
+      over = true;
+    }
+    this.#container.dataset.overflow = over ? "yes" : "no";
   }
 
   // A block inside a disabled one is drawn disabled and writes no code, but

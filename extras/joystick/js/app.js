@@ -469,6 +469,7 @@ const programTab = new ProgramTab({
   ui: {
     run: byId("programRun"),
     runLabel: byId("programRunLabel"),
+    runShort: byId("programRunShort"),
     stop: byId("programStop"),
     menu: byId("programMenu"),
     menuList: byId("programMenuList"),
@@ -484,6 +485,8 @@ const programTab = new ProgramTab({
     viewToggle: byId("viewToggle"),
     state: byId("programState"),
     log: byId("programLog"),
+    logToggle: byId("programLogToggle"),
+    logCount: byId("programLogCount"),
   },
 });
 
@@ -494,8 +497,10 @@ offerConnect();
 
 // Every other way a program stops: the Target reports its own losses
 // (program.js). Stop and Autonomous stop a program on any target, a preview
-// included: an operator reaching for Stop means everything.
-byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab."));
+// included: an operator reaching for Stop means everything. The tab's own
+// Stop program is the operator ending their program, which the console
+// says plainly; every other stop says why, in amber.
+byId("programStop").addEventListener("click", () => runner.abort("Stop was pressed on the Program tab.", { own: true }));
 byId("stop").addEventListener("click", () => runner.abort("Stop was pressed."));
 byId("auto").addEventListener("click", () => runner.abort("Autonomous was pressed."));
 

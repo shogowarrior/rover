@@ -329,17 +329,22 @@
          works on. -->
     <section id="programTab" role="tabpanel" aria-labelledby="tabProgram" data-view="shown" hidden>
       <div class="programBar" role="toolbar" aria-label="Program">
+        <!-- Its word in full, or where the toolbar is narrow its short
+             one ("Run" on the rover), its title naming the target either
+             way: Run gives way, never Stop program. -->
         <button type="button" class="run" id="programRun" disabled>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.1v9.8L12.8 8z"/></svg>
-          <span id="programRunLabel">Run on rover</span>
+          <span class="runWord" id="programRunLabel">Run on rover</span>
+          <span class="runShort" id="programRunShort">Run</span>
         </button>
         <!-- Named apart from the panel's red Stop: this one ends the
              program, and sends STOP only if the program was driving; that
-             one always stops the rover, an exploring one too. -->
+             one always stops the rover, an exploring one too. Both words
+             at every width: "Stop" alone read as the page's Stop. -->
         <button type="button" class="halt" id="programStop" disabled aria-label="Stop program"
                 title="End the program. The rover stops if the program was driving it.">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
-          <span>Stop<span class="haltMore"> program</span></span>
+          <span>Stop program</span>
         </button>
         <!-- The File menu, at the far end of its row with the View toggle:
              what is used now and then and moves nothing. popover.js opens
@@ -361,7 +366,7 @@
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2M3 13.5h10"/></svg>
               <span>Import…</span>
             </button>
-            <button type="button" role="menuitem" id="programExport" title="Save the program as rover-program.json" disabled>
+            <button type="button" role="menuitem" id="programExport" disabled>
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13.5h10"/></svg>
               <span>Export</span>
             </button>
@@ -375,9 +380,10 @@
         <!-- Shows or hides the view pane (the scan, or the simulated room)
              beside the editor, on this tab alone: hidden, the pane is gone
              and the editor takes its room. programtab.js keeps it, and the
-             tab's data-view, which panel.css keys on. -->
+             tab's data-view, which panel.css keys on. Pressed, its icon's
+             left pane is filled: the view is there. -->
         <button type="button" class="viewToggle" id="viewToggle" aria-pressed="true" aria-controls="view">
-          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M7 3v10"/></svg>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path class="viewPane" d="M3.5 4.5h3.5v7h-3.5z"/><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M7 3v10"/></svg>
           <span class="viewWord">View</span>
         </button>
         <input type="file" id="programFile" accept=".json,application/json" hidden>
@@ -397,8 +403,11 @@
           </div>
         </div>
 
-        <!-- What is running and why it stopped, then everything the program
-             and the runner said. -->
+        <!-- Under the editor on every layout: what is running and why it
+             stopped, one line, then everything the program and the runner
+             said, only as tall as it needs, up to a cap past which it
+             scrolls. On a phone the log is a press away (Log), so the
+             editor's height never follows how much was said. -->
         <div class="programConsole">
           <div class="programStateRow">
             <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
@@ -408,6 +417,13 @@
                  connect card, start folded. -->
             <button type="button" class="consoleConnect" id="programConnect" hidden
                     title="Connect to the rover at the address in the link's popover.">Connect</button>
+            <!-- A phone's: shows or hides the log under the line, once
+                 there is one (programtab.js). -->
+            <button type="button" class="logToggle" id="programLogToggle" aria-controls="programLog" aria-expanded="false" hidden>
+              <span>Log</span>
+              <span class="logCount" id="programLogCount"></span>
+              <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 10 8 6.5l3.5 3.5"/></svg>
+            </button>
           </div>
           <ol class="programLog" id="programLog" aria-label="Program output"></ol>
         </div>
