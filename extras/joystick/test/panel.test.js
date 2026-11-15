@@ -5293,6 +5293,10 @@ test("alerts: the chip keeps the link's word, and says No motors and a rover exp
   // line moves nothing outside it.
   const awayAll = awayCss.map((r) => r.body).join("");
   check(/-webkit-line-clamp:\s*2;/.test(awayBase) && /display:\s*-webkit-box;/.test(awayBase) && /overflow-wrap:\s*anywhere;/.test(awayBase) && !/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(awayAll), `wraps to two lines at most: ${awayBase}`);
+  // A display of its own outranks the browser's [hidden] rule, so hidden
+  // must say display: none itself, or the warning stays on screen with the
+  // rover not exploring.
+  check(!/display:/.test(awayBase) || awayCss.some((r) => r.selector === ".roverAway[hidden]" && /display:\s*none;/.test(r.body)), "hidden, the line is gone: its own display does not keep it on screen");
   const viewBody = cssRules(panelCss()).filter((r) => r.selector === ".view").map((r) => r.body).join("");
   check(/contain:\s*size;/.test(viewBody) && page.$("roverAway").parentNode === page.$("view"), "inside the size-contained view");
   // Each alert its own shape, neither two circles (the reviewers' round 2:

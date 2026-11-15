@@ -1565,6 +1565,9 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   outline-offset: -1px;
 }
 
+/* Its display above outranks the browser's own [hidden] rule, which would
+   leave the line, and its warning, on screen while the rover is not
+   exploring: hidden, it is gone. */
 .roverAway[hidden] { display: none; }
 
 /* A fault the rover reports about itself, in the scan's card at its top,
