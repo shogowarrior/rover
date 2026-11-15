@@ -3,7 +3,7 @@
    sizes (css/panel.css): one row, the controls and what the rover is
    doing, the same on both tabs, and the room under it taking every pixel
    left, nothing over the floor but a metre in its corner. The rest (the
-   room's list, the key, the drag, that it is idealised) folds into the
+   room's list, the key, that it is idealised) folds into the
    settings, a line each.
 
    The palette is the look's (css/looks.css), the room's own colours (its
@@ -187,15 +187,29 @@
 .sim-arrow[data-turn="free"] { fill: none; }
 
 /* The move as the blocks name it ("Rotate clockwise"). A pivot's name is
-   long ("Pivot sideways, backward-right"): on a phone it is cut short,
-   last, rather than push the settings off the bar. */
+   long ("Pivot sideways, backward-right"): where it does not fit, it goes
+   (data-fit, simview.js), the last thing on the line to, never cut short
+   ("Strafe rig…", a lone "B": the review's phones 2) and never pushing
+   the settings off the bar. The room shows the motion. */
 .sim-move {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   font-size: var(--t-sm);
   font-weight: var(--fw-semi);
+}
+
+.sim-move[data-fit="no"],
+.sim-clock[data-fit="no"] { display: none; }
+
+/* Under about 70 px of room, no move at all, whatever its name: one that
+   fits there ("Stopped") and the next that does not would come and go
+   with every move of a preview. */
+.sim-status { container: simstatus / inline-size; }
+
+@container simstatus (max-width: 69.98px) {
+  .sim-move,
+  .sim-twist { display: none; }
 }
 
 .sim-move[data-stalled="yes"] { color: var(--stop-ink); }
@@ -287,20 +301,18 @@
 
 /* As the bar narrows, the line keeps the words that matter, the least
    needed going first: the time of the latest word, then the word itself
-   (the Program tab's console says it too), the clock's caption (its title
-   still says it), then the clock and the wheels,
+   (the Program tab's console says it too), then the clock, with its
+   caption or not at all (a bare "4.8 s" after "50%" read as how long
+   the move lasts: the reviews' laptops 3, tablets 4), and the wheels,
    leaving the move: on a 320 px phone the clock left the move "S..."
-   (the critic's round 3). How fast gives way of itself (above). */
+   (the critic's round 3). How fast gives way of itself (above), and the
+   clock where the move would be cut (simview.js). */
 @container sim (max-width: 799.98px) {
   .sim-log-at { display: none; }
 }
 
 @container sim (max-width: 559.98px) {
   .sim-log { display: none; }
-}
-
-@container sim (max-width: 479.98px) {
-  .sim-clock .label { display: none; }
 }
 
 @container sim (max-width: 359.98px) {
@@ -597,8 +609,6 @@
 }
 
 .sim-room-row .sim-pick { grid-column: 2 / -1; justify-self: start; }
-
-.sim-drag input[type="range"] { height: var(--sim-tool); }
 
 .sim-value {
   font-family: var(--mono);

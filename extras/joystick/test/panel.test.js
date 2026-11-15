@@ -1089,14 +1089,18 @@ test("the scan: a connect card over it while no link is up, and the scan empty u
   const states = (selector.match(/data-link="(\w+)"/g) || []).map((m) => m.slice(11, -1)).sort().join();
   check(states === "connecting,down", `only with no link up: ${states}`);
   check(!/data-tab|tabpanel|#(drive|program)Tab/.test(selector), `on either tab: ${selector}`);
-  // The card and the fan share one cell that takes what the fault's row
-  // and the legend's leave: an auto row sized by the card, in a small
-  // scan, let the fan spill out of it. The auto rows are the fault's and
-  // the rings' legend's alone.
+  // The card and the fan share one cell that takes what the legend's row
+  // leaves: an auto row sized by the card, in a small scan, let the fan
+  // spill out of it. The auto row is the rings' legend's, and the fault's
+  // in its place while there is one, the legend keeping its height under
+  // it: in a row of its own the fault took the fan's height, readings down
+  // to 9 px on a phone (the review's phones 1).
   const card = cssRules(panelCss()).find((r) => r.selector === ".scan" && /grid-template:/.test(r.body));
-  check(card && /grid-template:\s*auto auto minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
+  check(card && /grid-template:\s*auto minmax\(0, 1fr\) \/ minmax\(0, 1fr\);/.test(card.body), `the card's cell: ${card && card.body}`);
   const cell = (selector) => cssRules(panelCss()).filter((r) => r.selector === selector).map((r) => r.body).join("");
-  check(/grid-area:\s*3 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > .fault")) && /grid-area:\s*2 \/ 1;/.test(cell(".scan > .scanLegend")), `the card and the fan in the cell, the legend and the fault over them: ${cell(".scan > *")} | ${cell(".scan > .scanLegend")} | ${cell(".scan > .fault")}`);
+  check(/grid-area:\s*2 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > :is(.fault, .scanLegend)")) && /visibility:\s*hidden/.test(cell(".scan:has(> .fault:not([hidden])) > .scanLegend")), `the card and the fan in the cell, the fault in the legend's place over them: ${cell(".scan > *")} | ${cell(".scan > :is(.fault, .scanLegend)")}`);
+  const px = (selector, prop) => Number((cell(selector).match(new RegExp(`${prop}:\\s*(\\d+)px`)) || [])[1]);
+  check(px(".fault summary", "height") + 2 === px(".scanLegend", "line-height") && /padding:\s*0 /.test(cell(".fault")), `the fault closed the legend's height, its edge included: ${px(".fault summary", "height")} + 2 vs ${px(".scanLegend", "line-height")}`);
   const own = cssRules(panelCss()).find((r) => r.selector === ".connectCard");
   check(own && /display:\s*none/.test(own.body), "otherwise not shown");
   // Under the card, with no link and no scan from one, the whole fan is
@@ -1109,6 +1113,11 @@ test("the scan: a connect card over it while no link is up, and the scan empty u
   check(/display:\s*none/.test(faint('body:not([data-link="up"]) #scan[data-empty="yes"] :is(.tick, .reading)')), "its names and its readings' dashes out of sight");
   check(/visibility:\s*hidden/.test(faint('body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend')), "the legend out of sight, keeping its place");
   check(/opacity:\s*0\.25/.test(faint('body:not([data-link="up"]) .wedge')) && /fill:\s*var\(--dim\)/.test(faint('body:not([data-link="up"]) .reading')), "a lost link's last scan dimmed, its readings still there");
+  // Its stop and go rings grey with it, their dashes kept: in red and
+  // amber over a greyed fan they were the loudest things in the view (the
+  // review's laptops 7). The legend's swatches keep their colours.
+  const rings = faint('body:not([data-link="up"]) #scan .ring:is(.go, .stop)');
+  check(/stroke:\s*var\(--dim\)/.test(rings) && !/stroke-dasharray/.test(rings), `a lost link's rings grey, dashed still: ${rings}`);
   check(page.$("scan").parentNode.querySelectorAll(".connectCard").length === 1, "in the scan's own card");
   check(page.$("connectGo").title && page.$("changeAddress").getAttribute("title"), "both its buttons titled");
   check(page.errors.length === 0, `errors ${page.errors}`);
@@ -1203,22 +1212,36 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   check(new RegExp(`calc\\(${RMAXPX}px / var\\(--scan-k, 1\\)\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `and its cap: ${RMAXPX}px`);
   const TS = rootVar("--scan-tick");
   for (const [layout, x0, x1, shape] of [["wide", 0, W, (k) => [W * k, H * k * 1.02]], ["tall", TX, TX + TW, (k) => [TW * k, H * k * 1.5]]]) {
-    // From where the readings first show, past where the names do, to three
-    // times the drawing's size.
-    for (const k of [0.6, 0.72, 0.79, 0.8, 0.9, 1.2, 2, 3.2]) {
+    // From where no reading fits at 12 px, past where the names show, to
+    // three times the drawing's size.
+    for (const k of [0.4, 0.5, 0.55, 0.6, 0.72, 0.79, 0.8, 0.9, 1.2, 2, 3.2]) {
       page.evalIn(`scanView.fit(${shape(k).join(", ")})`);
       check(svg.dataset.layout === layout, `${layout} at ${k}: ${svg.dataset.layout}`);
       check(svg.getAttribute("viewBox") === `${x0} 0 ${x1 - x0} ${H}`, `${layout}: its box: ${svg.getAttribute("viewBox")}`);
       check(svg.style.getPropertyValue("--scan-k") === k.toFixed(3), `${layout} at ${k}: --scan-k ${svg.style.getPropertyValue("--scan-k")}`);
-      const rs = Math.min(RS, RMAXPX / k) / RS;
+      // A reading 12 px on screen at least, as a name is (the review's
+      // phones 1: 8 to 10 px on a phone), as panel.css draws it.
+      const RP = g("ScanView.READING_MIN_PX");
+      check(RP === 12 && new RegExp(`max\\(calc\\(${RP}px / var\\(--scan-k, 1\\)\\), min\\(var\\(--scan-reading\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `a reading's floor: ${RP} px`);
+      const rs = Math.max(RP / k, Math.min(RS, RMAXPX / k)) / RS;
       // A name 12 px on screen at least (ScanView.TICK_PX), so it shows
       // only where 12 px takes no more units than a reading.
       const TP = g("ScanView.TICK_PX");
       const ts = Math.max(TP / k, Math.min(TS, 14 / k)) / TS;
-      const names = svg.dataset.labels === "all";
-      check(names === (TP / k <= RS) && svg.dataset.labels === (names ? "all" : "readings"), `${layout} at ${k}: names shown only at ${TP} px or more: ${svg.dataset.labels}`);
+      const labels = svg.dataset.labels;
+      const names = labels === "all";
+      check(names === (TP / k <= RS) && ["all", "readings", "front", "none"].includes(labels), `${layout} at ${k}: names shown only at ${TP} px or more: ${labels}`);
       check(!names || ts * TS * k >= TP - 1e-9, `${layout} at ${k}: a name ${ts * TS * k} px on screen`);
-      const boxes = texts.filter((n) => names || n.getAttribute("class") === "reading").map((n) => {
+      check(rs * RS * k >= RP - 1e-9, `${layout} at ${k}: a reading ${rs * RS * k} px on screen`);
+      // Where the five do not fit at 12 px, the side ones go first, and
+      // only then the front three: never all of them while three fit, nor
+      // the side ones while five do (the boxes below hold whatever shows).
+      const outer = texts.filter((n) => n.getAttribute("data-outer") === "yes");
+      check(outer.length === 2 && outer.every((n) => n.getAttribute("class") === "reading"), "L and R marked, which go first");
+      if (k >= 0.6) check(labels === "all" || labels === "readings", `${layout} at ${k}: all five readings at 12 px: ${labels}`);
+      if (k >= 0.55 || (layout === "wide" && k >= 0.45)) check(labels !== "none", `${layout} at ${k}: the front three at least: ${labels}`);
+      const shown = (n) => n.getAttribute("class") === "reading" ? labels !== "none" && (labels !== "front" || n.getAttribute("data-outer") !== "yes") : names;
+      const boxes = texts.filter(shown).map((n) => {
         const big = n.getAttribute("class") === "reading";
         const str = big ? "no echo" : n.textContent;
         const em = big ? rs : ts;
@@ -1242,8 +1265,8 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
           check(!overlap, `${layout} at ${k}: '${p.str}' overlaps '${q.str}'`);
         }
       }
-      // A name sits right over its reading, at any scale.
-      for (const b of scanBearings(page)) {
+      // A name sits right over its reading, wherever the names show.
+      if (names) for (const b of scanBearings(page)) {
         const label = texts.find((n) => n !== b.reading && n.getAttribute("x") === b.reading.getAttribute("x") && n.getAttribute("class") === "tick");
         const gap = label && Number(b.reading.getAttribute("y")) - Number(label.getAttribute("y"));
         check(label && gap > 0 && gap <= RS * rs + 2.1, `${layout} at ${k}: ${b.key}'s name over its reading: ${gap}`);
@@ -1283,19 +1306,19 @@ test("scan fit: the larger layout for the box, measured as it changes, and smudg
     fitTo(w, h);
     return svg.dataset.labels;
   };
-  check(labels(350, 393) === "all" && labels(180, 120) === "readings" && labels(100, 80) === "none", "the bearings' names go first, then the readings");
+  check(labels(350, 393) === "all" && labels(180, 120) === "readings" && labels(210, 100) === "front" && labels(100, 80) === "none", "the bearings' names go first, then the side readings, then the rest");
   const css = panelCss();
   const hides = cssRules(css).filter((r) => /#scan\[data-labels/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector).join(" ");
-  check(/data-labels="readings"\] \.tick/.test(hides) && /data-labels="none"\] :is\(\.tick, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
+  check(/#scan:is\(\[data-labels="readings"\], \[data-labels="front"\]\) \.tick/.test(hides) && /#scan\[data-labels="front"\] \.reading\[data-outer="yes"\]/.test(hides) && /data-labels="none"\] :is\(\.tick, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
   // Never larger on screen than a reading or a name needs, whatever the
   // fan's scale, and a name never under 12 px; the legend at the page's
   // smallest type, in the dim ink, never over the fan or taking a press.
   const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
-  check(/font-size:\s*min\(var\(--scan-reading\), calc\(28px \/ var\(--scan-k, 1\)\)\);/.test(rule(".reading")), `readings capped: ${rule(".reading")}`);
+  check(/font-size:\s*max\(calc\(12px \/ var\(--scan-k, 1\)\), min\(var\(--scan-reading\), calc\(28px \/ var\(--scan-k, 1\)\)\)\);/.test(rule(".reading")), `readings capped, and floored at 12 px: ${rule(".reading")}`);
   check(/font-size:\s*max\(calc\(12px \/ var\(--scan-k, 1\)\), min\(var\(--scan-tick\), calc\(14px \/ var\(--scan-k, 1\)\)\)\);/.test(rule(".tick")), `names capped, and floored at 12 px: ${rule(".tick")}`);
   check(page.evalIn("ScanView.TICK_PX") === 12, "the floor scan.js lays the names out for");
   const legend = rule(".scanLegend");
-  check(/font-size:\s*var\(--t-xs\);/.test(legend) && /color:\s*var\(--dim\);/.test(legend) && /white-space:\s*nowrap;/.test(legend) && /pointer-events:\s*none;/.test(legend) && /justify-self:\s*start;/.test(legend), `the legend quiet, one line, in the corner: ${legend}`);
+  check(/font-size:\s*var\(--t-sm\);/.test(legend) && /color:\s*var\(--dim\);/.test(legend) && /white-space:\s*nowrap;/.test(legend) && /pointer-events:\s*none;/.test(legend) && /justify-self:\s*start;/.test(legend), `the legend quiet, one line, in the corner: ${legend}`);
   check(/width:\s*20px;/.test(rule(".legendSwatch")), `its dashes long enough to tell apart: ${rule(".legendSwatch")}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
@@ -2835,17 +2858,21 @@ test("motorsReady: the fault trades height with the scan inside the view, never 
 // with its caption. Without a live link the values are history, dimmed.
 test("readouts: the chip's temperature, then the captions go before a value is cut short, each cell titled with its own", () => {
   const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(readoutsLine, \["words", "nochip", "small", "bare"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
-  const hidden = cssRules(panelCss()).find((r) => r.selector.includes('.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="bare"]) .cell:has(> #temp)'));
+  check(/fitSteps\(readoutsLine, \["words", "nochip", "small", "nophase", "bare"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
+  const hidden = cssRules(panelCss()).find((r) => r.selector.includes('.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell:has(> #temp)'));
   check(hidden && /clip-path:\s*inset\(50%\)/.test(hidden.body) && !/display:\s*none/.test(hidden.body), `first the chip's temperature, out of sight, still read: ${hidden && hidden.body}`);
   check(hidden && hidden.selector.includes('.readouts[data-fit="bare"] .cell .label') && !/nochip"?\]?[^,]*\.label|small"\][^,]*\.label/.test(hidden.selector), `last, the captions, the same way: ${hidden && hidden.selector}`);
-  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="bare"]) .cell output');
+  // The phase's caption before the move's: a phase says what it is, and
+  // "FORWARD · CRUISE" bare read as buttons at 480 x 320 (the review's
+  // phones 11).
+  check(hidden && hidden.selector.includes('.readouts[data-fit="nophase"] #phaseCell .label') && !/nophase"\][^,]*\.cell \.label/.test(hidden.selector), `the phase's caption first: ${hidden && hidden.selector}`);
+  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell output');
   check(smaller && /font-size:\s*var\(--t-sm\);/.test(smaller.body), `then the values the smaller type: ${smaller && smaller.body}`);
   const dim = cssRules(panelCss()).find((r) => r.selector === 'body:not([data-link="up"]) .readouts :is(output, #phase)');
-  check(dim && /color:\s*var\(--dim\);/.test(dim.body), "with no live link the values dimmed, with the scan over them");
+  check(dim && /color:\s*var\(--dim\);/.test(dim.body) && /opacity:\s*0\.[5-7]\d*;/.test(dim.body), "with no live link the values dimmed and faded, with the scan over them");
   const order = cssRules(outside(panelCss(), "@media")).map((r) => r.selector);
   check(order.indexOf('body:not([data-link="up"]) .readouts :is(output, #phase)') > order.indexOf('#phase[data-tone="warn"]'), "the halt's amber dimmed too");
-  check(!cssRules(panelCss()).some((r) => /\.readouts/.test(r.selector) && /#(move|phase)|\.cell:first-child|#phaseCell/.test(r.selector) && /display:\s*none|clip-path/.test(r.body)), "the move and the phase never hidden");
+  check(!cssRules(panelCss()).some((r) => r.selector.split(",").some((part) => /\.readouts/.test(part) && /#(move|phase)|\.cell:first-child|#phaseCell/.test(part) && !/\.label\s*$/.test(part)) && /display:\s*none|clip-path/.test(r.body)), "the move and the phase never hidden");
   const line = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".readouts");
   check(line && /height:\s*var\(--readouts-h\);/.test(line.body) && /white-space:\s*nowrap;/.test(line.body), "one line, one height");
   const page = loadPage();
@@ -2868,6 +2895,8 @@ test("readouts: the chip's temperature, then the captions go before a value is c
   check(page.evalIn("fitReadouts()") === "nochip", `the chip gone, the captions kept: ${fit()}`);
   measure("move", () => (fit() === "bare" ? { scroll: 40, client: 40, cell: 40 } : { scroll: 40, client: 22, cell: 60 }));
   check(page.evalIn("fitReadouts()") === "bare", `the captions only where a value would be cut short: ${fit()}`);
+  measure("move", () => (fit() === "bare" || fit() === "nophase" ? { scroll: 40, client: 40, cell: 40 } : { scroll: 40, client: 22, cell: 60 }));
+  check(page.evalIn("fitReadouts()") === "nophase", `the move's caption kept while it fits: ${fit()}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -2959,8 +2988,17 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
     && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - var\(--ctl\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
     && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, under both rows of cells, on the screen: ${fileMenu}`);
   const bandMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [], "#programMenuList");
-  check(!/\btop:/.test(bandMenu) && /max-height:\s*calc\(100 \* var\(--svh\) - var\(--cell-h\) - 2 \* var\(--s-2\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(bandMenu),
-    `in the band, from the cells' first row to the foot: ${bandMenu}`);
+  // In the band its right edge stays at its button's, but it hangs from
+  // the cells' foot, 4 px under them: from its button, 208 px wide, it
+  // slid under the second cell, "Examples" read "mples", and a press on
+  // its first example landed on the top (the review's phones 0; measured
+  // in a browser at 568 x 320 to 932 x 430: no item meets a cell). Its top
+  // is the cells' two rows and the 6 px between them, less the band's
+  // padding over its button, and 4 px.
+  check(/top:\s*calc\(2 \* var\(--cell-h\) \+ 6px - \(var\(--cell-h\) - var\(--ctl\)\) \/ 2 \+ var\(--s-1\)\);/.test(bandMenu) && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - var\(--s-1\) - 2 \* var\(--s-2\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(bandMenu) && !/\b(left|right):/.test(bandMenu),
+    `in the band, from the cells' foot to the screen's, its right edge at its button's: ${bandMenu}`);
+  const band = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [];
+  check(/padding-top:\s*calc\(\(var\(--cell-h\) - var\(--ctl\)\) \/ 2\);/.test(body(band, "#programTab .programBar")) && /grid-area:\s*1 \/ -2;/.test(body(band, "#programTab .menuHolder")), "its button in the band's first row, at the cells' first row");
   // Under 568 px (480 x 320) the top spans the screen, a cell a row, and
   // leaves no bands: the toolbar in the top's row lay under the cells, Run
   // out of reach (the merge of the cells' and the Program tab's round 2).
@@ -3075,12 +3113,19 @@ test("layout: the rotate buttons keep to their area, their words where they fit,
   // showed every corner again, words overlapping at 320 px). Bare arrows
   // said nothing, and looked like controls (the review's phones 22);
   // wrapped to two lines they crowded the ring.
-  const corners = blockRules(outside(panelCss(), "@media"), "@container hints (max-width: 179.98px) {") || [];
-  check(corners.length === 1 && corners[0].selector === ".hint" && /display:\s*none/.test(corners[0].body), `under 180 px of corners, none: ${corners.map((r) => r.selector)}`);
+  // At 12 px, the dock's least: at 11 they were under it (the reviews'
+  // phones 12, tablets 7), so under 190 px.
+  const corners = blockRules(outside(panelCss(), "@media"), "@container hints (max-width: 189.98px) {") || [];
+  check(corners.length === 1 && corners[0].selector === ".hint" && /display:\s*none/.test(corners[0].body), `under 190 px of corners, none: ${corners.map((r) => r.selector)}`);
   const text = outside(panelCss(), "@media");
-  check(text.indexOf("@container hints (max-width: 179.98px)") > text.lastIndexOf(".hint[data-corner="), "the corners hidden after the rules that place them");
+  check(text.indexOf("@container hints (max-width: 189.98px)") > text.lastIndexOf(".hint[data-corner="), "the corners hidden after the rules that place them");
   const hint = base.filter((r) => r.selector === ".hint").map((r) => r.body).join("");
-  check(/white-space:\s*nowrap;/.test(hint) && /font-size:\s*var\(--t-xs\);/.test(hint), `a corner's words never wrap, at 11 px: ${hint}`);
+  check(/white-space:\s*nowrap;/.test(hint) && /font-size:\s*var\(--t-sm\);/.test(hint), `a corner's words never wrap, at 12 px: ${hint}`);
+  // On its side the gauge goes and the slider takes the rest of the
+  // column: with the gauge it was 64 px, 2 px a step (the review's phones
+  // 5). The caption still names it.
+  const sideSpeed = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => /\.speed/.test(r.selector));
+  check(sideSpeed.some((r) => r.selector === ".speed .icon" && /display:\s*none/.test(r.body)) && sideSpeed.some((r) => r.selector === ".speed" && /grid-template-columns:\s*auto minmax\(0, 1fr\);/.test(r.body)), `on its side, no gauge, the slider the rest: ${sideSpeed.map((r) => r.selector)}`);
   // The speed one row on every layout. Under 230 px, where the caption
   // would leave the slider under about 140 px, a gauge in the caption's
   // place; under 150 the value a size down too. The caption over the value
@@ -3456,7 +3501,14 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   // The stacked sticks up to 280 px: 360 px was more stick than a laptop's
   // hand needs, and took the view's width (the review's laptops 3).
   const stackedRoot = stacked.filter((r) => r.selector === ":root").map((r) => r.body).join("");
-  check(/--stick:\s*clamp\(120px, \(100 \* var\(--svh\) - 332px\) \/ 2, 280px\);/.test(stackedRoot) && /--drive:\s*calc\(var\(--stick\) \+ 32px\);/.test(stackedRoot), `stacked: up to 280 px, the column one stick wide: ${stackedRoot}`);
+  check(/--stick:\s*clamp\(120px, \(100 \* var\(--svh\) - 332px\) \/ 2, 280px\);/.test(stackedRoot) && /--dock-col:\s*max\(var\(--stick\), 230px\);/.test(stackedRoot) && /--drive:\s*calc\(var\(--dock-col\) \+ 32px\);/.test(stackedRoot), `stacked: up to 280 px, the column one stick wide, 230 px at the least: ${stackedRoot}`);
+  // The rotate buttons and the speed across the whole column, centred
+  // under their sticks, whose edges the captions keep: one stick wide, a
+  // short laptop's lost 'Speed', 'Left' and 'Right' and kept an 80 px
+  // slider (the review's laptops 5, tablets 7). The speed keeps its word
+  // from 230 px.
+  const across = stacked.filter((r) => r.selector.replace(/\s+/g, " ") === ".spin, .speed").map((r) => r.body).join("");
+  check(/margin-inline:\s*calc\(\(var\(--stick\) - var\(--dock-col\)\) \/ 2\);/.test(across) && !stacked.some((r) => /grid-template-columns/.test(r.body) && r.selector === ".controls" && !/var\(--stick\)/.test(r.body)), `stacked: the rotate buttons and the speed the column's width: ${across}`);
   // The family and the line end at the pivot stick's right edge on every
   // layout, the stacked one's too: the line's dot, unpainted while off,
   // keeps its place before the words, so a line from the column's start
@@ -3528,7 +3580,7 @@ test("dock: the pivot stick off looks off, grey not blue, and the dock's words a
   check(/container:\s*family \/ inline-size;/.test(family) && /justify-self:\s*stretch;/.test(family) && /justify-content:\s*flex-end;/.test(family), `the family's area its container: ${family}`);
   // The dock's captions and its line at 13 px, the corners at 11.
   for (const selector of ["#stickLabel", "#speedLabel", ".caveat"]) check(/font-size:\s*var\(--t-ctl\);/.test(body(selector)), `${selector} at 13 px: ${body(selector)}`);
-  check(/font-size:\s*var\(--t-xs\);/.test(body(".hint")), "the corners at 11 px");
+  check(/font-size:\s*var\(--t-sm\);/.test(body(".hint")), "the corners at 12 px, the dock's least (the reviews' phones 12, tablets 7)");
   // On a phone on its side the family is quieter than the top's switches
   // beside it: no track, the family chosen raised rather than inverted, so
   // it reads as its stick's caption (the review's phones 8). It and the
@@ -3564,7 +3616,7 @@ test("the sticks: sized from the viewport alone, in rows of fixed height, so no 
   const css = panelCss();
   const rules = cssRules(css);
   const declared = (name) => rules.filter((r) => new RegExp(`(^|[\\s;{])${name}\\s*:`).test(r.body));
-  for (const name of ["--stick", "--stick-w", "--drive", "--gutter", "--shell-max", "--svh", "--dock-cap", "--dock-note", "--dock-row", "--dock-gap"]) {
+  for (const name of ["--stick", "--stick-w", "--dock-col", "--drive", "--gutter", "--shell-max", "--svh", "--dock-cap", "--dock-note", "--dock-row", "--dock-gap"]) {
     const where = declared(name);
     check(where.length > 0 && where.every((r) => r.selector === ":root"), `${name} set on :root alone, never per state, tab or target: ${where.map((r) => r.selector)}`);
     for (const r of where) {
@@ -3574,7 +3626,7 @@ test("the sticks: sized from the viewport alone, in rows of fixed height, so no 
       // container's or the content's size (%, em, cq units) got in.
       const left = value
         .replace(/env\(safe-area-inset-(top|bottom|left|right), 0px\)/g, "")
-        .replace(/var\(--(svh|stick-w|stick|shell-max|gutter|s-\d)\)/g, "")
+        .replace(/var\(--(svh|stick-w|stick|dock-col|shell-max|gutter|s-\d)\)/g, "")
         .replace(/\b(clamp|min|max|calc|none)\b/g, "")
         .replace(/\d+(\.\d+)?(px|vw|vh|svh)?/g, "");
       check(value !== "" && /^[\s()+\-*/,]*$/.test(left), `${name}: from the viewport alone: '${value}' (left '${left.trim()}')`);
@@ -4067,19 +4119,27 @@ test("program: switching the target mid-run stops the program, and the choice is
   check(hiddenWide && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(hiddenWide.body) && /"head"\s*"main"/.test(hiddenWide.body), `wide, hidden: the editor the width: ${hiddenWide && hiddenWide.body}`);
   const shownWide = wideRules.find((r) => r.selector === ".shell:has(> #programTab:not([hidden]))");
   const wideBody = shownWide ? shownWide.body : "";
-  check(/--view-w:\s*clamp\(320px, 0\.4 \* \(min\(100vw, var\(--shell-max\)\) - 2 \* var\(--gutter\) - var\(--s-4\)\), 560px\);/.test(wideBody) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(wideBody), `wide, shown: the view about 40%, the editor the rest: ${wideBody}`);
-  // The view the whole of its column's height, and the editor's card the
-  // rest, the console under the editor, the view shown or hidden: under
-  // the view the console was a box the column's height holding one line
-  // (685 px of it at 1920 x 1080), and the fan a strip over it (the
-  // review's laptops 0). So nothing in the wide rules puts the tab on the
-  // shell's tracks, splits the stage or moves the console out from under
-  // the editor, and nothing pushes the toolbar down from the pane's top.
-  check(/grid-template-rows:\s*auto minmax\(0, 1fr\);/.test(wideBody) && /"head head"\s*"view main"/.test(wideBody) && !/--view-h/.test(wideBody), `wide, shown: the view the column's height: ${wideBody}`);
-  const wideTab = (selector) => wideRules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/--view-w:\s*clamp\(360px, 0\.5 \* \(min\(100vw, var\(--shell-max\)\) - 2 \* var\(--gutter\) - var\(--s-4\)\), 640px\);/.test(wideBody) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(wideBody), `wide, shown: the view's column about half, the editor the rest: ${wideBody}`);
+  // The view's card at the top of its column, as tall as its drawing at
+  // the column's width (--va) and its bars, and the console under it the
+  // rest of the column; the editor's card beside both, full height, its
+  // toolbar its head. Given the whole column, the fan or the room floated
+  // in it with bare ground over and under, 50 to 67% of it empty (the
+  // review's laptops 0, tablets 6). The view's row gives way to a short
+  // screen, never the console's last line.
+  check(/--view-h:\s*calc\(\(var\(--view-w\) - var\(--vcw\)\) \/ var\(--va\) \+ var\(--vch\)\);/.test(wideBody), `wide, shown: the view as tall as its drawing at the column's width: ${wideBody}`);
+  check(/grid-template-rows:\s*auto var\(--bar-h\) minmax\(0, calc\(var\(--view-h\) - var\(--bar-h\)\)\) minmax\(var\(--console-min\), 1fr\);/.test(wideBody) && /"head head"\s*"view pbar"\s*"view edit"\s*"cons edit"/.test(wideBody) && !/(^|[\s;])(row-)?gap:/.test(wideBody), `wide, shown: the view over the console, the editor's card beside both: ${wideBody}`);
+  const wideTab = (selector) => wideRules.filter((r) => r.selector.replace(/,\n\s*/g, ",") === selector).map((r) => r.body).join("");
+  // The tab and its stage step aside, with the view shown alone, so the
+  // toolbar, the editor and the console take the shell's areas; hidden,
+  // the tab is one box, its console under the editor.
+  check(/display:\s*contents/.test(wideTab('#programTab:not([hidden], [data-view="hidden"]),#programTab:not([hidden], [data-view="hidden"]) > .programStage')), "wide, shown: the tab's toolbar, editor and console on the shell's grid");
+  check(/grid-area:\s*pbar/.test(wideTab('#programTab:not([data-view="hidden"]) .programBar')) && /grid-area:\s*edit/.test(wideTab('#programTab:not([data-view="hidden"]) .programEditor')), "the toolbar the editor's head, the editor under it");
+  const consoleWide = wideTab('#programTab:not([data-view="hidden"]) .programConsole');
+  const logWide = wideTab('#programTab:not([data-view="hidden"]) .programLog');
+  check(/grid-area:\s*cons/.test(consoleWide) && /margin-top:\s*var\(--s-4\)/.test(consoleWide) && /flex:\s*1 1 auto/.test(logWide) && /max-height:\s*none/.test(logWide), `the console under the view, its log the rest of it, scrolling: ${consoleWide} | ${logWide}`);
+  check(!/padding-top|margin-top/.test(wideTab("#programTab")), "wide: the toolbar at the pane's top, against the editor");
   const stageSplit = (rules) => rules.filter((r) => /#programTab|programStage|programConsole|programBar|programEditor|programLog/.test(r.selector) && /subgrid|display:\s*contents|grid-(area|row|column)|max-height:\s*none/.test(r.body));
-  check(stageSplit(wideRules).length === 0, `wide: the editor's card and the console under it, a column: ${stageSplit(wideRules).map((r) => r.selector)}`);
-  check(!/padding-top|margin-top/.test(wideTab("#programTab")) && !wideRules.some((r) => /#programTab/.test(r.selector) && /(^|[\s;])(row-)?gap:\s*[1-9]/.test(r.body)), "wide: the toolbar at the pane's top, against the editor");
   // A tablet upright: the view a band over the editor's card, the
   // screen's width, one height whatever the target; the console under the
   // editor there too. Beside the band it was a box as tall as the band
@@ -4154,12 +4214,32 @@ test("program: switching the target mid-run stops the program, and the choice is
   check(pad > 0 && line > 0 && 7 * (line + 2 * pad + gap) + 8 <= 170, `a short editor: the seven down the left in 170 px: ${7 * (line + 2 * pad + gap) + 8} (${pillPad} | ${pillLine})`);
   check((blockRules(programCss, "@media (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint") && (blockRules(programCss, "@media not all and (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint"),
     "the hint clear of the toolbox wherever blocks.js puts it");
-  // A short editor drops the zoom buttons, which ran up under the toolbox,
-  // and a shorter one the trash can and puts the hint at its foot.
+  // Shorter still (130 px at 480 x 320), closer again: at 23 px a pill,
+  // Variables was cut in half and Output out of sight (the review's
+  // phones 4; measured in a browser: all seven in 130 px).
+  const shorter = everyBlock(programCss, "@container editor (max-height: 169.98px) {");
+  const tight = (re) => shorter.filter((r) => re.test(r.selector)).map((r) => r.body).join("");
+  const tPad = Number((tight(/\.roverCategory$/).match(/padding:\s*(\d+)px/) || [])[1]);
+  const tLine = Number((tight(/blocklyToolboxCategoryLabel/).match(/line-height:\s*(\d+)px/) || [])[1]);
+  const tEnds = Number((tight(/^\.blocklyToolbox:not\(\[layout="h"\]\)$/).match(/padding:\s*(\d+)px/) || [])[1]);
+  check(tLine > 0 && 7 * (tLine + 2 * tPad) + 2 * tEnds <= 130 && /margin:\s*0;/.test(tight(/\.roverCategory$/)), `shorter still: the seven in 130 px: ${7 * (tLine + 2 * tPad) + 2 * tEnds}`);
+  // A short editor drops the zoom buttons, which ran up under the toolbox;
+  // a narrow one (a phone's) or a shorter one the trash can too, which on
+  // a phone lay over an example's inputs (the review's phones 3); and a
+  // short one puts the hint at its foot, or, too narrow for it beside the
+  // toolbox, nowhere: it ran five lines tall, its top cut off.
   check(/container:\s*editor \/ size;/.test(baseOf(".programEditor")), "the editor a container for its height");
   check(everyBlock(programCss, "@container editor (max-height: 299.98px) {").some((r) => r.selector === ".blocklyZoom" && /display:\s*none/.test(r.body)), "a short editor: no zoom buttons");
+  const small = everyBlock(programCss, "@container editor (max-width: 359.98px) or (max-height: 259.98px) {");
+  check(small.some((r) => r.selector.replace(/\s+/g, " ") === ".blocklyZoom, .blocklyTrash" && /display:\s*none/.test(r.body)), "under 360 px wide or 260 tall: no trash can, no zoom buttons");
   const shortest = blockRules(programCss, "@container editor (max-height: 199.98px) {") || [];
-  check(shortest.some((r) => r.selector === ".blocklyTrash" && /display:\s*none/.test(r.body)) && shortest.some((r) => r.selector === ".programHint" && /bottom:/.test(r.body)), "shorter still: no trash can, the hint at the foot");
+  check(shortest.some((r) => r.selector === ".programHint" && /bottom:/.test(r.body)), "shorter still: the hint at the foot");
+  const cramped = everyBlock(programCss, "@container editor (max-height: 199.98px) and (max-width: 399.98px) {");
+  check(cramped.some((r) => r.selector === ".programHint" && /display:\s*none/.test(r.body)), "and too narrow beside the toolbox, no hint");
+  // A program loaded (an example, a file) fitted to the editor's width,
+  // from its top-left, never zoomed in past the start scale (the review's
+  // phones 3: examples ran past a phone's editor); measured in a browser.
+  check(/load\(state\) \{[\s\S]*?this\.#showTopLeft\(true\);/.test(blocksJs) && /Math\.min\(this\.#startScale, \(view\.width - 2 \* margin\) \/ width\)/.test(blocksJs) && /workspace\.scroll\(margin - box\.left \* scale, margin - box\.top \* scale\)/.test(blocksJs), "a loaded program fitted to the width, from its top-left");
   // The toolbar keeps to one row in a phone's tab: its icons go first.
   const narrowPane = blockRules(programCss, "@container program (max-width: 459.98px) {") || [];
   check(narrowPane.some((r) => /\.viewWord/.test(r.selector) && /display:\s*none/.test(r.body)), "a narrow tab's View toggle its icon alone");
@@ -4643,7 +4723,7 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // The top spans the page beside either tab, so a tab switch moves none of
   // its cells: the Program tab changes only where the panes meet.
   const programShown = body(".shell:has(> #programTab:not([hidden]))");
-  check(/grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(programShown) && /--view-w:\s*clamp\(320px, 0\.4 \* /.test(programShown) && areas(programShown)[0] === '"head head"', `beside the Program tab, the view about 40%, the top across both: ${programShown}`);
+  check(/grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(programShown) && /--view-w:\s*clamp\(360px, 0\.5 \* /.test(programShown) && areas(programShown)[0] === '"head head"', `beside the Program tab, the view's column about half, the top across both: ${programShown}`);
   const programHidden = body('.shell:has(> #programTab[data-view="hidden"]:not([hidden]))');
   check(areas(programHidden).join(" ") === '"head" "main"' && /grid-template-columns:\s*minmax\(0, 1fr\);/.test(programHidden), `the view hidden, the editor the page's width: ${programHidden}`);
   const base = cssRules(outside(css, "@media"));
@@ -5093,10 +5173,11 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   }
   const fault = rule(base, ".fault");
   check(/min-height:\s*0;/.test(fault) && /max-height:\s*50cqh;/.test(fault) && /overflow-y:\s*auto;/.test(fault), `the fault takes height from the fan, at most half the card: ${fault}`);
-  // The connect card shares the fan's cell, over it, under the fault's
-  // row, and the scan is size-contained: the card or the fault coming and
-  // going moves nothing outside it.
-  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*3 \/ 1;/.test(rule(base, ".scan > *")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > .fault")) && /grid-area:\s*2 \/ 1;/.test(rule(base, ".scan > .scanLegend")), "the connect card over the fan, in its one cell, the legend's row over both and the fault over that");
+  // The connect card shares the fan's cell, over it, under the legend's
+  // row, where the fault takes the legend's place, and the scan is
+  // size-contained: the card or the fault coming and going moves nothing
+  // outside it.
+  check(/container:\s*scan \/ size;/.test(rule(base, ".scan")) && /grid-area:\s*2 \/ 1;/.test(rule(base, ".scan > *")) && /grid-area:\s*1 \/ 1;/.test(rule(base, ".scan > :is(.fault, .scanLegend)")), "the connect card over the fan, in its one cell, the legend's row over both, the fault in its place");
   // The fan centred in its card, as large as it fits: pinned to the foot,
   // it left the card's top half empty (the critic's round 2).
   check(/preserveAspectRatio", "xMidYMid meet"/.test(fs.readFileSync(path.join(PANEL_ROOT, "js", "scan.js"), "utf8")), "the fan centred in its card");
@@ -5116,7 +5197,7 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   const picks = 'body[data-target="simulator"] .view > :is(.scan, .readouts)';
   const shape = 'body[data-target="simulator"] .shell';
   const shapeOnly = (body) => body.split(";").map((d) => d.trim()).filter(Boolean).every((d) => /^--(va|vcw|vch)\s*:/.test(d));
-  check(onTarget.length === 2 && onTarget.some((r) => r.selector.replace(/\s+/g, " ") === picks && /^\s*display:\s*none;\s*$/.test(r.body)) && onTarget.some((r) => r.selector === shape && shapeOnly(r.body)),
+  check(onTarget.length >= 2 && onTarget.some((r) => r.selector.replace(/\s+/g, " ") === picks && /^\s*display:\s*none;\s*$/.test(r.body)) && onTarget.every((r) => r.selector.replace(/\s+/g, " ") === picks || (r.selector === shape && shapeOnly(r.body))),
     `the target picks what fills the view and its shape, and nothing else: ${onTarget.map((r) => r.selector)}`);
   check(base.some((r) => r.selector.replace(/\s+/g, " ") === picks) && base.some((r) => r.selector === shape), "outside every @media: the same on every layout");
   const readsShape = cssRules(css).filter((r) => /var\(--(va|vcw|vch)\)/.test(r.body));
@@ -5374,7 +5455,7 @@ test("program: its own stop and start exploring are no press: a stick let go of 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
-test("program: the Program tab is marked while a program drives the rover, not while it previews", async () => {
+test("program: the Program tab is marked while a program drives the rover, and otherwise while it previews", async () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const tab = page.$("tabProgram");
   const marked = () => tab.dataset.running === "yes" && /driving the rover/.test(tab.getAttribute("title") || "");
@@ -5391,9 +5472,16 @@ test("program: the Program tab is marked while a program drives the rover, not w
   if (page.evalIn("'simulator' in targets")) {
     page.evalIn("runner.run(async (api) => { await api.wait(5); }, targets.simulator);");
     await flush();
-    check(page.evalIn("runner.target && runner.target.kind") === "simulator" && !marked(), "a preview drives nothing: not marked");
+    // A preview marks the tab too, another way: the simulated rover drove
+    // itself under the Drive tab with nothing to say why (the review's
+    // laptops 6).
+    const previewing = () => tab.dataset.running === "preview" && /preview is running on the simulator/.test(tab.getAttribute("title") || "");
+    check(page.evalIn("runner.target && runner.target.kind") === "simulator" && !marked() && previewing(), `a preview drives no rover: marked as a preview: ${tab.dataset.running} ${tab.getAttribute("title")}`);
     page.evalIn("runner.abort('done')");
     await flush();
+    check(!previewing() && !tab.dataset.running && /^Program: /.test(tab.getAttribute("title")), "unmarked once it ends");
+    const ring = cssRules(stylesheet("program.css")).find((r) => r.selector === '.tabs [role="tab"][data-running="preview"]::after');
+    check(ring && /position:\s*absolute/.test(ring.body) && /border:\s*1\.5px solid var\(--ok\)/.test(ring.body) && !/animation/.test(ring.body), `a still ring in the dot's corner: ${ring && ring.body}`);
   }
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
@@ -6086,7 +6174,7 @@ test("target: one view of the simulator, in one slot, held at 1x while the Drive
   // words on screen rather than a title on greyed-out speeds; the faster
   // speeds are refused all the same.
   check(view().dataset.held === "yes", "the view knows it is held");
-  check(!why().hidden && /real time/.test(why().textContent), `the settings say why: ${why().textContent}`);
+  check(!why().hidden && /^Held at 1× on the Drive tab$/.test(why().textContent) && /real time/.test(why().getAttribute("title")), `the settings say why, in a line that fits, the rest in its title: ${why().textContent}`);
   const [one, two, four] = options();
   check(!one.disabled && two.disabled && four.disabled, `2x and 4x refused: ${options().map((o) => o.disabled)}`);
   check(/real time/.test(two.getAttribute("title")) && /real time/.test(four.getAttribute("title")) && /Play at 1 times/.test(one.getAttribute("title")),

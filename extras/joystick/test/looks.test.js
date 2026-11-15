@@ -65,7 +65,7 @@ const AUDIT = [
     "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar and the View toggle's while shown, the rover's aim, the dashed ring before a scheme wish's note"],
   ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks outside the top's cells, the address, the room list, the theme tiles"],
   ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
-    "the link chip's lamp while up, open or not, the Autonomous switch's edge while on, a program's dots (the running tab's on the cell), the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
+    "the link chip's lamp while up, open or not, the Autonomous switch's edge while on, a program's dots (the running tab's on the cell, and a preview's ring there), the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
   ["--chosen", ["--panel"], MARK, "the open tab's underline, in the top's second cell"],
   ["--dim", ["--raised-hi"], MARK, "the Autonomous switch's knob while off, on its track"],
   ["--ok", ["--ok-soft over --panel"], MARK, "the Autonomous switch's knob while on, on its tinted track"],

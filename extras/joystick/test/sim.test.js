@@ -1322,6 +1322,11 @@ test("the view: one row of controls, the same on both tabs, one speed list, and 
   assert.ok(!why.hidden && /real time/.test(why.textContent), `the settings say why: ${why.textContent}`);
   page.evalIn("simView.holdPlayback(null)");
   assert.ok(why.hidden && byClass("sim")[0].dataset.held === "no", "let go: the list back, the line gone");
+  // The page's own reason says it in a line that fits a 340 px popover,
+  // the rest in its title: "Driven from the Drive tab, the simulator runs
+  // in real ti…" (the reviews' laptops 4, tablets 5).
+  const held = (require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "js", "app.js"), "utf8").match(/simView\.holdPlayback\(driving\s*\?\s*"([^"]+)"/) || [])[1] || "";
+  assert.ok(held.split(":")[0] === "Held at 1× on the Drive tab" && /real time/.test(held), `the line short, the reason in the title: ${held}`);
   assert.deepEqual(page.errors, []);
 });
 
@@ -1368,9 +1373,12 @@ test("the view: the motion and the clock in the bar's one row, a metre in the ro
   const about = all(panel).filter((n) => (n.getAttribute("class") || "").split(" ").includes("sim-about"));
   assert.ok(about.some((n) => /^Idealised preview/.test(n.textContent) && /never slip/.test(n.getAttribute("title"))), "idealised: a line, the detail in its title");
   assert.ok(about.every((n) => n.textContent.length <= 120), `no paragraphs: ${about.map((n) => n.textContent.length)}`);
-  const drag = all(panel).find((n) => n.tagName === "INPUT" && n.getAttribute("type") === "range");
-  assert.ok(drag && /released/.test(drag.getAttribute("title")) && /changes nothing/.test(drag.parentNode.getAttribute("title")), "the drag, kept, what it means in its title");
-  assert.equal(drag.parentNode.children.find((n) => n.getAttribute("class") === "label").textContent, "Wheel drag", "its name on its one line");
+  // No wheel drag: no row of the wheel table needs a released wheel, so
+  // its slider changed nothing, said so in its title, and stayed (the
+  // reviews' laptops 4, tablets 5). The calibration is sim.js's.
+  assert.ok(!all(panel).some((n) => n.tagName === "INPUT" && n.getAttribute("type") === "range"), "no slider that changes nothing");
+  assert.ok(!/drag/i.test(all(panel).map((n) => n.textContent || "").join(" ")) && !/drag/.test(byClass("sim-settings")[0].getAttribute("title")), "nor a word of it");
+  assert.equal(typeof page.evalIn("targets.simulator.releasedDrag"), "number", "the calibration kept in the simulator");
   const css = stylesheet("sim.css");
   const rule = (selector) => cssRules(outside(css, "@container")).filter((r) => r.selector === selector).map((r) => r.body).join("");
   assert.match(rule(".sim-about"), /white-space:\s*nowrap/, "the settings' words a line each");
@@ -1380,8 +1388,9 @@ test("the view: the motion and the clock in the bar's one row, a metre in the ro
   for (const selector of [".sim-status", ".sim-twist", ".sim-move", ".sim-clock"]) {
     assert.doesNotMatch(rule(selector), /position:\s*absolute/, `${selector} in the row, not over the room`);
   }
-  // How fast gives way a whole part at a time, the travel first, then the
-  // turn: never cut to "0...".
+  // How fast gives way a whole part at a time, the share of full speed
+  // first, then the travel, the turn last (simview.js): never cut to
+  // "0...".
   const twist = rule(".sim-twist");
   assert.match(twist, /flex-wrap:\s*wrap/, "a part that does not fit wraps out of sight");
   assert.match(twist, /overflow:\s*hidden/);
@@ -1389,9 +1398,17 @@ test("the view: the motion and the clock in the bar's one row, a metre in the ro
   assert.match(twist, /flex:\s*0 1000 auto/, "giving way before the move");
   const unfit = cssRules(css).filter((r) => /\.sim-twist\[data-fit="no"\]/.test(r.selector));
   assert.ok(unfit.some((r) => /display:\s*none/.test(r.body)), "where even its first part would be cut, none of it shows");
-  // As the bar narrows its line keeps the move: no width hides it.
+  // As the bar narrows its line keeps the move, whole: no width hides it,
+  // and it is never cut short, "Strafe rig…" or a lone "B" (the review's
+  // phones 2): where it does not fit, how fast and the clock go first, and
+  // then it goes with how fast (data-fit, simview.js).
   const hidesMove = cssRules(css).filter((r) => /\.sim-move\b/.test(r.selector) && /display:\s*none/.test(r.body));
-  assert.deepEqual(hidesMove.map((r) => r.selector), [], "the move always shown");
+  assert.deepEqual(hidesMove.map((r) => r.selector), ['.sim-move[data-fit="no"],\n.sim-clock[data-fit="no"]', ".sim-move,\n  .sim-twist"], "the move hidden only where measured not to fit, or with no room for any");
+  assert.match(css, /@container simstatus \(max-width: 69\.98px\) \{\s*\.sim-move,\s*\.sim-twist \{ display: none; \}/, "under 70 px of room, none");
+  assert.doesNotMatch(rule(".sim-move"), /ellipsis/, "never cut short");
+  // The clock with its caption, or not at all: a bare "4.8 s" after "50%"
+  // read as how long the move lasts (the reviews' laptops 3, tablets 4).
+  assert.ok(!cssRules(css).some((r) => /\.sim-clock \.label/.test(r.selector) && /display:\s*none/.test(r.body)), "no width takes the clock's caption alone");
   const { PAD } = page.evalIn("({ PAD: SimView.PAD })");
   assert.ok(Object.values(PAD).every((pad) => pad >= 2 && pad <= 4), `the room's margin its walls' stroke and no more: ${JSON.stringify(PAD)}`);
   assert.deepEqual(page.errors, []);
@@ -1481,11 +1498,11 @@ test("the view: its settings open from their button, and Escape or a press outsi
   assert.notEqual(page.doc.activeElement, panel.querySelectorAll("button")[0], "not a menu: the focus stays put");
   page.fire(panel.querySelectorAll("button")[0], "pointerdown");
   assert.ok(!panel.hidden, "a press inside: still open");
-  // Not a menu: its keys are its controls' own. The drag slider moves
+  // Not a menu: its keys are its controls' own. The room's list moves
   // with the arrows, Home and End, and Tab moves on inside it.
-  const [slider] = panel.querySelectorAll("input");
+  const [list] = panel.querySelectorAll("select");
   for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Tab"]) {
-    assert.equal(page.fire(slider, "keydown", { key }).defaultPrevented, false, `${key} is the slider's`);
+    assert.equal(page.fire(list, "keydown", { key }).defaultPrevented, false, `${key} is the list's`);
   }
   assert.ok(!panel.hidden, "and none of them folds it");
   page.fire(panel, "keydown", { key: "Escape" });
@@ -1511,6 +1528,9 @@ test("the view: its settings open from their button, and Escape or a press outsi
 test("the view: one mark per bump, gone with the trail; and where the next preview starts", async () => {
   const { page, sim, byClass, button, play } = pageWithView();
   const twist = () => byClass("sim-twist")[0].children.map((n) => n.textContent).filter(Boolean).join(" · ");
+  // Where the next preview starts, in the move's title (the bar had no
+  // room for it: the review's phones 2).
+  const goesOn = () => /next preview begins/.test(byClass("sim-move")[0].getAttribute("title"));
   sim.hold(protocol.MOVE_BACKWARD, 255); // into the wall behind the start
   await pageFrames(page, 2000, sim);
   sim.release();
@@ -1519,19 +1539,19 @@ test("the view: one mark per bump, gone with the trail; and where the next previ
   assert.equal(byClass("sim-bump").length, 1, "one mark drawn");
   const caption = byClass("sim-log")[0];
   assert.equal(caption.dataset.tone, "bump", "the caption is in the bump's colour");
-  assert.match(twist(), /goes on from here/, "stopped away from its start");
+  assert.ok(goesOn() && twist() === "", "stopped away from its start");
   const listening = sim.onTelemetry(() => {}); // as a running program is
   play(1);
-  assert.equal(twist(), "", "mid-run, a wait is only a stop");
+  assert.ok(!goesOn(), "mid-run, a wait is only a stop");
   assert.equal(byClass("sim-move")[0].textContent, "Stopped");
   listening();
   play(1);
-  assert.match(twist(), /goes on from here/);
+  assert.ok(goesOn());
   page.fire(button("Clear trail"), "click");
   assert.equal(byClass("sim-bump").length, 0, "removed, not hidden");
   page.fire(byClass("sim-tool").find((b) => (b.getAttribute("title") || "").startsWith("Reset")), "click");
   play(1);
-  assert.equal(twist(), "", "back at its start");
+  assert.ok(!goesOn() && twist() === "", "back at its start");
   sim.explore(); // said, but not a bump
   play(1);
   assert.equal(caption.dataset.tone, "", `in plain colour: ${byClass("sim-log-text")[0].textContent}`);
@@ -1656,6 +1676,40 @@ test("the view: the move by its name, and how fast in the parts that say somethi
   assert.deepEqual(parts(), [["sim-word", "not simulated"]]);
   const names = page.evalIn("MOTIONS.map((m) => m.label)");
   assert.ok(names.every((n) => !/_/.test(n)), "every name the blocks' words");
+  assert.deepEqual(page.errors, []);
+});
+
+// The move whole or not at all: where the bar cannot hold it, the clock
+// goes first, then the move with how fast, never "Strafe rig…" or a lone
+// "B" (the review's phones 2). Stopped where the next preview begins, the
+// move's title says so: on the bar an 11 px note was cut to "a preview …".
+test("the view: the move whole or not at all, and where a preview goes on in its title", async () => {
+  const { page, sim, byClass, play } = pageWithView();
+  const [move, twist, clock] = ["sim-move", "sim-twist", "sim-clock"].map((name) => byClass(name)[0]);
+  let room = 200;
+  Object.defineProperty(move, "scrollWidth", { configurable: true, get: () => 72 });
+  Object.defineProperty(move, "clientWidth", { configurable: true, get: () => Math.min(72, room) });
+  const drive = async (code) => {
+    sim.command(code, 128, 400);
+    await pageFrames(page, 160, sim);
+    play(1);
+  };
+  await drive(protocol.MOVE_FORWARD);
+  assert.deepEqual([move, twist, clock].map((n) => n.dataset.fit), ["yes", "yes", "yes"], "room for it all");
+  room = 40;
+  await drive(protocol.MOVE_BACKWARD);
+  assert.deepEqual([move, twist, clock].map((n) => n.dataset.fit), ["no", "no", "no"], "no room: the move goes, with how fast and the clock");
+  room = 200;
+  await drive(protocol.MOVE_FORWARD);
+  assert.equal(move.dataset.fit, "yes", "and comes back whole");
+  sim.command(protocol.STOP, 0, 400);
+  await pageFrames(page, 600, sim);
+  play(1);
+  assert.ok(!sim.state.atStart && /next preview begins/.test(move.getAttribute("title")), `stopped away from its start: ${move.getAttribute("title")}`);
+  assert.ok(!byClass("sim-word")[0].textContent, "nothing more on the bar");
+  sim.reset();
+  play(1);
+  assert.doesNotMatch(move.getAttribute("title"), /next preview/, "reset: back at its start");
   assert.deepEqual(page.errors, []);
 });
 

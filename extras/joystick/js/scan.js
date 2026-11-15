@@ -23,7 +23,9 @@
  * screen, and lost rows where the corner was short (the critic's round 3).
  *
  * Two layouts, whichever draws the fan larger in the box. Wide (a box about
- * twice as wide as tall, the Program tab's view): the side readings beyond
+ * twice as wide as tall: the Program tab's view, which panel.css sizes to
+ * this shape on every layout, at the top of its column on a wide screen,
+ * and under the top on a phone or tablet): the side readings beyond
  * the ends of their wedges. Tall (anything squarer, the Drive tab's view on
  * every layout): the side readings under the ends of their wedges, so the
  * fan's arcs span the box. A fan always 420 units wide left a square pane
@@ -73,6 +75,15 @@ class ScanView {
   // units as a reading and no more, so the names show only where the fan is
   // drawn at TICK_PX / READING_UNITS screen pixels a unit or more.
   static TICK_PX = 12;
+  // And the least a reading is drawn at (the floor in panel.css's
+  // .reading): the same.
+  static READING_MIN_PX = ScanView.TICK_PX;
+  // A reading at its widest, "no echo", in ems of its type (the gauge's
+  // figures about 0.6 em each), and how far it reaches over and under its
+  // baseline: what #lay fits in the box.
+  static READING_EMS = 4.2;
+  static ASCENT = 0.75;
+  static DESCENT = 0.2;
   static CX = ScanView.VIEW_W / 2; // the rover
   static CY = ScanView.VIEW_H - 20;
   static R_MIN = 24; // wedges start clear of the rover's dot
@@ -208,45 +219,87 @@ class ScanView {
   // no wedge ever runs under a number. In the tall layout the side ones sit
   // under the ends of their wedges instead, below the rover's baseline where
   // no wedge reaches, reading inward.
+  //
+  // A reading is never drawn under READING_MIN_PX on screen either, as the
+  // names are not (the review's phones 1: 8 to 10 px readings on a phone,
+  // the fan's whole point). Where the names give way, a reading takes more
+  // units than the layout above was drawn for, so the readings move to
+  // where there is room for them: the side ones under their wedges' ends
+  // on either layout, and in the tall one the front diagonals in the box's
+  // top corners, clear of the outer ring. Where all five do not fit at that
+  // size, the side ones go first (L and R: Explorer stops only for what is
+  // in its path), and where the front three do not fit either, all of
+  // them: the wedges still show, by colour and length, what is close and
+  // on which side. svg[data-labels] says which: "all" (names and
+  // readings), "readings", "front" or "none".
   #lay(layout, k) {
-    const { VIEW_W, VIEW_H, TALL_X, TALL_W, R_MAX, CX, CY, HALF_WIDTH } = ScanView;
+    const { VIEW_W, VIEW_H, TALL_X, TALL_W, R_MAX, CX, CY, HALF_WIDTH, READING_EMS, ASCENT, DESCENT } = ScanView;
     const tall = layout === "tall";
-    const size = Math.min(ScanView.READING_UNITS, ScanView.READING_MAX_PX / k);
+    const size = Math.max(ScanView.READING_MIN_PX / k, Math.min(ScanView.READING_UNITS, ScanView.READING_MAX_PX / k));
+    const names = ScanView.TICK_PX / k <= ScanView.READING_UNITS;
+    const [left, right] = tall ? [TALL_X, TALL_X + TALL_W] : [0, VIEW_W];
+    const width = READING_EMS * size;
+    const place = (view) => {
+      const outward = Math.cos(radians(view.screen));
+      if (Math.abs(outward) > 0.9 && (tall || !names)) {
+        // Under the wedge's end, a little outside it: the name just under
+        // its lower edge and the reading under the name, or the reading
+        // alone, its top on the baseline.
+        const side = Math.sign(outward);
+        const x = CX + R_MAX * Math.cos(radians(view.screen - side * HALF_WIDTH)) + 3 * side;
+        const labelY = CY - 2;
+        const readingY = names ? labelY + size + 2 : CY + ASCENT * size;
+        return { x, readingY, labelY, anchor: side < 0 ? "start" : "end" };
+      }
+      // The reading by the arc, the name over it.
+      const [px, py] = ScanView.#polar(view.screen, R_MAX + 12);
+      const anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
+      if (tall && !names && anchor !== "middle") {
+        // In its top corner, its inner end clear of the outer ring.
+        const x = anchor === "end" ? left + 2 : right - 2;
+        const inner = anchor === "end" ? x + width : x - width;
+        const reach = R_MAX + 3;
+        const dx = Math.abs(CX - inner);
+        const arcY = dx < reach ? CY - Math.sqrt(reach * reach - dx * dx) : CY;
+        const readingY = Math.min(py + 5, arcY - 2 - DESCENT * size);
+        return { x, readingY, labelY: readingY - size, anchor: anchor === "end" ? "start" : "end" };
+      }
+      return { x: px, readingY: py + 5, labelY: py + 5 - size, anchor };
+    };
+    const places = this.#views.map(place);
+    // Whether these readings fit the box and keep clear of each other, at
+    // their widest ("no echo").
+    const boxes = places.map(({ x, readingY, anchor }) => {
+      const x0 = anchor === "end" ? x - width : anchor === "start" ? x : x - width / 2;
+      return { x0, x1: x0 + width, y0: readingY - ASCENT * size, y1: readingY + DESCENT * size };
+    });
+    const fits = (shown) => shown.every((i, n) => {
+      const b = boxes[i];
+      const inside = b.x0 >= left && b.x1 <= right && b.y0 >= 0 && b.y1 <= VIEW_H;
+      return inside && shown.slice(n + 1).every((j) => {
+        const c = boxes[j];
+        return !(b.x0 < c.x1 && c.x0 < b.x1 && b.y0 < c.y1 && c.y0 < b.y1);
+      });
+    });
+    const outer = this.#views.map((view) => Math.abs(Math.cos(radians(view.screen))) > 0.9);
+    const every = places.map((p, i) => i);
+    const front = every.filter((i) => !outer[i]);
+    const labels = names ? "all" : fits(every) ? "readings" : fits(front) ? "front" : "none";
+
     this.#svg.dataset.layout = layout;
     this.#svg.setAttribute("viewBox", tall ? `${TALL_X} 0 ${TALL_W} ${VIEW_H}` : `0 0 ${VIEW_W} ${VIEW_H}`);
-    for (const view of this.#views) {
-      const outward = Math.cos(radians(view.screen));
-      let x;
-      let readingY;
-      let labelY;
-      let anchor;
-      if (tall && Math.abs(outward) > 0.9) {
-        const side = Math.sign(outward);
-        // The wedge's lower edge, at full reach, and a little outside it;
-        // the name just under it, the reading under the name.
-        x = CX + R_MAX * Math.cos(radians(view.screen - side * HALF_WIDTH)) + 3 * side;
-        labelY = CY - 2;
-        readingY = labelY + size + 2;
-        anchor = side < 0 ? "start" : "end";
-      } else {
-        // The reading by the arc, the name over it.
-        const [px, py] = ScanView.#polar(view.screen, R_MAX + 12);
-        x = px;
-        readingY = py + 5;
-        labelY = readingY - size;
-        anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
-      }
+    this.#views.forEach((view, i) => {
+      const { x, readingY, labelY, anchor } = places[i];
       for (const [text, y] of [[view.reading, readingY], [view.label, labelY]]) {
         text.setAttribute("x", x.toFixed(1));
         text.setAttribute("y", y.toFixed(1));
         text.setAttribute("text-anchor", anchor);
       }
-    }
+      // L and R, which go first (panel.css).
+      if (outer[i]) view.reading.setAttribute("data-outer", "yes");
+    });
     this.#svg.style.setProperty("--scan-k", k.toFixed(3));
-    // The names show only where TICK_PX fits a reading's units, and the
-    // readings under about 7 px are a smudge (panel.css hides them).
-    const names = ScanView.TICK_PX / k <= ScanView.READING_UNITS;
-    this.#svg.dataset.labels = names ? "all" : k >= 0.45 ? "readings" : "none";
+    this.#svg.dataset.labels = labels;
   }
 
   #showDistance(view, cm) {
