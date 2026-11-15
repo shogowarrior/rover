@@ -2743,6 +2743,15 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   const placed = [...programSide, ...side].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage/.test(r.selector) && /grid-|display:/.test(r.body));
   check(placed.length === 0, `the toolbar a row over the editor, as everywhere: ${placed.map((r) => r.selector)}`);
   check(!/flex-direction:\s*row/.test(where(".programStage")), `the console under the editor: ${where(".programStage")}`);
+  // File's menu hangs from its button as on every layout, never moved
+  // (from the bands, it lay under the second cell at 568 x 320), and stops
+  // at the screen's foot under the top and the toolbar, scrolling inside
+  // past that: uncapped, it ran past the foot and opening it scrolled the
+  // toolbar under the top.
+  const fileMenu = where("#programMenuList");
+  check(!/\btop:/.test(fileMenu)
+    && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - \(var\(--bar-h\) - 3px\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
+    && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, on the screen: ${fileMenu}`);
   // The state as many lines as it needs, never cut: one line cut "Nothing
   // to run yet" to its first words, the only reason on screen why Run was
   // off (the critic's round 2).
@@ -4355,8 +4364,10 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   check(page.$("linkChip").getAttribute("aria-controls") === "linkPanel", "the chip opens it");
   // Open, its Connect is the one: the card's over the scan gives way,
   // keeping its place.
-  const cardAway = rules.find((r) => r.selector === ".shell:has(#linkPanel:not([hidden])) .connectCard");
-  check(cardAway && /visibility:\s*hidden;/.test(cardAway.body) && !/display/.test(cardAway.body), `the connect card gives way to the popover: ${cardAway && cardAway.body}`);
+  // The Program tab console's Connect too (the critic's round 2).
+  const cardAway = rules.find((r) => r.selector === ".shell:has(#linkPanel:not([hidden])) :is(.connectCard, .consoleConnect)");
+  check(cardAway && /visibility:\s*hidden;/.test(cardAway.body) && !/display/.test(cardAway.body), `the connect card and the console's Connect give way to the popover: ${cardAway && cardAway.body}`);
+  check((page.$("programConnect").getAttribute("class") || "").split(/\s+/).includes("consoleConnect"), "the console's Connect is the one that gives way");
   page.$("host").value = "";
   page.fire(page.$("connect"), "click");
   check(page.$("note").title === page.$("note").textContent && page.$("note").textContent !== "", `the whole note on hover: ${page.$("note").title}`);
@@ -5674,8 +5685,14 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   check(!gear.hasAttribute("aria-haspopup") && panel.getAttribute("role") === "group" && panel.tagName === "DIV" && !panel.hasAttribute("aria-modal"),
     `a group, not a menu or a dialog: ${panel.tagName} role=${panel.getAttribute("role")}`);
   check((panel.getAttribute("class") || "").split(/\s+/).includes("menu"), "it wears the File menu's .menu: over the page, hanging below the top");
+  // Its scroll fades take a layer over its own lines, inside the popover's
+  // (a positioned .menu with a z-index stacks what it holds), which can
+  // never rise over the top: the popover itself takes none.
   const layered = cssRules(panelCss()).filter((rule) => /\.options\b|#optionsPanel\b/.test(rule.selector) && /z-index/.test(rule.body));
-  check(layered.length === 0, `.menu's layer, never one of its own over Stop: ${layered.map((rule) => rule.selector)}`);
+  const fades = layered.filter((rule) => rule.selector.split(/,(?![^(]*\))/).every((part) => /::(before|after)$/.test(part.trim())) && /pointer-events:\s*none;/.test(rule.body));
+  check(layered.length === fades.length, `.menu's layer, never one of its own over Stop: ${layered.filter((rule) => !fades.includes(rule)).map((rule) => rule.selector)}`);
+  const menuRule = cssRules(outside(panelCss(), "@media")).find((rule) => rule.selector === ".menu");
+  check(menuRule && /position:\s*absolute;/.test(menuRule.body) && /z-index:\s*1;/.test(menuRule.body), `a .menu stacks its own fades: ${menuRule && menuRule.body}`);
   // The last thing in the top's second cell, beside Stop: the hand that
   // reaches for the gear lands, at worst, on Stop.
   const holder = gear.parentNode;
@@ -5714,6 +5731,61 @@ test("look: the gear opens a popover that Escape and a press outside close, and 
   page.fire(gear, "click");
   key(page.$("programMenu"), "ArrowDown");
   check(panel.hidden && !page.$("programMenuList").hidden, "the File menu, opening, closes it");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+test("look: Options hangs from the top below the cells, never runs off the screen, and fades an end with more past it", () => {
+  // From the foot of the top, as the link's popover does, so it hangs as
+  // far below the cells in every layout: hung from the gear, it touched
+  // them. Never taller than the screen under the top, 8 px clear of the
+  // foot, scrolling inside rather than move the page and the sticks with
+  // it; at 844 x 390 its Firmware section was past the foot with nothing to
+  // say so (the critic's round 2).
+  const base = cssRules(outside(panelCss(), "@media"));
+  const rule = (selector) => base.filter((r) => r.selector.replace(/\s+/g, " ") === selector).map((r) => r.body).join("");
+  check(/position:\s*static;/.test(rule(".hands > .menuHolder")), `the gear's holder not positioned: the popover hangs from the top: ${rule(".hands > .menuHolder")}`);
+  check(/position:\s*sticky;/.test(rule(".bar")), "the top is what it hangs from");
+  const options = rule(".options");
+  check(/(^|[\s;])top:\s*100%;/.test(options) && /max-height:\s*calc\(100 \* var\(--svh\) - 100% - var\(--s-2\) - env\(safe-area-inset-bottom, 0px\)\);/.test(options) && /overflow-y:\s*auto;/.test(options),
+    `below the top, never past the screen's foot, scrolling inside: ${options}`);
+  const link = rule(".linkPanel");
+  const linkTop = (link.match(/(?:^|[\s;])top:\s*([^;]+);/) || [])[1];
+  check(linkTop === "100%", `the link's popover from the same line: ${linkTop}`);
+  check(/max-height:\s*calc\(100 \* var\(--svh\) - 100% - var\(--s-2\) - env\(safe-area-inset-bottom, 0px\)\);/.test(link) && /overflow-y:\s*auto;/.test(link),
+    `nor the link's, whose fault and note together ran past a phone on its side: ${link}`);
+  // The fades: the panel's own ground over each end, under nothing it
+  // could take a press from, shown only by data-more, and weightless while
+  // hidden so data-more outweighs the File menu's id.
+  const hidden = rule(":where(.options, .linkPanel, #programMenuList)::before, :where(.options, .linkPanel, #programMenuList)::after");
+  check(/position:\s*sticky;/.test(hidden) && /pointer-events:\s*none;/.test(hidden) && /opacity:\s*0;/.test(hidden), `the fades sticky, hidden and pressed through: ${hidden}`);
+  for (const end of ["before", "after"]) {
+    const ground = rule(`.options::${end}, .linkPanel::${end}, #programMenuList::${end}`);
+    check(/linear-gradient\(to (top|bottom), var\(--panel\) 20%, transparent\)/.test(ground), `${end}: the panel's own ground: ${ground}`);
+  }
+  check(/opacity:\s*1;/.test(rule('.menu[data-more~="above"]::before, .menu[data-more~="below"]::after')), "shown by data-more");
+
+  // popover.js marks the ends with more past them, as it opens and scrolls,
+  // and clears them as it closes.
+  const page = loadPage();
+  const gear = page.$("options");
+  const panel = page.$("optionsPanel");
+  panel.clientHeight = 280;
+  panel.scrollHeight = 531;
+  panel.scrollTop = 0;
+  page.fire(gear, "click");
+  check(panel.getAttribute("data-more") === "below", `open at its top: ${panel.getAttribute("data-more")}`);
+  panel.scrollTop = 120;
+  page.fire(panel, "scroll", { bubbles: false });
+  check(panel.getAttribute("data-more") === "above below", `scrolled part way: ${panel.getAttribute("data-more")}`);
+  panel.scrollTop = 251;
+  page.fire(panel, "scroll", { bubbles: false });
+  check(panel.getAttribute("data-more") === "above", `scrolled to its end: ${panel.getAttribute("data-more")}`);
+  page.fire(gear, "click");
+  check(panel.hidden && !panel.hasAttribute("data-more"), "closed, nothing marked");
+  panel.scrollHeight = 280;
+  panel.scrollTop = 0;
+  page.fire(gear, "click");
+  check(!panel.hasAttribute("data-more"), "all of it in sight: nothing marked");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
