@@ -1261,18 +1261,18 @@ test("the view: paused, Pause is pressed and no playback speed is", () => {
   assert.deepEqual(page.errors, []);
 });
 
-// One row of controls on every layout, never two: the room's list, the
-// playback speed as one list at every width (buttons on a wide view and a
-// list on a narrow one were two looks for one choice), pause, reset and
-// the settings at the far end. A bar too narrow for the room's list gives
-// it to the settings, where the same list waits; the speed, pause and
-// reset stay one press. The owner asked for the room to be bigger: no row
-// of the bar ever wraps into it.
+// One row on every layout, never two: the room's list, the playback speed
+// as one list at every width (buttons on a wide view and a list on a
+// narrow one were two looks for one choice), pause, reset, what the rover
+// is doing, and the settings at the far end. A bar too narrow for the
+// room's list gives it to the settings, where the same list waits; the
+// speed, pause and reset stay one press. The owner asked for the room to
+// be bigger: no row of the bar ever wraps into it.
 test("the view: one row of controls, one speed list, and a narrow bar gives the room's list to the settings", () => {
   const { page, sim, byClass } = pageWithView();
   const bar = byClass("sim-bar")[0];
   const kinds = bar.children.map((n) => (n.getAttribute("class") || "").split(" ").filter((c) => c !== "sim-tool")[0]);
-  assert.deepEqual(kinds, ["sim-room", "sim-speed-pick", "sim-pause", "sim-reset", "sim-settings"], "the bar, in order");
+  assert.deepEqual(kinds, ["sim-room", "sim-speed-pick", "sim-pause", "sim-reset", "sim-status", "sim-settings"], "the bar, in order");
   assert.equal(byClass("sim-speed").length, 0, "no buttons for the speed");
   const [barRoom, panelRoom] = byClass("sim-room");
   assert.ok(panelRoom && all(page.$("simMore")).includes(panelRoom), "the room's list again, in the settings");
@@ -1315,32 +1315,41 @@ test("the view: one row of controls, one speed list, and a narrow bar gives the 
   assert.deepEqual(page.errors, []);
 });
 
-// What the view says lies in the room's margins (SimView.PAD), a line above
-// the floor and a line below it, never over it and never in rows of their
-// own that take the room's height: the owner asked twice for the room to
-// be bigger. The key to the colours is in the settings alone.
-test("the view: the tag and the motion in the room's margins, and the key in the settings", () => {
+// What the view says is in the bar's one row, beside the controls: the
+// wheels, the move and how fast, the tag or the latest word, the scale and
+// the clock. Never over the floor, and never in rows of their own that
+// take the room's height: the owner asked twice for the room to be
+// bigger, and a line above the floor and another below it, with the bar,
+// took half the pane at 568 x 320 (the critic's rounds 1 and 2). The key
+// to the colours is in the settings alone.
+test("the view: the motion, the tag and the clock in the bar's one row, the room the rest, and the key in the settings", () => {
   const { page, byClass } = pageWithView();
-  const stage = byClass("sim-stage")[0];
-  for (const name of ["sim-badge", "sim-foot"]) {
-    assert.equal(byClass(name)[0].parentNode, stage, `${name} over the stage, in its margin`);
+  const is = (node, other, what) => assert.ok(node === other, what);
+  const bar = byClass("sim-bar")[0];
+  const status = byClass("sim-status")[0];
+  is(status && status.parentNode, bar, "what the rover is doing, in the bar");
+  for (const name of ["sim-inset", "sim-move", "sim-twist", "sim-badge", "sim-scale", "sim-clock"]) {
+    is(byClass(name)[0].parentNode, status, `${name} on the bar's one line`);
   }
-  for (const name of ["sim-move", "sim-twist", "sim-clock", "sim-scale", "sim-inset"]) {
-    assert.equal(byClass(name)[0].parentNode, byClass("sim-foot")[0], `${name} on the foot's one line`);
-  }
-  assert.equal(byClass("sim-log")[0].parentNode, byClass("sim-badge")[0], "the latest word on the top line");
+  is(byClass("sim-log")[0].parentNode, byClass("sim-badge")[0], "the latest word in the tag's place");
   assert.equal(byClass("sim")[0].children.length, 3, "the view: the bar, the stage, the settings");
+  const stage = byClass("sim-stage")[0];
+  assert.deepEqual(stage.children.map((n) => n.getAttribute("class")), ["sim-map"], "the stage holds the room and nothing over it");
   const keys = byClass("sim-key");
   assert.equal(keys.length, 1, "one key");
   assert.ok(all(page.$("simMore")).includes(keys[0]), "in the settings");
   const css = stylesheet("sim.css");
   const rule = (selector) => cssRules(outside(css, "@container")).filter((r) => r.selector === selector).map((r) => r.body).join("");
-  for (const selector of [".sim-badge", ".sim-foot"]) {
-    assert.match(rule(selector), /position:\s*absolute/, `${selector} lies over the stage`);
-    assert.match(rule(selector), /white-space:\s*nowrap/, `${selector} one line`);
+  assert.match(rule(".sim-status"), /white-space:\s*nowrap/, "one line");
+  assert.match(rule(".sim-status"), /min-width:\s*0/, "giving way in the bar, never pushing the settings off it");
+  for (const selector of [".sim-status", ".sim-badge", ".sim-move", ".sim-clock"]) {
+    assert.doesNotMatch(rule(selector), /position:\s*absolute/, `${selector} in the row, not over the room`);
   }
+  // As the bar narrows its line keeps the move: no width hides it.
+  const hidesMove = cssRules(css).filter((r) => /\.sim-move\b/.test(r.selector) && /display:\s*none/.test(r.body));
+  assert.deepEqual(hidesMove.map((r) => r.selector), [], "the move always shown");
   const { PAD } = page.evalIn("({ PAD: SimView.PAD })");
-  assert.ok(PAD.top >= 18 && PAD.bottom >= 24, `margins for the two lines: ${JSON.stringify(PAD)}`);
+  assert.ok(Object.values(PAD).every((pad) => pad >= 2 && pad <= 4), `the room's margin its walls' stroke and no more: ${JSON.stringify(PAD)}`);
   assert.deepEqual(page.errors, []);
 });
 
@@ -1366,7 +1375,13 @@ test("the view: it fills its slot on every layout, and each room fits whatever s
   const css = stylesheet("sim.css");
   assert.ok(!/--room-/.test(css + stylesheet("program.css")), "read by neither sim.css nor program.css");
   const panelRules = cssRules(stylesheet("panel.css")).filter((r) => /--room-/.test(r.body));
-  assert.deepEqual(panelRules.map((r) => `${r.selector} { ${r.body.trim()} }`), ['body[data-target="simulator"] .shell { --va: var(--room-aspect, 1.3333);\n  --vcw: 34px;\n  --vch: 102px; }'], "panel.css reads it once, as the view's aspect on the simulator target");
+  assert.deepEqual(panelRules.map((r) => `${r.selector} { ${r.body.trim()} }`), ['body[data-target="simulator"] .shell { --va: var(--room-aspect, 1.3333);\n  --vcw: 24px;\n  --vch: 60px; }'], "panel.css reads it once, as the view's aspect on the simulator target");
+  // What the card adds round the room: its edge (2), the view's padding
+  // (16) and the walls' margin (SimView.PAD) across; and down, the bar's
+  // one row (32) and the gap under it (4) as well.
+  const { PAD: pad } = page.evalIn("({ PAD: SimView.PAD })");
+  assert.equal(2 + 16 + pad.left + pad.right, 24, "--vcw: what the card adds across");
+  assert.equal(2 + 16 + 32 + 4 + pad.top + pad.bottom, 60, "--vch: what it adds down");
   assert.equal(blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {"), null, "no layout of its own: one view on every layout");
   const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
   const view = rule(".sim");
