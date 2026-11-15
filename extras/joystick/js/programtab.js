@@ -15,14 +15,21 @@
  *                   once the target is switched to the simulator. A phone
  *                   has no room for both: there the view starts folded on
  *                   either target and stays as the View toggle leaves it,
- *                   so a preview never squeezes the editor unasked.
+ *                   until Preview is pressed: a preview with the view
+ *                   folded showed nothing moving (the review's phones 1),
+ *                   so Preview shows it, on every layout, and it stays
+ *                   shown for the operator to see where the preview ended.
  *     ui            the tab's elements, by name: tab (the tab itself, whose
  *                   data-view, "shown" or "hidden", the page's CSS keys on),
- *                   run, runLabel, stop, the File menu's button and list
- *                   (menu, menuList), examples (the group its examples go
- *                   in), exportButton, importButton, importFile, clear,
- *                   workspace (the block editor's box), hint, offline,
- *                   viewToggle (the toolbar's View toggle), state, log.
+ *                   run, runLabel (Run's word) and runShort (its short word,
+ *                   where the toolbar is narrow), stop, the File menu's
+ *                   button and list (menu, menuList), examples (the group
+ *                   its examples go in), exportButton, importButton,
+ *                   importFile, clear, workspace (the block editor's box),
+ *                   hint, offline, viewToggle (the toolbar's View toggle),
+ *                   state, log, and logToggle and logCount (a phone's Log,
+ *                   which shows or hides the log under the state line).
+ *                   runShort, logToggle and logCount may be left out.
  *
  *   attachEditor(editor)    the block editor is ready (a BlockEditor).
  *   editorUnavailable(why)  there will be no editor: say why in its place and
@@ -55,11 +62,19 @@
  * tabs (app.js).
  *
  * The tab's Stop only asks the runner to abort; app.js wires it, with every
- * other way a program is stopped. Nothing here sends to the rover: a program
- * reaches it only through the runner and the rover's Target.
+ * other way a program is stopped. It is the operator ending their own
+ * program (ProgramRunner's own stop), so the console says a plain
+ * "Stopped.", where a stop the panel imposed (a lost link, a drive press,
+ * the top's Stop) says why, in amber (the review's phones 25).
+ * Nothing here sends to the rover: a program reaches it only through the
+ * runner and the rover's Target.
  */
 class ProgramTab {
   static RUN_LABELS = Object.freeze({ rover: "Run on rover", simulator: "Preview" });
+  // Where the toolbar is narrow (program.css): Run gives way, never Stop
+  // program, which alone read "Stop" beside the top's red Stop (the
+  // review's phones 6). Run's title names the target either way.
+  static RUN_SHORT = Object.freeze({ rover: "Run", simulator: "Preview" });
   // An empty editor: the console's line says only that, the reason Run is
   // off; the advice is the editor's own placeholder, said once (the
   // critic's round 2: the same advice three times). Run's title says both.
@@ -78,9 +93,12 @@ class ProgramTab {
       hidden: "View: show the scan, or the simulated room, beside the editor",
     },
     import: "Open a program saved with Export",
+    export: "Save the program as rover-program.json",
+    nothingToExport: "Nothing to export: the editor has no blocks yet",
     clear: "Remove every block",
     busy: "Stop the program first",
     nothingToClear: "Nothing to clear",
+    log: { open: "Hide the program's log", closed: "Show the program's log: what the program and the runner said" },
   });
 
   #runner;
@@ -125,6 +143,10 @@ class ProgramTab {
     ui.importFile.addEventListener("change", () => this.#import().catch(reportFault));
     ui.clear.addEventListener("click", () => this.#clear().catch(reportFault));
     ui.viewToggle.addEventListener("click", () => this.#showView(ui.viewToggle.getAttribute("aria-pressed") !== "true"));
+    if (ui.logToggle) {
+      ui.logToggle.addEventListener("click", () => this.#openLog(ui.logToggle.getAttribute("aria-expanded") !== "true"));
+      this.#openLog(false);
+    }
     // Blockly refits itself only to a window's resize. Its box also changes
     // as the view pane shows or hides, or as the console under it grows.
     if (typeof ResizeObserver === "function") {
@@ -186,6 +208,15 @@ class ProgramTab {
     tab.dataset.view = shown ? "shown" : "hidden";
   }
 
+  // A phone's log, under the state line, or out of sight (program.css keys
+  // on the log's data-open). The Log button shows only once there is one.
+  #openLog(open) {
+    const { logToggle, log } = this.#ui;
+    logToggle.setAttribute("aria-expanded", String(open));
+    logToggle.title = ProgramTab.TITLES.log[open ? "open" : "closed"];
+    log.dataset.open = open ? "yes" : "no";
+  }
+
   /* --- running ----------------------------------------------------------- */
 
   async #run() {
@@ -220,6 +251,10 @@ class ProgramTab {
       this.#update();
       return;
     }
+    // A preview is to be watched: with the view folded (a phone's start),
+    // it ran with nothing on screen moving. Shown, it stays, so the
+    // operator sees where the preview left the simulated rover.
+    if (target.kind === "simulator" && this.#ui.tab.dataset.view !== "shown") this.#showView(true);
     // Refused only if the target stopped being ready since Run was enabled;
     // the strip already says why, from the target itself.
     this.#runner.run(program, target).then((end) => {
@@ -248,11 +283,12 @@ class ProgramTab {
       "Run it on the rover anyway, with the wheels off the ground or Stop in reach?";
   }
 
-  #onRunnerState(state, { kind, outcome, reason }) {
+  #onRunnerState(state, { kind, outcome, reason, own }) {
     if (state === "idle" && outcome) {
       this.#outcome = {
         done: { tone: "done", text: `Done on the ${kind}.` },
-        stopped: { tone: "stopped", text: `Stopped: ${reason}` },
+        // The operator's own Stop program: what they asked for, no warning.
+        stopped: own ? { tone: "ended", text: "Stopped." } : { tone: "stopped", text: `Stopped: ${reason}` },
         failed: { tone: "failed", text: `Error: ${reason}` },
       }[outcome];
     } else {
@@ -348,6 +384,7 @@ class ProgramTab {
 
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;
+    if (ui.runShort) ui.runShort.textContent = ProgramTab.RUN_SHORT[kind] || "Run";
     ui.run.disabled = !editor || empty || !idle || !readiness.ok;
     ui.run.title = !editor ? this.#editorWhy : !idle ? ProgramTab.TITLES.running : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY_TITLE : ProgramTab.TITLES.run[kind] || "";
     ui.stop.disabled = state !== "running";
@@ -367,21 +404,27 @@ class ProgramTab {
     ui.importButton.title = busy || titles.import;
     ui.clear.disabled = !canEdit || empty;
     ui.clear.title = busy || (empty ? titles.nothingToClear : titles.clear);
-    ui.exportButton.disabled = !editor;
+    // Nothing to save from an empty editor, as nothing to clear (the
+    // review's tablets 17): off, saying why. A running program can be saved.
+    ui.exportButton.disabled = !editor || empty;
+    ui.exportButton.title = empty ? titles.nothingToExport : titles.export;
     ui.hint.hidden = !editor || !editor.empty;
 
     const running = this.#runner.target ? this.#runner.target.kind : kind;
     let status;
-    if (state === "running") status = { tone: "running", text: running === "simulator" ? "Previewing on the simulator…" : `Running on the ${running}…` };
+    // Short, as the line is one line: a preview is on the simulator, whose
+    // name the top's switch shows, and a target not ready says so briefly
+    // (Run's title, and the line's, say why in full).
+    if (state === "running") status = { tone: "running", text: running === "simulator" ? "Previewing…" : `Running on the ${running}…` };
     else if (state === "stopping") status = { tone: "stopping", text: "Stopping…" };
     else if (this.#outcome) status = this.#outcome;
     else if (!editor) status = { tone: "idle", text: this.#editorWhy };
-    else if (!readiness.ok) status = { tone: "idle", text: readiness.why };
+    else if (!readiness.ok) status = { tone: "idle", text: readiness.brief || readiness.why, whole: readiness.why };
     else if (empty) status = { tone: "idle", text: ProgramTab.EMPTY };
-    else status = { tone: "ready", text: kind === "simulator" ? "Ready to preview on the simulator." : `Ready to run on the ${kind}.` };
+    else status = { tone: "ready", text: kind === "simulator" ? "Ready to preview." : `Ready to run on the ${kind}.` };
     ui.state.textContent = status.text;
-    // Whole on hover, where one line cuts it short (a phone on its side).
-    ui.state.title = status.text;
+    // Whole on hover, where one line cuts it short or says it briefly.
+    ui.state.title = status.whole || status.text;
     ui.state.dataset.tone = status.tone;
   }
 
@@ -393,5 +436,9 @@ class ProgramTab {
     log.appendChild(line);
     while (log.children.length > ProgramTab.LOG_LINES) log.children[0].remove();
     log.scrollTop = log.scrollHeight;
+    // A phone's Log, once there is one, with how many lines it holds.
+    const { logToggle, logCount } = this.#ui;
+    if (logToggle) logToggle.hidden = false;
+    if (logCount) logCount.textContent = String(log.children.length);
   }
 }

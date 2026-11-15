@@ -11,8 +11,10 @@
  * runs on (js/sim.js). Both have this shape:
  *
  *   kind               "rover" or "simulator".
- *   ready()            {ok, why}: whether a program may start on it now, and if
- *                      not, why not, in words for the operator.
+ *   ready()            {ok, why, brief}: whether a program may start on it
+ *                      now, and if not, why not, in words for the operator;
+ *                      brief, where given, says it in a few words, for the
+ *                      Program tab's one-line console on a phone.
  *   hold(move, speed)  drive this motion until it is changed or released. move
  *                      is a motion code from protocol.js, speed 0..SPEED_MAX.
  *   release()          stop what the program is driving, and nothing else.
@@ -47,13 +49,16 @@ if (typeof module !== "undefined") {
  *       {outcome: "failed", reason} (the program threw), or
  *       {outcome: "refused", reason} -- a program is already running, or the
  *       target is not ready -- in which case nothing ran.
- *   abort(reason)
+ *   abort(reason, {own})
  *       Stops the running program: its pending wait ends at once, what it was
  *       driving is released, and every api call it makes from then on throws.
- *       Returns false when there was nothing to stop.
+ *       Returns false when there was nothing to stop. own: the operator
+ *       ended their own program (the Program tab's Stop program), which is
+ *       logged as a plain "Stopped." ("info"), and how it ended carries own:
+ *       true; any other stop is logged with its reason, as a warning.
  *   state        "idle", "running" or "stopping" (aborted, still unwinding).
  *   target       the Target a program is running on, or null.
- *   onState(fn)      fn(state, {kind, outcome, reason}) on each change.
+ *   onState(fn)      fn(state, {kind, outcome, reason, own}) on each change.
  *   onLog(fn)        fn({text, tone}): tone "say" for the program's own
  *                    output, "info", "done", "stopped" or "failed".
  *   onHighlight(fn)  fn(blockId) as each statement starts; fn(null) when
@@ -149,8 +154,8 @@ class ProgramRunner {
     return this.#execute(run, program);
   }
 
-  abort(reason = "Stopped.") {
-    return this.#run ? this.#stop(this.#run, reason) : false;
+  abort(reason = "Stopped.", { own = false } = {}) {
+    return this.#run ? this.#stop(this.#run, reason, own) : false;
   }
 
   /* --- one run --------------------------------------------------------- */
@@ -162,10 +167,10 @@ class ProgramRunner {
       await program(this.#api(run));
       // A program can finish in the same turn as an abort, its last statement
       // already run; it still counts as stopped.
-      end = signal.aborted ? { outcome: "stopped", reason: run.reason } : { outcome: "done" };
+      end = signal.aborted ? ProgramRunner.#stoppedEnd(run) : { outcome: "done" };
     } catch (err) {
       end = signal.aborted
-        ? { outcome: "stopped", reason: run.reason }
+        ? ProgramRunner.#stoppedEnd(run)
         : { outcome: "failed", reason: ProgramRunner.#describe(err) };
     }
 
@@ -176,15 +181,22 @@ class ProgramRunner {
     this.#highlight(null);
     this.#run = null;
     if (end.outcome === "done") this.#log("Done.", "done");
+    else if (end.own) this.#log("Stopped.", "info");
     else if (end.outcome === "stopped") this.#log(`Stopped: ${end.reason}`, "stopped");
     else this.#log(`Error: ${end.reason}`, "failed");
     this.#setState("idle", { kind: run.target.kind, ...end });
     return end;
   }
 
-  #stop(run, reason) {
+  // How a stopped run ended: own only when the operator ended it.
+  static #stoppedEnd(run) {
+    return run.own ? { outcome: "stopped", reason: run.reason, own: true } : { outcome: "stopped", reason: run.reason };
+  }
+
+  #stop(run, reason, own = false) {
     if (run !== this.#run || run.controller.signal.aborted) return false;
     run.reason = reason;
+    run.own = own;
     // The pending wait rejects, and so does every api call from here on...
     run.controller.abort(ProgramRunner.#stopped(reason));
     // ...and what the program drives stops now, not when it has unwound.
@@ -516,6 +528,15 @@ class RoverTarget {
     stale: "The rover has stopped sending telemetry.",
   });
 
+  // The same in a few words, for the console's one line: whole, a phone
+  // cut "Connect to the rover..." to "Connect t..." beside its Connect
+  // button (the review's phones 0). Run's title keeps the whole reason.
+  static NOT_READY_BRIEF = Object.freeze({
+    down: "Not connected.",
+    connecting: "Connecting…",
+    stale: "No telemetry.",
+  });
+
   #driver;
   #link;
   #latest = null; // the last telemetry object, while its link lasts
@@ -554,7 +575,7 @@ class RoverTarget {
   ready() {
     const state = this.#link.state;
     if (state === "up") return { ok: true, why: "" };
-    return { ok: false, why: RoverTarget.NOT_READY[state] || "The rover is not connected." };
+    return { ok: false, why: RoverTarget.NOT_READY[state] || "The rover is not connected.", brief: RoverTarget.NOT_READY_BRIEF[state] || "Not connected." };
   }
 
   hold(move, speed) {

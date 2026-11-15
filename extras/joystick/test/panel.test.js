@@ -2861,29 +2861,60 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // The tab in its area under the top, a column as on every layout: the
   // toolbar one slim row over the editor, the console under the editor.
   // In the bands beside the top, the toolbar was two rows there, and four
-  // 240 px slabs before that (the critic's round 2): nothing here places
-  // the tab, the toolbar or its controls on the shell's tracks.
+  // 240 px slabs before that (the critic's round 2): nothing in the rules
+  // for every width on its side places the tab, the toolbar or its
+  // controls on the shell's tracks, and nothing lays the console beside
+  // the editor.
   const tab = body(side, "#programTab:not([hidden])");
   check(!/grid-(row|column|area|template)/.test(tab) && !/display:/.test(tab), `the tab in its area, a column: ${tab}`);
   const programSide = blockRules(stylesheet("program.css"), LANDSCAPE_PHONE) || [];
   const where = (selector) => body(programSide, selector);
   const placed = [...programSide, ...side].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage/.test(r.selector) && /grid-|display:/.test(r.body));
   check(placed.length === 0, `the toolbar a row over the editor, as everywhere: ${placed.map((r) => r.selector)}`);
-  check(!/flex-direction:\s*row/.test(where(".programStage")), `the console under the editor: ${where(".programStage")}`);
-  // File's menu hangs from its button as on every layout, never moved
-  // (from the bands, it lay under the second cell at 568 x 320), and stops
-  // at the screen's foot under the top and the toolbar, scrolling inside
-  // past that: uncapped, it ran past the foot and opening it scrolled the
-  // toolbar under the top.
+  check(!/flex-direction:\s*row/.test(where(".programStage")) && !programSide.some((r) => /programConsole/.test(r.selector)), `the console under the editor: ${where(".programStage")}`);
+  // Under 700 px wide (568 x 320, 667 x 375) the cells are a cell a row in
+  // the middle, and the bands beside them were empty while the editor
+  // under them had about 90 px (the review's phones 0): the toolbar takes
+  // them, Run over Stop program on the left and File over View on the
+  // right, a row a cell's, and the editor's card starts under the cells,
+  // the width the view leaves it. Two rows of two, never the four slabs.
+  const bands = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 699.98px) {") || [];
+  const banded = (selector) => body(bands, selector);
+  check(/grid-area:\s*1 \/ 1 \/ -1 \/ -1;/.test(banded("#programTab:not([hidden])")) && /grid-template-columns:\s*subgrid;/.test(banded("#programTab:not([hidden])")) && /container-type:\s*normal;/.test(banded("#programTab:not([hidden])")),
+    `under 700 px: the tab on the shell's tracks, no container: ${banded("#programTab:not([hidden])")}`);
+  check(/grid-area:\s*1 \/ 1 \/ 2 \/ -1;/.test(banded("#programTab .programBar")) && /grid-template-rows:\s*var\(--ctl\) var\(--ctl\);/.test(banded("#programTab .programBar")),
+    `under 700 px: the toolbar two rows of the top's height, beside it: ${banded("#programTab .programBar")}`);
+  const spot = { "#programRun": "1 / 1", "#programStop": "2 / 1", "#programTab .menuHolder": "1 / -2", "#viewToggle": "2 / -2" };
+  for (const [selector, area] of Object.entries(spot)) check(banded(selector).includes(`grid-area: ${area};`), `under 700 px: ${selector} in its band: ${banded(selector)}`);
+  check(/grid-area:\s*2 \/ 3 \/ 3 \/ -1;/.test(banded("#programTab .programStage")) && /grid-area:\s*2 \/ 1 \/ 3 \/ -1;/.test(banded('#programTab[data-view="hidden"] .programStage')),
+    "under 700 px: the editor's card under the cells, beside the view or the screen's width");
+  // From 700 px wide the cells fit one row, so they take it, as on a wide
+  // screen, and the editor and the console the height under it: a row
+  // each they left the editor 150 to 200 px (the review's phones 0). The
+  // view takes the left two fifths, shown.
+  const row = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 700px) {") || [];
+  const oneRow = (selector) => body(row, selector);
+  check(/grid-template-columns:\s*minmax\(0, 2fr\) minmax\(0, 3fr\);/.test(oneRow(".shell:has(> #programTab:not([hidden]))")) && areas(oneRow(".shell:has(> #programTab:not([hidden]))")) === '"head head" "view main"'
+    && areas(oneRow('.shell:has(> #programTab[data-view="hidden"]:not([hidden]))')) === '"head" "main"', `from 700 px: the top across, the view and the editor under it: ${oneRow(".shell:has(> #programTab:not([hidden]))")}`);
+  check(/display:\s*flex;/.test(oneRow(".shell:has(> #programTab:not([hidden])) .cells")) && /flex:\s*1 1 0;/.test(oneRow(".shell:has(> #programTab:not([hidden])) .hcell.hands")),
+    "from 700 px: the cells one row, the second taking the rest");
+  // File's menu hangs from its button as on every layout, never moved, and
+  // stops at the screen's foot under the top and the toolbar (in the
+  // bands, under the cells' first row), scrolling inside past that:
+  // uncapped, it ran past the foot and opening it scrolled the toolbar
+  // under the top.
   const fileMenu = where("#programMenuList");
   check(!/\btop:/.test(fileMenu)
-    && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - \(var\(--bar-h\) - 3px\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
+    && /max-height:\s*calc\(100 \* var\(--svh\) - var\(--cell-h\) - 3 \* var\(--s-2\) - \(var\(--bar-h\) - 3px\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
     && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, on the screen: ${fileMenu}`);
-  // The state as many lines as it needs, never cut: one line cut "Nothing
-  // to run yet" to its first words, the only reason on screen why Run was
-  // off (the critic's round 2).
-  const stateLines = where(".programConsole .programState");
-  check(stateLines !== "" && !/max-height|overflow|nowrap|text-overflow/.test(stateLines), `the state wraps: ${stateLines}`);
+  const bandMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 699.98px) {") || [], "#programMenuList");
+  check(!/\btop:/.test(bandMenu) && /max-height:\s*calc\(100 \* var\(--svh\) - var\(--cell-h\) - 2 \* var\(--s-2\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(bandMenu),
+    `in the band, from the cells' first row to the foot: ${bandMenu}`);
+  // The state one line on every layout, never a height that follows what
+  // it says (program.css's base rule; the program tests hold it), and
+  // nothing on its side makes it more: the reason Run is off is short on
+  // the line, and whole on Run's title and the line's.
+  check(!programSide.some((r) => /programState/.test(r.selector) && /white-space|line-height|max-height/.test(r.body)), "the state one line on its side too");
   for (const rules of [side, narrow]) {
     const shell = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
     const dockGap = (body(rules, ".shell, .controls") + body(rules, ".controls")).match(/column-gap:\s*([^;]+);/);
@@ -3603,7 +3634,10 @@ test("program: with an editor, Run follows the link, and a run highlights, locks
   standInEditor(page);
   check(page.$("programOffline").hidden, "no offline message");
   check(page.$("programRun").disabled === true, "Run off without a link");
-  check(/Connect to the rover/.test(page.$("programRun").title) && /Connect to the rover/.test(page.$("programState").textContent), `says why: ${page.$("programRun").title}`);
+  // Why, in full on Run and on the line's hover, and in a few words on the
+  // line, which is one line: a phone cut the whole reason to "Connect t..."
+  // (the review's phones 0).
+  check(/Connect to the rover/.test(page.$("programRun").title) && page.$("programState").textContent === "Not connected." && /Connect to the rover/.test(page.$("programState").title), `says why: ${page.$("programRun").title} / ${page.$("programState").textContent} / ${page.$("programState").title}`);
   check(page.$("programRunLabel").textContent === "Run on rover", `label ${page.$("programRunLabel").textContent}`);
   check(exampleItems(page).length === 4 && fileMenu(page).every((b) => b.disabled === false), "the File menu works offline");
 
@@ -3679,7 +3713,18 @@ test("program: a manual press, blur, a hidden page, Stop, Autonomous either way,
     check(end && end.outcome === "stopped" && reason.test(end.reason), `${what}: ended ${JSON.stringify(end)}`);
     check(page.evalIn("runner.state") === "idle", `${what}: idle`);
     check(names(ws, mark).join() === after, `${what}: sent ${names(ws, mark)}, wanted ${after}`);
-    check(/^Stopped: /.test(page.$("programState").textContent) && page.$("programState").dataset.tone === "stopped", `${what}: state ${page.$("programState").textContent}`);
+    // Every stop the panel imposed says why, in amber; the operator's own
+    // Stop program, what they asked for, a plain "Stopped." (the review's
+    // phones 25: their own stop read as a warning).
+    if (what === "the tab's Stop") {
+      check(page.$("programState").textContent === "Stopped." && page.$("programState").dataset.tone === "ended" && end.own === true, `${what}: state ${page.$("programState").textContent} ${page.$("programState").dataset.tone}`);
+      const last = page.$("programLog").children.at(-1);
+      check(last.textContent === "Stopped." && last.dataset.tone === "info", `${what}: logged ${last.dataset.tone}: ${last.textContent}`);
+    } else {
+      check(/^Stopped: /.test(page.$("programState").textContent) && page.$("programState").dataset.tone === "stopped" && !("own" in end), `${what}: state ${page.$("programState").textContent}`);
+      const last = page.$("programLog").children.at(-1);
+      check(/^Stopped: /.test(last.textContent) && last.dataset.tone === "stopped", `${what}: logged ${last.dataset.tone}: ${last.textContent}`);
+    }
     check(!logLines(page).includes("after"), `${what}: nothing after the drive ran`);
     // The program never takes the rover back: only what the operator holds
     // drives on.
@@ -3840,41 +3885,52 @@ test("program: switching the target mid-run stops the program, and the choice is
   const shownWide = wideRules.find((r) => r.selector === ".shell:has(> #programTab:not([hidden]))");
   const wideBody = shownWide ? shownWide.body : "";
   check(/--view-w:\s*clamp\(320px, 0\.4 \* \(min\(100vw, var\(--shell-max\)\) - 2 \* var\(--gutter\) - var\(--s-4\)\), 560px\);/.test(wideBody) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(wideBody), `wide, shown: the view about 40%, the editor the rest: ${wideBody}`);
-  // As tall as what it shows needs at that width, the fan's shape or the
-  // room's (--va): in a pane the screen's height the fan filled only its
-  // foot and the room was letterboxed (the critic's round 2). The console
-  // takes the rest of its column, the editor the whole of the right.
-  check(/--view-h:\s*min\(\(var\(--view-w\) - var\(--vcw\)\) \/ var\(--va\) \+ var\(--vch\), /.test(wideBody) && /grid-template-rows:\s*auto var\(--view-h\) minmax\(0, 1fr\);/.test(wideBody), `wide, shown: the view's height from its aspect: ${wideBody}`);
+  // The view the whole of its column's height, and the editor's card the
+  // rest, the console under the editor, the view shown or hidden: under
+  // the view the console was a box the column's height holding one line
+  // (685 px of it at 1920 x 1080), and the fan a strip over it (the
+  // review's laptops 0). So nothing in the wide rules puts the tab on the
+  // shell's tracks, splits the stage or moves the console out from under
+  // the editor, and nothing pushes the toolbar down from the pane's top.
+  check(/grid-template-rows:\s*auto minmax\(0, 1fr\);/.test(wideBody) && /"head head"\s*"view main"/.test(wideBody) && !/--view-h/.test(wideBody), `wide, shown: the view the column's height: ${wideBody}`);
   const wideTab = (selector) => wideRules.filter((r) => r.selector === selector).map((r) => r.body).join("");
-  check(/grid-template-columns:\s*subgrid;/.test(wideTab('#programTab[data-view="shown"]:not([hidden])')) && /container-type:\s*normal;/.test(wideTab('#programTab[data-view="shown"]:not([hidden])')), "the tab on the shell's tracks, no container");
-  check(/grid-area:\s*2 \/ 1;/.test(wideTab('#programTab[data-view="shown"] .programConsole')) && /grid-area:\s*1 \/ 2 \/ 3 \/ 3;/.test(wideTab('#programTab[data-view="shown"] .programEditor')), "the console under the view, the editor the whole right");
-  // The editor's card level with the view beside it: its toolbar, the
-  // card's head, at the top of the view's row, and the editor straight
-  // under it. Over the editor alone, the toolbar put the two tops 40 px
-  // apart (the critic's round 1); nothing pushes it down from that row.
-  const wideBar = wideTab('#programTab[data-view="shown"] .programBar');
-  check(/grid-area:\s*1 \/ 2;/.test(wideBar) && /align-self:\s*start;/.test(wideBar) && !/margin|padding/.test(wideBar), `wide, shown: the toolbar at the top of the view's row: ${wideBar}`);
-  check(/margin-top:\s*var\(--bar-h\);/.test(wideTab('#programTab[data-view="shown"] .programEditor')), "wide, shown: the editor straight under its toolbar");
-  check(!/padding-top|margin-top/.test(wideTab("#programTab")) && !wideRules.some((r) => /#programTab/.test(r.selector) && /(^|[\s;])(row-)?gap:\s*[1-9]/.test(r.body) && !/data-view="shown"/.test(r.selector)), "wide, hidden: the toolbar at the pane's top too, against the editor");
+  const stageSplit = (rules) => rules.filter((r) => /#programTab|programStage|programConsole|programBar|programEditor|programLog/.test(r.selector) && /subgrid|display:\s*contents|grid-(area|row|column)|max-height:\s*none/.test(r.body));
+  check(stageSplit(wideRules).length === 0, `wide: the editor's card and the console under it, a column: ${stageSplit(wideRules).map((r) => r.selector)}`);
+  check(!/padding-top|margin-top/.test(wideTab("#programTab")) && !wideRules.some((r) => /#programTab/.test(r.selector) && /(^|[\s;])(row-)?gap:\s*[1-9]/.test(r.body)), "wide: the toolbar at the pane's top, against the editor");
+  // A tablet upright: the view a band over the editor's card, the
+  // screen's width, one height whatever the target; the console under the
+  // editor there too. Beside the band it was a box as tall as the band
+  // holding one line, and the fan a thumbnail (the review's tablets 1).
+  const tabletRules = blockRules(panel, "@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {") || [];
+  const band = tabletRules.filter((r) => r.selector === ".shell:has(> #programTab:not([hidden])) > .view").map((r) => r.body).join("");
+  check(/height:\s*clamp\(120px, min\(38 \* var\(--svh\), 100 \* var\(--svh\) - 400px\), 460px\);/.test(band), `a tablet: the view a band one height: ${band}`);
+  check(stageSplit(tabletRules).length === 0 && !tabletRules.some((r) => /programTab/.test(r.selector) && /grid-template-(columns|areas)/.test(r.body)) && !tabletRules.some((r) => /^\.shell/.test(r.selector) && /grid-template-columns/.test(r.body)),
+    `a tablet: the band the width, the console under the editor: ${stageSplit(tabletRules).map((r) => r.selector)}`);
+  // The console after the editor in the stage, so a column puts it under.
+  const stageKids = [...folded.$("programStage").children].map((n) => n.getAttribute("class"));
+  check(stageKids.indexOf("programEditor") >= 0 && stageKids.indexOf("programEditor") < stageKids.indexOf("programConsole"), `the console after the editor: ${stageKids}`);
   const aspect = cssRules(outside(panel, "@media"));
   const shellVars = aspect.filter((r) => r.selector === ".shell" && /--va:/.test(r.body)).map((r) => r.body).join("");
   const simVars = aspect.filter((r) => r.selector === 'body[data-target="simulator"] .shell').map((r) => r.body).join("");
   check(/--va:\s*2\.1;/.test(shellVars) && /--va:\s*var\(--room-aspect, 1\.3333\);/.test(simVars), `the fan's aspect, or the room's: ${shellVars} | ${simVars}`);
   // A tablet upright: the band over the editor one height whatever the
-  // target, what it shows (--va) setting its width alone, so a switch of
-  // target never moves the editor's top (105 px at 768 x 1024 when the
-  // fan's band was only as tall as its wide shape: the review's tablets 11).
-  const bandRules = blockRules(panel, "@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {") || [];
-  const band = bandRules.find((r) => r.selector === '.shell:has(> #programTab[data-view="shown"]:not([hidden]))');
-  const bandBody = band ? band.body : "";
-  const bandVar = (name) => (bandBody.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[1] || "";
-  check(/grid-template-rows:\s*auto var\(--band-h\) minmax\(0, 1fr\);/.test(bandBody) && bandVar("band-h") !== "" && !/--v(a|cw|ch)\b/.test(bandVar("band-h") + bandVar("band-0")), `tablet: the band's height the screen's, not what it shows: ${bandBody}`);
-  check(/var\(--va\)/.test(bandVar("view-w")) && /grid-template-columns:\s*var\(--view-w\) minmax\(0, 1fr\);/.test(bandBody), `tablet: what it shows sets the band's width: ${bandBody}`);
-  check(!bandRules.some((r) => /data-target/.test(r.selector)), "tablet: nothing in the band's layout by target");
+  // target, from the screen alone, never from what it shows (--va, --vcw,
+  // --vch), so a switch of target never moves the editor's top (105 px at
+  // 768 x 1024 when the fan's band was only as tall as its wide shape: the
+  // review's tablets 11). The band is the screen's width (the review's
+  // tablets 1, above), and the fan or the room fits inside it.
+  check(band !== "" && !/--v(a|cw|ch)\b/.test(band), `tablet: the band's height the screen's, not what it shows: ${band}`);
+  check(!tabletRules.some((r) => /data-target/.test(r.selector)), "tablet: nothing in the band's layout by target");
   // The editor and the console are the stage's; nothing of the simulator's.
   const consoleBox = folded.$("programState").parentNode.parentNode;
   check(consoleBox.getAttribute("class") === "programConsole" && consoleBox.parentNode === folded.$("programStage"), "the console is in the stage");
-  check(folded.$("programState").title === folded.$("programState").textContent && folded.$("programState").title !== "", `the state whole on hover, where one line cuts it: '${folded.$("programState").title}'`);
+  // The state one line, on every layout: two or three lines of it took
+  // the editor's height a run at a time on a phone (the review's phones
+  // 7). Whole on hover, and on Run's title while Run is off; the line says
+  // a reason briefly ("Not connected.", tested above).
+  const stateRule = cssRules(outside(stylesheet("program.css"), "@")).filter((r) => r.selector === ".programState").map((r) => r.body).join("");
+  check(/white-space:\s*nowrap;/.test(stateRule) && /text-overflow:\s*ellipsis;/.test(stateRule) && /overflow:\s*hidden;/.test(stateRule), `the state one line: ${stateRule}`);
+  check(folded.$("programState").title !== "" && (folded.$("programState").title === folded.$("programState").textContent || folded.$("programState").title === folded.evalIn("targetSwitch.target.ready().why")), `the state whole on hover, where one line cuts it: '${folded.$("programState").title}'`);
   check(!all(folded.$("programTab")).includes(folded.$("simSlot")), "no view of its own in the Program tab");
   // The toolbar is the head of the editor's card on every layout: one slim
   // row a cell's height, on the card's ground, with no gap between it and
@@ -3887,33 +3943,58 @@ test("program: switching the target mid-run stops the program, and the choice is
   check(/--bar-h:\s*calc\(var\(--ctl\) \+ 7px\);/.test(baseOf(":root")) && /height:\s*var\(--bar-h\);/.test(baseOf(".programBar")) && /display:\s*flex;/.test(baseOf(".programBar")) && /border-bottom:\s*none;/.test(baseOf(".programBar")) && /border-radius:\s*var\(--r-lg\) var\(--r-lg\) 0 0;/.test(baseOf(".programBar")),
     `the toolbar a row, the card's head: ${baseOf(".programBar")}`);
   check(/border-radius:\s*0 0 var\(--r-lg\) var\(--r-lg\);/.test(baseOf(".programEditor")) && /gap:\s*0;/.test(baseOf("#programTab")), `the editor the card's body, straight under it: ${baseOf(".programEditor")} | ${baseOf("#programTab")}`);
-  // Blockly's toolbox along the top of a phone's editor, upright or on its
-  // side (a short screen too: down the left of a short editor the seven
-  // categories ran past its foot), and every category in sight there:
-  // wrapping to a second row, never a row that scrolls and cuts one
-  // mid-word ("Lo" at 375 px: the critic's round 2).
+  // Blockly's toolbox along the top of an upright phone's editor, every
+  // category in sight there: wrapping to a second row, never a row that
+  // scrolls and cuts one mid-word ("Lo" at 375 px: the critic's round 2).
+  // On its side, down the left, so they never wrap: along the top they
+  // took 30 to 60 px of an editor 170 px tall (the review's phones 0).
+  // Down the left of a short editor the seven ran past its foot (round
+  // 2), so a short editor's pills are closer, all seven in its height.
   const blocksJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
-  check(/static NARROW = "\(max-width: 600px\), \(max-height: 520px\)";/.test(blocksJs), "the toolbox along the top of a narrow or short screen");
+  check(/static NARROW = "\(max-width: 600px\) and \(orientation: portrait\)";/.test(blocksJs), "the toolbox along the top of an upright phone alone");
   const pills = baseOf('.blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup');
   check(/flex-wrap:\s*wrap;/.test(pills) && !/overflow|mask/.test(pills), `every category in sight, wrapping: ${pills}`);
-  check((blockRules(programCss, "@media (max-width: 600px), (max-height: 520px) {") || []).some((r) => r.selector === ".programHint") && (blockRules(programCss, "@media (min-width: 601px) and (min-height: 521px) {") || []).some((r) => r.selector === ".programHint"),
+  // Every block a query opens, wherever it is in the sheet.
+  const everyBlock = (css, opening) => {
+    const rules = [];
+    for (let rest = css.replace(/\/\*[\s\S]*?\*\//g, ""), at = rest.indexOf(opening); at >= 0; rest = rest.slice(at + opening.length), at = rest.indexOf(opening)) rules.push(...blockRules(rest.slice(at), opening));
+    return rules;
+  };
+  const shortPills = everyBlock(programCss, "@container editor (max-height: 299.98px) {").filter((r) => /blocklyToolbox:not\(\[layout="h"\]\)/.test(r.selector));
+  const pillPad = shortPills.filter((r) => /\.roverCategory/.test(r.selector)).map((r) => r.body).join("");
+  const pillLine = shortPills.filter((r) => /blocklyToolboxCategoryLabel/.test(r.selector)).map((r) => r.body).join("");
+  const pad = Number((pillPad.match(/padding:\s*(\d+)px/) || [])[1]);
+  const gap = Number((pillPad.match(/margin:\s*0 0 (\d+)px/) || [])[1]);
+  const line = Number((pillLine.match(/line-height:\s*(\d+)px/) || [])[1]);
+  // Seven pills and the toolbox's 4 px either end in 170 px, the editor's
+  // height at 568 x 320.
+  check(pad > 0 && line > 0 && 7 * (line + 2 * pad + gap) + 8 <= 170, `a short editor: the seven down the left in 170 px: ${7 * (line + 2 * pad + gap) + 8} (${pillPad} | ${pillLine})`);
+  check((blockRules(programCss, "@media (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint") && (blockRules(programCss, "@media not all and (max-width: 600px) and (orientation: portrait) {") || []).some((r) => r.selector === ".programHint"),
     "the hint clear of the toolbox wherever blocks.js puts it");
   // A short editor drops the zoom buttons, which ran up under the toolbox,
   // and a shorter one the trash can and puts the hint at its foot.
   check(/container:\s*editor \/ size;/.test(baseOf(".programEditor")), "the editor a container for its height");
-  check((blockRules(programCss, "@container editor (max-height: 299.98px) {") || []).some((r) => r.selector === ".blocklyZoom" && /display:\s*none/.test(r.body)), "a short editor: no zoom buttons");
+  check(everyBlock(programCss, "@container editor (max-height: 299.98px) {").some((r) => r.selector === ".blocklyZoom" && /display:\s*none/.test(r.body)), "a short editor: no zoom buttons");
   const shortest = blockRules(programCss, "@container editor (max-height: 199.98px) {") || [];
   check(shortest.some((r) => r.selector === ".blocklyTrash" && /display:\s*none/.test(r.body)) && shortest.some((r) => r.selector === ".programHint" && /bottom:/.test(r.body)), "shorter still: no trash can, the hint at the foot");
   // The toolbar keeps to one row in a phone's tab: its icons go first.
   const narrowPane = blockRules(programCss, "@container program (max-width: 459.98px) {") || [];
   check(narrowPane.some((r) => /\.viewWord/.test(r.selector) && /display:\s*none/.test(r.body)), "a narrow tab's View toggle its icon alone");
-  // Narrower still, Stop program says "Stop", named in full: the whole of
-  // it ran the View toggle off a 320 px phone's tab beside "Run on rover",
-  // and its grey square alone, beside the top's red one, said nothing (the
-  // critic's round 2).
+  // Narrower still (a 320 px phone), Run gives way, never Stop program:
+  // cut to "Stop", it was the one button on screen named Stop and not the
+  // one that stops an exploring rover (the review's phones 6). Run says
+  // "Run" on the rover ("Preview" on the simulator), titled in full, and
+  // no rule there hides a word of Stop program.
   const narrowest = blockRules(programCss, "@container program (max-width: 339.98px) {") || [];
   const haltWords = all(folded.$("programStop")).map((n) => (n.textContent || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-  check(narrowest.some((r) => r.selector === ".programBar .haltMore" && /display:\s*none/.test(r.body)) && !narrowest.some((r) => /\.halt span$/.test(r.selector)) && haltWords === "Stop program" && folded.$("programStop").getAttribute("aria-label") === "Stop program", `the narrowest tab's Stop program says Stop, named: ${haltWords}`);
+  check(narrowest.some((r) => r.selector === ".programBar .runWord" && /display:\s*none/.test(r.body)) && narrowest.some((r) => r.selector === ".programBar .runShort" && /display:\s*inline/.test(r.body)) && /\.runShort\s*\{\s*display:\s*none;/.test(programCss.replace(/\/\*[\s\S]*?\*\//g, "")),
+    "the narrowest tab: Run's short word in place of its long one, and only there");
+  check(!narrowest.some((r) => /halt|#programStop/.test(r.selector) && /display:\s*none/.test(r.body)) && haltWords === "Stop program" && folded.$("programStop").getAttribute("aria-label") === "Stop program", `the narrowest tab's Stop program says both words: ${haltWords}`);
+  const shortRun = () => `${folded.$("programRunShort").textContent} / ${folded.$("programRunLabel").textContent}`;
+  check(shortRun() === "Run / Run on rover", `Run's words on the rover: ${shortRun()}`);
+  folded.fire(segments(folded)[1], "click");
+  check(shortRun() === "Preview / Preview", `on the simulator: ${shortRun()}`);
+  folded.fire(segments(folded)[0], "click");
 
   const again = loadPage({ stored: { "rover.target": "simulator" } });
   check(again.evalIn("targetSwitch.kind") === "simulator" && again.$("programRunLabel").textContent === "Preview", "remembered");
@@ -3970,7 +4051,7 @@ test("program: the console offers Connect beside the line while the rover target
   check(go.parentNode === page.$("programState").parentNode && /Connect to the rover/.test(go.getAttribute("title") || ""), "beside the state line, titled");
   check(go.hidden, "the Drive tab: the scan's card offers it");
   page.fire(page.$("tabProgram"), "click");
-  check(page.$("programTab").dataset.view === "hidden" && !go.hidden && /Connect to the rover/.test(page.$("programState").textContent), `no link, the view folded: offered, the line says why: ${page.$("programState").textContent}`);
+  check(page.$("programTab").dataset.view === "hidden" && !go.hidden && page.$("programState").textContent === "Not connected." && /Connect to the rover/.test(page.$("programState").title), `no link, the view folded: offered, the line says why: ${page.$("programState").textContent}`);
   page.fire(page.$("viewToggle"), "click");
   check(go.hidden, "the view shown: its connect card offers it, not two at once");
   page.fire(page.$("viewToggle"), "click");
@@ -4212,11 +4293,14 @@ test("program: the File menu holds the examples, Import, Export and Clear, and o
   key(page.doc.activeElement, "Escape");
   check(menu.hidden && button.getAttribute("aria-expanded") === "false" && page.doc.activeElement === button, "Escape closes it, back on the button");
 
-  // An item that cannot act stays, disabled, and the keys pass it by.
+  // An item that cannot act stays, disabled, and the keys pass it by: an
+  // empty editor has nothing to clear and nothing to export (Export was
+  // on there while Clear was off: the review's tablets 17).
   page.evalIn("__editor.empty = true; programTab.refresh();");
   check(page.$("programClear").disabled && !page.$("programClear").hidden, "nothing to clear: Clear disabled, still there");
+  check(page.$("programExport").disabled && !page.$("programExport").hidden, "nothing to export: Export disabled, still there");
   check(key(button, "ArrowUp").defaultPrevented, "Up on the button opens the menu, and scrolls nothing");
-  check(!menu.hidden && focused() === "Export", `Up on the button opens on the last that can act: ${focused()}`);
+  check(!menu.hidden && focused() === "Import…", `Up on the button opens on the last that can act: ${focused()}`);
   key(page.doc.activeElement, "Tab");
   check(menu.hidden && button.getAttribute("aria-expanded") === "false", "Tab closes it");
   page.evalIn("__editor.empty = false; programTab.refresh();");
@@ -4299,11 +4383,14 @@ test("program: an item that asks leaves the focus on the File button once answer
   startProgram(page, "await api.wait(5);");
   await flush();
   check(titles().every((t) => t === "off:Stop the program first"), `mid-run: ${titles()}`);
-  check(page.$("programExport").disabled === false, "Export still works");
+  check(page.$("programExport").disabled === false && page.$("programExport").title === "Save the program as rover-program.json", `Export still works: ${page.$("programExport").title}`);
   page.evalIn("runner.abort('done')");
   await liveForAsync(page, ws, 200);
   page.evalIn("__editor.empty = true; programTab.refresh();");
   check(titles().at(-1) === "off:Nothing to clear", `empty: ${titles().at(-1)}`);
+  check(page.$("programExport").disabled === true && /^Nothing to export/.test(page.$("programExport").title), `empty, Export off and says why: ${page.$("programExport").title}`);
+  page.evalIn("__editor.empty = false; programTab.refresh();");
+  check(page.$("programExport").disabled === false && /^Save the program/.test(page.$("programExport").title), `blocks again: Export on: ${page.$("programExport").title}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -5150,6 +5237,117 @@ test("program: the two Stops are named apart", () => {
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A preview drives what the operator watches: pressed with the view
+// folded (a phone, where it starts folded), it shows the view for the run,
+// and leaves it shown after, the toggle saying so. Folded, Preview ran a
+// room nobody could see (the review's phones 1). A run on the rover leaves
+// the fold as it is, and a preview that cannot start shows nothing.
+test("program: Preview with the view folded shows it; a run on the rover leaves it folded", async () => {
+  const page = loadPage();
+  if (!page.evalIn("'simulator' in targets")) return;
+  standInEditor(page, "await api.wait(0.2);");
+  page.fire(page.$("tabProgram"), "click");
+  const view = () => `${page.$("programTab").dataset.view} ${page.$("viewToggle").getAttribute("aria-pressed")}`;
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(view() === "hidden false", `folded on a phone: ${view()}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "running" && view() === "hidden false", `a run on the rover leaves it folded: ${page.evalIn("runner.state")} ${view()}`);
+  page.fire(page.$("programStop"), "click");
+  await flush();
+  toSimulator(page);
+  check(view() === "hidden false" && page.$("programRunLabel").textContent === "Preview", `folded on the simulator: ${view()}`);
+  page.evalIn(`__editor.compile = () => { throw new Error("A drive until block has nothing to wait for."); };`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.state") === "idle" && view() === "hidden false", `a preview that cannot start shows nothing: ${view()}`);
+  page.evalIn(`__editor.compile = () => async (api) => { await api.wait(0.2); };`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.evalIn("runner.target && runner.target.kind") === "simulator" && view() === "shown true" && /hide/i.test(page.$("viewToggle").title), `Preview shows the view: ${view()} ${page.$("viewToggle").title}`);
+  await pageFrames(page, 600, page.evalIn("targets.simulator"));
+  check(page.evalIn("runner.state") === "idle" && view() === "shown true", `shown after the preview, until View folds it: ${page.evalIn("runner.state")} ${view()}`);
+  page.fire(page.$("viewToggle"), "click");
+  check(view() === "hidden false", `View folds it: ${view()}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// A phone's console is one line, and its log a press of Log away: Log
+// shows with the first line and counts them, and opens and closes the
+// log, saying which a press does. The log opens over the editor's foot,
+// out of the flow, so the editor's height never follows what was said:
+// after one run the console grew to 155 px and the editor shrank from
+// 470 px to 300 at 375 x 667 (the review's phones 7). Wider, the log is
+// under the state, only as tall as it needs, up to five lines, on the
+// console's own ground: a box the column's height under the view, it held
+// one line (laptops 0), and pure black, it read as a hole (laptops 14).
+test("program: a phone's Log shows with the first line, counts them, and opens over the editor", async () => {
+  const page = loadPage();
+  standInEditor(page);
+  const toggle = page.$("programLogToggle");
+  const log = page.$("programLog");
+  const shut = () => `${toggle.getAttribute("aria-expanded")} ${log.dataset.open}`;
+  check(toggle.hidden && log.children.length === 0, "no log, no Log");
+  check(toggle.getAttribute("aria-controls") === "programLog" && toggle.parentNode === page.$("programState").parentNode, "beside the state, naming the log");
+  check(shut() === "false no" && /^Show/.test(toggle.title), `shut at first: ${shut()} ${toggle.title}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(!toggle.hidden && page.$("programLogCount").textContent === "1", `the first line: Log, counting it: ${page.$("programLogCount").textContent}`);
+  page.fire(toggle, "click");
+  check(shut() === "true yes" && /^Hide/.test(toggle.title), `open: ${shut()} ${toggle.title}`);
+  page.fire(page.$("programRun"), "click");
+  await flush();
+  check(page.$("programLogCount").textContent === "2" && shut() === "true yes", `counts as lines come, open as it was: ${page.$("programLogCount").textContent}`);
+  page.fire(toggle, "click");
+  check(shut() === "false no" && /^Show/.test(toggle.title), `shut again: ${shut()}`);
+  const programCss = stylesheet("program.css");
+  const base = cssRules(outside(programCss, "@"));
+  const baseOf = (selector) => base.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/display:\s*none;/.test(baseOf(".logToggle")), "Log a phone's alone");
+  const logRule = baseOf(".programLog");
+  check(/flex:\s*none;/.test(logRule) && /max-height:\s*calc\(5 \* var\(--t-sm\) \* 1\.6 \+ var\(--s-1\) \+ var\(--s-2\)\);/.test(logRule) && /overflow-y:\s*auto;/.test(logRule) && /background:\s*var\(--panel\);/.test(logRule),
+    `wider, the log as tall as it needs up to five lines, on the console's ground: ${logRule}`);
+  const phone = blockRules(programCss, "@media (max-width: 599.98px), (max-height: 520.98px) {") || [];
+  const phoneOf = (selector) => phone.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/display:\s*inline-flex;/.test(phoneOf(".logToggle:not([hidden])")), "a phone's Log, once there is a log");
+  check(/display:\s*none;/.test(phoneOf('.programLog:not([data-open="yes"])')), "shut, the log takes no room");
+  const open = phoneOf('.programLog[data-open="yes"]');
+  check(/position:\s*absolute;/.test(open) && /bottom:\s*calc\(100% \+ 6px\);/.test(open) && /position:\s*relative;/.test(phoneOf(".programConsole")), `open, over the editor's foot, out of the flow: ${open}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// The View toggle is quiet: shown, the raised ground and the ink, never
+// the chosen segment's inversion, which made it the loudest thing in the
+// toolbar, louder than Run and the only bright thing while Run was off
+// (the review's tablets 10, laptops 14). Run is the one loud control.
+test("program: the View toggle is quiet, shown or folded", () => {
+  const rules = cssRules(outside(stylesheet("program.css"), "@media"));
+  const of = (selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/color:\s*var\(--readout\);/.test(of('.viewToggle[aria-pressed="true"]')) && /background:\s*var\(--raised\);/.test(of('.viewToggle[aria-pressed="true"]')), `shown: ${of('.viewToggle[aria-pressed="true"]')}`);
+  check(/color:\s*var\(--dim\);/.test(of('.viewToggle[aria-pressed="false"]')), `folded: ${of('.viewToggle[aria-pressed="false"]')}`);
+  const loud = cssRules(stylesheet("program.css")).filter((r) => /viewToggle/.test(r.selector) && /--chosen|--on-chosen|--live/.test(r.body));
+  check(loud.length === 0, `nothing paints it as a choice or a live control: ${loud.map((r) => r.selector)}`);
+});
+
+// In a short view (a phone's band over the editor, the middle of a phone
+// on its side), the connect card is one compact row under the fan, its
+// button and Change address: sized for a tall pane, it covered most of a
+// short fan (the review's tablets 2).
+test("program: the connect card is a compact row under the fan in a short view", () => {
+  const short = blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || [];
+  const card = short.filter((r) => r.selector === ".scan > .connectCard").map((r) => r.body).join("");
+  check(/grid-auto-flow:\s*column;/.test(card) && /place-self:\s*end center;/.test(card) && /background:\s*none;/.test(card) && /box-shadow:\s*none;/.test(card), `one row, at the foot, with no card around it: ${card}`);
+  check(short.some((r) => r.selector === ".connectTitle" && /display:\s*none;/.test(r.body)), "its title in the top's chip, not over the fan");
+  check(!short.some((r) => /connectGo|connectAddress/.test(r.selector) && /display:\s*none/.test(r.body)), "Connect and Change address both there");
+  // Narrow too (a phone on its side at 480 px), Connect alone, whole: beside
+  // it, Change address wrapped and cut the button to "ct to 192.16". The
+  // top's link chip changes the address there.
+  const narrow = blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 329.98px) {") || [];
+  check(narrow.some((r) => r.selector === ".connectAddress" && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector)), "a short, narrow view: Connect alone");
+  check(/grid-auto-columns:\s*minmax\(0, max-content\);/.test(card) && short.some((r) => r.selector === ".connectAddress" && /white-space:\s*nowrap;/.test(r.body)), "each on one line, the button giving way first");
+});
+
 /* --- the target: the Drive tab on the simulator ---------------------------- */
 
 // Every command the page's simulator takes from the Driver, as move names,
@@ -5501,6 +5699,43 @@ test("program: the editor warns each pivot that runs, under NORMAL only, and cle
   page.evalIn('__blocks.fold.warnings.set("TEMP_COLLAPSED_WARNING_", "echo"); __blocks.folded.move = "MOVE_FORWARD"; __changed({ isUiEvent: false })');
   w = warned();
   check(w.folded === "" && w.after === "scheme" && w.fold === "", `the echo goes with what it folds: ${JSON.stringify(w)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Blockly's scrollbars only while the program runs past the view: on an
+// empty workspace, or one whose blocks all show, they said there was more
+// to see when there was nothing (the review's laptops 14). Marked on the
+// editor's box at once, on every change (a scroll or a zoom among them)
+// and on a resize; where Blockly cannot say, they show.
+test("program: the editor marks whether the program runs past its view, and the scrollbars show only then", () => {
+  const page = loadPage();
+  page.evalIn(`
+    globalThis.__metrics = { view: { left: 0, top: 0, width: 400, height: 300 }, content: { left: 0, top: 0, width: 0, height: 0 } };
+    const any = new Proxy(function () {}, { get: () => any, apply: () => any, construct: () => any });
+    const workspace = new Proxy({
+      getMetricsManager: () => ({ getViewMetrics: () => __metrics.view, getContentMetrics: () => __metrics.content }),
+      addChangeListener: (fn) => { globalThis.__changed = fn; },
+    }, { get: (t, key) => t[key] || any });
+    const stub = { inject: () => workspace, Theme: { defineTheme: (_, theme) => theme } };
+    globalThis.javascript = { Order: any };
+    window.matchMedia = () => ({ matches: false, addEventListener() {} });
+    byId("programWorkspace").style.setProperty = () => {};
+    globalThis.__editor = new BlockEditor(byId("programWorkspace"), { Blockly: new Proxy(stub, { get: (t, key) => t[key] || any }), generator: any, storageKey: "test.program" });
+  `);
+  const mark = () => page.$("programWorkspace").dataset.overflow;
+  check(mark() === "no", `empty: nothing past the view: ${mark()}`);
+  page.evalIn("__metrics.content = { left: 20, top: 20, width: 200, height: 100 }; __changed({ isUiEvent: false });");
+  check(mark() === "no", `blocks that all show: ${mark()}`);
+  page.evalIn("__metrics.content = { left: 20, top: 20, width: 200, height: 400 }; __changed({ isUiEvent: false });");
+  check(mark() === "yes", `a program longer than the view: ${mark()}`);
+  page.evalIn("__metrics.view = { left: 0, top: 150, width: 400, height: 300 }; __metrics.content = { left: 20, top: 20, width: 200, height: 100 }; __changed({ isUiEvent: true });");
+  check(mark() === "yes", `scrolled past it, a scroll is a UI event: ${mark()}`);
+  page.evalIn("__metrics.view = { left: 0, top: 0, width: 400, height: 300 }; __editor.resize();");
+  check(mark() === "no", `back in sight on a resize: ${mark()}`);
+  page.evalIn("__metrics.view = { left: NaN, top: 0, width: 400, height: 300 }; __changed({ isUiEvent: true });");
+  check(mark() === "yes", `Blockly cannot say: they show: ${mark()}`);
+  const rules = cssRules(outside(stylesheet("program.css"), "@media")).filter((r) => /data-overflow="no"/.test(r.selector));
+  check(rules.some((r) => /blocklyScrollbarHorizontal/.test(r.selector) && /blocklyScrollbarVertical/.test(r.selector) && /visibility:\s*hidden;/.test(r.body)), `the scrollbars hidden while nothing is past the view: ${rules.map((r) => r.selector)}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
