@@ -362,11 +362,16 @@ input[type="range"]::-moz-range-thumb {
 /* --- options (look.js) ------------------------------------------------------- */
 
 /* The gear ends the second cell, an icon a control's size (the cells'
-   rules, below, give it its touch target). */
+   rules, below, give it its touch target), with no edge or fill of its
+   own: the cell's outline is the cell's alone. Open, it is lit as the
+   link chip is, on the hovered fill, its ink the page's (the critics'
+   round 3: its open ring was barely there). */
 .optionsButton {
   width: var(--ctl);
   padding: 0;
   color: var(--dim);
+  background: none;
+  border-color: transparent;
   border-radius: var(--r-full);
 }
 
@@ -375,26 +380,27 @@ input[type="range"]::-moz-range-thumb {
   background: var(--raised-hi);
 }
 
-/* The popover wears the File menu's .menu, above, and hangs from the top
-   as the link's does: its holder is not positioned, so it hangs from the
-   foot of the top (.bar), right edges together with the second cell, as
-   far below the cells as the link's popover is in every layout. Hung from
-   the gear, it touched the cells' foot (the critic's round 2). */
+/* The popover wears the File menu's .menu, above, and hangs from the
+   cells as the link's does: its holder is not positioned, so it hangs
+   from the foot of the cells (.cells), right edges together with the
+   second cell, 6 px below them as the link's popover is in every layout.
+   Hung from the gear, it touched the cells' foot (the critic's round 2);
+   hung from the top's foot, it lay flush on the view's edge (round 3). */
 .hands > .menuHolder { position: static; }
 
 /* As wide as a phone on its side leaves left of the gear, and never
-   taller than the screen under the top (100%: the top's own height, which
-   is where the popover begins) and 8 px clear of the foot: it scrolls
-   inside rather than scroll the page, which would move the stick, and its
-   ends fade where more of it is past the edge (below). With 150 px kept,
-   it stopped 52 px over a 667 px screen's foot, its Update row out of
-   sight (the critic's round 1). Its padding above and below is the fades'
-   (below). */
+   taller than the screen under it (100%: the cells' own height, which with
+   the top's padding over them and the 6 px is where the popover begins)
+   and 8 px clear of the foot: it scrolls inside rather than scroll the
+   page, which would move the stick, and its ends fade where more of it is
+   past the edge (below). With 150 px kept, it stopped 52 px over a 667 px
+   screen's foot, its Update row out of sight (the critic's round 1). Its
+   padding above and below is the fades' (below). */
 .options {
-  top: 100%;
+  top: calc(100% + 6px);
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100 * var(--svh) - 100% - var(--s-2) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100 * var(--svh) - 100% - var(--shell-top) - 6px - var(--s-2) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   scrollbar-width: thin;
   padding: 0 var(--s-3);
@@ -784,29 +790,35 @@ body[data-target="simulator"] .shell {
   background: var(--case);
 }
 
-/* A cell a row, 6 px apart: 86 px in all. */
+/* A cell a row, 6 px apart: 86 px in all. The box the popovers hang
+   from, 6 px below its foot: the link's from the chip's left edge, the
+   gear's right edges together (below). Never an ancestor of a stick, so
+   it may be positioned. */
 .cells {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   row-gap: 6px;
 }
 
-/* One row: each cell as wide as what it holds, the first at the left and
-   the second, Stop and the gear at its end, at the right, the page's
-   ground between them. Nothing in either cell changes width with the
-   state (each says what its width alone allows: data-fit, below), so
-   neither moves; where the two would meet, the words step down until they
-   do not (app.js measures the row as well as each cell). Two halves left
-   dead ground inside both cells (the critic's round 2: 140 px in the first
-   at 1280, 240 in the second). */
+/* One row: the first cell as wide as what it holds, the second the rest,
+   Stop and the gear at its far end, 8 px between them and no page ground
+   (the critics' round 3: two islands with up to 580 px of bare ground
+   between them read as pills afloat, not a bar). Nothing before the chip
+   changes width with the state (each says what its width alone allows:
+   data-fit, below), so the chip never moves; what the chip comes to say
+   (the rover's name, its alerts) is room the fit kept for it, which the
+   second cell gives back. Where the two would meet, the words step down
+   until they do not (app.js measures both cells and the row). */
 @container bar (min-width: 900px) {
   .cells {
     display: flex;
-    justify-content: space-between;
     column-gap: var(--s-2);
   }
 
-  .hcell { flex: none; }
+  .hcell.drives { flex: none; }
+
+  .hcell.hands { flex: 1 1 0; }
 }
 
 /* A cell: one rounded box, one line of controls 32 px tall, whatever they
@@ -849,13 +861,11 @@ body[data-target="simulator"] .shell {
 
 #stop { margin-left: 10px; }
 
-/* Autonomous at the first cell's far end where the cell spans the screen
-   (a cell a row), right after the link where the cell is as wide as what
-   it holds (one row). The first cell clips what it cannot hold, never
-   spills it over the second (its popover hangs from the top, not from it,
-   so is not clipped). */
-.drives > .autoSwitch { margin-left: auto; }
-
+/* The first cell: the target, Autonomous and the link, in that order at
+   every width, from the cell's start: Autonomous never at its far end,
+   over Stop where the cells stack. It clips what it cannot hold, never
+   spills it over the second (its popover hangs from the cells, not from
+   it, so is not clipped). */
 .drives { overflow-x: clip; }
 
 /* The popovers hung from the cells wrap their words, as the cells' own
@@ -873,6 +883,12 @@ body[data-target="simulator"] .shell {
   border-radius: var(--r-full);
   box-shadow: inset 0 0 0 1px var(--edge);
 }
+
+/* In a cell, one outline, the cell's: a track is told from it by its fill
+   alone, as the link chip is and the gear has none (the critics' round 3:
+   three and four nested hairlines in a cell were the noise "sleek" was to
+   remove). */
+.hcell .segmented { box-shadow: none; }
 
 .segmented button,
 .hcell .segmented button {
@@ -954,17 +970,21 @@ body[data-target="simulator"] .shell {
   color: var(--dim);
   background: none;
   border: 0;
-  border-radius: var(--r-xs);
-  box-shadow: inset 0 -2px 0 transparent;
+  border-radius: 0;
 }
 
 @media (hover: hover) {
   .hcell .tabs [role="tab"]:hover { color: var(--readout); background: none; }
 }
 
+/* The open tab's underline: a straight 2 px bar with square ends, under
+   its word and as wide, 3 px over the button's foot. An inset shadow on a
+   rounded box curled up at its ends (the critics' round 3). Painted as
+   the tab's own background, not a pseudo-element: its ::before is its
+   touch target, and its ::after the running program's dot (program.css). */
 .hcell .tabs [role="tab"][aria-selected="true"] {
   color: var(--readout);
-  box-shadow: inset 0 -2px 0 var(--chosen);
+  background: linear-gradient(var(--chosen), var(--chosen)) center bottom 3px / calc(100% - 2 * var(--tab-x, 10px)) 2px no-repeat;
 }
 
 /* Every status dot: the link chip's lamp, the pivot caveat's and the
@@ -1046,6 +1066,9 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   #stop:hover { background: var(--stop-hi); }
 }
 
+/* Its square 15 px, most of the glyph's box (joystick.html draws it 22
+   of 24): at 8 px it was a dot, and the red alone carried the meaning
+   (the critics' round 3). */
 #stop .icon {
   width: var(--glyph);
   height: var(--glyph);
@@ -1053,24 +1076,35 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   stroke: none;
 }
 
-/* The link chip: a lamp, the link's word (link.js) with "Rover:" before it
-   where the cell has room, the address where it is widest (data-fit,
-   below), and a caret, always: it is a button, and opens the link's
-   popover. Its words, long and short, the rover's alert and the sizers
-   share one cell, so it is as wide whatever it says: the sizers hold the
-   longest it can say at each step, and what shows starts at the cell's
-   left. All well is quiet, a green lamp; a link that went or went quiet,
-   or a rover that needs the operator, is amber, the word saying which. */
+/* The link chip: a lamp; on the simulator target "Rover:", or the rover's
+   glyph where the cell is narrow; the link's word (link.js), the address
+   after it where the cell is widest (data-fit, below); the rover's alerts,
+   each in its own slot after the word (app.js); and a caret, always: it is
+   a button, and opens the link's popover, and the caret turns over while
+   it is open. Its word and a sizer for each word it can say share one
+   cell, so the word's slot is as wide whatever it says. Told from its cell
+   by its fill alone, never a hairline in a cell's outline (the critics'
+   round 3). All well is quiet, a green lamp; a link that went, went quiet
+   or never came, or a rover that needs the operator, tints it amber, the
+   words saying which. */
 .linkChip {
   justify-content: flex-start;
-  gap: var(--s-2);
+  gap: 6px;
   padding: 0 var(--s-2) 0 var(--s-3);
   font-weight: var(--fw-semi);
   color: var(--dim);
+  background: var(--raised);
+  border-color: transparent;
   border-radius: var(--r-full);
 }
 
-.linkChip .lamp { background: var(--dim); }
+/* The lamp first, before the rover's name, which comes before it in the
+   page so that where the cell is narrow its glyph can take the lamp's
+   place (below). */
+.linkChip .lamp {
+  order: -1;
+  background: var(--dim);
+}
 
 .chipWord {
   display: inline-grid;
@@ -1081,12 +1115,56 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .chipSizer { visibility: hidden; }
 
-/* The long words, "Rover:" with them, where the cell has room; the short
-   ones elsewhere (below). The rover's alert in the state's place while
-   there is one (app.js). */
-.chipShort,
-.linkChip:not([data-alert=""]) .chipSay,
-.linkChip[data-alert=""] .chipAlert { display: none; }
+/* Whose link: the rover's, on the simulator target (app.js keeps its
+   hidden). Its word where the cell has room, its glyph elsewhere (below). */
+.chipFor {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chipFor .roverGlyph,
+.chipAlert .icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.6;
+}
+
+/* The rover's glyph, where it shows, is the lamp: in its colour. */
+.chipFor .roverGlyph {
+  display: none;
+  color: var(--dim);
+}
+
+/* What needs the operator about the rover: a glyph and its word, amber,
+   each while it is so (app.js keeps its hidden and its title). A rover
+   last seen exploring over a link that went is said so, dashed, as the
+   Autonomous switch's track is. */
+.chipAlert {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 0 var(--s-1);
+  color: var(--warn);
+  border-radius: var(--r-full);
+}
+
+.chipAlert[data-known="last"] {
+  outline: 1px dashed var(--warn);
+  outline-offset: -1px;
+}
+
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipAlert[data-known="last"] { outline-offset: 1px; }
+
+.chipFor[hidden],
+.chipAlert[hidden] { display: none; }
+
+/* Measured shown (app.js's fit, data-fitting), so that the fit keeps their
+   room whatever they say now: the rover's name and both alerts. Out of
+   sight meanwhile, and the fit is over before the page is next drawn. */
+.cells[data-fitting] :is(.chipFor, .chipAlert)[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+}
 
 .linkChip .caret {
   width: var(--glyph);
@@ -1095,7 +1173,11 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   color: var(--dim);
 }
 
+/* Open: the caret turned over, and the chip on the hovered fill where it
+   is not tinted, as the gear is. */
 .linkChip[aria-expanded="true"] { background: var(--raised-hi); }
+
+.linkChip[aria-expanded="true"] .caret { transform: rotate(180deg); }
 
 .linkChip[data-say="connecting"] .lamp { animation: pending 600ms ease-in-out infinite alternate; }
 
@@ -1103,45 +1185,58 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .linkChip[data-say="up"] .lamp { background: var(--ok); }
 
-.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) {
-  color: var(--warn);
-  background: var(--warn-soft);
-  border-color: var(--warn);
-}
+.linkChip[data-say="up"] .roverGlyph { color: var(--ok); }
 
-.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) :is(.lamp, .caret) { color: var(--warn); }
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"]) { color: var(--warn); }
 
-.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) .lamp { background: var(--warn); }
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"]) :is(.lamp, .caret, .roverGlyph) { color: var(--warn); }
+
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"]) .lamp { background: var(--warn); }
+
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-say="unreachable"], :not([data-alert=""])) { background: var(--warn-soft); }
 
 /* The words a cell gives up where it cannot hold them all (app.js,
    fitSteps: data-fit, measured against the most each slot can say, so the
    step follows the cell's width and the fonts the device has, never the
    state). The first cell, from the most it says: the address on the chip
-   ("host", a screen 1280 px wide or more); every word; Sim, Auto and the
-   link's short words ("short"); every control closer to its words
-   ("snug"); the link's short words at 12 px ("small"); and the chip's lamp
-   and caret alone ("lamp"), its title saying the rest. The second: every
-   word; the segments closer to their words ("tight"), and closer still
-   ("snug"), at 13 px both, so a 375 px phone and one on its side keep the
-   first cell's size of word; 12 px words ("small"); and only where nothing
-   else fits (a 320 px phone), Adv ("short"). Stop stays 16 px from the
-   scheme, and the gear square. */
+   ("host", a screen 1280 px wide or more); every word; the alerts' glyphs
+   for their words ("glyphs"); Sim, Auto and the rover's glyph for its name
+   ("short"); every control closer to its words ("snug"); the link's word
+   at 12 px ("small"); and the chip's lamp, the glyphs and its caret alone
+   ("lamp"), its title saying the rest. The link's words are the same at
+   every step but the last: one word for each state, never a short one of
+   its own (the critics' round 3). The second: every word; the segments
+   closer to their words ("tight"), and closer still ("snug"), at 13 px
+   both, so a 375 px phone and one on its side keep the first cell's size
+   of word; 12 px words ("small"); and only where nothing else fits (a
+   320 px phone), Adv ("short"). Stop stays 16 px from the scheme, and the
+   gear square. */
 
-/* The address (Link's --host, a CSS string) 8 px after whichever word the
-   chip shows, in its sizer too: so the chip is as wide with it whatever it
-   says, and the space a shorter word leaves falls before the caret, not
-   between the word and the address (the critic's round 1: "Connected", a
-   gap, then the address). One font, the address quieter. */
-.drives[data-fit="host"] :is(.chipSay, .chipAlert, .chipSizer.chipLong)::after {
+/* The address (Link's --host, a CSS string) 8 px after the link's word,
+   in each sizer too: so the slot is as wide with it whatever it says, and
+   the space a shorter word leaves falls after the address, not between
+   the word and the address (the critic's round 1: "Connected", a gap, then
+   the address). One font, the address quieter. */
+.drives[data-fit="host"] :is(.chipSay, .chipSizer)::after {
   content: var(--host, "");
   margin-left: var(--s-2);
   font-weight: var(--fw-medium);
   color: var(--dim);
 }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord, .chipLong, .chipFor) { display: none; }
+.drives:is([data-fit="glyphs"], [data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .alertWord { display: none; }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segShort, .autoShort, .chipShort) { display: inline; }
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord, .chipForWord) { display: none; }
+
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segShort, .autoShort) { display: inline; }
+
+/* The rover's glyph for its name, in the lamp's place: the lamp gives way
+   to it on the simulator target, and while the fit measures, where the
+   name is shown on either target. */
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipFor .roverGlyph { display: block; }
+
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipFor:not([hidden]) + .lamp,
+.cells[data-fitting] .drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .lamp { display: none; }
 
 .drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
   gap: 6px;
@@ -1154,8 +1249,15 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 }
 
 .drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .linkChip {
-  gap: 5px;
-  padding: 0 4px 0 var(--s-2);
+  gap: 3px;
+  padding: 0 2px 0 6px;
+}
+
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipAlert { padding: 0; }
+
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .linkChip .caret {
+  width: 14px;
+  height: 14px;
 }
 
 .drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
@@ -1166,6 +1268,11 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 .drives[data-fit="small"] .chipWord { font-size: var(--t-sm); }
 
 .drives[data-fit="lamp"] .chipWord { display: none; }
+
+/* The last step is a 320 px phone's, and the middle column of a phone on
+   its side: the target's segments closer still, so that Autonomous ends
+   48 px or more short of Stop under it (43 at 6 px). */
+.drives[data-fit="lamp"] { --seg-x: 4px; }
 
 .hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"]) {
   --seg-x: 7px;
@@ -1192,18 +1299,21 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 .hands[data-fit="short"] .scheme .segShort { display: inline; }
 
 /* The link's popover: the address, Connect, and what the link has to say.
-   It hangs from the top, below the cells, never over them (a phone's
-   second cell, with Stop, is under the chip), left edges together. Never
-   past the screen's foot, as Options (above): a motor fault's words and a
-   lost link's note together ran past a phone on its side, where the page
-   cannot scroll the top. Its padding above and below is its fades'. */
+   It hangs 6 px below the cells, never over them (a phone's second cell,
+   with Stop, is under the chip), from the chip's left edge (app.js gives
+   its place, --chip-x), as far right as the cells let it: hung from the
+   cells' left edge it read as the target's, and flush on the view's edge
+   as part of it (the critics' round 3). Never past the screen's foot, as
+   Options (above): a motor fault's words and a lost link's note together
+   ran past a phone on its side, where the page cannot scroll the top. Its
+   padding above and below is its fades'. */
 .linkPanel {
-  top: 100%;
+  top: calc(100% + 6px);
   right: auto;
-  left: 0;
+  left: clamp(0px, var(--chip-x, 0px), 100% - min(22rem, 100%));
   gap: var(--s-2);
   width: min(22rem, 100%);
-  max-height: calc(100 * var(--svh) - 100% - var(--s-2) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100 * var(--svh) - 100% - var(--shell-top) - 6px - var(--s-2) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   scrollbar-width: thin;
   padding: 0 var(--s-3);
@@ -2522,6 +2632,30 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     font-size: var(--t-xs);
     letter-spacing: var(--track-tight);
   }
+
+  /* Here the middle column is under the 288 px the cells need at their
+     tightest (200 px at 480 x 320), and the second cell, Stop and the gear
+     ran over the pivot stick's family (the merge's round 3). So the top
+     spans the screen, its cells a row each, and the sticks and the view
+     take the screen under it: the dock's rows and its 112 px sticks are
+     210 px, and 218 are left. The dock starts under the top on either tab,
+     its sticks centred in what is left, as tall as it is whatever it
+     holds, so nothing in the top moves them. */
+  .shell { grid-template-areas: "head head head" ". view ."; }
+
+  .shell:has(> #programTab:not([hidden])) {
+    grid-template-areas:
+      "head head head head"
+      "view view main main";
+  }
+
+  .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
+    grid-template-areas:
+      "head head head head"
+      "main main main main";
+  }
+
+  .shell > .dock:not([hidden]) { grid-row: 2 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

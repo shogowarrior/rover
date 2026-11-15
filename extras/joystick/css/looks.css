@@ -282,7 +282,9 @@
 
   --case: #e4edf8;
   --panel: #f6f9fd;
-  --raised: #eaf1f9;
+  /* A shade under the cells' ground, 1.1:1, so that the link chip and a
+     switch's track in a cell are told from it by their fill alone. */
+  --raised: #e6eef8;
   --raised-hi: #d3e0f0;
   --chosen: #0b2142;
   --on-chosen: #ffffff;

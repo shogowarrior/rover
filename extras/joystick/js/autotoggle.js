@@ -1,8 +1,13 @@
 /**
  * The Autonomous toggle: a labelled switch in the top's first cell, the
  * other cell from Stop, so that a press that misses Stop can never land on
- * it and start the rover exploring (F8). On while the target explores, off
- * while it waits for the controls; its track and knob show which
+ * it and start the rover exploring (F8). It sits second in that cell,
+ * after the target and before the link chip, near the cell's start on
+ * every layout. Where the cells stack, the first over the second, it is
+ * never over Stop, which keeps the second cell's far end (it was at the
+ * first cell's far end, right over Stop: the critics' round 3). On while
+ * the target explores, off while it waits for the controls; its track and
+ * knob show which
  * (panel.css). A press turns it the other way, through
  * the Driver: turned on it sends RESUME_AUTONOMOUS
  * (Driver.resumeAutonomous()), turned off STOP (Driver.stopRover(), with
