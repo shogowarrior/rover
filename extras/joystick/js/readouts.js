@@ -4,7 +4,8 @@
  * the motor-shield warning, as the fault line over the scan. The mode's
  * output, hidden, carries it as data-mode too. (The Autonomous toggle keeps
  * its own state: autotoggle.js; app.js has the link chip say "No motors"
- * or "Exploring" where the view does not show the rover's own.)
+ * where the view does not show the rover's own fault line, and "Rover
+ * exploring" on the simulator target, kept dashed once the link goes.)
  *
  *   new Readouts({ mode, move, phaseCell, phase, temp, motorsFault })
  *     motorsFault  shown only while the rover says its motor shield did

@@ -58,13 +58,14 @@ default install path, `~/.platformio/penv/bin/pio`.
    `.pio/build/<env>/` (see below).
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
    from disk (the rover cannot serve it) and press Connect on the card over
-   the scan; the link chip at the top ("Not connected", or "Connect" on a
-   phone) opens the address, to change it first. Every control is in two
-   cells at the top: Rover | Simulator, the link chip and the Autonomous
-   switch in the first; the Drive and Program tabs, Normal | Advanced, Stop
-   (the red square) and the gear in the second. Normal | Advanced is the
-   rover's control scheme (below), or on the simulator the simulator's own;
-   picked before the rover reports one, it is sent as soon as it does. The
+   the scan; the link chip at the top ("Not connected", or its lamp alone
+   on the narrowest phone) opens the address, to change it first. Every
+   control is in two cells at the top: Rover | Simulator, the Autonomous
+   switch and the link chip in the first; the Drive and Program tabs,
+   Normal | Advanced, Stop (the red square) and the gear in the second.
+   Normal | Advanced is the rover's control scheme (below), or on the
+   simulator the simulator's own; picked before the rover reports one, it
+   is sent as soon as it does, and the page says so in words. The
    Drive tab has the two joysticks, the left one to translate and the right
    one to pivot; the Program tab has block programs. Rover | Simulator puts
    both tabs on a simulated rover instead, to try the controls or preview a
