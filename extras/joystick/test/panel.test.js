@@ -2765,66 +2765,102 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // The dock spans every row, and the middle column outgrows a short screen
   // with no rover connected (568 x 320): the dock stops at the screen's
   // height, less the shell's padding above (the top's, --shell-top, which
-  // the sticky top takes as its own), so the sticks centred in it stay
-  // where they are as lines come and go.
+  // the sticky top takes as its own), so the sticks at its foot stay where
+  // they are as lines come and go.
   const dock = body(side, ".shell > .dock:not([hidden])");
   check(/grid-row:\s*1 \/ -1;/.test(dock), `the dock spans every row: ${dock}`);
   const top = (body(side, ".shell").match(/--shell-top:\s*calc\(([^;]+)\);/) || [])[1];
   const cap = (dock.match(/max-height:\s*calc\(100 \* var\(--svh\) - ([^;]+)\);/) || [])[1];
   check(top === "var(--s-2) + env(safe-area-inset-top, 0px)" && cap === "var(--s-2) - env(safe-area-inset-top, 0px)", `the dock as tall as the screen less the padding above it: padding ${top}, cap ${cap}`);
-  check(/align-content:\s*center;/.test(body(side, ".controls")), "the sticks centred in it");
-  // Each stick takes what the height leaves (120 px: the dock's four rows
-  // but the sticks', the shell's padding above and the margin under the
-  // view, and the home bar's inset) and what the width leaves the middle
-  // column: 336 px for the two cells, a row each (212 px of half the width
-  // with the gutters and gaps), and 288 px at their tightest under 780 px
-  // wide (180 px). The rows' sum is the dock's own tokens': each a fixed
-  // height (the schemes' test holds them).
+  // The sticks' rows at the dock's foot, so the captions over them (Pivot |
+  // Sideways, Translate) sit clear below the top's two cells: centred,
+  // the family lay level with the second cell, 15 px from the gear, and
+  // read as a third switch of the top's (the review's phones 8).
+  check(/align-content:\s*end;/.test(body(side, ".controls")) && !/align-content:\s*center;/.test(body(side, ".controls")), `the sticks at the foot of the dock: ${body(side, ".controls")}`);
+  // Each stick takes what the height leaves (212 px: the shell's padding
+  // above, the two cells, 12 px clear of them, the dock's four rows but the
+  // sticks' and 4 px under them, and the notch's and the home bar's
+  // insets) and what the width leaves the middle column: 336 px for the
+  // two cells, a row each (212 px of half the width with the gutters and
+  // gaps), and 288 px at their tightest under 780 px wide (180 px). The
+  // rows' sum is the dock's own tokens': each a fixed height (the schemes'
+  // test holds them).
   const stick = (rules) => (body(rules, ":root").match(/--stick:([^;]*);/) || [])[1] || "";
-  check(stick(side).includes("100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px)") && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
-  check(stick(narrow).includes("100 * var(--svh) - 120px - env(safe-area-inset-bottom, 0px)") && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
+  const height = "100 * var(--svh) - 212px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)";
+  check(stick(side).includes(height) && stick(side).includes("50vw - 212px"), `on its side: ${stick(side)}`);
+  check(stick(narrow).includes(height) && stick(narrow).includes("50vw - 180px"), `under 780 px wide: ${stick(narrow)}`);
   const px = (name) => Number((body(cssRules(outside(panelCss(), "@media")), ":root").match(new RegExp(`--${name}:\\s*(\\d+)px;`)) || [])[1]);
   const rows = px("dock-cap") + px("dock-note") + px("dock-row") + 3 * px("dock-gap");
-  check(rows + 8 + 8 <= 120, `the dock's rows (${rows} px) and the padding above and below (16) inside the 120 px kept from the height`);
-  check(/padding:\s*0 0 env\(safe-area-inset-bottom, 0px\);/.test(dock), `the home bar's inset clear under the sticks: ${dock}`);
+  const cells = 8 + 2 * px("cell-h") + 6; // the shell's padding above, and the two cells 6 px apart
+  check(rows === 102 && cells + 12 + rows + 4 <= 212, `the dock's rows (${rows} px) under the cells (${cells}), 12 px clear of them and 4 over the foot, inside the 212 px kept from the height`);
+  check(/padding:\s*0 0 calc\(var\(--s-1\) \+ env\(safe-area-inset-bottom, 0px\)\);/.test(dock), `the home bar's inset clear under the sticks, and 4 px: ${dock}`);
   // No foot bar: Stop and Autonomous are in the top's cells, in the middle
   // column on both tabs.
   check(!/\.actions\b/.test(panelCss()), "no .actions rule left in panel.css");
 });
 
-// The rotate buttons share their stick's column and never outgrow it: at
-// the stick's floor the icons beside the words did (Right across the gap
-// into the speed at 960 x 521, under the Stop bar at 480 x 320 on its
-// side). Narrower than icon and word need at full size, both a size down,
-// never one without the other (the critic's rounds 1 and 2).
-test("layout: the rotate buttons keep to their stick's column, each its arrow and its word", () => {
+// The rotate buttons keep to their area and never outgrow it: at the
+// stick's floor the icons beside the words did (Right across the gap into
+// the speed at 960 x 521, under the Stop bar at 480 x 320 on its side).
+// Narrower than icon and word need at full size, the arrows alone, at
+// their full size: the words a size down to 11 px were the dock's smallest
+// (the review's phones 20). On an upright phone they are their arrows
+// alone beside the speed, which takes the rest of the row: under the pivot
+// stick alone its slider was 64 to 84 px long (the review's phones 4).
+test("layout: the rotate buttons keep to their area, their words where they fit, and the speed most of an upright phone's row", () => {
   const base = cssRules(outside(panelCss(), "@media"));
   const spin = base.filter((r) => r.selector === ".spin").map((r) => r.body).join("");
-  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(spin), `two columns that cannot grow past the column: ${spin}`);
+  check(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/.test(spin), `two columns that cannot grow past the area: ${spin}`);
   check(/container:\s*spin \/ inline-size;/.test(spin), `a container to ask: ${spin}`);
-  // Under 156 px (a 320 px phone, a phone on its side, a short laptop's
-  // stacked column) the arrow at 12 px beside the word at 11 px; nowhere
-  // does either go.
+  // Under 156 px (an upright phone, a phone on its side, a short laptop's
+  // stacked column) the words go and the arrows stay, at their size; that
+  // is the only rule that hides either, and no rule makes either smaller.
   const narrow = blockRules(outside(panelCss(), "@media"), "@container spin (max-width: 155.98px) {") || [];
-  check(narrow.some((r) => r.selector === ".spin .icon" && /width:\s*12px/.test(r.body) && /height:\s*12px/.test(r.body)), "under 156 px a small arrow beside the word");
-  check(narrow.some((r) => r.selector === ".spin button" && /font-size:\s*var\(--t-xs\)/.test(r.body) && !/height/.test(r.body)), "the word a size down, the button its row's height still");
-  const hidden = cssRules(panelCss()).filter((r) => /\.spin (\.icon|\.spinWord)|\.spinWord/.test(r.selector) && /display:\s*none/.test(r.body));
-  check(hidden.length === 0, `neither the arrow nor the word ever hidden: ${hidden.map((r) => r.selector)}`);
+  check(narrow.length === 1 && narrow[0].selector === ".spinWord" && /display:\s*none/.test(narrow[0].body), `under 156 px the arrows alone: ${narrow.map((r) => r.selector)}`);
+  const hidden = cssRules(panelCss()).filter((r) => /\.spin (\.icon|\.spinWord)|\.spinWord|\.spin \.icon/.test(r.selector) && /display:\s*none/.test(r.body));
+  check(hidden.length === 1 && hidden[0].selector === ".spinWord", `nothing else hides a word, nothing an arrow: ${hidden.map((r) => r.selector)}`);
+  check(!cssRules(panelCss()).some((r) => /\.spin\b|\.spinWord/.test(r.selector) && /font-size:\s*var\(--t-xs\)/.test(r.body)), "no 11 px word on a rotate button");
   const page = loadPage();
-  check(["ccw", "cw"].every((id) => /^Rotate/.test(page.$(id).getAttribute("aria-label") || "")), "each named, whatever shows");
+  // The words in each button's name and title wherever they show.
+  check(["ccw", "cw"].every((id) => /^Rotate (counter-)?clockwise$/.test(page.$(id).getAttribute("aria-label") || "")), "each named, whatever shows");
+  const titled = ["ccw", "cw"].map((id) => page.$(id).getAttribute("title") || "");
+  check(/^Rotate left \(Q\)/.test(titled[0]) && /^Rotate right \(E\)/.test(titled[1]), `each titled with its words: ${titled.join(" / ")}`);
   check(["ccw", "cw"].every((id) => all(page.$(id)).some((n) => n.tagName === "SVG") && all(page.$(id)).some((n) => n.getAttribute && n.getAttribute("class") === "spinWord")), "each its arrow and its word");
+  // An upright phone: the rotate buttons' area two 44 px buttons and the
+  // gap between them, under the 156 px where the words go, at the
+  // translate stick's left edge; the speed the rest of the row, across
+  // both sticks' columns. The three columns add up to the two sticks and
+  // the gap between them, so neither stick moves; the caption keeps to the
+  // first column, the family the rest of its row.
+  const root = base.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--spin-w:\s*calc\(2 \* var\(--tap\) \+ var\(--s-2\)\);/.test(root) && /--tap:\s*44px;/.test(root) && /--s-2:\s*8px;/.test(root) && 2 * 44 + 8 < 156, `two 44 px buttons, their words gone: ${root.match(/--spin-w:[^;]*;/)}`);
+  const phone = blockRules(panelCss(), "@media (max-width: 599.98px) and (orientation: portrait) {") || [];
+  const controls = phone.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
+  const areas = ((controls.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
+  check(/grid-template-columns:\s*var\(--spin-w\) calc\(var\(--stick\) - var\(--spin-w\) - var\(--s-4\)\) var\(--stick\);/.test(controls), `the sticks' columns, the first split for the rotate buttons: ${controls}`);
+  check(areas === '"label family family" "note note note" "move move pivot" "spin speed speed"', `the speed across both sticks: ${areas}`);
+  check(!/grid-template-rows/.test(controls) && phone.every((r) => r.selector === ".controls"), "its rows the dock's own, and nothing else changed");
   // The corners' words on one line or not at all: under 180 px of corners
-  // the arrows alone, beside the family's name over the stick; wrapped to
-  // two lines they crowded the ring.
+  // nothing, after the rules that lay a corner out (before them, those
+  // showed every corner again, words overlapping at 320 px). Bare arrows
+  // said nothing, and looked like controls (the review's phones 22);
+  // wrapped to two lines they crowded the ring.
   const corners = blockRules(outside(panelCss(), "@media"), "@container hints (max-width: 179.98px) {") || [];
-  check(corners.length === 1 && corners[0].selector === ".hint .name" && /display:\s*none/.test(corners[0].body), "under 180 px of corners, the arrows alone");
-  check(/white-space:\s*nowrap;/.test(base.filter((r) => r.selector === ".hint").map((r) => r.body).join("")), "a corner's words never wrap");
-  // The speed one row on every layout: narrow, a gauge in the caption's
-  // place and the value a size down; the caption over the value read as
-  // two lines (the critic's round 2). The caption still names the slider.
-  const speedNarrow = blockRules(outside(panelCss(), "@media"), "@container speed (max-width: 149.98px) {") || [];
-  check(speedNarrow.some((r) => r.selector === "#speedLabel" && /display:\s*none/.test(r.body)) && speedNarrow.some((r) => r.selector === ".speed .icon" && /display:\s*block/.test(r.body)), "narrow, the gauge in the caption's place");
-  check(!speedNarrow.some((r) => /grid-(area|row|column)/.test(r.body)), `narrow, still one row: ${speedNarrow.map((r) => r.selector)}`);
+  check(corners.length === 1 && corners[0].selector === ".hint" && /display:\s*none/.test(corners[0].body), `under 180 px of corners, none: ${corners.map((r) => r.selector)}`);
+  const text = outside(panelCss(), "@media");
+  check(text.indexOf("@container hints (max-width: 179.98px)") > text.lastIndexOf(".hint[data-corner="), "the corners hidden after the rules that place them");
+  const hint = base.filter((r) => r.selector === ".hint").map((r) => r.body).join("");
+  check(/white-space:\s*nowrap;/.test(hint) && /font-size:\s*var\(--t-xs\);/.test(hint), `a corner's words never wrap, at 11 px: ${hint}`);
+  // The speed one row on every layout. Under 230 px, where the caption
+  // would leave the slider under about 140 px, a gauge in the caption's
+  // place; under 150 the value a size down too. The caption over the value
+  // read as two lines (the critic's round 2). The caption still names the
+  // slider.
+  const speedNarrow = blockRules(outside(panelCss(), "@media"), "@container speed (max-width: 229.98px) {") || [];
+  check(speedNarrow.some((r) => r.selector === "#speedLabel" && /display:\s*none/.test(r.body)) && speedNarrow.some((r) => r.selector === ".speed .icon" && /display:\s*block/.test(r.body)), "under 230 px, the gauge in the caption's place");
+  const speedNarrower = blockRules(outside(panelCss(), "@media"), "@container speed (max-width: 149.98px) {") || [];
+  check(speedNarrower.length === 1 && speedNarrower[0].selector === "#speedOut" && /font-size:\s*var\(--t-ctl\)/.test(speedNarrower[0].body), `under 150 px, the value a size down: ${speedNarrower.map((r) => r.selector)}`);
+  check(![...speedNarrow, ...speedNarrower].some((r) => /grid-(area|row|column)/.test(r.body)), "narrow, still one row");
   check(/display:\s*none/.test(base.filter((r) => r.selector === ".speed .icon").map((r) => r.body).join("")), "the gauge only where the caption gives way");
   const gauge = all(page.$("speed").parentNode).find((n) => n.tagName === "SVG");
   check(gauge && gauge.getAttribute("aria-hidden") === "true" && page.$("speed").getAttribute("aria-labelledby") === "speedLabel" && page.$("speedLabel").textContent === "Speed", "the slider named by its caption, the gauge silent");
@@ -3140,22 +3176,26 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   // The pivot stick's line says one of three things, each on one line, in
   // the same words on every layout (the critic's round 1: "Needs Advanced"
   // on a phone on its side, "Pivots need Advanced (at the top)"
-  // elsewhere). Each fits the line's narrowest place: the pivot stick's
-  // column at its floor (112 px, on its side under about 600 px wide) and
-  // the 12 px gap the line reaches into there, with its dot: 17 characters
-  // took 105 to 117 px in Inter and up to 123 in DejaVu Sans, measured
-  // headless, where 22 took 129. Off, its words say what the stick needs
-  // and where to choose it (F8, where "Advanced only." said neither). It
-  // never hides, which would take its height too, and has no second,
-  // shorter copy for a narrow row.
+  // elsewhere). Each fits the line's narrowest place at the dock's 13 px:
+  // the pivot stick's column at its floor (112 px, on its side under about
+  // 600 px wide) and the 12 px gap the line reaches into there, or a short
+  // laptop's stacked column (120 px), with its dot: up to 118 px in DejaVu
+  // Sans, measured headless, where 22 characters took 129 at 12 px. Off,
+  // its words say what the stick is waiting for, as a need: "Advanced: top
+  // bar" read as a label and its value, as if Advanced were on, and named
+  // a bar the top no longer has (the review's phones 5, tablets 3,
+  // laptops 5). It never hides, which would take its height too, and has
+  // no second, shorter copy for a narrow row.
   const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
   check(said.every((text) => text.length > 0 && text.length <= 17), `the line's words: ${said}`);
   const off = page.evalIn("FamilySelector.OFF");
-  check(/Advanced/.test(off) && /top bar/.test(off), `off, it says what the stick needs and where: '${off}'`);
+  check(/^Needs? Advanced\b/.test(off) && !/\bbar\b|:/.test(off), `off, it says what the stick needs, not as a label and its value: '${off}'`);
+  check(/^Untried: go slow$/.test(page.evalIn("FamilySelector.CAVEAT")), `on, the caveat: '${page.evalIn("FamilySelector.CAVEAT")}'`);
+  check(/\bat the top\b/.test(page.evalIn("FamilySelector.OFF_TITLE")) && !/\btop bar\b/.test(page.evalIn("FamilySelector.OFF_TITLE")), `off, the pad's title says where: '${page.evalIn("FamilySelector.OFF_TITLE")}'`);
   check(page.evalIn("FamilySelector.OFF_SHORT") === undefined && page.doc.getElementById("pivotNoteShort") === null && page.$("pivotNote").parentNode.children.filter((n) => n.tagName === "P").length === 1, "one line, one wording: no short copy");
   const rules = cssRules(outside(panelCss(), "@media"));
   check(!/@container note\b/.test(panelCss()) && !/\.caveat\.short/.test(panelCss()), "no rule picks other words by the row's width");
-  const landscapeLine = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector === ".noteLine").map((r) => r.body).join("");
+  const landscapeLine = (mediaRules(LANDSCAPE_PHONE) || []).filter((r) => r.selector.split(/,\s*/).includes(".noteLine")).map((r) => r.body).join("");
   check(/margin-inline-start:\s*calc\(-1 \* var\(--s-3\)\);/.test(landscapeLine), `on its side, the line reaches over the 12 px gap beside the pivot stick's column: ${landscapeLine}`);
   const areas = (text) => ((text.match(/grid-template-areas:([^;]*);/) || ["", ""])[1].match(/"[^"]*"/g) || []).map((row) => row.replace(/\s+/g, " ")).join(" ");
   const controls = rules.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
@@ -3167,26 +3207,41 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   // A wide screen 564 px tall or more stacks the sticks in one column (the
   // owner's "tile them vertically"), with the same rows one under the
   // other: still every one a fixed height, the sticks' boxes the only
-  // auto ones, but for the empty gap between the two sticks' rows, at
-  // least 8 px and the rest of a column taller than both need (from 1044
-  // px tall, the sticks at their 360 px cap), which only the viewport sets
-  // (the shell's grid), so the column is filled to its foot. No other
-  // layout sets the rows.
+  // auto ones, but for three empty rows that share what a column taller
+  // than both sticks need leaves (from 892 px tall, the sticks at their
+  // 280 px cap) evenly: over the translate stick's rows, between them and
+  // the pivot stick's (at least 8 px), and under those. Only the viewport
+  // sets them (the shell's grid), so the column is filled to its foot with
+  // no band of empty card (one gap of 188 px between the sticks at 1920 x
+  // 1080, the review's laptops 3). No other layout sets the rows.
   const rowsSet = cssRules(panelCss()).filter((r) => r.selector.replace(/\s+/g, " ") === ".controls" && /grid-template-rows/.test(r.body));
   const rowsOf = (r) => ((r.body.match(/grid-template-rows:([^;]*);/) || [])[1] || "").trim();
-  const fixedRows = (value) => value !== "" && value.split(/\s+(?![^(]*\))/).every((row) => /^(auto|var\(--(dock-cap|dock-note|dock-row|s-\d)\)|minmax\(var\(--s-\d\), 1fr\))$/.test(row));
+  const fixedRows = (value) => value !== "" && value.split(/\s+(?![^(]*\))/).every((row) => /^(auto|var\(--(dock-cap|dock-note|dock-row|s-\d)\)|minmax\((0|var\(--s-\d\)), 1fr\))$/.test(row));
   check(rowsSet.length === 2 && rowsSet.every((r) => fixedRows(rowsOf(r))), `no layout sizes a row by what it says: ${rowsSet.map(rowsOf).join(" | ")}`);
   const stacked = blockRules(panelCss(), "@media (min-width: 960px) and (min-height: 564px) {") || [];
   const stackedControls = stacked.filter((r) => r.selector === ".controls").map((r) => r.body).join("");
-  check(/grid-template-rows:\s*var\(--dock-cap\) auto var\(--dock-row\) minmax\(var\(--s-2\), 1fr\) var\(--dock-cap\) var\(--dock-note\) auto var\(--dock-row\);/.test(stackedControls)
-    && areas(stackedControls) === '"label" "move" "spin" "." "family" "note" "pivot" "speed"', `stacked: the translate stick's rows, then the pivot stick's, the line its own row, the gap between them the one flexible row, and empty: ${areas(stackedControls)}`);
+  check(/grid-template-rows:\s*minmax\(0, 1fr\) var\(--dock-cap\) auto var\(--dock-row\) minmax\(var\(--s-2\), 1fr\) var\(--dock-cap\) var\(--dock-note\) auto var\(--dock-row\) minmax\(0, 1fr\);/.test(stackedControls)
+    && areas(stackedControls) === '"." "label" "move" "spin" "." "family" "note" "pivot" "speed" "."', `stacked: the translate stick's rows, then the pivot stick's, the line its own row, the empty rows over, between and under them the flexible ones: ${areas(stackedControls)}`);
   check(rowsSet.filter((r) => /1fr/.test(rowsOf(r))).length === 1, "no other layout has a flexible row");
+  // The stacked sticks up to 280 px: 360 px was more stick than a laptop's
+  // hand needs, and took the view's width (the review's laptops 3).
+  const stackedRoot = stacked.filter((r) => r.selector === ":root").map((r) => r.body).join("");
+  check(/--stick:\s*clamp\(120px, \(100 \* var\(--svh\) - 332px\) \/ 2, 280px\);/.test(stackedRoot) && /--drive:\s*calc\(var\(--stick\) \+ 32px\);/.test(stackedRoot), `stacked: up to 280 px, the column one stick wide: ${stackedRoot}`);
+  // The family and the line end at the pivot stick's right edge on every
+  // layout, the stacked one's too: the line's dot, unpainted while off,
+  // keeps its place before the words, so a line from the column's start
+  // would start "Needs Advanced" 12 px in, under nothing.
+  check(!stacked.some((r) => /^\.(family|noteLine)$/.test(r.selector)), "stacked: the family and the line where they are on every layout");
   for (const selector of [".caveat", "#stickLabel"]) {
     const rule = rules.find((r) => r.selector === selector);
     check(rule && /white-space:\s*nowrap/.test(rule.body), `${selector} never wraps: ${rule && rule.body.trim()}`);
   }
   const lineRule = rules.find((r) => r.selector === ".caveat");
-  check(lineRule && /line-height:\s*var\(--dock-note\);/.test(lineRule.body) && /font-size:\s*var\(--t-sm\);/.test(lineRule.body), `one line of the row's height, at 12 px, not 11: ${lineRule && lineRule.body.trim()}`);
+  check(lineRule && /line-height:\s*var\(--dock-note\);/.test(lineRule.body) && /font-size:\s*var\(--t-ctl\);/.test(lineRule.body), `one line of the row's height, at the dock's 13 px (the review's laptops 16): ${lineRule && lineRule.body.trim()}`);
+  // Off, no dot: a grey lamp before the words read as a status. Unpainted,
+  // not removed, so nothing on the line moves as the scheme changes.
+  const offDot = rules.filter((r) => r.selector === '.caveat[data-tone="off"]::before').map((r) => r.body).join("");
+  check(/^\s*background:\s*none;\s*$/.test(offDot), `off, the dot unpainted: ${offDot}`);
   // Its dot close to its words: with the wider gap the caveat ran past the
   // stick at its floor.
   check(lineRule && /gap:\s*var\(--s-1\);/.test(lineRule.body), `the caveat's dot close to its words: ${lineRule && lineRule.body.trim()}`);
@@ -3205,6 +3260,62 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   look();
   const tones = ["off", "caveat", "off", "warn"];
   check(lines.join(" | ") === ["OFF", "CAVEAT", "OFF", "PRESS_AGAIN"].map((name, i) => `shown ${page.evalIn(`FamilySelector.${name}`)}/${tones[i]}`).join(" | "), `the line: ${lines.join(" | ")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Under NORMAL the pivot stick is drawn but off, and must look it: its
+// knob in the operator's blue and its corners in blue read as a stick to
+// use, behind a faded family (the review's phones 22, laptops 5). Each
+// paints only, keyed on the pad's data-off, so nothing moves under a held
+// stick (the sticks' test below). And the dock's words are one size: its
+// captions and the line 13 px, the corners' 11 (the review's laptops 16);
+// the family's segments 28 px as every switch's, in a caption row that
+// holds their 32 px track (the review's phones 21, tablets 14).
+test("dock: the pivot stick off looks off, grey not blue, and the dock's words and switch keep the page's sizes", () => {
+  const css = panelCss();
+  const base = cssRules(outside(css, "@media"));
+  const body = (selector, rules = base) => rules.filter((r) => r.selector.split(/,\s*/).includes(selector)).map((r) => r.body).join("");
+  // The knob grey: joy.js paints it once, in --live, so the canvas itself
+  // is filtered, never an ancestor of it (the stick-ancestor test holds
+  // that), and only while the pad is off.
+  check(/^\s*filter:\s*grayscale\(1\);\s*$/.test(body('#pivotPad[data-off="yes"] canvas')), `off, the knob grey: ${body('#pivotPad[data-off="yes"] canvas')}`);
+  check(!cssRules(css).some((r) => /filter\s*:/.test(r.body) && /#pivotStick|#stick\b|#movePad|canvas/.test(r.selector) && !/\[data-off="yes"\]/.test(r.selector)), "nothing filters a stick that is on");
+  // Its corners grey, their arrows too, where on they are the page's blue.
+  const offHint = body('#pivotPad[data-off="yes"] .hint');
+  check(offHint === body('#pivotPad[data-off="yes"] .hint .glyph') && /^\s*color:\s*var\(--dim\);\s*$/.test(offHint), `off, the corners --dim: ${offHint}`);
+  check(/color:\s*var\(--live\)/.test(body(".hint .glyph")), "on, their arrows the operator's blue");
+  // The family's segments the page's 28 px (no smaller --seg of its own),
+  // their track 4 px more, in the caption row's height; its touch target
+  // 44 px as the top's are.
+  const root = body(":root");
+  const px = (name) => Number((root.match(new RegExp(`--${name}:\\s*(\\d+)px;`)) || [])[1]);
+  check(px("seg") === 28 && px("dock-cap") === px("seg") + 4, `the caption row (${px("dock-cap")} px) holds a 28 px segment's track`);
+  check(!cssRules(css).some((r) => /\.family/.test(r.selector) && /--seg\s*:/.test(r.body)), "no smaller segment for the family");
+  check(/inset:\s*calc\(\(var\(--seg\) - var\(--tap\)\) \/ 2\) 0;/.test(body(".family .segmented button::before")), `its target 44 px: ${body(".family .segmented button::before")}`);
+  // Its words step down by its own area's width: the family a container,
+  // stretched over its area, its switch at the area's end.
+  const family = body(".family");
+  check(/container:\s*family \/ inline-size;/.test(family) && /justify-self:\s*stretch;/.test(family) && /justify-content:\s*flex-end;/.test(family), `the family's area its container: ${family}`);
+  // The dock's captions and its line at 13 px, the corners at 11.
+  for (const selector of ["#stickLabel", "#speedLabel", ".caveat"]) check(/font-size:\s*var\(--t-ctl\);/.test(body(selector)), `${selector} at 13 px: ${body(selector)}`);
+  check(/font-size:\s*var\(--t-xs\);/.test(body(".hint")), "the corners at 11 px");
+  // On a phone on its side the family is quieter than the top's switches
+  // beside it: no track, the family chosen raised rather than inverted, so
+  // it reads as its stick's caption (the review's phones 8). It and the
+  // line reach over the gap beside the pivot stick's column.
+  const side = mediaRules(LANDSCAPE_PHONE) || [];
+  check(/^\s*background:\s*none;\s*$/.test(body(".family .segmented", side)), `on its side, no track: ${body(".family .segmented", side)}`);
+  const chosen = body('.family .segmented button[aria-pressed="true"]', side);
+  check(/color:\s*var\(--readout\);/.test(chosen) && /background:\s*var\(--raised-hi\);/.test(chosen), `on its side, the chosen family raised: ${chosen}`);
+  check(side.some((r) => r.selector.split(/,\s*/).includes(".family") && r.selector.split(/,\s*/).includes(".noteLine") && /margin-inline-start:\s*calc\(-1 \* var\(--s-3\)\);/.test(r.body)), "on its side, the family and the line over the gap beside them");
+  // In the page: the pad off under NORMAL, on under ADVANCED, and the line
+  // with it, what the rules above key on.
+  const page = loadPage();
+  const ws = connectOpen(page);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  check(page.$("pivotPad").dataset.off === "yes" && page.$("pivotNote").dataset.tone === "off", "NORMAL: the pad off, the line's dot unpainted");
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(page.$("pivotPad").dataset.off === "no" && page.$("pivotNote").dataset.tone === "caveat", "ADVANCED: the pad on, the line's amber dot");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -4630,7 +4741,7 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   // column as wide as they need, and no layout of its own for a short,
   // tall or narrower wide screen.
   const wideRoot = rule(mediaRules(WIDE) || [], ":root");
-  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 224px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
+  check(/--stick:\s*clamp\(120px, min\(100 \* var\(--svh\) - 228px, \(45vw - 56px\) \/ 2\), 240px\);/.test(wideRoot), `wide: the sticks: ${wideRoot}`);
   check(/--drive:\s*calc\(2 \* var\(--stick\) \+ 56px\);/.test(wideRoot), `wide: the column: ${wideRoot}`);
   check(mediaRules(WIDE_SHORT) === null && !css.includes("@media (min-width: 1180px)") && !/@media \(min-width: 960px\)[^{]*(min-height: 761px|max-height: 738\.98px)/.test(css), "no layout of its own for a short, a tall or a wider wide screen");
   // A tablet upright fills its screen's width, and its dock is a card as
@@ -5605,8 +5716,16 @@ test("look: the chosen segment's word stays on its chip, the only ground its ink
   check(stopGap && /margin-left:\s*12px/.test(stopGap.body) && tightGap && /gap:\s*4px/.test(tightGap.body), "Stop 12 px and the cell's 4 px gap from the scheme when tight: 16 px");
   const bar = cssRules(outside(css, "@media")).find((r) => r.selector === ".bar");
   check(bar && /container:\s*bar \/ inline-size;/.test(bar.body), `the top a container the cells ask: ${bar && bar.body}`);
-  const side = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
-  check(side.some((r) => r.selector === ".family .segmented button" && /font-size:\s*var\(--t-xs\)/.test(r.body)), "the family's words a size down on a narrow phone on its side");
+  // The pivot stick's family steps down by its own area's width, as the
+  // cells do by theirs: 13 px where its words fit with the top's sides,
+  // 12 px and closer under 152 px (a 320 px phone, a phone on its side at
+  // the stick's floor), never 11 (the review's phones 20), and its
+  // segments 28 px as every switch's (24 were the page's smallest
+  // targets: the review's phones 21).
+  const familyStep = blockRules(outside(css, "@media"), "@container family (max-width: 151.98px) {") || [];
+  check(familyStep.length === 1 && familyStep[0].selector === ".family .segmented button" && /font-size:\s*var\(--t-sm\)/.test(familyStep[0].body) && /--seg-x:\s*5px/.test(familyStep[0].body), `the family's words a size down where its area is narrow: ${familyStep.map((r) => r.body)}`);
+  check(!flat.some((r) => /\.family/.test(r.selector) && (/font-size:\s*var\(--t-xs\)/.test(r.body) || /--seg\s*:/.test(r.body))), "never 11 px, never a smaller segment");
+  check(mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") === null, "no step of its own for a narrow phone on its side");
   // The short words stand in for the long ones, and are never what is read.
   const page = loadPage();
   const sim = page.$("target").children[1];
