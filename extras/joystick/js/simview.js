@@ -251,8 +251,8 @@ class SimView {
     // The bar's middle: the wheels now, the move by name and how fast; the
     // latest word from the preview; and on the Program tab the clock. One
     // line, each part giving way where the view is narrow (sim.css), the
-    // move last. How fast is in parts, each shown whole or not at all: the
-    // turn in degrees, the travel in m/s, and the share of full speed,
+    // move last, whole or not at all (#fitTwist). How fast is in parts,
+    // each shown whole or not at all: the turn in degrees, the travel in m/s, and the share of full speed,
     // which goes first, then the travel, the turn last (#fitTwist): "50% ·
     // 0.00 m/s · 0..." hid the one number that matters while rotating. The move as the Program tab's blocks name it, not
     // the firmware's MOVE_BACKWARD; and no "Idealised preview" tag, which
@@ -274,7 +274,7 @@ class SimView {
     dom.html("span", { class: "label" }, ui.clockBox, "Sim time");
     ui.clock = dom.html("span", { class: "sim-time" }, ui.clockBox, "0.0 s");
 
-    ui.more = this.#tool(bar, "Settings: the room, rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
+    ui.more = this.#tool(bar, "Settings: the room, rays, trail and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
 
     // The room, taking every pixel the bar leaves, nothing over it.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);
@@ -328,19 +328,10 @@ class SimView {
       this.#render();
     });
 
-    // A calibration, kept: one line, what it means in its title.
-    const dragWhat = "Released-wheel drag: how hard a wheel the shield has released resists turning, from 0 (it turns " +
-      "freely) to 1 (it holds like a driven wheel). No move in the firmware's wheel table needs a released wheel to " +
-      "turn, so today this changes nothing; it would for a row that did.";
-    const drag = dom.html("label", { class: "sim-row sim-drag", title: dragWhat }, ui.panel);
-    dom.html("span", { class: "label" }, drag, "Wheel drag");
-    ui.drag = dom.html("input", { type: "range", min: "0", max: "1", step: "0.05", title: dragWhat }, drag);
-    ui.drag.value = String(this.#target.releasedDrag);
-    ui.dragOut = dom.html("output", { class: "sim-value" }, drag, this.#target.releasedDrag.toFixed(2));
-    ui.drag.addEventListener("input", () => {
-      this.#target.releasedDrag = Number(ui.drag.value);
-      ui.dragOut.textContent = Number(ui.drag.value).toFixed(2);
-    });
+    // No wheel drag here: no row of the firmware's wheel table needs a
+    // released wheel to turn, so a slider for it changed nothing (the
+    // reviews' laptops 4, tablets 5). The calibration stays in sim.js
+    // (SimTarget.releasedDrag), for a row that would.
     this.#buildKey(ui.panel, "sim-key");
     dom.html("p", {
       class: "sim-about",
@@ -576,15 +567,27 @@ class SimView {
     this.#rover.handleLine.setAttribute("x2", reach.toFixed(1));
   }
 
-  // How fast shows whole or not at all. The parts after the first wrap out
-  // of sight by themselves where they do not fit (sim.css); the first, a
-  // number, would be cut instead, "54°" for 54°/s, so where it does not fit
-  // none shows. A word (what a stall pushes against) may be cut short.
-  // Measured only as what the bar says changes, and as the view's size
-  // does (#fit); a page that cannot measure shows it all.
+  // The move shows whole or not at all, and so does how fast. The move is
+  // never cut ("Strafe rig…", or a lone "B" between reset and settings at
+  // 480 x 320: the review's phones 2): how fast gives way first (sim.css),
+  // then the clock, and where the move still does not fit it goes with
+  // how fast, and the room shows the motion. Of how fast, the parts after
+  // the first wrap out of sight by themselves where they do not fit
+  // (sim.css); the first, a number, would be cut instead, "54°" for
+  // 54°/s, so where it does not fit none shows. A word (what a stall
+  // pushes against) may be cut short. Measured only as what the bar says
+  // changes, and as the view's size does (#fit); a page that cannot
+  // measure shows it all.
   #fitTwist() {
-    const twist = this.#ui.twist;
-    twist.dataset.fit = "yes";
+    const { twist, move, clockBox } = this.#ui;
+    for (const part of [twist, move, clockBox]) part.dataset.fit = "yes";
+    const cut = () => move.scrollWidth > move.clientWidth + 0.5;
+    if (cut()) clockBox.dataset.fit = "no";
+    if (cut()) {
+      move.dataset.fit = "no";
+      twist.dataset.fit = "no";
+      return;
+    }
     const first = [...twist.children].find((n) => n.textContent);
     if (first && first !== this.#ui.twistWord && first.scrollWidth > twist.clientWidth + 0.5) twist.dataset.fit = "no";
   }
@@ -645,16 +648,22 @@ class SimView {
     const pace = Math.hypot(vx, vy);
     const turn = Math.abs(degrees(w));
     // Stopped away from its start with nothing running, the rover is where
-    // the next preview begins: say so, since a second run is otherwise drawn
-    // over the first. (Mid-run, a wait between moves is only a stop.)
+    // the next preview begins: the move's title says so, as the Program
+    // tab's console does (app.js), since a second run is otherwise drawn
+    // over the first. On the bar, an 11 px note cut to "a preview …" beside
+    // a cut "Stopp…" (the review's phones 2). (Mid-run, a wait between
+    // moves is only a stop.)
+    const goesOn = !motion && state.mode !== MODE_AUTONOMOUS && !state.atStart && this.#target.idle;
+    ui.move.setAttribute("title", goesOn ? "Stopped where the next preview begins: Reset, at the bar's start, starts it over." : "What the simulated rover is doing");
     ui.twistWord.textContent = !motion
-      ? state.mode === MODE_AUTONOMOUS ? "not simulated" : state.atStart || !this.#target.idle ? "" : "a preview goes on from here"
+      ? state.mode === MODE_AUTONOMOUS ? "not simulated" : ""
       : state.stalled ? `pushing against ${state.contact || "something"}` : "";
     ui.pct.textContent = motion ? `${Math.round((state.speed * 100) / SPEED_MAX)}%` : "";
     ui.turn.textContent = motion && !state.stalled && turn >= 0.5 ? `${Math.round(turn)}°/s` : "";
     ui.pace.textContent = motion && !state.stalled && pace >= 0.005 ? `${pace.toFixed(2)} m/s` : "";
     ui.move.dataset.stalled = state.stalled ? "yes" : "no";
-    const said = [ui.move, ...ui.twist.children].map((n) => n.textContent).join("|");
+    // The clock's length too: a pause, or another figure, widens it.
+    const said = [ui.move, ...ui.twist.children].map((n) => n.textContent).join("|") + `|${this.#target.paused}|${String(Math.floor(state.now / 1000)).length}`;
     if (said !== this.#drawn.twist) {
       this.#drawn.twist = said;
       this.#fitTwist();

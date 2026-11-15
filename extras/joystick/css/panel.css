@@ -765,8 +765,9 @@ input[type="range"]::-moz-range-thumb {
 /* The view's shape, for the layouts that size its pane to what it shows
    (the Program tab's, below): --va its drawing's width over its height,
    --vcw and --vch what its card adds across and down. The scan's fan is
-   420 x 200 (scan.js), in its card's padding under the rings' legend's
-   line (20 px) and over the readouts line; the
+   420 x 200 (scan.js), in its card's padding (a wide screen's is larger,
+   below) under the rings' legend's line (22 px, the fault's too) and over
+   the readouts line; the
    room's shape is the simulator's (SimView sets --room-aspect here), under
    its bar's one row (32 px and a 4 px gap), with the walls' margin
    (SimView.PAD, 3 px) and the card's padding (3 px over the bar, 8 px
@@ -776,7 +777,7 @@ input[type="range"]::-moz-range-thumb {
 .shell {
   --va: 2.1;
   --vcw: 8px;
-  --vch: 64px;
+  --vch: 66px;
 }
 
 body[data-target="simulator"] .shell {
@@ -1559,10 +1560,14 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 .roverAway[hidden] { display: none; }
 
 /* A fault the rover reports about itself, in the scan's card at its top,
-   the fan under it. Amber, not red: nothing is moving that should stop;
-   the rover simply cannot move. It takes height from the fan, at most half
-   the card, and scrolls the rest. A bar of its own over the card read as a
-   third row under the top's two cells (the critic's round 2). */
+   in the legend's row and in its place while it shows, the fan under it.
+   Amber, not red: nothing is moving that should stop; the rover simply
+   cannot move. Closed, it is the legend's height (18 px), so the fan
+   keeps its size as it comes and goes: in a row of its own over the
+   legend it took the fan's height, readings down to 9 px on a phone (the
+   review's phones 1). Opened, it takes height from the fan, at most half
+   the card, and scrolls the rest. A bar of its own over the card read as
+   a third row under the top's two cells (the critic's round 2). */
 .fault {
   justify-self: start;
   max-width: 520px;
@@ -1570,7 +1575,7 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   max-height: 50cqh;
   overflow-y: auto;
   margin: 0 var(--s-2) var(--s-1);
-  padding: 6px var(--s-3);
+  padding: 0 var(--s-3);
   font-size: var(--t-xs);
   line-height: var(--lh-body);
   color: var(--readout);
@@ -1588,6 +1593,7 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   display: flex;
   align-items: center;
   gap: var(--s-1);
+  height: 16px;
   list-style: none;
   cursor: pointer;
 }
@@ -1617,7 +1623,7 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   color: var(--warn);
 }
 
-.fault p { margin: var(--s-1) 0 0; }
+.fault p { margin: 0 0 var(--s-1); }
 
 /* One line on every card: a narrow one (a phone's, 288 px) says the
    first half alone, where the whole wrapped to two lines and took the
@@ -1654,15 +1660,15 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
   min-height: 0;
 }
 
-/* The fault, while there is one, in a row at the card's top; under it the
-   rings' legend, a row of its own in the card's top-left corner, so it
-   never lies over the fan; under that the fan and, with no link, the
-   connect card, in one cell: the card over the fan's faint rings, the
-   card at its full size. */
-.scan { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
-.scan > * { grid-area: 3 / 1; }
-.scan > .fault { grid-area: 1 / 1; }
-.scan > .scanLegend { grid-area: 2 / 1; }
+/* The rings' legend, a row of its own in the card's top-left corner, so
+   it never lies over the fan, and the fault, while there is one, in its
+   place there; under them the fan and, with no link, the connect card,
+   in one cell: the card over the fan's faint rings, the card at its full
+   size. The legend keeps the row's height under the fault. */
+.scan { grid-template: auto minmax(0, 1fr) / minmax(0, 1fr); }
+.scan > * { grid-area: 2 / 1; }
+.scan > :is(.fault, .scanLegend) { grid-area: 1 / 1; }
+.scan:has(> .fault:not([hidden])) > .scanLegend { visibility: hidden; }
 
 /* With no link, whatever the tab or the width, over the faint fan: the
    next thing to do, rather than an empty pane that reads as a fault. Not
@@ -1844,10 +1850,12 @@ body[data-link="connecting"] .connectGo {
 /* The fan draws at --scan-k screen pixels a unit (scan.js, which picks
    the layout that draws it larger). The bearings' names go first, where
    12 px would take more units than a reading (under 0.8 px a unit), then
-   the readings, below about 7 px a smudge (under 0.45): the wedges alone
-   still show, by colour and length, what is close and on which side.
-   scan.js says which in data-labels. Under 32 px they are a smudge too. */
-#scan[data-labels="readings"] .tick,
+   the side readings (L and R), where five at 12 px no longer fit the box,
+   then the front three: the wedges alone still show, by colour and
+   length, what is close and on which side. scan.js says which in
+   data-labels. Under 32 px they are a smudge too. */
+#scan:is([data-labels="readings"], [data-labels="front"]) .tick,
+#scan[data-labels="front"] .reading[data-outer="yes"],
 #scan[data-labels="none"] :is(.tick, .reading) { display: none; }
 
 @container scan (max-height: 31.98px) {
@@ -1894,12 +1902,15 @@ body[data-link="connecting"] .connectGo {
    override the attribute. Each at the drawing's own size, but never more
    than 28 px (a reading) or 14 px (a bearing's name) on screen: the fan
    grows to fill its pane, three times its size on a laptop, and its
-   labels need not. A bearing's name never less than 12 px either
-   (ScanView.TICK_PX): at 10 px on a phone, 8 on the Program tab's fan,
-   the names were hard to read (the critic's round 3). */
+   labels need not. Never less than 12 px either (ScanView.TICK_PX and
+   READING_MIN_PX): at 10 px on a phone, 8 on the Program tab's fan, the
+   names were hard to read (the critic's round 3), and the readings, the
+   fan's whole point, were 8 to 10 px on a phone (the review's phones 1);
+   where they would not fit at 12, scan.js drops them, the side ones
+   first (above). */
 .reading {
   font-family: var(--gauge);
-  font-size: min(var(--scan-reading), calc(28px / var(--scan-k, 1)));
+  font-size: max(calc(12px / var(--scan-k, 1)), min(var(--scan-reading), calc(28px / var(--scan-k, 1))));
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   fill: var(--readout);
@@ -1919,7 +1930,8 @@ body[data-link="connecting"] .connectGo {
    amber, at about 22 px on a wide screen, it outshouted the readouts, and
    a red STOP word vied with Stop (the critic's round 2); in the fan's
    corner it floated with the fan, its dashes too short to tell apart
-   (round 3). Where the card is narrow the 100 cm ring's goes, and where
+   (round 3). 12 px, the fan's floor: at 11 it was under it (the review's
+   phones 12). Where the card is narrow the 100 cm ring's goes, and where
    it is short the whole line, for the fan. */
 .scanLegend {
   justify-self: start;
@@ -1929,9 +1941,9 @@ body[data-link="connecting"] .connectGo {
   min-width: 0;
   margin: 0 var(--s-2) var(--s-1);
   overflow: hidden;
-  font-size: var(--t-xs);
+  font-size: var(--t-sm);
   font-weight: var(--fw-semi);
-  line-height: 16px;
+  line-height: 18px;
   letter-spacing: var(--track-label);
   white-space: nowrap;
   color: var(--dim);
@@ -1981,6 +1993,12 @@ body[data-link="connecting"] .connectGo {
 body:not([data-link="up"]) .wedge { opacity: 0.25; }
 body:not([data-link="up"]) .wedge[data-zone="clear"] { fill: var(--dim); stroke: var(--dim); }
 body:not([data-link="up"]) .reading { fill: var(--dim); }
+
+/* The stop and go rings grey with them, keeping their dashes: in red and
+   amber over a greyed fan they were the loudest things in the view, fixed
+   thresholds over data no longer live (the review's laptops 7). The
+   legend keeps its colours, which say what the dashes mean. */
+body:not([data-link="up"]) #scan .ring:is(.go, .stop) { stroke: var(--dim); }
 
 /* With no link and no scan from one (the connect card over it), the fan
    has nothing to say: all of it faint, its rings and the rover's dot
@@ -2052,8 +2070,12 @@ body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend { 
    never cut, however long (ROTATE_COUNTERCLOCKWISE beside SIDESTEP on a
    320 px phone; the critic's round 1). The captions went first, and a
    bare "STOP" read like a button, a bare 41.5°C as nothing in particular
-   (round 3). A halt says what it is without one: "Halted: boxed in". */
-.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="bare"]) .cell:has(> #temp),
+   (round 3). The phase's caption goes before the move's: a phase says
+   what it is ("CRUISE"), and a line of bare values read as buttons at
+   480 x 320 (the review's phones 11). A halt says what it is without one:
+   "Halted: boxed in". */
+.readouts:is([data-fit="nochip"], [data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell:has(> #temp),
+.readouts[data-fit="nophase"] #phaseCell .label,
 .readouts[data-fit="bare"] .cell .label {
   position: absolute;
   width: 1px;
@@ -2071,21 +2093,26 @@ body:not([data-link="up"]) .scan:has(> #scan[data-empty="yes"]) > .scanLegend { 
   clip-path: inset(50%);
 }
 
-.readouts:is([data-fit="small"], [data-fit="bare"]) {
+.readouts:is([data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) {
   gap: var(--s-2);
   padding-inline: var(--s-3);
 }
 
-.readouts:is([data-fit="small"], [data-fit="bare"]) .cell output { font-size: var(--t-sm); }
+.readouts:is([data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell output { font-size: var(--t-sm); }
 
-.readouts:is([data-fit="small"], [data-fit="bare"]) .cell + .cell::before { margin-right: 2px; }
+.readouts:is([data-fit="small"], [data-fit="nophase"], [data-fit="bare"]) .cell + .cell::before { margin-right: 2px; }
 
 #phase[data-tone="warn"] { color: var(--warn); }
 
 /* Without a live link what the rover last reported is history, dimmed
    with the scan over it, the halt's amber too: in full ink under a
-   dimmed scan, "Move STOP" read as live (the critic's round 3). */
-body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
+   dimmed scan, "Move STOP" read as live (the critic's round 3), and in
+   the dim ink at full weight, still (the review's phones 14): faded too,
+   as the fan's wedges are. */
+body:not([data-link="up"]) .readouts :is(output, #phase) {
+  color: var(--dim);
+  opacity: 0.7;
+}
 
 /* The simulator's one view (simview.js fills it): a card the pane's size,
    which the view inside fills (sim.css). clip, not hidden: a scroll
@@ -2238,7 +2265,7 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
   display: flex;
   align-items: center;
   gap: var(--s-1);
-  font-size: var(--t-xs);
+  font-size: var(--t-sm);
   font-weight: var(--fw-bold);
   line-height: var(--lh-tight);
   white-space: nowrap;
@@ -2271,17 +2298,19 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
 .hint[data-corner="downLeft"] { align-self: end; justify-self: start; }
 .hint[data-corner="downRight"] { align-self: end; justify-self: end; flex-direction: row-reverse; text-align: right; }
 
-/* Each corner's words on one line, or nothing. Two corners side by side
-   take 2 x 87 px (the arrow, its gap and "Right back" at 11 px in DejaVu
-   Sans, the widest fallback; 77 in Inter, measured headless): under 180
-   px of corners (a stick under 164 px: a 320 to 375 px phone, a phone on
-   its side, a short laptop's stacked column) no corner shows at all. The
+/* Each corner's words on one line, at 12 px, the dock's least (at 11 they
+   were under it: the reviews' phones 12, tablets 7), or nothing. Two
+   corners side by side take 2 x 95 px (the arrow, its gap and "Right
+   back" at 12 px in DejaVu Sans, the widest fallback; 84 in Inter):
+   under 190 px of corners (a stick under 174 px: a 320 to 375 px phone, a
+   phone on its side, a short laptop's stacked column) no corner shows at
+   all. The
    arrows alone said nothing a word does, and looked like controls (the
    review's phones 22); wrapped to two lines ("Right" over "back") they
    crowded the ring (the critic's round 1). The stick's family over it
    says what it does. Not a stick's ancestor, so it may be a container.
    After the rules that lay a corner out, which would show it again. */
-@container hints (max-width: 179.98px) {
+@container hints (max-width: 189.98px) {
   .hint { display: none; }
 }
 
@@ -2640,9 +2669,9 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
    so the tab switch moves nothing but the line between the panes. The
    Drive tab's column is as wide as its two sticks need (--drive), the view
    the rest: the owner asked for the view to be the larger. The Program
-   tab gives the view about 40% (from 320 to 560 px) and the editor the
-   rest, and the editor all of it with the view hidden. The Program tab
-   scrolls inside its own pane. */
+   tab gives the view's column about half the width (from 360 to 640 px),
+   the view at its top and the console under it, and the editor the rest,
+   and the editor all of it with the view hidden. */
 @media (min-width: 960px) and (min-height: 521px) {
   :root {
     /* The sticks as large as the height leaves them, up to 240 px, and no
@@ -2658,6 +2687,13 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
     --shell-max: 1600px;
   }
 
+  /* From 1800 px wide, the panes take the screen's width: capped at 1600
+     px, a full-HD screen kept 184 px of bare ground at either side (the
+     review's laptops 8). */
+  @media (min-width: 1800px) {
+    :root { --shell-max: 100vw; }
+  }
+
   .shell {
     height: 100vh;
     height: 100dvh;
@@ -2671,22 +2707,69 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
     padding-bottom: var(--s-4);
   }
 
-  /* The Program tab: the view about 40% of the width (from 320 to 560
-     px) on the left, the whole column's height, and the editor's card
-     the rest, its toolbar its head and the console under it, the view
-     shown or hidden: the same column either way, so View moves nothing
-     in it. Under the view, the console was a box the column's height
-     holding one line (685 px of it at 1920 x 1080) and the fan a strip
-     over it (the review's laptops 0); now the fan or the room has the
-     column, and draws in whichever shape fills it. */
+  /* The view's card here: the scan's padding (below) and its legend's
+     row over the fan, the readouts' line under it. */
+  .shell { --vcw: 24px; --vch: 82px; }
+
+  body[data-target="simulator"] .shell { --vcw: 24px; --vch: 55px; }
+
+  /* The Program tab, the view shown: the left column about half the
+     width (360 to 640 px), and in it, at its top, the view's card as tall
+     as its drawing at the column's width (--va: the fan's wide shape, or
+     the room's) and its bars, so the legend, the drawing and the
+     readouts, or the simulator's bar and its room, keep together; under
+     it the console, the state line and the log, the rest of the column,
+     the log scrolling inside it. The editor's card, its toolbar its head,
+     the right side at full height. Given the whole column, the fan or the
+     room floated in it with bare ground over and under, 50 to 67% of the
+     column empty from 1024 x 768 to 1920 x 1080, the legend at its top
+     and the readouts 200 px under the fan (the review's laptops 0 and
+     tablets 6). The view's row gives way where the screen is short, so
+     the console keeps a line (--console-min). The tab's own box and its
+     stage step aside (display: contents), so the toolbar, the editor and
+     the console are the shell's grid items: the console under the view,
+     the editor beside both. With the view hidden the tab is one box
+     again, the editor the width and the console under it (below). */
   .shell:has(> #programTab:not([hidden])) {
-    --view-w: clamp(320px, 0.4 * (min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-4)), 560px);
+    --view-w: clamp(360px, 0.5 * (min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-4)), 640px);
+    --view-h: calc((var(--view-w) - var(--vcw)) / var(--va) + var(--vch));
+    --console-min: calc(var(--bar-h) + var(--s-4));
     grid-template-columns: var(--view-w) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto var(--bar-h) minmax(0, calc(var(--view-h) - var(--bar-h))) minmax(var(--console-min), 1fr);
     grid-template-areas:
       "head head"
-      "view main";
+      "view pbar"
+      "view edit"
+      "cons edit";
   }
+
+  #programTab:not([hidden], [data-view="hidden"]),
+  #programTab:not([hidden], [data-view="hidden"]) > .programStage { display: contents; }
+
+  #programTab:not([data-view="hidden"]) .programBar { grid-area: pbar; }
+
+  #programTab:not([data-view="hidden"]) .programEditor {
+    grid-area: edit;
+    min-height: 0;
+  }
+
+  /* The console the rest of the column, the log all of it under the
+     state line, scrolling past it; quiet when empty, the card's ground
+     alone under the line. */
+  #programTab:not([data-view="hidden"]) .programConsole {
+    grid-area: cons;
+    min-height: 0;
+    margin-top: var(--s-4);
+  }
+
+  #programTab:not([data-view="hidden"]) .programLog {
+    flex: 1 1 auto;
+    display: block;
+    min-height: 0;
+    max-height: none;
+  }
+
+  #programTab:not([data-view="hidden"]) .programLog:empty { border-top: none; }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
@@ -2762,8 +2845,19 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
 @media (min-width: 960px) and (min-height: 564px) {
   :root {
     --stick: clamp(120px, (100 * var(--svh) - 332px) / 2, 280px);
-    --drive: calc(var(--stick) + 32px);
+    --dock-col: max(var(--stick), 230px);
+    --drive: calc(var(--dock-col) + 32px);
   }
+
+  /* The column 230 px wide at the least, the rotate buttons and the speed
+     across all of it, centred under their sticks, whose edges the captions
+     keep: one stick wide, a laptop's column narrowed with its height, so
+     the bigger laptop showed less (the speed's gauge in its word's place at
+     1366 x 768, 'Speed' at 1280 x 800), and at 1280 x 595 the rotate
+     buttons lost their words and the slider was 80 px for 0 to 255 (the
+     review's laptops 5, tablets 7). */
+  .spin,
+  .speed { margin-inline: calc((var(--stick) - var(--dock-col)) / 2); }
 
   /* 8 px over and under the rows, where the empty rows at either end and
      the gaps beside them make up the card's 16 px. */
@@ -2906,6 +3000,14 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
     color: var(--readout);
     background: var(--raised-hi);
   }
+
+  /* The speed its value and the slider, the rest of the column: the gauge
+     in the caption's place left the slider 64 px, about 2 px a step of 8
+     under a 24 px thumb (the review's phones 5). The caption still names
+     the slider, and its title says what it is. */
+  .speed { grid-template-columns: auto minmax(0, 1fr); }
+
+  .speed .icon { display: none; }
 }
 
 /* The Program tab on its side, 568 px wide or more (568 x 320, 844 x 390):

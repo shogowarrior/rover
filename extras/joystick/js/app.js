@@ -536,7 +536,7 @@ function holdSimPlayback() {
   if (!simView) return;
   const driving = !driveTab.hidden && targetSwitch.kind === "simulator";
   simView.holdPlayback(driving
-    ? "Driven from the Drive tab, the simulator runs in real time: 2× and 4× are for previews on the Program tab."
+    ? "Held at 1× on the Drive tab: driven from there, the simulator runs in real time, and 2× and 4× are for previews on the Program tab."
     : null);
 }
 
@@ -610,14 +610,20 @@ schemeToggle.onChange((scheme) => programTab.setScheme(scheme));
 
 // A program driving the rover from the Program tab goes on while the Drive
 // tab shows, and nothing there said so: the tab itself is marked while one
-// runs, and says so on hover. A press of any drive control takes over, as
-// ever. Its own title, what the tab is, comes back after.
+// runs, and says so on hover. A preview on the simulator marks it too, in
+// another shape (program.css): the simulated rover drove itself under the
+// Drive tab with nothing to say why (the review's laptops 6). A press of
+// any drive control takes over, as ever. Its own title, what the tab is,
+// comes back after.
 const programTabButton = byId("tabProgram");
 const programTabTitle = programTabButton.getAttribute("title");
 runner.onState((state, { kind }) => {
   if (state !== "idle" && kind === "rover") {
     programTabButton.dataset.running = "yes";
     programTabButton.setAttribute("title", "A program is driving the rover. Any drive press, Stop or Autonomous takes over.");
+  } else if (state !== "idle") {
+    programTabButton.dataset.running = "preview";
+    programTabButton.setAttribute("title", "A preview is running on the simulator. Any drive press takes over.");
   } else {
     delete programTabButton.dataset.running;
     programTabButton.setAttribute("title", programTabTitle);
@@ -839,8 +845,8 @@ fitTheTop();
 
 // The readouts' line the same way: the chip's temperature goes first, the
 // least needed, then the values take the smaller type, and only then do
-// the captions go (each cell titled with its own), before a value is cut
-// short, as each frame changes what it says: without its caption, a bare
+// the captions go, the phase's before the move's (each cell titled with its
+// own), before a value is cut short, as each frame changes what it says: without its caption, a bare
 // "STOP" read like a button (the critic's round 3). One line, one height,
 // whatever it holds.
 const readoutsLine = document.querySelector(".readouts");
@@ -849,7 +855,7 @@ const readoutsLine = document.querySelector(".readouts");
 // value not cut short but not shown: counted as cut, every line that let
 // the chip go let the captions go too.
 const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.parentNode.getBoundingClientRect().width > 1 && value.scrollWidth > value.clientWidth);
-const fitReadouts = () => fitSteps(readoutsLine, ["words", "nochip", "small", "bare"], cutShort);
+const fitReadouts = () => fitSteps(readoutsLine, ["words", "nochip", "small", "nophase", "bare"], cutShort);
 if (typeof ResizeObserver === "function") new ResizeObserver(fitReadouts).observe(readoutsLine);
 if (typeof MutationObserver === "function") {
   new MutationObserver(fitReadouts).observe(readoutsLine, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });

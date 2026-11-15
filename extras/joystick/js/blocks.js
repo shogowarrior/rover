@@ -678,7 +678,9 @@ class RoverBlocks {
  *   save() / load(state)
  *                      the program in Blockly's JSON form. load() checks the
  *                      shape first and throws, keeping the current program,
- *                      when it is not a rover program.
+ *                      when it is not a rover program; a program it loads
+ *                      shows from its top-left corner, no wider than the
+ *                      editor (never zoomed in past the start scale).
  *   clear()            remove every block (undo brings them back).
  *   highlight(id)      light up the running block; null for none.
  *   select(id)         select a block and bring it into view.
@@ -705,6 +707,9 @@ class RoverBlocks {
 class BlockEditor {
   static NARROW = "(max-width: 600px) and (orientation: portrait)";
   static SAVE_DELAY_MS = 400;
+  static MIN_SCALE = 0.4;
+  // The margin round a program fitted to the editor's width, in pixels.
+  static FIT_MARGIN = 16;
 
   static #AsyncFunction = (async () => {}).constructor;
 
@@ -716,6 +721,8 @@ class BlockEditor {
   #workspace = null;
   #readOnly = false;
   #placed = false; // the program has been scrolled into a view with a size
+  #fitPending = false; // a program loaded, to fit to the editor's width once it has one
+  #startScale = 0.85;
   #saveTimer = null;
   #scheme = null;
   #warned = new WeakMap(); // block -> the scheme warning it carries, or null
@@ -800,7 +807,7 @@ class BlockEditor {
       workspaces.load(before, this.#workspace);
       throw new Error(`It could not be loaded: ${err.message}`);
     }
-    this.#showTopLeft();
+    this.#showTopLeft(true);
   }
 
   clear() {
@@ -839,6 +846,7 @@ class BlockEditor {
 
   #inject(state) {
     const narrow = this.#narrow.matches;
+    this.#startScale = narrow ? 0.72 : 0.85;
     // Slim scrollbars: Blockly's own are 15 px, 25 on a touch screen, thick
     // grey bars that looked unstyled (the critic's round 2). The workspace
     // pans by a drag anywhere, so the bar is a cue more than a handle.
@@ -857,7 +865,7 @@ class BlockEditor {
       // attribute, as given (13.3.0's grid.ts): var() follows the look, as
       // the scan's fills do.
       grid: { spacing: 24, length: 2, colour: "var(--raised-hi)", snap: true },
-      zoom: { controls: true, wheel: true, startScale: narrow ? 0.72 : 0.85, maxScale: 2, minScale: 0.4, scaleSpeed: 1.15, pinch: true },
+      zoom: { controls: true, wheel: true, startScale: this.#startScale, maxScale: 2, minScale: BlockEditor.MIN_SCALE, scaleSpeed: 1.15, pinch: true },
       move: { scrollbars: true, drag: true, wheel: false },
       maxTrashcanContents: 16,
     });
@@ -959,13 +967,38 @@ class BlockEditor {
   }
 
   // Scroll the program's top-left corner into view, rather than wherever the
-  // workspace was left.
-  #showTopLeft() {
+  // workspace was left. A program just loaded (an example, an imported
+  // file) is fitted to the editor's width too, never zoomed in past the
+  // start scale: at full scale an example ran past a phone's editor, "1 s"
+  // cut off at its edge and the trash can under its blocks (the review's
+  // phones 3). In a hidden tab, once it is shown (resize()).
+  #showTopLeft(fit = false) {
     const workspace = this.#workspace;
+    this.#fitPending = this.#fitPending || fit;
     this.#placed = this.#container.clientWidth > 0;
     if (!this.#placed) return;
     const blocks = workspace.getTopBlocks(true);
-    if (blocks.length) workspace.scrollBoundsIntoView(blocks[0].getBoundingRectangleWithoutChildren(), 32);
+    if (!blocks.length) return;
+    if (this.#fitPending) {
+      this.#fitPending = false;
+      if (this.#fitWidth()) return;
+    }
+    workspace.scrollBoundsIntoView(blocks[0].getBoundingRectangleWithoutChildren(), 32);
+  }
+
+  // The program as wide as the editor's view at most, its top-left corner
+  // FIT_MARGIN in from the view's: false where Blockly cannot say how wide.
+  #fitWidth() {
+    const workspace = this.#workspace;
+    const margin = BlockEditor.FIT_MARGIN;
+    const box = workspace.getBlocksBoundingBox();
+    const view = workspace.getMetricsManager().getViewMetrics();
+    const width = box.right - box.left;
+    if (!(width > 0) || !(view.width > 2 * margin)) return false;
+    const scale = Math.max(BlockEditor.MIN_SCALE, Math.min(this.#startScale, (view.width - 2 * margin) / width));
+    workspace.setScale(scale);
+    workspace.scroll(margin - box.left * scale, margin - box.top * scale);
+    return true;
   }
 }
 

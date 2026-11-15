@@ -27,6 +27,20 @@
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
+/* A preview on the simulator, in the same corner: a ring, still, where a
+   run on the rover is a pulsing dot, so the two never read as one. */
+.tabs [role="tab"][data-running="preview"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 1px;
+  box-sizing: border-box;
+  width: var(--lamp);
+  height: var(--lamp);
+  border: 1.5px solid var(--ok);
+  border-radius: 50%;
+}
+
 /* The toolbar's height (below), for the layouts that place the editor
    under it on a grid (panel.css). */
 :root { --bar-h: calc(var(--ctl) + 7px); }
@@ -526,8 +540,13 @@
    middle, and the toolbar takes the empty bands beside them (panel.css
    places it): its buttons as wide as their words, closer to them, with
    no icons, and the editor's card all body, every corner round. The File
-   menu hangs from its button in the right band, at the cells' first row:
-   from 48 px down to 8 px over the foot. */
+   menu keeps its right edge at its button's, in the right band at the
+   cells' first row, but hangs from the cells' foot, as the link's popover
+   does, 4 px under them, and down to 8 px over the screen's: from its
+   button, 208 px wide, it slid under the second cell, "Examples" read
+   "mples", and a press on its first example landed on the top (the
+   review's phones 0). Its top is the cells' two rows and the 6 px
+   between them, less the band's padding over its button, and 4 px. */
 @media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {
   .programBar {
     height: auto;
@@ -545,7 +564,8 @@
   .programEditor { border-radius: var(--r-lg); }
 
   #programMenuList {
-    max-height: calc(100 * var(--svh) - var(--cell-h) - 2 * var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    top: calc(2 * var(--cell-h) + 6px - (var(--cell-h) - var(--ctl)) / 2 + var(--s-1));
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - var(--s-1) - 2 * var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -654,6 +674,21 @@
   }
 
   .blocklyToolbox:not([layout="h"]) .roverCategory .blocklyToolboxCategoryLabel { line-height: 16px; }
+}
+
+/* Shorter still (130 px at 480 x 320, the toolbar a row of its own over
+   it), closer again: seven rows of 17 px and 2 px either end. At 23 px
+   they took 169 px, Variables cut in half and Output out of sight, with
+   nothing to say there was more (the review's phones 4). */
+@container editor (max-height: 169.98px) {
+  .blocklyToolbox:not([layout="h"]) { padding: 2px var(--s-1); }
+
+  .blocklyToolbox:not([layout="h"]) .blocklyToolboxCategory.roverCategory {
+    margin: 0;
+    padding: 1px var(--s-3) 1px 10px !important;
+  }
+
+  .blocklyToolbox:not([layout="h"]) .roverCategory .blocklyToolboxCategoryLabel { line-height: 15px; }
 }
 
 /* Along the top of an upright phone (blocks.js): every category in
@@ -767,15 +802,22 @@
   .blocklyZoom { display: none; }
 }
 
-/* Shorter still, the trash can too, which ran up under the toolbox the
-   same way: a block dropped on the toolbox goes as it would in the can.
-   And the hint at the foot, as wide as the editor allows (from the
-   middle, half of it), clear of the toolbox however many rows it takes:
-   in the middle of what the toolbox left (two rows of pills over 66 px,
-   the view beside it), it ran up under the pills. */
-@container editor (max-height: 199.98px) {
+/* Narrow (a phone's editor, under 360 px) or short (under 260 px), the
+   trash can and the zoom buttons both: the trash can ran up under the
+   toolbox the same way, and on a phone, semi-transparent, it lay over an
+   example's blocks, their inputs under it (the review's phones 3). A
+   block dropped on the toolbox goes as it would in the can, and a pinch
+   still zooms. */
+@container editor (max-width: 359.98px) or (max-height: 259.98px) {
+  .blocklyZoom,
   .blocklyTrash { display: none; }
+}
 
+/* Under 200 px tall, the hint at the foot, as wide as the editor allows
+   (from the middle, half of it), clear of the toolbox however many rows
+   it takes: in the middle of what the toolbox left (two rows of pills
+   over 66 px, the view beside it), it ran up under the pills. */
+@container editor (max-height: 199.98px) {
   .programHint {
     top: auto;
     bottom: var(--s-3);
@@ -785,10 +827,19 @@
   }
 }
 
-/* There, beside a toolbox down the left, as wide as what it leaves. */
+/* There, beside a toolbox down the left, as wide as what it leaves; and
+   where that is too narrow for it in two lines (the view beside the
+   editor at 480 x 320: five lines, its top cut off), not at all: the
+   File menu's examples are a press away. */
 @container editor (max-height: 199.98px) {
   @media not all and (max-width: 600px) and (orientation: portrait) {
     .programHint { max-width: calc(100% - 120px - 2 * var(--s-3)); }
+  }
+}
+
+@container editor (max-height: 199.98px) and (max-width: 399.98px) {
+  @media not all and (max-width: 600px) and (orientation: portrait) {
+    .programHint { display: none; }
   }
 }
 
