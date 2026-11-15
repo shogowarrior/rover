@@ -2340,6 +2340,47 @@ test("schemes: a press on the other segment replaces a wish, and a press on the 
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A wish in words, where a touch screen shows it (it shows no title): on
+// the connect card over the rover's scan while there is no link, and in
+// the link's popover, behind a dashed ring as the segment is drawn (the
+// reviewer's round 1, on an iPad). Gone with the wish.
+test("schemes: a wish is said in words on the connect card and in the link's popover, and only while it waits", () => {
+  const page = loadPage();
+  const notes = () => [page.$("connectWish"), page.$("linkWish")];
+  const said = () => notes().map((n) => (n.hidden ? "-" : n.textContent)).join(" | ");
+  check(notes().every((n) => n.hidden), `nothing to say at first: ${said()}`);
+  check(all(page.$("view")).includes(page.$("connectWish")) && all(page.$("view")).filter((n) => /\bconnectCard\b/.test(n.getAttribute("class") || "")).some((card) => all(card).includes(page.$("connectWish"))), "one on the connect card");
+  check(all(page.$("linkPanel")).includes(page.$("linkWish")), "one in the link's popover");
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  check(notes().every((n) => !n.hidden && n.textContent === "Advanced goes to the rover once it connects."), `wished: ${said()}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(notes().every((n) => n.textContent === "Normal goes to the rover once it connects."), `replaced: ${said()}`);
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(notes().every((n) => n.hidden), `dropped: ${said()}`);
+
+  // Connected to firmware that names no scheme: still waiting, and said so.
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  const ws = connectOpen(page);
+  check(page.$("linkWish").textContent === "Advanced goes to the rover once it connects.", `connected, no frame yet: ${said()}`);
+  ws.serverMsg(telemetry({ scheme: undefined }));
+  check(page.$("linkWish").textContent === "Advanced goes to the rover once it reports its scheme." && !page.$("linkWish").hidden, `a frame that names none: ${said()}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
+  check(notes().every((n) => n.hidden) && ws.sent.join() === '{"scheme":"ADVANCED"}', `sent, and said no more: ${said()}, ${ws.sent}`);
+  ws.serverDrop();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  check(page.$("connectWish").textContent === "Normal goes to the rover once it connects.", `a wish after the link went: ${said()}`);
+
+  // Drawn as the wished segment is: --dim words behind a dashed ring in
+  // --live, and gone from a card too short for its title.
+  const rules = cssRules(panelCss());
+  const ring = rules.find((r) => r.selector === ".schemeWish::before");
+  check(ring && /border:\s*1px dashed var\(--live\)/.test(ring.body), `the dashed ring: ${ring && ring.body}`);
+  const words = rules.find((r) => r.selector === ".schemeWish");
+  check(words && /color:\s*var\(--dim\)/.test(words.body), `its words: ${words && words.body}`);
+  check(/\.connectCard \.schemeWish/.test(blockRules(panelCss(), "@container scan (max-height: 139.98px) {").map((r) => r.selector).join()), "hidden with the card's title where the card is short");
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("schemes: Advanced sends one {\"scheme\":\"ADVANCED\"} and nothing else, and the rover explores on", () => {
   const { page, ws } = connected(telemetry({ scheme: "NORMAL" })); // exploring
   const heard = listen(page);
@@ -4386,22 +4427,30 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
 // Every button says on hover what it does, the owner's ask with Stop's
 // icon ("all buttons should have that"): Stop and the link chip above all,
 // whose words a narrow cell drops or never shows, and every other button
-// on the page, in each state of the link, of the editor and of a program,
-// on either target. The question dialog's answers, which say what they do
-// in full, are its own.
+// on the page, in each state of the link (connecting and stale too), of
+// the editor and of a program, on either target, and the question
+// dialog's answers, which were the two left untitled (the reviewer's
+// round 1).
 test("every button titled with what it does, in every state of the link and of a program", async () => {
   const page = loadPage();
   const untitled = () => all(page.doc.documentElement)
-    .filter((n) => n.tagName === "BUTTON" && !["askNo", "askYes"].includes(n.id))
+    .filter((n) => n.tagName === "BUTTON")
     .filter((n) => !(n.getAttribute("title") || n.title))
     .map((n) => n.id || n.dataset.family || n.dataset.target || n.dataset.scheme || n.textContent);
   check(untitled().length === 0, `untitled with no link: ${untitled()}`);
   const tabTitle = page.$("tabProgram").getAttribute("title");
   check(/^Program/.test(tabTitle), `the Program tab: ${tabTitle}`);
-  const ws = connectOpen(page);
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("connect"), "click");
+  check(page.doc.body.dataset.link === "connecting" && untitled().length === 0 && /^Cancel/.test(page.$("connect").title), `untitled while connecting: ${untitled()}, connect '${page.$("connect").title}'`);
+  const ws = page.sockets.at(-1);
+  ws.serverOpen();
   check(untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled with a link: ${untitled()}, connect '${page.$("connect").title}'`);
   ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   check(untitled().length === 0, `untitled with telemetry: ${untitled()}`);
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale" && untitled().length === 0 && /^Disconnect/.test(page.$("connect").title), `untitled while stale: ${untitled()}, connect '${page.$("connect").title}'`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
   // Off under NORMAL, the family's segments say why too.
   const familySegs = all(page.$("familyChoice")).filter((n) => n.dataset.family);
   const offTitle = page.evalIn("FamilySelector.OFF_TITLE");
@@ -4418,6 +4467,15 @@ test("every button titled with what it does, in every state of the link and of a
   check(/^A program is running/.test(page.$("programRun").title) && /driving the rover/.test(page.$("tabProgram").getAttribute("title")), `running: Run '${page.$("programRun").title}', tab '${page.$("tabProgram").getAttribute("title")}'`);
   await liveForAsync(page, ws, 2000);
   check(page.evalIn("runner.state") === "idle" && untitled().length === 0 && page.$("tabProgram").getAttribute("title") === tabTitle, `after the run: ${untitled()}, tab '${page.$("tabProgram").getAttribute("title")}'`);
+  // A question: Yes says what it answers, Cancel that it answers no.
+  check(page.$("askNo").title === page.evalIn("AskDialog.NO_TITLE") && /^Cancel \(Escape\): answer no/.test(page.$("askNo").title), `Cancel before any question: '${page.$("askNo").title}'`);
+  page.fire(page.$("programClear"), "click");
+  await flush();
+  check(page.$("ask").open && untitled().length === 0, `asked: ${page.$("ask").open}, untitled ${untitled()}`);
+  check(page.$("askYes").title === "Clear: answer yes to “Clear the program?”", `Yes, titled with its question: '${page.$("askYes").title}'`);
+  check(page.$("askNo").title === page.evalIn("AskDialog.NO_TITLE"), `Cancel: '${page.$("askNo").title}'`);
+  await answer(page, "cancel");
+  check(!page.$("ask").open && page.evalIn("__editor.cleared") === 0, "answered no: nothing cleared");
 
   // The view's toggle, both ways, titled with what a press does.
   // The fake page has no matchMedia, so it starts as a phone does: hidden.
@@ -5131,6 +5189,69 @@ test("target: on the simulator the scheme toggle sets the simulator's scheme, wi
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
+// A wish for the rover's scheme waits while the simulator is the target:
+// from there nothing goes to the rover but Stop (targetswitch.js), and the
+// toggle shows the simulator's scheme, so a wish sent then changed the
+// rover unseen (the reviewer's round 1). It goes as the rover is the
+// target again, if the rover has named the other scheme by then (once,
+// pending as a press's), nowhere if it named the one wished for, and on
+// the next frame if the link is stale then or the rover has named none.
+test("target: a scheme wish waits, unsent, while the simulator is the target, and goes once the rover is the target again", () => {
+  let page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  let ws = connectOpen(page);
+  liveFor(page, ws, 1500, { mode: "MANUAL", scheme: "NORMAL" });
+  check(count(ws) === 0, `sent from the simulator target: ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === "ADVANCED" && pendingScheme(page) === null && shownScheme(page) === "NORMAL", `kept, unseen: ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}, shows the simulator's ${shownScheme(page)}`);
+  check(page.$("linkWish").hidden && page.$("connectWish").hidden, "not said either, while the simulator is the target");
+  toRover(page);
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `sent as the rover is the target again: ${ws.sent}`);
+  check(page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === "ADVANCED" && shownScheme(page) === "NORMAL" && page.$("scheme").dataset.state === "pending", `pending as a press's: ${pendingScheme(page)}, shows ${shownScheme(page)}`);
+  check(page.$("linkWish").hidden, "a request, no longer a wish");
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  check(shownScheme(page) === "ADVANCED" && pendingScheme(page) === null && count(ws) === 1, `confirmed, sent once: ${shownScheme(page)}, ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // The rover named the scheme wished for: nothing to send.
+  page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: "ADVANCED" });
+  toRover(page);
+  check(count(ws) === 0 && page.evalIn("schemeToggle.wanted") === null && pendingScheme(page) === null && shownScheme(page) === "ADVANCED", `met: sent ${ws.sent}, wanted ${page.evalIn("schemeToggle.wanted")}, shows ${shownScheme(page)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // Stale as the rover is the target again: no request on a link whose
+  // telemetry cannot confirm it. The next frame sends it.
+  page = loadPage();
+  page.fire(schemeButton(page, "NORMAL"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  page.clock.advance(page.evalIn("Link.STALE_MS"));
+  check(page.doc.body.dataset.link === "stale", `stale: ${page.doc.body.dataset.link}`);
+  toRover(page);
+  check(count(ws) === 0 && page.evalIn("schemeToggle.wanted") === "NORMAL" && pendingScheme(page) === "NORMAL", `stale: sent ${ws.sent}, wanted ${page.evalIn("schemeToggle.wanted")}, marked ${pendingScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
+  check(ws.sent.join() === '{"scheme":"NORMAL"}' && page.evalIn("schemeToggle.wanted") === null, `the next frame sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+
+  // A rover that names no scheme leaves the wish waiting, on either
+  // target; back on the rover's, the first frame that names one sends it.
+  page = loadPage();
+  page.fire(schemeButton(page, "ADVANCED"), "click");
+  toSimulator(page);
+  ws = connectOpen(page);
+  liveFor(page, ws, 1000, { mode: "MANUAL", scheme: undefined });
+  toRover(page);
+  check(count(ws) === 0 && pendingScheme(page) === "ADVANCED", `no scheme named: sent ${ws.sent}, marked ${pendingScheme(page)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL", scheme: "NORMAL" }));
+  check(ws.sent.join() === '{"scheme":"ADVANCED"}', `the first frame naming one sent ${ws.sent}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("target: the simulator's scheme starts from the rover's and is its own while it is the target", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL", scheme: "ADVANCED" }));
   const scheme = () => page.evalIn("targets.simulator.scheme");
@@ -5453,6 +5574,30 @@ test("look: Dark | Light and a tile per theme in the gear's popover, the look in
   });
   check(checkedTheme(page) === "console", `the default checked: ${checkedTheme(page)}`);
   check(worn(page) === "console-dark", `html wears ${worn(page)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// Options, sized to what it holds (the reviewer's round 1): Dark | Light as
+// wide as its words, as every other toggle is, not stretched across the
+// popover; and on a touch screen with nothing to hover, where no keyboard
+// is likely, no list of keys over Update. The rest stays: the looks and
+// the firmware update.
+test("look: Dark | Light as wide as its words, and a touch screen's Options leaves out the keys", () => {
+  const rules = cssRules(panelCss());
+  const flavours = rules.filter((r) => /\.flavours\b/.test(r.selector));
+  check(flavours.some((r) => r.selector === ".options .flavours" && /align-self:\s*flex-start/.test(r.body)), `as wide as its words: ${flavours.map((r) => `${r.selector}{${r.body}}`)}`);
+  check(!flavours.some((r) => /(^|[\s;{])(width|flex|flex-grow)\s*:/.test(r.body)), `nothing stretches it: ${flavours.map((r) => r.body)}`);
+
+  const touch = blockRules(panelCss(), "@media (hover: none) and (pointer: coarse) {");
+  const gone = touch.filter((r) => /display:\s*none/.test(r.body)).flatMap((r) => r.selector.split(/\s*,\s*/));
+  check(["#keysLabel", "#keyList", ".keysNote"].every((s) => gone.includes(s)), `the keys left out: ${gone}`);
+  check(gone.every((s) => ["#keysLabel", "#keyList", ".keysNote"].includes(s)), `nothing else left out: ${gone}`);
+  // What it leaves out is the whole Keys section, between the looks and
+  // the firmware update.
+  const page = loadPage();
+  const kids = page.$("optionsPanel").children.map((n) => n.id || (n.getAttribute("class") || ""));
+  const at = (id) => kids.indexOf(id);
+  check(at("lookChoice") < at("keysLabel") && at("keysLabel") + 1 === at("keyList") && at("keyList") + 1 === at("keysNote") && at("keysNote") + 1 === at("firmwareLabel"), `the Keys section, whole: ${kids}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

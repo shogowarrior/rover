@@ -226,6 +226,7 @@ const schemeToggle = new SchemeToggle({
   link,
   group: byId("scheme"),
   choice: byId("schemeChoice"),
+  notes: [byId("linkWish"), byId("connectWish")],
 });
 
 // The pivot stick's family, on under ADVANCED only.

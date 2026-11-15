@@ -477,10 +477,15 @@ input[type="range"]::-moz-range-thumb {
 /* Each section after the first set off from the one above. */
 .options .menuLabel ~ .menuLabel { margin-top: var(--s-2); }
 
-/* Dark | Light across the popover, then a tile per theme, side by side,
-   each previewed in the flavour in force. The toggle is a group in a menu,
-   whose groups stack: its segments stay in a row. */
-.options .flavours { flex-direction: row; }
+/* Dark | Light, then a tile per theme, side by side, each previewed in
+   the flavour in force. The toggle is a group in a menu, whose groups
+   stack: its segments stay in a row, and it is as wide as its words, as
+   every other toggle is, never stretched across the popover (the
+   reviewer's round 1). */
+.options .flavours {
+  flex-direction: row;
+  align-self: flex-start;
+}
 
 .looks {
   display: grid;
@@ -589,6 +594,15 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--t-xs);
   line-height: var(--lh-body);
   color: var(--dim);
+}
+
+/* A touch screen with nothing to hover (a phone, a tablet without a
+   keyboard's trackpad): the keys are no use there, and took 150 px of a
+   phone's Options, with Update under them (the reviewer's round 1). */
+@media (hover: none) and (pointer: coarse) {
+  #keysLabel,
+  #keyList,
+  .keysNote { display: none; }
 }
 
 /* A short screen: the keys' rows closer, so the whole popover, Update
@@ -1286,6 +1300,33 @@ body[data-link="down"] #connect {
 
 #note[data-tone="bad"] { color: var(--warn); }
 
+/* A scheme pressed before the rover reported one (scheme.js), in words,
+   in the link's popover and on the connect card: a touch screen shows no
+   title, and the dashed segment alone said nothing (the reviewer's round
+   1, on an iPad). Behind a dashed ring, as that segment is drawn, in its
+   first line: centred on the card, the ring stays by the words it marks. */
+.schemeWish {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--dim);
+  text-wrap: balance;
+}
+
+.schemeWish::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--lamp);
+  height: var(--lamp);
+  margin-right: 6px;
+  vertical-align: 0;
+  border: 1px dashed var(--live);
+  border-radius: 50%;
+}
+
+.schemeWish[hidden] { display: none; }
+
 /* --- the view: what the controls drive ---------------------------------- */
 
 /* One pane beside (or above) both tabs: on the rover target the rover's
@@ -1493,7 +1534,8 @@ body[data-link="connecting"] .connectGo {
 /* A card too short for all of it (a phone on its side, a short screen):
    the button first. */
 @container scan (max-height: 139.98px) {
-  .connectTitle { display: none; }
+  .connectTitle,
+  .connectCard .schemeWish { display: none; }
 }
 
 @container scan (max-height: 99.98px) {
