@@ -188,7 +188,7 @@
 /* A phone on its side has under 300 px under the top. The tab spans the
    screen on the shell's columns (panel.css), and its toolbar takes the
    bands beside the top, which were empty: Run over Stop program in the
-   left band, at the editor's left edge, File over View in the right, at
+   left band, at the editor's left edge, View over File in the right, at
    its right edge, each as wide as its words, lined up with a cell's
    controls (4 px into a 40 px cell, the cells 6 px apart). Stretched to
    the bands' width they were four 240 px slabs, two of them grey with no
@@ -217,8 +217,22 @@
 
   #programRun { grid-area: 1 / 1; justify-self: start; }
   #programStop { grid-area: 2 / 1; justify-self: start; }
-  .programBar .menuHolder { grid-area: 1 / -2; justify-self: end; margin-left: 0; }
-  #viewToggle { grid-area: 2 / -2; justify-self: end; }
+  .programBar .menuHolder { grid-area: 2 / -2; justify-self: end; margin-left: 0; }
+  #viewToggle { grid-area: 1 / -2; justify-self: end; }
+
+  /* File on the second row, level with the cells' second, so its menu
+     hangs from it below the cells, 8 px under them as the top's popovers
+     are, never beside them: from the first row, on a screen under about
+     800 px wide, it lay under the second cell, its first items hidden
+     there, and ran past the screen's foot (568 x 320). At most the screen
+     under the cells (8 px and the notch's inset over them, here), less
+     8 px, and scrolling inside past that (panel.css fades its ends). */
+  #programMenuList {
+    top: calc(100% + (var(--cell-h) - var(--ctl)) / 2 + var(--s-2));
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - 3 * var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
 
   .programStage {
     grid-row: 2;

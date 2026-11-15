@@ -375,21 +375,99 @@ input[type="range"]::-moz-range-thumb {
   background: var(--raised-hi);
 }
 
-/* The popover wears the File menu's .menu, above: under its button, right
-   edges together, below the cells and over the page. As wide as a phone on
-   its side leaves left of the gear, and never taller than the screen under
-   the cells (two rows of them, 86 px, the top's padding and the gap under
-   the gear, 110 px at most in every layout, and 8 px clear of the foot):
-   it scrolls inside rather than scroll the page, which would move the
-   stick. With 150 px kept, it stopped 52 px over a 667 px screen's foot,
-   its Update row out of sight (the critic's round 1). */
+/* The popover wears the File menu's .menu, above, and hangs from the top
+   as the link's does: its holder is not positioned, so it hangs from the
+   foot of the top (.bar), right edges together with the second cell, as
+   far below the cells as the link's popover is in every layout. Hung from
+   the gear, it touched the cells' foot (the critic's round 2). */
+.hands > .menuHolder { position: static; }
+
+/* As wide as a phone on its side leaves left of the gear, and never
+   taller than the screen under the top (100%: the top's own height, which
+   is where the popover begins) and 8 px clear of the foot: it scrolls
+   inside rather than scroll the page, which would move the stick, and its
+   ends fade where more of it is past the edge (below). With 150 px kept,
+   it stopped 52 px over a 667 px screen's foot, its Update row out of
+   sight (the critic's round 1). Its padding above and below is the fades'
+   (below). */
 .options {
+  top: 100%;
   gap: var(--s-1);
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100 * var(--svh) - 110px - var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100 * var(--svh) - 100% - var(--s-2) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
-  padding: var(--s-2) var(--s-3) var(--s-3);
+  scrollbar-width: thin;
+  padding: 0 var(--s-3);
 }
+
+/* A popover taller than the room under the top scrolls inside, and says
+   so: a fade over each end with more of it past the edge (popover.js's
+   data-more), stuck to that edge as it scrolls. At 844 x 390 Options ran
+   past the screen's foot, its Firmware section out of sight with nothing
+   to say it was there (the critic's round 2). Each fade is 24 px of the
+   panel's own ground, over the padding at its end and the line nearest
+   it, and only while there is more past it, so a list scrolled to its end
+   shows its last line whole. It takes no more room than the padding it
+   stands in for (each end's own, less the gap): the menu's own
+   padding-block is nothing, so the fades' edges are the scrolled box's
+   own, however a browser counts a scroller's padding for a sticky box.
+   Hidden at no weight (:where), so data-more outweighs an id. The link's
+   popover (below) fades its ends too. */
+:where(.options, .linkPanel, #programMenuList)::before,
+:where(.options, .linkPanel, #programMenuList)::after {
+  content: "";
+  position: sticky;
+  z-index: 1;
+  flex: none;
+  height: var(--s-6);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.options::before,
+.linkPanel::before,
+#programMenuList::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--panel) 20%, transparent);
+}
+
+.options::after,
+.linkPanel::after,
+#programMenuList::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--panel) 20%, transparent);
+}
+
+.menu[data-more~="above"]::before,
+.menu[data-more~="below"]::after { opacity: 1; }
+
+/* Options: 8 px over its first line and 12 under its last, its gap's 4
+   with each; the fades across its side padding too. */
+.options::before,
+.options::after { margin-inline: calc(-1 * var(--s-3)); }
+
+.options::before { margin-bottom: calc(var(--s-2) - var(--s-1) - var(--s-6)); }
+
+.options::after { margin-top: calc(var(--s-3) - var(--s-1) - var(--s-6)); }
+
+/* The link's popover: 8 px over its first line and 12 under its last, its
+   gap's 8 with each. */
+.linkPanel::before,
+.linkPanel::after { margin-inline: calc(-1 * var(--s-3)); }
+
+.linkPanel::before { margin-bottom: calc(-1 * var(--s-6)); }
+
+.linkPanel::after { margin-top: calc(var(--s-3) - var(--s-2) - var(--s-6)); }
+
+/* The File menu: 4 px at either end, as .menu's padding was, with no gap. */
+#programMenuList { padding-block: 0; }
+
+#programMenuList::before,
+#programMenuList::after { margin-inline: calc(-1 * var(--s-1)); }
+
+#programMenuList::before { margin-bottom: calc(var(--s-1) - var(--s-6)); }
+
+#programMenuList::after { margin-top: calc(var(--s-1) - var(--s-6)); }
 
 .options .menuLabel {
   margin: 0;
@@ -1100,14 +1178,20 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 /* The link's popover: the address, Connect, and what the link has to say.
    It hangs from the top, below the cells, never over them (a phone's
-   second cell, with Stop, is under the chip), left edges together. */
+   second cell, with Stop, is under the chip), left edges together. Never
+   past the screen's foot, as Options (above): a motor fault's words and a
+   lost link's note together ran past a phone on its side, where the page
+   cannot scroll the top. Its padding above and below is its fades'. */
 .linkPanel {
   top: 100%;
   right: auto;
   left: 0;
   gap: var(--s-2);
   width: min(22rem, 100%);
-  padding: var(--s-2) var(--s-3) var(--s-3);
+  max-height: calc(100 * var(--svh) - 100% - var(--s-2) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0 var(--s-3);
   white-space: normal;
 }
 
@@ -1323,10 +1407,11 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 body:is([data-link="down"], [data-link="connecting"]) .connectCard { display: grid; }
 
 /* With the link's popover open, its Connect is the one: the card's gives
-   way, keeping its place. Two Connect buttons, one over the other, asked
-   which to press (the critic's round 1). A browser without :has() shows
-   both, as before. */
-.shell:has(#linkPanel:not([hidden])) .connectCard { visibility: hidden; }
+   way, keeping its place, and so does the Program tab console's. Two
+   Connect buttons, one over the other, asked which to press (the critic's
+   round 1), and the console's still showed under the popover on a phone
+   (round 2). A browser without :has() shows them all, as before. */
+.shell:has(#linkPanel:not([hidden])) :is(.connectCard, .consoleConnect) { visibility: hidden; }
 
 .connectTitle {
   margin: 0;
