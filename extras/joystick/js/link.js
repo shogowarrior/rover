@@ -4,7 +4,7 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, chip, linkState, note, proxy, cardTitle, storageKey })
+ *   new Link({ body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
  *     host        the address field (host or host:port), in the link
  *                 popover; Enter connects, and leaves the field, so the
@@ -27,11 +27,20 @@
  *     note        the status line, in the popover;
  *     proxy       the connect card's button, in the view pane while there
  *                 is no link: a press of it is a press of connect. It says
- *                 what that press does: "Connect to" the address, "Cancel"
- *                 while connecting, "Reconnect" after a lost link, and "Try
- *                 again" after a rover that was never reached;
+ *                 what that press does, and to which address: "Connect
+ *                 to" it, "Cancel" while connecting, "Reconnect to" it
+ *                 after a lost link, and "Try" it "again" after a rover
+ *                 that was never reached; "Connect to" once the address is
+ *                 not the one that went (the reviewers' round 2: "Reconnect"
+ *                 alone went to an address typed since, unseen). Its
+ *                 data-full holds those words, and its data-verb the verb
+ *                 alone ("Connect", "Reconnect", "Try again", "Cancel"),
+ *                 for a card too narrow for both, which then names the
+ *                 address on a line of its own (app.js, fitConnect());
  *     cardTitle   the connect card's title: the link's state, as the chip
  *                 says it, and the address while connecting;
+ *     cardHost    that line on the card: the address, as the button
+ *                 names it;
  *     storageKey  where the address is remembered.
  *
  *   With no socket the chip and the card name the address in the field, as
@@ -49,6 +58,15 @@
  *                      (firmware.js): an object whose "ota" is a string. It
  *                      never reaches onTelemetry, where one blanked the scan,
  *                      hid the motor warning and forgot the scheme.
+ *   onSay(fn)          fn(said) whenever the chip is said again: its word
+ *                      ("down", "lost", "unreachable", "connecting", "up" or
+ *                      "stale", as data-say) or the address it names, which
+ *                      can change while the state does not (a Connect to an
+ *                      address that cannot be opened at all stays down,
+ *                      "Not reachable"). The chip's title is Link's again
+ *                      then: what app.js puts before it goes back on here
+ *                      (the reviewers' round 2: the alerts' words were lost
+ *                      from it until the next frame).
  *   onState(fn)        fn(state, cause) on every change of state:
  *                        "down"        no socket;
  *                        "connecting"  a socket that has not opened yet;
@@ -105,20 +123,31 @@ class Link {
     stale: () => Link.LABEL.stale,
   });
   // The connect card's button, in each state but up and stale, where the
-  // card is not shown: what a press does. "lost" and "unreachable" are
-  // "down" after a link that went under the panel, or never came.
+  // card is not shown: what a press does, and where. "lost" and
+  // "unreachable" are "down" after a link that went under the panel, or
+  // never came: again to the address that went, or to another typed
+  // since, which is a Connect like any other. PROXY_VERB is the verb
+  // alone, for a card too narrow for the address beside it.
   static PROXY = Object.freeze({
     down: (address) => address ? `Connect to ${address}` : "Connect",
-    lost: () => "Reconnect",
-    unreachable: () => "Try again",
+    lost: (address, again) => (again ? `Reconnect to ${address}` : Link.PROXY.down(address)),
+    unreachable: (address, again) => (again ? `Try ${address} again` : Link.PROXY.down(address)),
+    connecting: () => "Cancel",
+    up: () => "Disconnect",
+    stale: () => "Disconnect",
+  });
+  static PROXY_VERB = Object.freeze({
+    down: () => "Connect",
+    lost: (again) => (again ? "Reconnect" : "Connect"),
+    unreachable: (again) => (again ? "Try again" : "Connect"),
     connecting: () => "Cancel",
     up: () => "Disconnect",
     stale: () => "Disconnect",
   });
   static PROXY_TITLE = Object.freeze({
     down: (address) => `Connect to the rover at ${address || "the address in the link's popover"}.`,
-    lost: (address) => `Reconnect: try the rover at ${address} again.`,
-    unreachable: (address) => `Try again: connect to the rover at ${address}.`,
+    lost: (address, again) => (again ? `Reconnect: try the rover at ${address} again.` : Link.PROXY_TITLE.down(address)),
+    unreachable: (address, again) => (again ? `Try again: connect to the rover at ${address}.` : Link.PROXY_TITLE.down(address)),
     connecting: () => Link.CONNECT_TITLE.connecting,
     up: () => Link.CONNECT_TITLE.up,
     stale: () => Link.CONNECT_TITLE.stale,
@@ -136,17 +165,19 @@ class Link {
   #state = null;
   #said = "down"; // the chip's word: the state, "down" split three ways
   #address = ""; // the address the chip names: the one a socket went to, or the field's
+  #wentTo = null; // the address the last socket went to, or null
   // The one current socket. Every listener checks it first: a socket that has
   // been replaced or closed on purpose must not touch the page, or its late
   // 'close' would halt the new session and show the link as down.
   #socket = null;
   #staleTimer = null;
   #stateListeners = new Listeners();
+  #sayListeners = new Listeners();
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, chip, linkState, note, proxy, cardTitle, storageKey }) {
-    this.#ui = { body, host, connect, chip, linkState, note, proxy, cardTitle };
+  constructor({ body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost, storageKey }) {
+    this.#ui = { body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost };
     this.#storageKey = storageKey;
 
     // The word's slot as wide as its longest word: a sizer for each, out of
@@ -191,6 +222,10 @@ class Link {
     return this.#stateListeners.add(fn);
   }
 
+  onSay(fn) {
+    return this.#sayListeners.add(fn);
+  }
+
   onTelemetry(fn) {
     return this.#telemetryListeners.add(fn);
   }
@@ -227,6 +262,7 @@ class Link {
       return;
     }
     memory.remember(this.#storageKey, host);
+    this.#wentTo = host;
     this.#name(host);
 
     // One socket at a time. An old one left open would hold one of the rover's
@@ -315,14 +351,19 @@ class Link {
   // The chip: its word, data-say for its colour, and the whole of it, with
   // the address, as its title. The connect card's title and button with it.
   #say(said) {
-    const { chip, linkState, proxy, cardTitle } = this.#ui;
+    const { chip, linkState, proxy, cardTitle, cardHost } = this.#ui;
+    const again = this.#address === this.#wentTo;
     this.#said = said;
     chip.dataset.say = said;
     linkState.textContent = Link.LABEL[said];
     chip.title = this.title;
-    proxy.textContent = Link.PROXY[said](this.#address);
-    proxy.title = Link.PROXY_TITLE[said](this.#address);
+    proxy.dataset.full = Link.PROXY[said](this.#address, again);
+    proxy.dataset.verb = Link.PROXY_VERB[said](again);
+    proxy.textContent = proxy.dataset.full;
+    proxy.title = Link.PROXY_TITLE[said](this.#address, again);
     cardTitle.textContent = Link.CARD[said](this.#address);
+    if (cardHost) cardHost.textContent = this.#address;
+    this.#sayListeners.emit(said);
   }
 
   // The address the chip names, where the top has room (panel.css) and in

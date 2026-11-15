@@ -63,6 +63,12 @@
  *                 or null.
  *   onChange(fn)  fn(scheme, previous) whenever the scheme shown changes, to
  *                 or from null included -- whoever changed it, a bind too.
+ *   onWish(fn)    fn(wish, heard) whenever the wish said changes: the
+ *                 scheme wished for the rover (null for none, and while
+ *                 bound, where it waits unseen), and whether a frame has
+ *                 come since the link was last down ("once it reports its
+ *                 scheme" rather than "once it connects"). The pivot
+ *                 stick's line says it too (app.js).
  */
 class SchemeToggle {
   // Telemetry arrives every TELEMETRY_MS (protocol.js). Three frames without
@@ -101,6 +107,8 @@ class SchemeToggle {
   #heard = false; // a frame has come over the link since it was last down
   #pendingTimer = null;
   #listeners = new Listeners();
+  #wishListeners = new Listeners();
+  #said = "none"; // the wish last said, as "wish heard", to tell its listeners of a change
 
   constructor({ link, group, choice, notes = [] }) {
     this.#link = link;
@@ -126,6 +134,10 @@ class SchemeToggle {
 
   onChange(fn) {
     return this.#listeners.add(fn);
+  }
+
+  onWish(fn) {
+    return this.#wishListeners.add(fn);
   }
 
   // Every frame states the scheme. One that names none, or one this panel
@@ -275,6 +287,11 @@ class SchemeToggle {
     for (const element of this.#notes) {
       element.textContent = note;
       element.hidden = !note;
+    }
+    const said = `${wish} ${this.#heard}`;
+    if (said !== this.#said) {
+      this.#said = said;
+      this.#wishListeners.emit(wish, this.#heard);
     }
   }
 }

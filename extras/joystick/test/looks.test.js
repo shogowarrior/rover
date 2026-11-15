@@ -62,7 +62,7 @@ const AUDIT = [
 
   // A fresh sonar ray is drawn at 0.95.
   ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
-    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar and the View toggle's while shown, the rover's aim, the dashed ring before a scheme wish's note"],
+    "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar and the View toggle's while shown, the rover's aim, the dashed ring before a scheme wish's note, the Autonomous switch's dashed edge while a press waits for the rover"],
   ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks outside the top's cells, the address, the room list, the theme tiles"],
   ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
     "the link chip's lamp while up, open or not, the Autonomous switch's edge while on, a program's dots (the running tab's on the cell), the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],

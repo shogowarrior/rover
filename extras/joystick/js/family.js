@@ -28,6 +28,12 @@
  *
  *   offer(available)    turn the pivots on (ADVANCED) or off. The family
  *                       chosen is kept either way.
+ *   wished(words)       while off, what the line says in place of "Needs
+ *                       Advanced" while ADVANCED is wished for a rover not
+ *                       yet reporting its scheme (one of WISHED), or null
+ *                       for none. "Needs Advanced" under a dashed Advanced
+ *                       said the opposite of the wish (the reviewers' round
+ *                       2).
  *   awaitPress(stick, on)
  *                       while on, that stick's caption ("move", the left
  *                       stick's label) or line ("pivot", the note) asks for
@@ -92,6 +98,15 @@ class FamilySelector {
   // pad's title says where; on, it has none, to hang over a stick in use.
   static CAVEAT = "Untried: go slow";
   static OFF = "Needs Advanced";
+  // While ADVANCED is wished for a rover that has not reported its scheme
+  // (scheme.js): it comes on the link, or waits for a rover that is
+  // connected to report one. One wording each, as the line's others, at
+  // most "Needs Advanced"'s 118 px: "Advanced once connected" was 177,
+  // past the pivot stick's column on a phone on its side.
+  static WISHED = Object.freeze({
+    waiting: "Advanced on link",
+    heard: "Advanced waits",
+  });
   static OFF_TITLE = "Pivots need Advanced: choose Advanced in Normal | Advanced, at the top. Under Normal the pivots are off, on the sticks and on the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
@@ -109,6 +124,7 @@ class FamilySelector {
   #family = FAMILY_PIVOT;
   #offered = false;
   #awaiting = new Set(); // the sticks a fresh press is asked of: "move", "pivot"
+  #wish = null; // what the line says while ADVANCED is wished (WISHED), or null
   #listeners = new Listeners();
 
   constructor({ choice, group, pad, label, hints, note }) {
@@ -146,6 +162,11 @@ class FamilySelector {
     this.#render();
   }
 
+  wished(words) {
+    this.#wish = words || null;
+    this.#render();
+  }
+
   awaitPress(stick, on) {
     if (on) this.#awaiting.add(stick);
     else this.#awaiting.delete(stick);
@@ -179,8 +200,9 @@ class FamilySelector {
     FamilySelector.#say(label, this.#awaiting.has("move") ? FamilySelector.PRESS_AGAIN : FamilySelector.TRANSLATE, this.#awaiting.has("move") ? "warn" : null);
     // A request for a press is for a stick that can take one.
     const pressPivot = offered && this.#awaiting.has("pivot");
+    const wish = !offered && this.#wish;
     const tone = pressPivot ? "warn" : offered ? "caveat" : "off";
-    const words = pressPivot ? FamilySelector.PRESS_AGAIN : offered ? FamilySelector.CAVEAT : FamilySelector.OFF;
+    const words = pressPivot ? FamilySelector.PRESS_AGAIN : offered ? FamilySelector.CAVEAT : wish || FamilySelector.OFF;
     FamilySelector.#say(note, words, tone);
 
     // The corner labels come from moveForStick() itself, so they cannot

@@ -77,6 +77,7 @@ const link = new Link({
   note: byId("note"),
   proxy: byId("connectGo"),
   cardTitle: byId("connectTitle"),
+  cardHost: byId("connectHost"),
   storageKey: "rover.host",
 });
 
@@ -93,6 +94,26 @@ byId("changeAddress").addEventListener("click", () => {
   if (byId("linkPanel").hidden) byId("linkChip").click();
   byId("host").focus();
 });
+// Its button names the address a press goes to ("Reconnect to" it), and
+// where the card is too narrow for that, measured, it says the verb alone
+// and a line of the card the address (the reviewers' round 2: "Connect to
+// 192.168.0.115" ran into its pill's ends at 480 x 320, and "Reconnect"
+// alone went to an address typed since, unseen). Again whenever Link says
+// it again, the link's state changes (which shows or hides the card), or
+// the scan's card changes size.
+const connectCard = document.querySelector(".connectCard");
+function fitConnect() {
+  const go = byId("connectGo");
+  go.textContent = go.dataset.full;
+  connectCard.dataset.fit = "full";
+  if (!(go.scrollWidth > go.clientWidth)) return;
+  go.textContent = go.dataset.verb;
+  connectCard.dataset.fit = "verb";
+}
+link.onSay(fitConnect);
+link.onState(fitConnect);
+if (typeof ResizeObserver === "function") new ResizeObserver(fitConnect).observe(connectCard.parentNode);
+fitConnect();
 
 const scanView = new ScanView(byId("scan"));
 
@@ -193,12 +214,26 @@ window.addEventListener("pagehide", () => driver.standDown("pagehide"));
 byId("stop").addEventListener("click", () => {
   if (driven.simulator) link.send({ move: STOP, speed: 0, duration: MOVE_DURATION_MS });
   driver.stopRover();
-  stopReachedRover();
 });
-const autoToggle = new AutoToggle({ button: byId("auto"), driver });
+// With no link on the rover target, a press of Autonomous (or T) sends
+// nothing, and says why where the link is made: the link's popover opens,
+// its note saying it. A switch that did nothing read as broken (the
+// reviewers' round 2), and its title says so too while the link is down
+// (titleAuto(), the target's block).
+const AUTO_NEEDS_LINK = "Autonomous needs the rover connected: connect, then press it again.";
+const autoToggle = new AutoToggle({
+  button: byId("auto"),
+  driver,
+  link,
+  unlinked: () => {
+    link.note(AUTO_NEEDS_LINK, "bad");
+    if (byId("linkPanel").hidden) byId("linkChip").click();
+  },
+});
 link.onTelemetry((data) => autoToggle.show(data));
 link.onState((state) => {
   if (state === "connecting") autoToggle.clear();
+  else if (state === "down") autoToggle.linkDown();
 });
 
 /* --- the keyboard -------------------------------------------------------- */
@@ -245,6 +280,12 @@ link.onTelemetry((data) => schemeToggle.show(data));
 link.onState((state) => {
   if (state === "down") schemeToggle.linkDown();
   else if (state === "stale") schemeToggle.linkStale();
+});
+// While Advanced is wished, the pivot stick's line says when it comes,
+// where "Needs Advanced" under the dashed Advanced said the opposite (the
+// reviewers' round 2).
+schemeToggle.onWish((wish, heard) => {
+  familySelector.wished(wish === SCHEME_ADVANCED ? FamilySelector.WISHED[heard ? "heard" : "waiting"] : null);
 });
 
 // The operator's own choice re-steers a held pivot stick at once, as
@@ -349,12 +390,21 @@ const autoTitle = autoButton.getAttribute("title");
 // link's word always (the critics' round 3: one alert in the word's place
 // hid the other, and hid "No data"). A rover last seen exploring stays so,
 // dashed, after its link goes stale or is lost, or a new one is tried:
-// nothing says it stopped until a frame says MANUAL, or a Stop goes out
-// over the link (Stop with no link cannot reach it). Its popover says each
-// in words, and so does the chip's title, before the link's own.
+// nothing says it stopped until a frame says MANUAL. Not a Stop, even one
+// sent over an open link: a stale link may be half-open, and a STOP sent
+// down it proves nothing (the reviewers' round 2: a Stop over a silent
+// link cleared the one warning left once it dropped). Its popover says
+// each in words, and so does the chip's title, before the link's own.
 const chip = byId("linkChip");
 const chipFor = byId("chipFor");
 const linkAlert = byId("linkAlert");
+const roverAway = byId("roverAway");
+// The view's line over the simulator, while the rover explores: the
+// chip's glyph alone said it on a phone (the reviewers' round 2).
+const ROVER_AWAY = Object.freeze({
+  now: "The rover is exploring on its own. Stop stops it.",
+  last: "Last seen exploring on its own. Reconnect, then Stop.",
+});
 const programTabPanel = byId("programTab");
 const programConnect = byId("programConnect");
 const ALERTS = Object.freeze({
@@ -379,13 +429,6 @@ link.onTelemetry((data) => {
 link.onState((state) => {
   if (state !== "up") modeHeard = false;
 });
-// A Stop that went out over the link: the rover was told to stop
-// exploring, and its next frame says whether it did.
-function stopReachedRover() {
-  if (link.state !== "up" && link.state !== "stale") return;
-  roverExploring = false;
-  markAlert();
-}
 function viewShowsScan() {
   if (driven.simulator) return false;
   return programTabPanel.hidden || programTabPanel.dataset.view !== "hidden";
@@ -402,11 +445,17 @@ function markAlert() {
     alert.element.title = on.includes(key) ? ALERTS[key].why(live) : "";
   }
   ALERTS.exploring.element.dataset.known = live ? "now" : "last";
+  roverAway.hidden = !on.includes("exploring");
+  roverAway.dataset.known = live ? "now" : "last";
+  roverAway.textContent = ROVER_AWAY[live ? "now" : "last"];
+  roverAway.title = ALERTS.exploring.why(live);
   chip.dataset.alert = on.join(" ");
   chip.title = [...whys, link.title].join(" ");
   linkAlert.textContent = whys.join(" ");
   linkAlert.hidden = on.length === 0;
   offerConnect();
+  // An alert takes room from the chip's word at the top's last step.
+  sayChipWord();
 }
 // With no link on the rover target, the Program tab's console says why Run
 // is off, and beside it a press of Connect does the next thing, while the
@@ -422,9 +471,11 @@ function offerConnect() {
 }
 link.onTelemetry(markAlert);
 link.onState(markAlert);
-// The chip's title names the field's address while there is no link
-// (Link): the alerts go back before it as one is typed.
-byId("host").addEventListener("input", markAlert);
+// Whenever Link says the chip again, its word or its address, with the
+// state or without (an address typed with no link, or one that cannot be
+// opened at all): its title is Link's alone then, and the alerts go back
+// before it.
+link.onSay(markAlert);
 // Again as the tab or the View toggle changes what the view shows (below),
 // and as anything else does (a switch of target folding the view).
 if (typeof MutationObserver === "function") {
@@ -445,10 +496,20 @@ function driveTarget(kind) {
   // the view knows it is out of sight and an idle one draws nothing.
   byId("simSlot").hidden = !driven.simulator;
   markAlert();
+  titleAuto();
+}
+// Autonomous says what it does on the target, and on the rover target
+// with no link that it needs one: a press then only opens the link's
+// popover (AutoToggle).
+function titleAuto() {
+  const unlinked = link.state === "down" || link.state === "connecting";
   autoButton.setAttribute("title", driven.simulator
     ? "Autonomous (T), on the simulator: on, the simulated rover takes the mode, but exploring is not simulated, so it stands still; off, it stops. The rover is left alone."
-    : autoTitle);
+    : unlinked
+      ? `${autoTitle} Needs a link to the rover: with none, a press opens the link's popover to connect.`
+      : autoTitle);
 }
+link.onState(titleAuto);
 driveTarget(targetSwitch.kind);
 targetSwitch.onChange((kind) => {
   runner.abort(`the target was switched to the ${kind}.`);
@@ -701,30 +762,66 @@ firmwareUpdate.onStart(() => {
 // switch to the simulator moved Autonomous 58 px). What comes and goes in
 // the chip, the rover's name on the simulator target and the two alerts,
 // is measured shown, all three (data-fitting, panel.css), so it always has
-// its room; out of it, it takes none. Again whenever a cell changes size.
+// its room; out of it, it takes none. Where the cells share a row the
+// second cell's controls keep to its far end (panel.css), so the room the
+// first takes as the chip says more comes out of the second's empty start,
+// and nothing there moves either. Again whenever a cell changes size.
 // Where the cells share a row, the first as wide as what it holds and the
 // second the rest, either can run over, so both count, and the row. The
-// address only on a screen 1280 px wide or more. Neither cell's height can
-// change: a cell is one line whatever it says. The second cell keeps its
-// 13 px words and Advanced whole down to a 375 px phone ("snug"), and gives
-// up a size, then Advanced, only past that (a 320 px phone): at 12 px on a
-// 375 px phone and on a phone on its side, its words were a size under the
-// first cell's (the critic's round 1).
+// address wherever the first cell has room for it, measured as the rest
+// (the reviewers' round 2: an iPad upright has, where a 1280 px screen was
+// asked). Neither cell's height can change: a cell is one line whatever it
+// says. The alerts' words go after every other word but the link's, Sim
+// and Auto and the rover's glyph for "Rover:" first; the second cell keeps
+// its 13 px words and Advanced whole down to a 375 px phone ("snug"), its
+// 12 px words and Advanced down to a 320 px phone ("tiny"), and gives up
+// Advanced only past that: at 12 px on a 375 px phone and on a phone on
+// its side, its words were a size under the first cell's (the critic's
+// round 1).
 const cellsRow = document.querySelector(".cells");
 const firstCell = document.querySelector(".hcell.drives");
 const secondCell = document.querySelector(".hcell.hands");
-const wideTop = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
-const runsOver = () => [firstCell, secondCell, cellsRow].some((box) => box.scrollWidth > box.clientWidth);
+// Whether a box holds what it holds: nothing past its content box, the
+// last control laid out included. scrollWidth alone missed a chip that ran
+// into the cell's padding and touched its outline (the reviewers' round
+// 2), and the popovers it hangs are out of the flow, so not counted.
+function runsPast(box) {
+  if (box.scrollWidth > box.clientWidth) return true;
+  const style = getComputedStyle(box);
+  const end = box.getBoundingClientRect().left + box.clientWidth + (parseFloat(style.borderLeftWidth) || 0) - (parseFloat(style.paddingRight) || 0);
+  const inFlow = [...box.children].filter((child) => child.getBoundingClientRect().width > 0 && getComputedStyle(child).position !== "absolute");
+  const last = inFlow[inFlow.length - 1];
+  if (!last) return false;
+  const rect = last.getBoundingClientRect();
+  return rect.left + rect.width > end + 0.5;
+}
+const runsOver = () => runsPast(firstCell) || runsPast(secondCell) || cellsRow.scrollWidth > cellsRow.clientWidth;
 // The second cell first: where the two share a row, the first takes what
 // the second leaves.
 function fitTheTop() {
   cellsRow.dataset.fitting = "yes";
   firstCell.dataset.fit = "lamp";
   fitSteps(secondCell, ["words", "tight", "snug", "small", "short"], runsOver);
-  fitSteps(firstCell, [...(wideTop && wideTop.matches ? ["host"] : []), "words", "glyphs", "short", "snug", "small", "lamp"], runsOver);
+  fitSteps(firstCell, ["host", "words", "short", "snug", "rover", "glyphs", "icons", "small", "lamp"], runsOver);
   delete cellsRow.dataset.fitting;
+  sayChipWord();
   placeLinkPanel();
 }
+// At the last step the chip's word has the room the cell leaves it after
+// the lamp, the rover's glyph, the alerts' glyphs and the caret, a slot
+// whose width no word changes: the word is said there where it fits whole,
+// and otherwise left to the chip's title and the link's popover (data-word
+// "cut", panel.css), never cut short. Again as the chip says another word
+// and as an alert comes or goes. Before the last step every word fits its
+// slot, which is as wide as the longest.
+// Its own lookups, not the consts above: markAlert() calls it, earlier.
+function sayChipWord() {
+  const word = byId("linkState");
+  const cut = chip.parentNode.dataset.fit === "lamp" && word.getBoundingClientRect().width > word.parentNode.getBoundingClientRect().width + 0.5;
+  if (cut) chip.dataset.word = "cut";
+  else delete chip.dataset.word;
+}
+link.onSay(sayChipWord);
 // The link's popover hangs from the chip's left edge (the critics' round
 // 3: from the cells' left, it read as the first control's), below the
 // cells: the chip's place in them, which only the fit above moves, since
