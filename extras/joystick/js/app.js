@@ -75,7 +75,6 @@ const link = new Link({
   chip: byId("linkChip"),
   linkState: byId("linkState"),
   linkShort: byId("linkShort"),
-  linkHost: byId("linkHost"),
   note: byId("note"),
   proxy: byId("connectGo"),
   storageKey: "rover.host",
@@ -664,7 +663,11 @@ firmwareUpdate.onStart(() => {
 // changes size. Where the cells share a row, each as wide as what it holds,
 // the row overflows where they would meet, so that counts too. The address
 // only on a screen 1280 px wide or more. Neither cell's height can change:
-// a cell is one line whatever it says.
+// a cell is one line whatever it says. The second cell keeps its 13 px
+// words and Advanced whole down to a 375 px phone ("snug"), and gives up a
+// size, then Advanced, only past that (a 320 px phone): at 12 px on a
+// 375 px phone and on a phone on its side, its words were a size under the
+// first cell's (the critic's round 1).
 const cellsRow = document.querySelector(".cells");
 const firstCell = document.querySelector(".hcell.drives");
 const secondCell = document.querySelector(".hcell.hands");
@@ -674,13 +677,14 @@ const runsOver = (cell) => cell.scrollWidth > cell.clientWidth || cellsRow.scrol
 // the second leaves.
 function fitTheTop() {
   firstCell.dataset.fit = "lamp";
-  fitSteps(secondCell, ["words", "tight", "small", "short"], runsOver);
+  fitSteps(secondCell, ["words", "tight", "snug", "small", "short"], runsOver);
   fitSteps(firstCell, [...(wideTop && wideTop.matches ? ["host"] : []), "words", "short", "snug", "small", "lamp"], runsOver);
 }
 if (typeof ResizeObserver === "function") new ResizeObserver(fitTheTop).observe(cellsRow);
 // The address, which the chip names at the first step, is no state: it
-// changes only as the operator connects somewhere else.
-if (typeof MutationObserver === "function") new MutationObserver(fitTheTop).observe(byId("linkHost"), { subtree: true, childList: true, characterData: true });
+// changes only as the operator connects somewhere else (Link sets the
+// chip's data-host).
+if (typeof MutationObserver === "function") new MutationObserver(fitTheTop).observe(byId("linkChip"), { attributes: true, attributeFilter: ["data-host"] });
 fitTheTop();
 
 // The readouts' line the same way: its captions go before a value is cut

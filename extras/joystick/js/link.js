@@ -4,7 +4,7 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, chip, linkState, linkShort, linkHost, note, proxy, storageKey })
+ *   new Link({ body, host, connect, chip, linkState, linkShort, note, proxy, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
  *     host        the address field (host or host:port), in the link
  *                 popover; Enter connects, and leaves the field, so the
@@ -14,12 +14,13 @@
  *                 with what a press does;
  *     chip        the link chip in the top's first cell, which opens the
  *                 popover: it gets data-say = the word it shows ("down",
- *                 "lost", "connecting", "up", "stale"), and is titled with
- *                 the state and the address in full, since a narrow cell
- *                 shows its lamp alone;
+ *                 "lost", "connecting", "up", "stale"), data-host and
+ *                 --host = the address it names (a CSS string, which a
+ *                 wide screen draws after its word, panel.css), and is
+ *                 titled with the state and the address in full, since a
+ *                 narrow cell shows its lamp alone;
  *     linkState   the state's word, in it; linkShort: its short word, which
- *                 a narrow cell shows in its place (panel.css); linkHost:
- *                 the address, in it (a wide screen shows it);
+ *                 a narrow cell shows in its place (panel.css);
  *     note        the status line, in the popover;
  *     proxy       the connect card's button, in the view pane while there
  *                 is no link: a press of it is a press of connect. It says
@@ -70,12 +71,14 @@ class Link {
     stale: "No data",
   });
   // The same, where the top's first cell is narrow (a phone): a word still,
-  // never the lamp alone while one fits (the critic's round 2).
+  // never the lamp alone while one fits (the critic's round 2), and one that
+  // says the chip is pressed to connect: "Connect" with no link, where
+  // "Offline" read as a label, not a button.
   static SHORT = Object.freeze({
-    down: "Offline",
-    lost: "Lost",
+    down: "Connect",
+    lost: "Link lost",
     connecting: "Linking…",
-    up: "Live",
+    up: "Connected",
     stale: "No data",
   });
   static TITLE = Object.freeze({
@@ -123,8 +126,8 @@ class Link {
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, chip, linkState, linkShort, linkHost, note, proxy, storageKey }) {
-    this.#ui = { body, host, connect, chip, linkState, linkShort, linkHost, note, proxy };
+  constructor({ body, host, connect, chip, linkState, linkShort, note, proxy, storageKey }) {
+    this.#ui = { body, host, connect, chip, linkState, linkShort, note, proxy };
     this.#storageKey = storageKey;
 
     // The card's button does what Connect does, whatever that is now, and
@@ -283,10 +286,16 @@ class Link {
   }
 
   // The address the chip names, where the top has room (panel.css) and in
-  // its title: the one connected to, or about to be.
+  // its title: the one connected to, or about to be. As a CSS string, which
+  // the chip draws right after its word, whichever it shows, and in its
+  // sizer, so it is as wide whatever it says with the address too, and the
+  // address 8 px after the word rather than after the longest word's room
+  // (the critic's round 1). JSON's escapes of a quote and a backslash are
+  // CSS's too.
   #name(address) {
     this.#address = address;
-    this.#ui.linkHost.textContent = address;
+    this.#ui.chip.dataset.host = address;
+    this.#ui.chip.style.setProperty("--host", JSON.stringify(address));
     if (this.#ui.chip.dataset.say) this.#say(this.#ui.chip.dataset.say);
   }
 

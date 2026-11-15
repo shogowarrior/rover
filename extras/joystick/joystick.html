@@ -60,8 +60,10 @@
 
           <!-- The rover's link: its lamp, then its word (link.js), "Rover:"
                before it where the cell has room, so it never reads as the
-               simulator's, the address where the cell is widest, and a
-               caret: a button that opens the link's popover, which hangs
+               simulator's, the address right after it where the cell is
+               widest (drawn from the chip's --host, panel.css, so the
+               sizer holds it too), and a caret: a button, "Connect" where
+               the cell is narrow, that opens the link's popover, which hangs
                from the top (panel.css): the address, Connect, and what
                link.js has to say. Not modal: Stop stays one press while it
                is open, and the keys stay the panel's (Space is Stop, even
@@ -75,12 +77,11 @@
           <button type="button" class="linkChip" id="linkChip" data-say="down" data-alert="">
             <span class="lamp" aria-hidden="true"></span>
             <span class="chipWord">
-              <span class="chipSay"><span class="chipFor" id="chipFor">Rover: </span><span class="chipLong" id="linkState">Not connected</span><span class="chipShort" id="linkShort">Offline</span></span>
+              <span class="chipSay"><span class="chipFor" id="chipFor">Rover: </span><span class="chipLong" id="linkState">Not connected</span><span class="chipShort" id="linkShort">Connect</span></span>
               <span class="chipAlert"><span class="chipFor">Rover: </span><span id="chipAlert"></span></span>
               <span class="chipSizer chipLong" aria-hidden="true">Rover: Not connected</span>
-              <span class="chipSizer chipShort" aria-hidden="true">No motors</span>
+              <span class="chipSizer chipShort" aria-hidden="true">Connected</span>
             </span>
-            <span class="chipHost" id="linkHost"></span>
             <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
           </button>
           <div class="menu linkPanel" id="linkPanel" role="group" aria-label="The link to the rover" hidden>

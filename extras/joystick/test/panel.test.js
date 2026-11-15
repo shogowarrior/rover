@@ -4118,12 +4118,14 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // cell's width, and nothing else. The first cell: the address on the chip
   // (a screen 1280 px wide), every word, Sim and Auto and the link's short
   // words, every control closer, 12 px words, the chip's lamp. The second:
-  // every word, the segments closer, 12 px words, and Adv only where
-  // nothing else fits.
+  // every word, the segments closer, and closer still, both at 13 px (a
+  // 375 px phone), 12 px words, and Adv only where nothing else fits.
   const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(secondCell, \["words", "tight", "small", "short"\], runsOver\)/.test(appJs) && /fitSteps\(firstCell, \[\.\.\.\(wideTop && wideTop\.matches \? \["host"\] : \[\]\), "words", "short", "snug", "small", "lamp"\], runsOver\)/.test(appJs), "each cell's steps, from the most it says");
+  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\], runsOver\)/.test(appJs) && /fitSteps\(firstCell, \[\.\.\.\(wideTop && wideTop\.matches \? \["host"\] : \[\]\), "words", "short", "snug", "small", "lamp"\], runsOver\)/.test(appJs), "each cell's steps, from the most it says");
   check(/matchMedia\("\(min-width: 1280px\)"\)/.test(appJs) && /cellsRow\.scrollWidth > cellsRow\.clientWidth/.test(appJs), "the address from 1280 px, and the row's overflow counts");
-  check(/new ResizeObserver\(fitTheTop\)/.test(appJs) && /new MutationObserver\(fitTheTop\)\.observe\(byId\("linkHost"\)/.test(appJs), "measured again as the cells' width or the address changes, never the state");
+  // The address is the chip's data-host (Link), which only connecting
+  // somewhere else changes; the state never refits the cells.
+  check(/new ResizeObserver\(fitTheTop\)/.test(appJs) && /new MutationObserver\(fitTheTop\)\.observe\(byId\("linkChip"\), \{ attributes: true, attributeFilter: \["data-host"\] \}\)/.test(appJs), "measured again as the cells' width or the address changes, never the state");
   const page0 = loadPage();
   check(page0.doc.documentElement.querySelector(".hcell.drives").dataset.fit === "words" && page0.doc.documentElement.querySelector(".hcell.hands").dataset.fit === "words", "a page that cannot measure keeps every word");
   // A box that fits at some steps and not others, and one that fits at none.
@@ -4135,9 +4137,17 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // A row whose parts shrink to fit says it does not fit by its parts.
   const parts = { dataset: {}, clientWidth: 100, scrollWidth: 100 };
   check(fitSteps(parts, ["words", "bare"], (b) => b.dataset.fit === "words") === "bare", "its own test of fitting");
-  const wordRules = cssRules(css.replace(/@(media|container)[^{]*\{/g, "")).filter((r) => /\.(chipHost|chipWord|chipFor|chipLong|chipShort|chipSay|chipAlert|segShort|segWord|autoShort|autoWord)\b/.test(r.selector) && /display\s*:/.test(r.body));
+  const wordRules = cssRules(css.replace(/@(media|container)[^{]*\{/g, "")).filter((r) => /\.(chipWord|chipFor|chipLong|chipShort|chipSay|chipAlert|segShort|segWord|autoShort|autoWord)\b/.test(r.selector) && /display\s*:/.test(r.body));
   const byFit = (pattern) => wordRules.filter((r) => pattern.test(r.selector) && /data-fit/.test(r.selector));
-  check(byFit(/\.chipHost/).length === 1 && /^\.drives\[data-fit="host"\] \.chipHost$/.test(byFit(/\.chipHost/)[0].selector), "the address only at the first cell's first step");
+  // The address (the chip's --host) drawn after whichever word shows, and
+  // in the long sizer, so the chip is as wide with it whatever it says and
+  // the address 8 px after the word: only at the first cell's first step.
+  const hosts = cssRules(css.replace(/@(media|container)[^{]*\{/g, "")).filter((r) => /content:\s*var\(--host/.test(r.body));
+  check(hosts.length === 1 && hosts[0].selector === '.drives[data-fit="host"] :is(.chipSay, .chipAlert, .chipSizer.chipLong)::after' && /margin-left:\s*var\(--s-2\);/.test(hosts[0].body) && /color:\s*var\(--dim\);/.test(hosts[0].body),
+    `the address only at the first cell's first step, after the word and in the sizer: ${hosts.map((r) => r.selector)}`);
+  // No slot of its own for it: one left a gap after a short word
+  // ("Connected", then the room "Not connected" needs: the critic's round 1).
+  check(page0.doc.getElementById("linkHost") === null && !cssRules(css).some((r) => /\.chipHost\b/.test(r.selector)), "no slot of its own for the address");
   check(byFit(/\.chipShort/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /\.autoShort/.test(r.selector) && /\.target \.segShort/.test(r.selector) && /display:\s*inline/.test(r.body)), "Sim, Auto and the link's short words from the short step");
   check(byFit(/\.chipLong/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /\.chipFor/.test(r.selector) && /display:\s*none/.test(r.body)), "the long words and Rover: go at the short step");
   check(byFit(/\.chipWord/).length === 1 && /^\.drives\[data-fit="lamp"\] \.chipWord$/.test(byFit(/\.chipWord/)[0].selector), "the chip's lamp and caret alone only at the last step");
@@ -4339,8 +4349,8 @@ test("alerts: on the simulator target a rover still exploring is said on the chi
   // Width, never height: the chip is a cell's button, 32 px, and its
   // words, long and short, the alert and two sizers share one grid cell,
   // so it is as wide whatever it says. The sizers hold the longest at each
-  // step: "Rover: Not connected" outlasts the alerts, "No motors" every
-  // short word.
+  // step: "Rover: Not connected" outlasts the alerts, "Connected" every
+  // short word ("No motors" a shade narrower, measured headless).
   const css = panelCss();
   const cellButton = cssRules(outside(css, "@media")).find((r) => r.selector === ".hcell button");
   check(cellButton && /height:\s*var\(--ctl\);/.test(cellButton.body) && /flex:\s*none;/.test(cellButton.body), `a cell's button 32 px, never squeezed: ${cellButton && cellButton.body}`);
@@ -4350,7 +4360,7 @@ test("alerts: on the simulator target a rover still exploring is said on the chi
   const longs = [...Object.values(page.evalIn("Link.LABEL")).map((w) => `Rover: ${w}`), "Rover: No motors", "Rover: Exploring"];
   const shorts = [...Object.values(page.evalIn("Link.SHORT")), "No motors", "Exploring"];
   check(longest === "Rover: Not connected" && longs.every((w) => w.length <= longest.length), `the long sizer the longest it says: ${longest}`);
-  check(shortest === "No motors" && shorts.every((w) => w.length <= shortest.length), `the short sizer the longest short word: ${shortest}`);
+  check(shortest === "Connected" && shorts.includes(shortest) && shorts.every((w) => w.length <= shortest.length), `the short sizer the longest short word: ${shortest}`);
   const sizesChip = cssRules(css).filter((r) => /\.linkChip/.test(r.selector) && /\[data-(say|alert)/.test(r.selector) && /(^|[\s;{])(min-|max-)?(height|width)\s*:|padding|font-size|gap/.test(r.body));
   check(sizesChip.length === 0, `no state of the chip's sizes it: ${sizesChip.map((r) => r.selector)}`);
   // Amber, the word saying which, never hue alone: tinted and edged.
@@ -5383,7 +5393,7 @@ test("look: the link chip keeps its lamp at every width, and a link that went is
   // Where its cell cannot hold a word (the first cell's last step,
   // measured), the chip is its lamp and caret alone, a button still by its
   // pill, its edge and its caret, its title saying the rest. Short words
-  // ("Offline", "Live") at every step but that one: the lamp alone read as
+  // ("Connect", "Connected") at every step but that one: the lamp alone read as
   // no word on every phone (the critic's round 2). The caret and the lamp
   // never go: a press opens the popover at every width.
   const hides = rules.filter((r) => /^\.drives/.test(r.selector) && /data-fit/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector);
@@ -5424,10 +5434,17 @@ test("look: the chosen segment's word stays on its chip, the only ground its ink
   // step, where nothing else does (a 320 px phone): the critic's round 2.
   check(shows.some((each) => each === '.hands[data-fit="short"] .scheme .segShort'), `Adv only at the second cell's last step: ${shows}`);
   const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(secondCell, \["words", "tight", "small", "short"\]/.test(appJs), "the short step the second cell's last");
+  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\]/.test(appJs), "the short step the second cell's last");
+  // 13 px words, the first cell's size, down to "snug" (a 375 px phone and
+  // one on its side, measured headless): the segments and the tabs closer,
+  // never smaller. A size down only at "small" and "short".
+  const snug = flat.find((r) => r.selector === '.hands[data-fit="snug"]');
+  check(snug && /--seg-x:\s*5px/.test(snug.body) && /--tab-x:\s*3px/.test(snug.body) && !/font-size/.test(snug.body), `snug: closer, at 13 px: ${snug && snug.body}`);
+  check(!flat.some((r) => /^\.hands/.test(r.selector) && /tight|snug/.test(r.selector) && /font-size/.test(r.body)), "no size down at tight or snug");
   // Stop at least 16 px from the scheme at every step.
-  const stopGap = flat.find((r) => r.selector === '.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) #stop');
-  const tightGap = flat.find((r) => r.selector === '.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"])');
+  const steps = '.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"])';
+  const stopGap = flat.find((r) => r.selector === `${steps} #stop`);
+  const tightGap = flat.find((r) => r.selector === steps);
   check(stopGap && /margin-left:\s*12px/.test(stopGap.body) && tightGap && /gap:\s*4px/.test(tightGap.body), "Stop 12 px and the cell's 4 px gap from the scheme when tight: 16 px");
   const bar = cssRules(outside(css, "@media")).find((r) => r.selector === ".bar");
   check(bar && /container:\s*bar \/ inline-size;/.test(bar.body), `the top a container the cells ask: ${bar && bar.body}`);
