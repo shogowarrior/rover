@@ -1803,19 +1803,23 @@ panel", says how each part works; this says what changed and why.
   - Autonomous and Stop are in different cells, so that a press that
     misses Stop can never start the rover exploring, and Autonomous sits
     near its cell's start, so that where the cells stack it is never over
-    Stop (52 px from it at the least).
-  - Each cell says as much as its width allows, measured
-    (`fitTheTop()`, `data-fit`): in the first, the chip's address after
-    its word from 1280 px wide, then every word, then the alerts' glyphs
-    for their words, then Sim, Auto and the rover's glyph for "Rover:",
-    then its controls closer together, the link's word at 12 px, and last
-    the chip's lamp, glyphs and caret alone; the link's word is one per
-    state at every other step, never a short word of its own. In the
-    second, every word, then its segments closer together, keeping 13 px
-    words down to a 375 px phone, then a smaller size, and on a 320 px
-    phone alone Adv for Advanced. The step follows the cell's width
-    alone, and each control is a slot as wide whatever it says, so nothing
-    in a cell moves on a switch of target, a change of link or an alert.
+    Stop (48 px from it at the least, at 320 x 568 and 568 x 320).
+  - Each cell says as much as its width allows, measured (`fitTheTop()`,
+    `data-fit`): in the first, the chip's address after its word wherever
+    the cell has room for it, then every word, then Sim and Auto, then its
+    controls closer together, then the rover's glyph for "Rover:", else
+    "Rover:" kept and the alerts' glyphs for their words, then both
+    glyphs, the link's word at 12 px, and last the chip filling the rest
+    of the cell, its word said where it fits whole and otherwise hidden,
+    never cut short; the link's word is one per state at every step, never
+    a short word of its own. So the alerts keep their words longest, and
+    "Rover:" outlasts Sim and Auto. In the second, every word, then its
+    segments closer together in two steps, keeping 13 px words down to a
+    375 px phone, then 12 px words, and on a 320 px phone alone Adv for
+    Advanced. A cell counts as too narrow once its last control passes its
+    content box. The step follows the cell's width alone, and each control
+    is a slot as wide whatever it says, so nothing in a cell moves on a
+    switch of target, a change of link or an alert.
   - Every switch (the target, the scheme, the pivot family, Dark | Light)
     is the same sleek segmented control: a pill-shaped track, words only,
     the chosen segment inverted (F7's rule).
@@ -1828,21 +1832,29 @@ panel", says how each part works; this says what changed and why.
   below the cells from the chip's left edge, not modal, like Options; each
   scrolls inside where the screen is too short for it, the end with more
   past it faded. With no link the view shows a connect card over the faint
-  scan, titled with the chip's word: "Connect to" the address (Cancel while
-  connecting, Reconnect after a lost link, Try again after a rover never
-  reached), a press of the popover's Connect, and Change address, which
-  opens the popover with the focus in the address. In a short view (an
-  upright phone's Drive tab, the Program tab's band) the card is one row
-  of buttons under the fan, covering none of it.
+  scan, on a layer of its own (under the faint fan's, its buttons took no
+  press), titled with the chip's word. Its button is a press of the
+  popover's Connect that names the address it acts on: "Connect to" it,
+  Cancel while connecting, "Reconnect to" it after a lost link, "Try" it
+  "again" after a rover never reached, and "Connect to" another address
+  typed since; where that would be cut, the verb alone, the address on a
+  line of the card. Change address opens the popover with the focus in the
+  address. In a view under 260 px tall the card is tighter, and under
+  170 px (a phone's band over the Program tab's editor) it is one row of
+  buttons under the fan, covering none of it.
 - **Alerts, in words.** The spec's badges ("No motors" and "Rover
   exploring", amber) became the chip's alerts: after the chip's word, each
-  in a slot of its own, amber, and a glyph in a narrow cell: "No motors"
-  while the rover reports that its motor shield did not answer and no scan
+  in a slot of its own, amber, and in a narrow cell a glyph of its own
+  shape (a motor struck through, a winding route): "No motors" while the
+  rover reports that its motor shield did not answer and no scan
   shows, and on the simulator target "Rover exploring" while the rover
   reports that it explores, kept dashed as last known once the link goes,
-  until a frame says otherwise or a Stop reaches the rover. The popover
-  says why in full, as the chip's title does, since a touch screen cannot
-  hover.
+  until a frame reports MANUAL: a Stop may not have arrived. On the
+  simulator target an amber line at the top of the view says it too ("The
+  rover is exploring on its own. Stop stops it."), dashed as last seen
+  once the link goes, since a phone's chip shows a glyph alone. The
+  popover says why in full, as the chip's title does, since a touch screen
+  cannot hover.
 - **Normal | Advanced is never greyed for want of a link.** Until the rover
   reports a scheme, both segments take a press as a wish, marked pending
   and titled "Sent to the rover as soon as it reports its scheme", and
@@ -1853,68 +1865,98 @@ panel", says how each part works; this says what changed and why.
   segment replaces it, and a press on the same one drops it. While the
   simulator is the target the wish waits, unsent, and is settled once the
   rover is the target again. Stale is as before: dimmed, and the title
-  says why. The wish is configuration, never a command.
+  says why. The wish is configuration, never a command. While Advanced is
+  wished, the pivot stick's line says so: "Advanced on link", or "Advanced
+  waits" for a linked rover that has yet to report its scheme.
+- **Autonomous waits for the rover.** A press on the rover is a request:
+  the switch shows only what telemetry reports, its track dashed while the
+  request waits, until a frame reports the mode asked for or three have
+  not. A second press before then goes the other way from the request, so
+  a quick undo ends with STOP; any other press of the operator's, a new
+  link or a lost one forgets the request. With no link a press sends
+  nothing, opens the link's popover and says there that Autonomous needs
+  the rover connected: a switch that did nothing read as broken.
 - **The view pane**, one element beside both tabs. On the rover target
-  the scan's card: the motor fault on one line at its top (at most 520 px
-  wide), the rings' legend ("25 cm stop · 40 cm go · 100 cm") a row of its
-  own in its top-left corner, the fan in a wide or a tall shape, whichever
-  draws it the larger, its words never under 12 px (the bearings' names go
-  where the fan is too small for them, the readings stay), and the
-  readouts (the move, the chip's temperature, the phase while exploring,
-  "Halted: boxed in" in amber) in one line at its foot, where a card of
-  their own used to stand, giving up the temperature, then a size, and
-  their captions only where a value would be cut. After a link goes the
-  readings and the readouts dim together. On the simulator target the one
-  simulator view, its controls in one row, the same on both tabs but the
-  playback speed and the clock, which the Drive tab's held 1x has no use
-  for, the room picked in its settings, and the room taking the rest. Its
-  size comes from the shell's grid, never from what it holds.
+  the scan's card: the rings' legend ("25 cm stop · 40 cm go · 100 cm",
+  12 px) a row of its own in its top-left corner, the motor fault in that
+  row in the legend's place (one line, at most 520 px wide), so that
+  closed it never shrinks the fan, the fan in a wide or a tall shape,
+  whichever draws it the larger, its words never under 12 px (the
+  bearings' names go where the fan is too small for them, then the left
+  and right readings, then the rest), and the readouts (the move, the
+  chip's temperature, the phase while exploring, "Halted: boxed in" in
+  amber) in one line at its foot, where a card of their own used to stand,
+  giving up the temperature, then a size, and their captions, the phase's
+  first, only where a value would be cut. After a link goes the readings,
+  the 25 and 40 cm rings and the readouts dim together. On the simulator
+  target the one simulator view, its controls in one row, the same on both
+  tabs but the playback speed and the clock, which the Drive tab's held 1x
+  has no use for (the clock never without its "Sim time"); the move shown
+  whole or not at all, never cut short; the room picked in its settings,
+  the wheels' drag no longer among them, and the room taking the
+  rest. Its size comes from the shell's grid, never from what it holds.
 - **The hands pane**: the Drive tab's dock, or the Program tab's editor
   card, its toolbar one slim row at its head (Run, Stop program, neutral,
   never red and never shortened, the File menu, and a quiet View toggle
   that shows or hides the view pane on that tab, with no strip left
-  behind), and the console's line under the editor on every layout; on a
-  phone the log is behind a Log button and opens upward over the editor's
-  foot. Preview shows a hidden view. Blockly's categories run along the
-  editor's top on an upright phone and down its left everywhere else,
-  never wrapping on a phone on its side; its scrollbars show only while
-  the program runs past the view, and Export is off on an empty editor.
-  Stop program ends a run with a neutral "Stopped.".
+  behind), and the console's line under the editor (under the view, on a
+  wide screen with the view shown); on a phone the log is behind a Log
+  button and opens upward over the editor's foot. Preview shows a hidden
+  view, and while a preview runs the Program tab's corner has a hollow
+  green ring, where a run on the rover has the pulsing dot. Blockly's
+  categories run along the editor's top on an upright phone and down its
+  left everywhere else, never wrapping on a phone on its side, and packed
+  tighter in a short editor, so all seven fit at 480 x 320; an editor
+  under 360 px wide or 260 px tall drops the trash can and the zoom
+  buttons; an example or an import opens at its top-left, zoomed to fit
+  the editor's width; its scrollbars show only while the program runs past
+  the view, and Export is off on an empty editor. Stop program ends a run
+  with a neutral "Stopped.".
 - **The dock.** Under NORMAL the pivot stick is grey, its hints dimmed,
   and its line says "Needs Advanced"; under ADVANCED "Untried: go slow".
   The dock's words are 13 px (the family 12 only in a narrow column, the
-  corner hints 11), and on an upright phone the speed takes most of its
-  row.
+  corner hints 12, gone where the column is under 190 px); on an upright
+  phone the speed takes most of its row, and on a phone on its side it is
+  its value and the slider, the gauge icon gone. The stacked column on a
+  wide screen is at least 230 px, so "Speed" keeps its word at 1024 x 768.
 - **The layouts.** On a wide screen the view is on the left and the hands
   on the right, on both tabs, and the Drive tab stacks its two sticks in
   one column beside the view, from the owner's "tile them vertically with
   a side split for the preview": the translate stick over the pivot
   stick, each up to 280 px, the spare height spread around them. The
-  Program tab gives the view about 40% and the whole column's height.
-  Upright the view is on top and the hands under it, the Program tab's
-  view a band the screen's width. On a phone on its side the sticks run
-  down the two edges at the screen's foot, with the two cells and the view
-  between them, and the Program tab's toolbar takes the bands beside the
-  cells (a row under them at 480 x 320), so the cells, Stop with them,
-  stay where the Drive tab has them. No layout puts a pane between two
-  others.
+  Program tab gives the view a column about half the width (360 to
+  640 px), the view at its top, sized to its drawing, and the console
+  under it, and the editor the other side at full height: at 40% of the
+  width and the column's whole height, the view's card left half its
+  column empty from 1024 x 768 to 1920 x 1080. From 1800 px wide the panes
+  use the screen's whole width. Upright the view is on top and the hands
+  under it, the Program tab's view a band the screen's width. On a phone
+  on its side the sticks run down the two edges at the screen's foot, with
+  the two cells and the view between them, and the Program tab's toolbar
+  takes the bands beside the cells (a row under them at 480 x 320), so the
+  cells, Stop with them, stay where the Drive tab has them. No layout puts
+  a pane between two others.
 - **Removed:** the wordmark; the status pills; the address row; the foot
   bar of Stop and Autonomous; the rail and its readouts card; the Drive
   tab's own view slot (`SimView.moveTo()` with it) and the Program tab's
   simulator strip and fold; the icons in the tabs' and switches' segments;
-  and `--on-ok`, which only the mode pill used.
+  `--on-ok`, which only the mode pill used; and the wheels' drag in the
+  simulator's settings, which no row of the wheel table needs
+  (`releasedDrag` stays in `js/sim.js`, calibration).
 
 **Where the build differs from the spec, and why.** The critic's two
-rounds of screenshots, at twelve sizes from 320 x 568 to 1440 x 900, and a
-review of the result by phone, tablet, laptop and code, led to these:
+rounds of screenshots, at twelve sizes from 320 x 568 to 1440 x 900, and
+two reviews of the result by phone, tablet, laptop and code, led to these:
 
 - The badges are the chip's alerts, not buttons of their own. As glyphs on
   a phone they were a crosshair and a compass that meant nothing without
   hover. First they took the chip's word's place, which hid "Link lost"
   and "No data" behind "Exploring" (the review); now each is a slot after
-  the word. In one row the first cell widens by that slot, and the second
-  cell's tabs and scheme shift with it; Autonomous, the chip's left edge,
-  Stop and the gear never move, and stacked nothing does.
+  the word. In one row the first cell widens by that slot, which comes out
+  of the empty start of the second, its controls kept to its far end: from
+  its start the tabs and the scheme moved up to 275 px as telemetry came,
+  and a click aimed at Advanced landed on Normal (the second review).
+  Nothing in either cell moves, in one row or stacked.
 - On a wide screen tall enough, the sticks stack in one column beside the
   view, the translate stick over the pivot stick, rather than side by side.
   Side by side, the dock sat in the middle of a card twice its height,
@@ -1926,6 +1968,14 @@ review of the result by phone, tablet, laptop and code, led to these:
   anything. They stack from 564 px tall, where each stick keeps 120 px, so
   a laptop's browser (1366 x 657, or 1280 x 595 on a 1080p screen at 150%)
   stacks them too; a shorter wide screen keeps them side by side.
+- The chip's address is tried wherever the first cell has room for it,
+  measured, not from a fixed 1280 px; an iPad upright still has none once
+  every word and the alerts' room are kept, and shows it in the link's
+  popover alone. On a 390 px phone upright "Rover:" gives way to the
+  rover's glyph for the same reason; on a phone on its side it stays
+  beside the alerts' glyphs. On a 320 px phone the scheme says Adv:
+  Advanced whole is 15 px short there, and closer still the segments'
+  words meet their pills' ends.
 - In the first cell Autonomous comes before the link chip, not after it:
   at the cell's far end it lay right over Stop where the cells stack (the
   critics' round 3).
@@ -1953,20 +2003,20 @@ review of the result by phone, tablet, laptop and code, led to these:
 
 | The owner's words | What was done |
 |---|---|
-| i had asked this to be bigger. i still see it the smallest window | The view is one of two panes on every layout, the larger beside the Drive tab on a wide screen, and the room fills it under one row of controls |
+| i had asked this to be bigger. i still see it the smallest window | The view is one of two panes on every layout, the larger beside the Drive tab on a wide screen, its column about half a wide screen on the Program tab, and the room fills it under one row of controls |
 | so much wasted space on this and the right most pane whatever that is for. | The right-most pane, the rail, is gone: the readouts are one line in the view. The stacked sticks fill their column on a wide screen |
 | can you please tile them vertically with a side split for the preview? | On a wide screen the Drive tab stacks the two sticks in one column (each up to 280 px, the spare height spread around them) beside the view, which takes the rest of the width |
 | this is BIGGG.. move it to the top next or left of setting for stop with just icon and hover to see more info. | Stop is a red square, icon alone, left of the gear at the end of the top's second cell, on every layout; its title says the rest |
 | all buttons should have that | Every button on the page is titled, and every icon-only one has an `aria-label` (`panel.test.js`, "every button titled with what it does") |
-| also move autonomus as a toggle | Autonomous is a switch in the top's first cell |
+| also move autonomus as a toggle | Autonomous is a switch in the top's first cell; a press on the rover waits, its track dashed, for the rover to report the mode, and with no link it opens the link's popover and says why |
 | instead of 2-3 lines...can this be converged into one line? and yet be ergonomical | One row of two cells where the top is wide enough, two rows of one cell each on a narrow screen; no address row, no pills, no foot bar |
 | Why is this here (Autonomous at the foot) | The foot bar is gone on every layout; Autonomous is in the top |
 | Why is this so big. | Stop is 40 x 32 in a 40 px cell, no taller than its neighbours |
 | Don't I ask for this to be moved in the top | Stop is in the top on every layout and both tabs, phones included |
 | The UI is very cluttered right now on phone. You should work on it | A phone shows two cells, the view and the dock, nothing else; the Program tab shows the cells, its toolbar, the editor and the console's line (the log behind a button), the view behind its toggle |
-| Not just phone but in general. It is not user friendly at all and confusing | The cells group the controls by what they decide (what you drive, how you drive it); the link and the rover's faults say themselves in words; with no link, the view says how to connect; nothing is greyed out without its reason on screen |
+| Not just phone but in general. It is not user friendly at all and confusing | The cells group the controls by what they decide (what you drive, how you drive it); the link and the rover's faults say themselves in words; with no link, the view says how to connect, naming the address; nothing is greyed out without its reason on screen, and a press that cannot act says why |
 | check how stupid the UI looks with a pane in b/w squzzed? | Two panes on every layout, never three: no view between the dock and the rail, no strip between the editor and the rail |
-| please put smore work on this as i mentioned before. I am very unhappy. | Built in three steps, then two rounds of a critic's screenshots at twelve sizes and every state, a review of the result by phone, tablet, laptop and code, and the fixes each found, merged and checked again at six sizes in nine states |
+| please put smore work on this as i mentioned before. I am very unhappy. | Built in three steps, then two rounds of a critic's screenshots at twelve sizes and every state, two reviews of the result by phone, tablet, laptop and code, and the fixes each found, merged and checked again |
 | buttons and things take up too much space. | Controls 32 px tall with 13 px words; the Program toolbar and the simulator's bar one row each |
 | STOP/autonmiuys are humogus and can be made much much shorter . | Stop a 40 x 32 square, Autonomous a 32 px switch, both inside the cells |
 | i wnat all control in the top. | Every control but the open tab's own is in the two cells; the address and Connect hang from the chip |
@@ -1980,10 +2030,17 @@ in a popover or under one, and does not move when the tab changes; Space is
 Stop and T Autonomous. No ancestor of a stick is positioned, transformed,
 filtered or contained. Nothing above or beside a held stick changes size or
 place on a scheme change, a link lost or stale, a fault, an alert or a
-switch of target. The Driver, Link, AutoToggle, TargetSwitch,
-FamilySelector, ProgramRunner, SimView, the firmware update and the keys
-behave as before. Colours come only from `css/looks.css`'s tokens; no
-firmware changed.
+switch of target. The Driver, the keys and the simulator's model
+(`js/sim.js`) are as F3j left them, and the firmware update's messages and
+rules are unchanged. The other parts changed only as Done says: Link's one
+word for each state, "Not reachable", the card's words for the address and
+`onSay()`; AutoToggle's pending press and its press with no link;
+TargetSwitch's Sim for Simulator in a narrow cell; FamilySelector's lines
+("Needs Advanced", "Untried: go slow" and a wish's); ProgramRunner's own
+stop, a neutral "Stopped."; SimView's one row, its room list in the
+settings and no wheel drag there, "Sim time" and the move whole or not at
+all; and the Firmware section's status line, which says why Update is off.
+Colours come only from `css/looks.css`'s tokens; no firmware changed.
 
 **Tests.** Every test that pinned a removed rule was rewritten to pin its
 replacement with the same intent, and none was deleted: no stick ancestor
@@ -2007,7 +2064,19 @@ the Program tab's console, Log, View toggle and compact connect card, the
 operator's own stop, the dock's grey pivot stick and its sizes, the wish
 waiting on the simulator target and said in words, the dialog's titled
 buttons, the firmware's status line, and, from the merge, nothing on a
-phone on its side laying the cells out by tab. Panel tests 342/342.
+phone on its side laying the cells out by tab. The second review's fixes
+added: the connect card on its own layer, naming its address, its verb
+alone where that would be cut, and its compact row only under 170 px;
+Autonomous's pending press, a quick undo ending with STOP, and a press
+with no link; "Rover exploring" kept through a Stop until a frame reports
+MANUAL, and the view's line saying it; both cells' steps, a cell's last
+control inside its box, and the second cell's controls held to its far
+end; the pivot stick's line under a wish; the wide Program tab's grid; the
+scan's 12 px floor and its label steps, the fault in the legend's row, the
+rings dimmed after a lost link and the phase's caption first; the
+preview's ring; the simulator's move whole or hidden; the File menu on a
+phone on its side; the editor's thresholds and an example's fit; and the
+stacked dock column. Panel tests 346/346.
 
 **Checks for the owner,** which need real screens and fingers:
 
@@ -2020,10 +2089,22 @@ phone on its side laying the cells out by tab. Panel tests 342/342.
 - the scheme wish with the rover: press Advanced before connecting, then
   connect, and the rover should come up on ADVANCED;
 - Stop by touch and by Space with the link's popover or Options open;
-- on the simulator target with the rover exploring, the chip saying
-  "Rover exploring" in amber, and dashed once the rover's link is cut;
+- on the simulator target with the rover exploring, the chip saying "Rover
+  exploring" in amber and the view's line saying so, both dashed once the
+  rover's link is cut, and both staying through a Stop until the rover
+  reports MANUAL;
 - the pivot stick under NORMAL reading as off (grey, "Needs Advanced"),
   and as live again under ADVANCED;
+- the connect card's Connect and Change address by touch, on a phone and
+  an iPad, at first load: under the faint fan's layer they once took no
+  press;
+- Autonomous with the rover: a press dashes its track until the rover
+  reports the mode, two quick presses leave the rover stopped, and with no
+  link a press opens the link's popover and says why;
+- on a phone, the chip's glyphs told apart by shape (the rover side on, No
+  motors, Rover exploring) without hovering;
+- a laptop's Program tab: the view's column about half the width, the
+  console under the view, and the editor at full height;
 - on a phone on its side, the Program tab's toolbar in the bands beside
   the cells, and Stop in the same place on both tabs;
 - a touch screen's Options without the keys, and an iPad with a trackpad,

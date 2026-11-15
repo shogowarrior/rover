@@ -453,26 +453,39 @@ then Normal | Advanced, and at its far end Stop, red and an icon alone,
 beside the gear. Autonomous and Stop are in different cells so that a
 press that misses Stop cannot start the rover exploring, and Autonomous
 sits near its cell's start, so that where the cells stack it is never
-over Stop (52 px from it at the least, at 320 x 568 and 568 x 320); the
+over Stop (48 px from it at the least, at 320 x 568 and 568 x 320); the
 gear, Stop's one neighbour, only opens Options. Every switch is the same
 segmented control, words only, the chosen segment inverted. Each cell is
 one line of controls and says as much as its width allows: `fitTheTop()`
 in `js/app.js` measures its `data-fit` steps from the most words to the
-fewest. The first cell: the chip's address after its word on a screen
-1280 px wide or more; every word; the alerts' glyphs for their words;
-Sim, Auto and the rover's glyph for "Rover:"; its controls closer
-together; the link's word at 12 px; and last the chip's lamp, glyphs and
-caret alone. The link's word is the same at every step but the last,
-never a short word of its own. The second: every word, its segments
-closer together (two steps, keeping 13 px words down to a 375 px phone),
-a smaller size, and only where nothing else fits (a 320 px phone) Adv for
-Advanced. The step follows the cell's width alone, never the link, the
-target or the rover's state, and each control is a slot as wide whatever
-it says (the chip holds sizers for its longest words), so nothing in a
-cell moves as they change, and no word, state or alert ever adds a line.
-In one row the first cell widens as the chip says "Rover:" or an alert,
-and the second gives the width back: the tabs and the scheme shift, but
-Autonomous, the chip's left edge, Stop and the gear never move. Every
+fewest. The first cell: the chip's address after its word, wherever the
+cell has room for it, measured (`host`); every word; Sim and Auto
+(`short`); its controls closer together (`snug`); the rover's glyph for
+"Rover:" (`rover`); else "Rover:" kept and the alerts' glyphs for their
+words (`glyphs`); both glyphs (`icons`); the link's word at 12 px
+(`small`); and last (`lamp`) the chip filling the rest of the cell, its
+word said in the room left after the lamp, the glyphs and the caret where
+it fits whole, and otherwise hidden (`data-word="cut"`), never cut short,
+its title and the popover saying it. So the alerts keep their words as
+long as any word but the link's can give way (their glyphs looked alike on
+an iPad on its side, and a touch screen cannot hover), and "Rover:"
+outlasts Sim and Auto. The link's word is one for each state at every
+step, never a short word of its own. The second: every word; its segments
+closer together, then closer still (`tight`, `snug`), keeping 13 px words
+down to a 375 px phone; 12 px words (`small`); and only where nothing else
+fits (a 320 px phone, where Advanced whole is 15 px short) Adv for
+Advanced (`short`). A cell runs over when its last control passes its
+content box, not only when what it holds overflows (`runsPast()`): a chip
+that ran into a cell's padding touched its outline. The step follows the
+cell's width alone, never the link, the target or the rover's state, and
+each control is a slot as wide whatever it says (the chip holds sizers for
+its longest words), so nothing in a cell moves as they change, and no
+word, state or alert ever adds a line. In one row the first cell widens as
+the chip says "Rover:" or an alert, and the width comes out of the empty
+start of the second, whose controls keep to its far end: Autonomous, the
+chip's left edge, the tabs, the scheme, Stop and the gear never move. Each
+glyph is its own shape: the rover's a rover seen from the side, No motors
+a motor struck through, and Rover exploring a winding route. Every
 button on the page is titled with what it does, the dialog's Yes and
 Cancel among them, and every one that is an icon alone has an
 `aria-label`: the owner asked for an icon and "hover to see more info" on
@@ -485,70 +498,96 @@ lost" after a link went, and "Not reachable" for a socket that closed
 before it opened, which the Driver still hears as a lost link), "Rover:"
 before it on the simulator target, so that it never reads as the
 simulator's (in a narrow cell the rover's glyph in the lamp's place), the
-address after the word where the cell is widest, and a caret; a lost,
-stale or unreachable link tints it amber. It opens the link's popover: the
-address, Connect (Cancel while connecting, Disconnect while up) and the
-note, which says how to connect or why the link went. With no socket the
-chip and the card name the address in the field, as Connect would use it.
-With no link the connect card over the faint scan is titled with the
+address after the word where the cell has room for it, and a caret; a
+lost, stale or unreachable link tints it amber. It opens the link's
+popover: the address, Connect (Cancel while connecting, Disconnect while
+up) and the note, which says how to connect or why the link went. With no
+socket the chip and the card name the address in the field, as Connect
+would use it. With no link the connect card over the faint scan, on a
+layer of its own (the faint fan's opacity makes it a stacking context,
+which painted over the card and took its presses), is titled with the
 chip's word ("Connecting to" the address while connecting), and its button
-is a press of that Connect, saying what the press does ("Connect to" the
-address, Cancel, Reconnect after a lost link, or Try again after a rover
-never reached); its Change address opens the popover with the focus in the
-address. In a view under 260 px tall (an upright phone's Drive tab, the
-Program tab's band) the card is one compact row under the fan, its title
-left to the chip, so it covers nothing; where that view is under 330 px
-wide too, the row is Connect alone. The card, and the Connect beside the
-Program tab's console line, give way while the popover is open, so two
-Connect buttons never show at once. After its word, each in a slot of its
-own and amber (a glyph alone in a narrow cell), the chip also says what
-needs the operator about the rover while nothing else on screen does
-(`markAlert()` in `js/app.js`): "No motors" while the rover reports that
-its motor shield did not answer and no scan shows (the simulator target,
-or the view hidden on the Program tab; where the scan shows, its fault
-line says it), and on the simulator target "Rover exploring" while the
-rover reports that it explores, since a rover sent exploring before the
-switch must not move unseen. Once that link goes or goes quiet, "Rover
-exploring" stays, dashed, as last known, until a frame says otherwise or
-a Stop goes out over an open link. The popover says why in words, as the
-chip's title does: a touch screen cannot hover. The link's popover and
-Options hang from the foot of the top (the link's from the chip's left
-edge) and the Program tab's File menu from its button, below the cells,
-never over them, and none is modal: Stop stays one press while one is
-open, and that press closes it. Each stops short of the screen's foot and
-scrolls inside past it, and `Popover` (`js/popover.js`) marks the ends with
-more of it past the edge (`data-more`), which the stylesheet fades, so a
-list cut by a short screen reads as one that scrolls.
+is a press of that Connect that names the address it acts on: "Connect to"
+it, Cancel while connecting, "Reconnect to" it after a lost link, "Try" it
+"again" after a rover never reached, and "Connect to" the field's address
+once that is another. Where the button would cut that short, measured
+(`fitConnect()` in `js/app.js`, `data-fit="verb"`), it says its verb alone
+and the address takes a line of the card. Its Change address opens the
+popover with the focus in the address. In a view under 260 px tall the
+card is tighter, and drops Change address where the view is under 230 px
+wide too; under 170 px tall (a phone's band over the Program tab's editor)
+it is one compact row under the fan, its title left to the chip, so it
+covers nothing, and where that view is under 330 px wide the row is
+Connect alone. `Link.onSay()` tells its listeners each time the chip is
+said again, its word or its address, so the alerts, the chip's word and
+the card's fit follow an address typed with no link at once. The card, and
+the Connect beside the Program tab's console line, give way while the
+popover is open, so two Connect buttons never show at once. After its
+word, each in a slot of its own and amber (a glyph alone in a narrow
+cell), the chip also says what needs the operator about the rover while
+nothing else on screen does (`markAlert()` in `js/app.js`): "No motors"
+while the rover reports that its motor shield did not answer and no scan
+shows (the simulator target, or the view hidden on the Program tab; where
+the scan shows, its fault line says it), and on the simulator target
+"Rover exploring" while the rover reports that it explores, since a rover
+sent exploring before the switch must not move unseen. Once that link goes
+or goes quiet, "Rover exploring" stays, dashed, as last known, until a
+frame reports MANUAL: a Stop may not have arrived, so it never clears the
+alert. On the simulator target the view says it too, in an amber line at
+its top (`#roverAway`): "The rover is exploring on its own. Stop stops
+it.", and once the link goes or goes quiet, dashed, "Last seen exploring
+on its own. Reconnect, then Stop.", since a phone's chip says it with a
+glyph alone. The popover says why in words, as the chip's title does: a
+touch screen cannot hover. The link's popover and Options hang from the
+foot of the top (the link's from the chip's left edge) and the Program
+tab's File menu from its button (on a phone on its side, from the second
+cell's foot: from its button, in the band beside the cells, it slid under
+them), below the cells, never over them, and none is modal: Stop stays one
+press while one is open, and that press closes it. Each stops short of the
+screen's foot and scrolls inside past it, and `Popover` (`js/popover.js`)
+marks the ends with more of it past the edge (`data-more`), which the
+stylesheet fades, so a list cut by a short screen reads as one that
+scrolls.
 
 **The view** (`#view`) is a sibling of both tabs, never an ancestor of a
-stick. On the rover target it holds the scan's card: the motor fault, while
-the rover reports one, on one line at its top, at most 520 px wide with
-its caret beside its words (what to do behind that disclosure); under it
-the rings' legend ("25 cm stop · 40 cm go · 100 cm"), a row of its own in
-the card's top-left corner on every layout, never over the fan; the fan
+stick. On the rover target it holds the scan's card: the rings' legend
+("25 cm stop · 40 cm go · 100 cm", 12 px), a row of its own in the card's
+top-left corner on every layout, never over the fan; the motor fault,
+while the rover reports one, in that row in the legend's place, so that
+closed it never shrinks the fan, on one line at most 520 px wide with its
+caret beside its words (what to do behind that disclosure); the fan
 (`ScanView`), in whichever of its two shapes, wide or tall, draws it the
 larger; and the readouts on one line at its foot: the move, the chip's
 temperature, and the phase while the rover explores, or "Halted: boxed
 in" (or "sensor silent") in amber, its caption hidden. The fan's bearing
 names and readings are never drawn under 12 px: where the fan is too small
-for its names they go, and the readings stay. The readouts give way a step
-at a time, the chip's temperature first, then a smaller size, and only
-then their captions, where a value would otherwise be cut short (a bare
-"STOP" read like a button), each cell titled with its caption. After a
-link goes the fan's readings and the readouts' values dim together. On the
-simulator target the view holds the one `SimView`, in `#simSlot`, which is
-hidden by its attribute on the rover target so that an idle view knows it
-is out of sight and draws nothing. Its controls take one row, the same
-controls in the same order on both tabs (the playback speed, pause and
-reset, what the rover is doing, the settings) but the speed and the clock
-("Sim time"), which only the Program tab's row has: the Drive tab holds the
-playback at 1x. The room is picked in the settings, with the rays, the
-trail, the wheels' drag and the colours' key; the room takes the rest of
-the view, and a view too short for the room shows the row alone. The
-view's size is the shell grid's, never its content's (size containment):
-a fault, the connect card, the readouts or a switch of target only trade
-height inside it, so none of them can grow its row and move the dock under
-a held stick.
+for its names they go, and the left and right readings move under the
+fan's ends; where it is smaller still those two go, and then the rest
+(`data-labels` on the fan: all, readings, front, none). The readouts give
+way a step at a time, the chip's temperature first, then a smaller size,
+and only then their captions, the phase's before the move's, where a value
+would otherwise be cut short (a bare "STOP" read like a button), each cell
+titled with its caption. After a link goes, and while it is quiet, the
+fan's readings, its 25 and 40 cm rings and the readouts' values dim
+together, the values faded too. On the simulator target the view holds the
+one `SimView`, in `#simSlot`, which is hidden by its attribute on the
+rover target so that an idle view knows it is out of sight and draws
+nothing. Its controls take one row, the same controls in the same order on
+both tabs (the playback speed, pause and reset, what the rover is doing,
+the settings) but the speed and the clock ("Sim time", never without its
+caption), which only the Program tab's row has: the Drive tab holds the
+playback at 1x, its note saying "Held at 1× on the Drive tab" and its
+title why. What the rover is doing is shown whole or not at all, never cut
+short: how fast gives way first, then the clock, and then the move, which
+always goes under about 70 px of room; where the next preview goes on from
+is in the move's title. The room is picked in the settings, with the rays,
+the trail and the colours' key (the wheels' drag is no longer there:
+`releasedDrag` stays in `js/sim.js` as calibration); the room takes the
+rest of the view, and a view too short for the room shows the row alone.
+The view's size is the shell grid's, never its content's (size
+containment): a fault, the connect card, the readouts or a switch of
+target only trade height inside it, so none of them can grow its row and
+move the dock under a held stick.
 
 **The layouts:**
 
@@ -559,16 +598,21 @@ a held stick.
   preview"): the translate stick with the rotate buttons under it, over
   the pivot stick with its family and line over it and the speed under
   it. Only one stick drives at a time, so stacking costs no thumb
-  anything. The column is as wide as the sticks need (`--drive`), each up
-  to 280 px, the height they leave spread above, between and below the
-  two groups so the column has no empty band, and the view takes the rest
-  of the width: the owner asked for the view to be the larger. Only a wide
-  screen under 564 px tall, where a stacked stick would keep less than
-  120 px, sets the two side by side. The Program tab gives the view about
-  40% of the width (320 to 560 px) and the whole column's height, and the
-  editor with its toolbar the rest, the console under the editor whether
-  the view is shown or hidden, its log as tall as its lines up to five and
-  then scrolling; with the view hidden the editor takes the width.
+  anything. The column is as wide as the sticks need, and at least 230 px
+  so that the speed keeps its word at 1024 x 768 (`--dock-col`), each
+  stick up to 280 px, the height they leave spread above, between and
+  below the two groups so the column has no empty band, and the view takes
+  the rest of the width: the owner asked for the view to be the larger.
+  Only a wide screen under 564 px tall, where a stacked stick would keep
+  less than 120 px, sets the two side by side. The Program tab gives the
+  view a column about half the width (360 to 640 px): the view at its top,
+  sized to its drawing (the legend, the fan and the readouts together),
+  and the console under it taking the rest of the column, its log
+  scrolling, with no rule while it is empty; the editor with its toolbar
+  takes the other side at full height. With the view hidden the editor
+  takes the width, and the console sits under it, its log as tall as its
+  lines up to five and then scrolling. From 1800 px wide the panes use the
+  screen's whole width.
 - Upright, a phone or a tablet: the cells a row each, the view under them
   taking what height is left, and the Drive tab's dock at the foot of the
   screen: the translate stick on the left, the pivot stick on the right
@@ -583,8 +627,9 @@ a held stick.
   foot, so the editor's height never follows what was logged.
 - A phone on its side, held like a gamepad: the translate stick down the
   left edge with the rotate buttons under it, the pivot stick down the
-  right with the speed under it, both at the foot of the screen with their
-  captions (Translate, and the family, quieter there: no track, the chosen
+  right with the speed under it (its value and the slider, with no caption
+  or gauge icon), both at the foot of the screen with their captions
+  (Translate, and the family, quieter there: no track, the chosen
   word raised) under the cells, and between them the two cells and the
   view under them, in reach of either thumb; the dock stops at the
   screen's height, so a middle column that outgrows a short screen moves
@@ -621,18 +666,20 @@ caption and the pivot stick's line keep to one line whatever they say
 (`FamilySelector` has one wording for every layout, short enough for the
 narrowest: 13 px words, the family's 12 px only in a column under 152 px,
 never 11), which keeps a family chosen under a held pivot stick a
-re-steer. The pivot stick's corner hints say their pivots in words on one
-line, or not at all where the column is under 180 px. Under NORMAL the
-pivot stick is drawn grey, by a filter on its own canvas (never on an
+re-steer. The pivot stick's corner hints say their pivots in 12 px words
+on one line, or not at all where the column is under 190 px. Under NORMAL
+the pivot stick is drawn grey, by a filter on its own canvas (never on an
 ancestor), its hints dimmed, and its line says "Needs Advanced", the pad's
 title saying where to choose it; under ADVANCED the line says "Untried: go
-slow", because no pivot row is bench-verified. joy.js sizes its canvas once, as it
-is built, so when the boxes settle at a new size (a turned phone's, say)
-the Driver builds the sticks again; it paints them once too, so it builds
-them again when the look changes, in the new look's `--live`,
-`--stick-rim` and `--stick-ring` (`js/drive.js`), letting go of a held
-stick first. A look picked while the Drive tab is hidden is drawn as the
-tab is shown, before a press can land.
+slow", because no pivot row is bench-verified; and while Advanced is
+wished for the rover (the scheme toggle, below), "Advanced on link" with
+no link yet, or "Advanced waits" while a linked rover has yet to report
+its scheme. joy.js sizes its canvas once, as it is built, so when the
+boxes settle at a new size (a turned phone's, say) the Driver builds the
+sticks again; it paints them once too, so it builds them again when the
+look changes, in the new look's `--live`, `--stick-rim` and `--stick-ring`
+(`js/drive.js`), letting go of a held stick first. A look picked while the
+Drive tab is hidden is drawn as the tab is shown, before a press can land.
 
 **The look.** The page's colours are `css/looks.css`'s: six looks, three
 themes (Console, the default, Field and Blueprint) in Dark and Light, worn
@@ -643,28 +690,30 @@ look; it loads in `<head>`, so the page is drawn in that look from the
 first paint, and paints the browser's bar (`theme-color`) then too. Every
 look keeps four
 signal hues, each with one job: blue (`--live`) for the operator's own
-controls (the knob, the slider, focus, Connect, Run), green (`--ok`) for
-the rover doing well, amber (`--warn`) for caution, and red (`--stop`) for
-Stop and danger alone. The edge (`--edge`) of a button, a switch's
-track, a field or a theme tile holds 3:1 against what it sits on, and the
-chosen segment of a switch is inverted (`--chosen`, its word and anything
-else on it in `--on-chosen`). Nothing is told apart by hue alone: the link
-chip, all well, is quiet (ink and a green lamp), and its alert is a word on
-an amber tint, so a fault stands out; a clear way on the scan is drawn
-open, a sonar ray closing in is heavy in the simulator, and Autonomous on
-moves its switch's knob as well as lighting it. The popover is not modal:
-Stop stays one press while it is open. What takes a colour as a plain value
-(joy.js's canvas, Blockly's theme, the browser's bar) is given it again on
-a change, through `lookToken()`; everything else follows
-through `var()`. A new colour is a token in every look, never a literal:
-`test/looks.test.js` fails a stylesheet that writes one, a token missing
-from a look, a pairing in its contrast audit that falls short, a teal
-among a look's greens and tints as drawn on their grounds or among the
-block colours, which the owner turned down, and a stylesheet that fades a
-colour out over a ground it cannot know (a faint green over a blue ground
-mixes to teal). The
-audit is a hand-kept list, so a rule that paints a token on a new surface
-adds its pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
+controls (the knob, the slider, focus, Connect, Run, and Autonomous's
+dashed track while a press waits), green (`--ok`) for the rover doing
+well, amber (`--warn`) for caution, and red (`--stop`) for Stop and danger
+alone. The edge (`--edge`) of a button, a switch's track outside the top's
+cells, a field or a theme tile holds 3:1 against what it sits on (in a
+cell, a switch's track and the chip are told from it by their fill, the
+cell's outline its one edge), and the chosen segment of a switch is
+inverted (`--chosen`, its word and anything else on it in `--on-chosen`).
+Nothing is told apart by hue alone: the link chip, all well, is quiet (ink
+and a green lamp), and its alert is a word on an amber tint, so a fault
+stands out; a clear way on the scan is drawn open, a sonar ray closing in
+is heavy in the simulator, and Autonomous on moves its switch's knob as
+well as lighting it. The popover is not modal: Stop stays one press while
+it is open. What takes a colour as a plain value (joy.js's canvas,
+Blockly's theme, the browser's bar) is given it again on a change, through
+`lookToken()`; everything else follows through `var()`. A new colour is a
+token in every look, never a literal: `test/looks.test.js` fails a
+stylesheet that writes one, a token missing from a look, a pairing in its
+contrast audit that falls short, a teal among a look's greens and tints as
+drawn on their grounds or among the block colours, which the owner turned
+down, and a stylesheet that fades a colour out over a ground it cannot
+know (a faint green over a blue ground mixes to teal). The audit is a
+hand-kept list, so a rule that paints a token on a new surface adds its
+pairing. The blocks' `PALETTE` (`js/blocks.js`) is the one set of
 colours the same in every look.
 
 **The scheme toggle**, Normal | Advanced in the top's second cell
@@ -678,9 +727,9 @@ the rover reports its scheme, and nothing is sent. The wish is said in
 words too, a touch screen showing no title: "Advanced goes to the rover
 once it connects" (or "once it reports its scheme"), behind a dashed ring
 as the segment is drawn, in the link's popover and on the connect card
-(over its compact row's buttons, and not in a short, narrow view). The
-next frame that names a scheme settles it: one `{"scheme": ...}` goes out
-if the frame names the other one, pending as a press's would, and the
+(over its compact row's buttons too, and not in a view under 120 px tall).
+The next frame that names a scheme settles it: one `{"scheme": ...}` goes
+out if the frame names the other one, pending as a press's would, and the
 wish is dropped either way. A wish waits, unsent and unseen, while the
 simulator is the target, whose scheme the toggle then shows: nothing but
 Stop goes to the rover from there, so it is settled as the rover becomes
@@ -707,10 +756,24 @@ target, `AutoToggle.bind()`), never as asked. A press turns it the other
 way through the Driver: pressed while off it sends RESUME_AUTONOMOUS
 (`Driver.resumeAutonomous()`), pressed while on STOP (`Driver.stopRover()`,
 whose stand-down names Autonomous, not Stop, as what was pressed), each a
-press that lets go of everything held and stops a program. Until a frame
-names the mode it is off, so a press resumes, as the button it replaced
-did. A halted rover still reports AUTONOMOUS, so off and on again retries
-it at once.
+press that lets go of everything held and stops a program. On the rover a
+press is a request, which only a frame confirms: it is marked pending
+(`data-pending`, a dashed `--live` track) while `aria-pressed` stays what
+telemetry reports, until a frame reports that mode or
+`AutoToggle.CONFIRM_FRAMES` (3) frames have not. A press while one is
+pending goes the other way from the request, not from the last report, so
+a quick press to undo one ends with STOP, never RESUME_AUTONOMOUS twice;
+T, which presses the switch, does the same. Any other press of the
+operator's (Stop, a stick, a rotate button, a drive key, through
+`Driver.onManualInput()`), a new link or a lost one forgets the request; a
+stale link keeps it, since no frame comes to settle it. The simulator
+takes the mode at once, with nothing pending. Until a frame names the mode
+the switch is off: with a link a press resumes, as the button it replaced
+did; with none (down or connecting) a press sends nothing, opens the
+link's popover and says there why ("Autonomous needs the rover connected:
+connect, then press it again."), and the switch's title says a press needs
+the link. A halted rover still reports AUTONOMOUS, so off and on again
+retries it at once.
 
 **The target switch**, Rover | Simulator, first in the top's first cell on
 every layout and both tabs, is a `TargetSwitch` (`js/targetswitch.js`) for
@@ -753,27 +816,37 @@ tablet upright), and a switch to the simulator shows it there again; on a
 phone it starts hidden on either target, where it squeezed the editor to a
 strip, and Preview shows it, so a preview never runs unseen. Blockly's
 categories run down the editor's left, closer together in a short editor
-so all seven fit, or along its top on an upright phone
-(`BlockEditor.NARROW`), wrapping to a second row rather than scrolling; a
-short editor drops Blockly's zoom buttons, and a shorter one its trash
-can. Its scrollbars show only while the program runs past the view
-(`data-overflow`), and Export is off, saying why, while the editor is
-empty. The console's line, under the editor on every layout, says briefly
-what is running and why Run is off ("Not connected."), its title and
-Run's in full; with no link on the rover target, while the view's connect
-card is out of sight, a Connect beside that line presses the popover's. On the rover a
-program needs a live link, and drives only through `Driver.program()`:
-each move is re-sent every `REPEAT_MS`, asking 400 ms, like a held control, and the operator's hands win over it. A drive press,
-blur, a hidden or closed page, the link lost, stale or disconnected, Stop,
-Autonomous, the tab's Stop program or a switch of target stops a run, and an
-abort sends STOP only if the program was driving. Stop program, the
-operator's own, ends it with a neutral "Stopped." (`own` on the run's end,
-`ProgramRunner.abort()`); amber is for a stop the panel imposed. Its commands are paced
-(`COMMAND_GAP_MS` and `REPEAT_GAP_MS` in `js/program.js`), so no loop floods
-the rover; it acts only on fresh readings, and never takes no echo for a
-clear way; every loop yields. Its limits on a drive, a drive-until and a wait
-are `ProgramRunner`'s (`js/program.js`). The compiled code runs with the
-page's globals in reach, so a program loaded from anywhere goes through
+and closer still under 170 px tall, so all seven fit at 480 x 320, or
+along its top on an upright phone (`BlockEditor.NARROW`), wrapping to a
+second row rather than scrolling; an editor under 360 px wide or 260 px
+tall drops Blockly's trash can and zoom buttons (a pinch still zooms), and
+one under 200 px tall and 400 px wide, but on an upright phone, its empty
+hint (the File menu's examples are a press away). An example or an import
+opens at its top-left, zoomed to fit the editor's width, never past the
+starting scale or under 0.4. Its scrollbars show only while the program
+runs past the view (`data-overflow`), and Export is off, saying why, while
+the editor is empty. The console's line, under the editor (under the view,
+on a wide screen with the view shown), says briefly what is running and
+why Run is off ("Not connected."), its title and Run's in full; with no
+link on the rover target, while the view's connect card is out of sight, a
+Connect beside that line presses the popover's. On the rover a program
+needs a live link, and drives only through `Driver.program()`: each move
+is re-sent every `REPEAT_MS`, asking 400 ms, like a held control, and the
+operator's hands win over it. A drive press, blur, a hidden or closed
+page, the link lost, stale or disconnected, Stop, Autonomous, the tab's
+Stop program or a switch of target stops a run, and an abort sends STOP
+only if the program was driving. Stop program, the operator's own, ends it
+with a neutral "Stopped." (`own` on the run's end,
+`ProgramRunner.abort()`); amber is for a stop the panel imposed. While a
+program runs the Program tab's corner says so, on either tab: a pulsing
+green dot for a run on the rover, and a still, hollow green ring for a
+preview (`data-running`), whose title says that any drive press takes
+over. Its commands are paced (`COMMAND_GAP_MS` and `REPEAT_GAP_MS` in
+`js/program.js`), so no loop floods the rover; it acts only on fresh
+readings, and never takes no echo for a clear way; every loop yields. Its
+limits on a drive, a drive-until and a wait are `ProgramRunner`'s
+(`js/program.js`). The compiled code runs with the page's globals in
+reach, so a program loaded from anywhere goes through
 `RoverBlocks.sanitize()`, which drops block ids, and `RoverBlocks.harden()`
 keeps comments out of the code. On the rover, Run asks first when the editor
 holds several stacks, and when the program drives a pivot while the rover is

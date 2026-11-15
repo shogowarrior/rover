@@ -57,9 +57,9 @@ default install path, `~/.platformio/penv/bin/pio`.
    gear's Options, Firmware, takes the `firmware.bin` a build leaves in
    `.pio/build/<env>/` (see below).
 5. **Drive it.** Open `extras/joystick/joystick.html` in a browser straight
-   from disk (the rover cannot serve it) and press Connect on the card over
-   the scan; the link chip at the top ("Not connected", or its lamp alone
-   on the narrowest phone) opens the address, to change it first. Every
+   from disk (the rover cannot serve it) and press Connect on the card
+   over the scan, which names the address it will use; the link chip at
+   the top ("Not connected") opens the address, to change it first. Every
    control is in two cells at the top: Rover | Simulator, the Autonomous
    switch and the link chip in the first; the Drive and Program tabs,
    Normal | Advanced, Stop (the red square) and the gear in the second.

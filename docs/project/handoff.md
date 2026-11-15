@@ -344,10 +344,17 @@ layout F3 to F3j built:
 - the link chip says the link's state in one word for each ("Not
   reachable" for a rover that never answered) and opens a popover with the
   address, Connect and the note; with no link a card over the scan, titled
-  with the chip's word, offers Connect (a row under the fan in a short
-  view); after its word the chip says "No motors", or "Rover exploring" on
-  the simulator target, in amber, where nothing else on screen says it,
-  the second dashed as last known once the link goes;
+  with the chip's word, offers Connect to the address it will use (one row
+  under the fan only in a view under 170 px tall); after its word the chip
+  says "No motors", or "Rover exploring" on the simulator target, in
+  amber, where nothing else on screen says it, the second dashed as last
+  known once the link goes, and cleared only by a frame that reports
+  MANUAL; on the simulator target a line at the top of the view says it
+  too;
+- a press of Autonomous on the rover is marked, its track dashed, until a
+  frame reports the mode asked for; a second press before then undoes it,
+  ending with STOP; and with no link a press opens the link's popover and
+  says why;
 - Normal | Advanced is never greyed out for want of a link: a press before
   the rover reports a scheme is a wish, said in words on the card and in
   the popover, sent as soon as the rover reports one (and only while the
@@ -355,12 +362,13 @@ layout F3 to F3j built:
 - under the cells two panes, never three: the view (the rover's scan, its
   legend in a corner, its readouts in one line, or the simulated room
   under one row of controls) beside both tabs, and the hands (the dock, or
-  the editor with its console line under it on every layout); on a wide
-  screen the Drive tab stacks its sticks in one column beside the view,
-  from the owner's "tile them vertically", each up to 280 px; under
-  NORMAL the pivot stick is grey and says "Needs Advanced"; the Program
-  tab's View toggle shows or hides the view, which starts hidden on a
-  phone and opens for a Preview;
+  the editor with its console line under it, which on a wide screen sits
+  under the view instead, the view's column there about half the width);
+  on a wide screen the Drive tab stacks its sticks in one column beside
+  the view, from the owner's "tile them vertically", each up to 280 px;
+  under NORMAL the pivot stick is grey and says "Needs Advanced"; the
+  Program tab's View toggle shows or hides the view, which starts hidden
+  on a phone and opens for a Preview;
 - gone: the wordmark, the status pills, the address row, the foot bar, the
   rail with its readouts card, and the Program tab's simulator strip.
 
@@ -385,11 +393,26 @@ cells 40 px everywhere, Stop in the same place on both tabs at every
 size. features.md, F8, maps each of the owner's clauses to what was done,
 and says where the build differs from the spec and why (the badges became
 the chip's alerts, the stacked sticks, Autonomous before the chip, the
-Program toolbar on a phone on its side, "Needs Advanced"). Panel tests
-342/342, the protocol check and the guard's 224/224 pass. The host tests
-and board builds did not run in this container (the PlatformIO registry
-is blocked); no firmware changed since they last passed (host tests
-192/192).
+Program toolbar on a phone on its side, "Needs Advanced"). A second review
+by phone, tablet, laptop and code then went over the merged result, and
+two parallel workers fixed what it found, merged one at a time onto
+PR #9's branch: the top (the connect card on a layer of its own, which had
+taken no press on a tablet, and naming its address; Autonomous's pending
+press and its press with no link; "Rover exploring" kept through a Stop;
+both cells' steps, measured, the alerts' words kept longest and the second
+cell's controls held to its far end) and the view, the Program tab and the
+dock (the wide Program tab's view column about half the width with the
+console under it; the scan's 12 px floor and the fault in the legend's
+row; the simulator's move whole or not at all, and no wheel drag in its
+settings; the preview's ring on the tab; an example's fit in the editor;
+the stacked dock column at least 230 px). Three things stay as they are by
+design: on a 390 px phone upright the chip shows the rover's glyph for
+"Rover:", which has no room there once the alerts' room is kept; an iPad
+upright has no room for the chip's address, which only the link's popover
+shows there; and a 320 px phone says Adv for Advanced, which whole is
+15 px short there. Panel tests 346/346, the protocol check and the guard's
+224/224 pass. The host tests and board builds were not run for this round;
+no firmware changed since they last passed (host tests 192/192).
 
 ## Current work
 
@@ -461,16 +484,22 @@ and the next thread's task names that branch.
   (features.md, F8): the panel on a laptop, an iPad both ways and a phone
   both ways, on both tabs and both targets; touch on the cells' small
   controls (the segments, the link chip and its caret, Autonomous, Stop
-  and the gear, 32 px tall with touch targets reaching 44 px); the scheme
-  wish with the rover (press Advanced before connecting, then connect);
-  Stop by touch and by Space with a popover open; "Rover exploring" on the
-  simulator target, dashed once the rover's link is cut; the grey pivot
-  stick reading as off under NORMAL; on a phone on its side, the Program
-  tab's toolbar in the bands and Stop in the same place on both tabs; a
+  and the gear, 32 px tall with touch targets reaching 44 px); the connect
+  card's buttons by touch at first load; the scheme wish with the rover
+  (press Advanced before connecting, then connect); Autonomous with the
+  rover (its dashed track until the rover reports, two quick presses
+  leaving it stopped, and a press with no link opening the link's
+  popover); Stop by touch and by Space with a popover open; "Rover
+  exploring" on the simulator target, in the chip and the view's line,
+  dashed once the rover's link is cut and kept through a Stop until the
+  rover reports MANUAL; the chip's glyphs told apart by shape on a phone;
+  the grey pivot stick reading as off under NORMAL; on a phone on its
+  side, the Program tab's toolbar in the bands and Stop in the same place
+  on both tabs; a laptop's Program tab with the console under the view; a
   touch screen's Options without the keys (an iPad with a trackpad may
-  show them); and on an iPhone a tap into the address or the OTA
-  password, whose 13 px words Safari may zoom the page for (it zooms into
-  a field under 16 px).
+  show them); and on an iPhone a tap into the address or the OTA password,
+  whose 13 px words Safari may zoom the page for (it zooms into a field
+  under 16 px).
 - Small panel and client items listed under "Open from earlier work" in
   [features.md](../features.md): `client/ws.py`'s traceback, and no
   committed stand-in rover.
