@@ -40,8 +40,8 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // The surfaces: the page, around the top's cells, the Program tab, Blockly's
 // workspace and the log (--case); the top's two cells, the cards, menus,
 // the dock and the bars (--panel), with the glow behind the scan and the
-// wide dock; buttons, a switch's track, the flyout and the room's floor
-// (--raised); a hovered, pressed or open one, and the Autonomous switch's
+// wide dock; buttons, a switch's track, the link chip, the flyout and the
+// room's floor (--raised); a hovered, pressed or open one, and the Autonomous switch's
 // track (--raised-hi); the chosen segment (--chosen). A tinted chip, badge
 // or button replaces its fill with the tint.
 const AUDIT = [
@@ -63,12 +63,13 @@ const AUDIT = [
   // A fresh sonar ray is drawn at 0.95.
   ["--live", ["--case", "--panel", "--glow over --panel", "--raised", "--raised-hi"], MARK,
     "the focus ring, the slider's thumb, the stick's knob and icons, a pressed tool's bar and the View toggle's while shown, the rover's aim"],
-  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks, the address, the room list, the theme tiles"],
+  ["--edge", ["--case", "--panel"], MARK, "a control's edge: buttons, tracks outside the top's cells, the address, the room list, the theme tiles"],
   ["--ok", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel", "--sim-plate"], MARK,
     "the link chip's lamp while up, open or not, the Autonomous switch's edge while on, a program's dots (the running tab's on the cell), the running block, the scan's clear wedge, a forward wheel, a firmware update's bar on its track"],
   ["--chosen", ["--panel"], MARK, "the open tab's underline, in the top's second cell"],
   ["--dim", ["--raised-hi"], MARK, "the Autonomous switch's knob while off, on its track"],
   ["--ok", ["--ok-soft over --panel"], MARK, "the Autonomous switch's knob while on, on its tinted track"],
+  ["--ok", ["--warn-soft over --panel"], MARK, "the link chip's lamp, or the rover's glyph in its place, while up, on the chip's amber tint while it says the rover's alert"],
   ["--warn at 0.95", ["--glow over --panel", "--raised", "--raised-hi"], MARK, "the caveat's dot, a sonar ray closing in, Pause held"],
   ["--stop at 0.95", ["--case", "--raised"], MARK, "a sonar ray inside STOP, a bump, a stalled rover's outline"],
   ["--warn", ["--glow over --panel"], MARK, "the scan's wedge, closing in"],
@@ -87,6 +88,7 @@ const AUDIT = [
   ["--sim-back", ["--raised", "--panel", "--sim-plate"], MARK, "a backward wheel, in the room, its inset and its key"],
 
   ["--rule", ["--case", "--panel"], QUIET, "the rules between parts, a card's edge"],
+  ["--raised", ["--panel"], QUIET, "the link chip and a switch's track in the top's cells, told from the cell by their fill alone: one outline per cell, the cell's"],
   ["--warn at 0.55", ["--glow over --panel"], QUIET, "the scan's GO ring, faded: its tick names it, the wedges' colour shows it"],
   ["--stop-ink at 0.65", ["--glow over --panel"], QUIET, "the scan's STOP ring, likewise"],
   ["--faint", ["--case", "--raised"], QUIET, "the stick's notches, a free wheel's and a box's edge"],

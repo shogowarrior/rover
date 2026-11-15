@@ -41,16 +41,20 @@
     <header class="bar">
       <div class="cells">
         <!-- What the controls drive, and its state: the target first, as
-             the owner asked; the link, which also says what needs the
-             operator about the rover; and Autonomous at the cell's end, in
-             the other cell from Stop, so that a press that misses Stop
-             cannot start the rover exploring. Each of the three is a slot
-             of one width whatever it says, on either target and in every
-             state: the words a cell shows are chosen by its width alone
-             (app.js steps them down, data-fit: the address first, then
-             Sim, Auto and the link's short words, then the link's lamp
-             alone), so nothing in either cell moves as the link, the
-             target or the rover's state changes. -->
+             the owner asked; Autonomous; and the link, which also says what
+             needs the operator about the rover, last. Autonomous sits near
+             the cell's start, in the other cell from Stop, which ends the
+             second: where the cells stack (a phone, a tablet upright) the
+             two are never in one column, so a press that misses Stop
+             cannot start the rover exploring (the critics' round 3: at the
+             first cell's end, Autonomous lay right over Stop). The target
+             and Autonomous are slots of one width whatever they say, and
+             the chip's word slot is as wide as its longest word, so nothing
+             in either cell moves as the link, the target or the rover's
+             state changes: the words a cell shows are chosen by its width
+             alone (app.js steps them down, data-fit: the address first,
+             then the alerts' glyphs for their words, then Sim and Auto and
+             the rover's glyph for its name, then the link's lamp alone). -->
         <div class="hcell drives" role="group" aria-label="What the controls drive">
           <!-- Rover | Simulator: what the Drive tab's controls drive and
                what a program runs on, for the whole page. targetswitch.js
@@ -58,29 +62,53 @@
                offers the rover alone, and hides. -->
           <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
 
-          <!-- The rover's link: its lamp, then its word (link.js), "Rover:"
-               before it where the cell has room, so it never reads as the
-               simulator's, the address right after it where the cell is
-               widest (drawn from the chip's --host, panel.css, so the
-               sizer holds it too), and a caret: a button, "Connect" where
-               the cell is narrow, that opens the link's popover, which hangs
-               from the top (panel.css): the address, Connect, and what
-               link.js has to say. Not modal: Stop stays one press while it
-               is open, and the keys stay the panel's (Space is Stop, even
-               with Connect focused). It also says what needs the operator
-               about the rover, amber, in the word's place, while it is so
-               and nothing on screen says it already (app.js): a motor
-               shield that did not answer, or on the simulator target a
-               rover exploring, which must not move unseen. Its words, long
-               or short, and the sizers under them share one cell, so it is
-               as wide whatever it says. -->
+          <!-- The rover's mode, as telemetry last reported it (readouts.js). -->
+          <output id="mode" hidden>—</output>
+
+          <!-- A switch, on while the target explores (autotoggle.js): its
+               knob and track say which. Named by its word; "Auto" where the
+               cell is narrow. -->
+          <button type="button" class="autoSwitch" id="auto" aria-pressed="false" aria-keyshortcuts="T" aria-label="Autonomous"
+                  title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
+            <span class="autoWord" aria-hidden="true">Autonomous</span>
+            <span class="autoShort" aria-hidden="true">Auto</span>
+            <span class="track" aria-hidden="true"></span>
+          </button>
+
+          <!-- The rover's link: its lamp, then on the simulator target
+               "Rover:", so the word never reads as the simulator's (where
+               the cell is narrow, the rover's glyph in the lamp's place
+               and colour: after the lamp in the page, first on screen,
+               panel.css); the link's state, one
+               word for each at every width (link.js), the address right
+               after it where the cell is widest (drawn from the chip's
+               --host, panel.css, so the sizers hold it too); what needs the
+               operator about the rover, each in its own slot after the
+               word, never in its place (app.js): a motor shield that did
+               not answer, and on the simulator target a rover exploring,
+               which must not move unseen (glyphs where the cell is narrow,
+               each titled); and a caret, flipped while the popover is open.
+               A press opens the link's popover, which hangs below the
+               cells from the chip's left edge (panel.css): the address,
+               Connect, and what link.js has to say. Not modal: Stop stays
+               one press while it is open, and the keys stay the panel's
+               (Space is Stop, even with Connect focused). Link adds a
+               sizer for each of its words under the word, so the word's
+               slot is as wide whatever it says. -->
           <button type="button" class="linkChip" id="linkChip" data-say="down" data-alert="">
+            <span class="chipFor" id="chipFor" hidden>
+              <svg class="icon roverGlyph" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.5"/><path d="M2.25 4v3M13.75 4v3M2.25 9v3M13.75 9v3"/></svg>
+              <span class="chipForWord">Rover:</span>
+            </span>
             <span class="lamp" aria-hidden="true"></span>
-            <span class="chipWord">
-              <span class="chipSay"><span class="chipFor" id="chipFor">Rover: </span><span class="chipLong" id="linkState">Not connected</span><span class="chipShort" id="linkShort">Connect</span></span>
-              <span class="chipAlert"><span class="chipFor">Rover: </span><span id="chipAlert"></span></span>
-              <span class="chipSizer chipLong" aria-hidden="true">Rover: Not connected</span>
-              <span class="chipSizer chipShort" aria-hidden="true">Connected</span>
+            <span class="chipWord"><span class="chipSay" id="linkState">Not connected</span></span>
+            <span class="chipAlert" id="alertMotors" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.4"/><path d="M3.2 12.8 12.8 3.2"/></svg>
+              <span class="alertWord">No motors</span>
+            </span>
+            <span class="chipAlert" id="alertExploring" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="M10.6 5.4 9.1 9.1 5.4 10.6 6.9 6.9z"/></svg>
+              <span class="alertWord">Rover exploring</span>
             </span>
             <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
           </button>
@@ -96,19 +124,6 @@
             <!-- How to connect, and why the link went. -->
             <p id="note" aria-live="polite"></p>
           </div>
-
-          <!-- The rover's mode, as telemetry last reported it (readouts.js). -->
-          <output id="mode" hidden>—</output>
-
-          <!-- A switch, on while the target explores (autotoggle.js): its
-               knob and track say which. Named by its word; "Auto" where the
-               cell is narrow. -->
-          <button type="button" class="autoSwitch" id="auto" aria-pressed="false" aria-keyshortcuts="T" aria-label="Autonomous"
-                  title="Autonomous (T): on, the rover explores by itself; off, it stops and waits for the controls. A rover that has halted retries at once when turned off and on again.">
-            <span class="autoWord" aria-hidden="true">Autonomous</span>
-            <span class="autoShort" aria-hidden="true">Auto</span>
-            <span class="track" aria-hidden="true"></span>
-          </button>
         </div>
 
         <!-- How the controls drive: the tabs, the scheme, and at the cell's
@@ -142,7 +157,7 @@
                title says the rest. -->
           <button type="button" id="stop" aria-label="Stop" aria-keyshortcuts="Space"
                   title="Stop (Space): stop the rover now, whatever is driving it, even its own exploring.">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="3"/></svg>
           </button>
 
           <!-- Options, under the gear: the page's look, Dark or Light and a
@@ -234,11 +249,13 @@
           <title id="scanDesc">Live ultrasonic scan at five bearings</title>
         </svg>
         <!-- With no link (panel.css says when), over the faint fan: the next
-             thing to do. Its button is a press of Connect, in the link's
-             popover, and says what that press does (link.js); Change address
-             opens that popover with the focus in the address (app.js). -->
+             thing to do. Its title is the link's state, as the chip says
+             it ("Connecting to" the address while connecting), and its
+             button is a press of Connect, in the link's popover, and says
+             what that press does (link.js); Change address opens that
+             popover with the focus in the address (app.js). -->
         <div class="connectCard" role="group" aria-labelledby="connectTitle">
-          <p class="connectTitle" id="connectTitle">No rover connected</p>
+          <p class="connectTitle" id="connectTitle">Not connected</p>
           <button type="button" class="connectGo" id="connectGo">Connect</button>
           <button type="button" class="connectAddress" id="changeAddress"
                   title="Change address: open the link's popover, with the rover's address ready to type.">Change address</button>
