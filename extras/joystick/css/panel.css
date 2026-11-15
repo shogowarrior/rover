@@ -1661,8 +1661,10 @@ body[data-link="connecting"] .connectGo {
    covers nothing. Over the middle of a short fan, the card sized for a
    tall pane hid most of it (the review's tablets 2). The row is the
    scan's last, whatever rows come before it; its title is the link
-   chip's word, in the top, and a scheme wish's note is the link
-   popover's alone. */
+   chip's word, in the top. A scheme wish's note, while there is one, is
+   a line over the buttons, as wide as they are: a phone shows no title,
+   and its Drive tab's view is this short (375 x 667), where the note
+   was the link popover's alone. */
 @container scan (max-height: 259.98px) {
   .scan > .connectCard {
     grid-row: 9;
@@ -1678,18 +1680,30 @@ body[data-link="connecting"] .connectGo {
     box-shadow: none;
   }
 
-  .connectTitle,
-  .connectCard .schemeWish { display: none; }
+  .connectTitle { display: none; }
 
   .connectAddress { white-space: nowrap; }
+
+  .connectCard > button { grid-row: 2; }
+
+  /* No width of its own (min-width's percentage counts as none while the
+     columns are sized), so the buttons set the row's, and it wraps in it. */
+  .connectCard .schemeWish {
+    grid-row: 1;
+    grid-column: 1 / span 2;
+    width: 0;
+    min-width: 100%;
+  }
 }
 
 /* A short view that is narrow too (the middle of a phone on its side, at
    480 px): Connect alone, whole, its address in it; the top's link chip,
-   over it, changes the address. Beside it, Change address wrapped to two
-   lines and cut the button to "ct to 192.16". */
+   over it, changes the address, and its popover says a scheme wish.
+   Beside it, Change address wrapped to two lines and cut the button to
+   "ct to 192.16". */
 @container scan (max-height: 259.98px) and (max-width: 329.98px) {
-  .connectAddress { display: none; }
+  .connectAddress,
+  .connectCard .schemeWish { display: none; }
 }
 
 @container scan (max-height: 99.98px) {

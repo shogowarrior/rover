@@ -2468,15 +2468,23 @@ test("schemes: a wish is said in words on the connect card and in the link's pop
   check(page.$("connectWish").textContent === "Normal goes to the rover once it connects.", `a wish after the link went: ${said()}`);
 
   // Drawn as the wished segment is: --dim words behind a dashed ring in
-  // --live, and gone, with the card's title, from the compact row a short
-  // view makes of the card: the link's popover still says it.
+  // --live. In the compact row a short view makes of the card (a phone's
+  // Drive tab), its title gone, the note a line over the buttons, as wide
+  // as they are; gone only where the view is narrow too, Change address
+  // with it, where the link's popover still says it.
   const rules = cssRules(panelCss());
   const ring = rules.find((r) => r.selector === ".schemeWish::before");
   check(ring && /border:\s*1px dashed var\(--live\)/.test(ring.body), `the dashed ring: ${ring && ring.body}`);
   const words = rules.find((r) => r.selector === ".schemeWish");
   check(words && /color:\s*var\(--dim\)/.test(words.body), `its words: ${words && words.body}`);
-  const shortCard = (blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
-  check(/\.connectCard \.schemeWish/.test(shortCard) && /\.connectTitle/.test(shortCard), `hidden with the card's title where the card is short: ${shortCard}`);
+  const short = blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || [];
+  const shortHidden = short.filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  const shortNote = short.filter((r) => r.selector === ".connectCard .schemeWish").map((r) => r.body).join("");
+  check(/\.connectTitle/.test(shortHidden) && !/schemeWish/.test(shortHidden), `a short card's title gone, the note kept: ${shortHidden}`);
+  check(/grid-row:\s*1;/.test(shortNote) && /grid-column:\s*1 \/ span 2;/.test(shortNote) && /width:\s*0;/.test(shortNote) && /min-width:\s*100%;/.test(shortNote)
+    && short.some((r) => r.selector === ".connectCard > button" && /grid-row:\s*2;/.test(r.body)), `a short card's note a line over its buttons, as wide as they are: ${shortNote}`);
+  const narrowHidden = (blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 329.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  check(/\.connectCard \.schemeWish/.test(narrowHidden), `gone where the short view is narrow too: ${narrowHidden}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -5527,7 +5535,7 @@ test("program: the connect card is a compact row under the fan in a short view",
   // it, Change address wrapped and cut the button to "ct to 192.16". The
   // top's link chip changes the address there.
   const narrow = blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 329.98px) {") || [];
-  check(narrow.some((r) => r.selector === ".connectAddress" && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector)), "a short, narrow view: Connect alone");
+  check(narrow.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector)), "a short, narrow view: Connect alone");
   check(/grid-auto-columns:\s*minmax\(0, max-content\);/.test(card) && short.some((r) => r.selector === ".connectAddress" && /white-space:\s*nowrap;/.test(r.body)), "each on one line, the button giving way first");
 });
 
