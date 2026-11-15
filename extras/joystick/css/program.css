@@ -522,13 +522,13 @@
   }
 }
 
-/* On its side and under 700 px wide, the cells stay a cell a row in the
+/* On its side, 568 to 699 px wide, the cells stay a cell a row in the
    middle, and the toolbar takes the empty bands beside them (panel.css
    places it): its buttons as wide as their words, closer to them, with
    no icons, and the editor's card all body, every corner round. The File
    menu hangs from its button in the right band, at the cells' first row:
    from 48 px down to 8 px over the foot. */
-@media (orientation: landscape) and (max-height: 520px) and (max-width: 699.98px) {
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) and (max-width: 699.98px) {
   .programBar {
     height: auto;
     padding: 0;
@@ -546,6 +546,15 @@
 
   #programMenuList {
     max-height: calc(100 * var(--svh) - var(--cell-h) - 2 * var(--s-2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* On its side under 568 px (480 x 320), the top spans the screen, a cell a
+   row (panel.css), and the toolbar heads the editor's card under it: the
+   File menu starts a cell and its 6 px lower than over one row. */
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
+  #programMenuList {
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - 3 * var(--s-2) - (var(--bar-h) - 3px) - var(--s-1) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
 }
 

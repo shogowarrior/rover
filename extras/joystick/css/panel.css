@@ -2762,7 +2762,7 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
   }
 }
 
-/* The Program tab on its side, under 700 px wide (568 x 320, 667 x 375):
+/* The Program tab on its side, 568 to 699 px wide (568 x 320, 667 x 375):
    the cells, a row each in the middle, leave a band either side of them,
    which were empty while the editor under them had about 90 px of height
    (the review's phones 0). The toolbar takes the bands: Run over Stop
@@ -2772,8 +2772,11 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
    tracks (subgrid) for it. No container here: a container is laid out on
    its own (layout containment), and a subgrid that is one gets no tracks
    at all. The view, positioned (above), lies over the tab's empty
-   corner; the top, its own layer, over its middle. */
-@media (orientation: landscape) and (max-height: 520px) and (max-width: 699.98px) {
+   corner; the top, its own layer, over its middle. Not under 568 px
+   (480 x 320): the top spans the screen there (below), leaving no bands,
+   and a toolbar in its row lay under the cells, Run out of reach; there
+   it is the editor card's head, a row of its own under the top. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) and (max-width: 699.98px) {
   #programTab:not([hidden]) {
     grid-area: 1 / 1 / -1 / -1;
     display: grid;
