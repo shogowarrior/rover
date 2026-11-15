@@ -117,7 +117,7 @@ sets only the simulator's own.
 | Rotate | L2 / R2, the panel's rotate buttons (17, 18) | The same |
 | Stop (0) | Cross, the panel's Stop; a stick held through Cross drives again only from centre | The same |
 | Pivot (9 to 12) | -- (the panel's right stick is shown, off) | Hold L1, or pick Pivot over the panel's right stick |
-| Pivot sideways (13 to 16) | -- | Hold R1, or pick Pivot sideways over the panel's right stick |
+| Pivot sideways (13 to 16) | -- | Hold R1, or pick Sideways over the panel's right stick |
 | Program tab | Any motion; a pivot block carries a warning, and Run on the rover asks before a pivot | Any motion |
 | Gamepad LEDs | Player 1 | Player 2 |
 
@@ -135,7 +135,7 @@ right is `PIVOT_RIGHT_FORWARD` (or `PIVOT_SIDEWAYS_FORWARD_RIGHT`), down and
 left `PIVOT_LEFT_BACKWARD` (`PIVOT_SIDEWAYS_BACKWARD_LEFT`), and a push
 exactly along an axis counts as right and forward. So in the pivot family
 (L1, or Pivot over the panel's right stick) up drives forward and down
-backward, about the side pushed; in the sideways family (R1, or Pivot sideways) up swings the
+backward, about the side pushed; in the sideways family (R1, or Sideways) up swings the
 front and down the rear, toward the side pushed. If the bench shows a row's
 wheels do not match its name, fix the row in `MovePatterns.cpp`, with its
 test, and the stick follows. Fix the same row in `RoverSim.WHEELS` in

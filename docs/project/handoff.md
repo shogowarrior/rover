@@ -324,6 +324,44 @@ PR, panel only (features.md, F3i and F3j):
   sticks are smaller (194 px at 1024 x 768, from 282), and above it larger
   (252 at 1280 x 800, from 202).
 
+On 2026-11-14 the owner, looking at `main`'s try-it page (which did not yet
+have F3i and F3j), found the panel cluttered and confusing, on a phone and
+everywhere: Stop and Autonomous still huge at the foot, a pane squeezed
+between two others, Normal | Advanced greyed out with no rover, and every
+control wanted in two cells at the top, Rover | Simulator first. A thread
+did F8 in features.md, panel only, on PR #9's branch, and it replaces the
+layout F3 to F3j built:
+
+- every control but the open tab's own is in two cells at the top, on
+  every layout and both tabs: Rover | Simulator, the link chip and the
+  Autonomous switch in the first; the Drive and Program tabs, Normal |
+  Advanced, and Stop, a red icon, beside the gear in the second. One row
+  where the top is wide enough, a cell a row below that. Each cell says as
+  much as its width allows, measured, and nothing in either moves on a
+  switch of target, a change of link or an alert;
+- the link chip shows the link's state in words and opens a popover with
+  the address, Connect and the note; with no link a card over the scan
+  offers Connect; the chip says "No motors", or "Exploring" on the
+  simulator target, in amber, where nothing else on screen says it;
+- Normal | Advanced is never greyed out for want of a link: a press before
+  the rover reports a scheme is a wish, sent as soon as it does;
+- under the cells two panes, never three: the view (the rover's scan with
+  its readouts in one line, or the simulated room) beside both tabs, and
+  the hands (the dock, or the editor); on a wide screen tall enough the
+  sticks stack in one column beside the view; the Program tab's View
+  toggle shows or hides the view, which starts hidden on a phone;
+- gone: the wordmark, the status pills, the address row, the foot bar, the
+  rail with its readouts card, and the Program tab's simulator strip.
+
+It was built in three steps, then checked by two rounds of a critic's
+screenshots at twelve sizes from 320 x 568 to 1440 x 900, every state
+included; the second round's fixes were split across parallel workers (the
+cells, the view, the dock, the Program tab, the popovers, and these docs).
+features.md, F8, maps each of the owner's clauses to what was done, and
+says where the build differs from the spec and why (the badges became the
+chip's alert, the stacked sticks). Test counts: see the PR. No firmware
+changed.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -352,7 +390,9 @@ F6, firmware updates from the panel, and F7, darker looks with a Dark |
 Light toggle, came later and are done too, and so are F3i, the Drive tab
 split for a larger view, and F3j, the header in one row with Stop beside
 the gear and Autonomous a toggle, from the owner's comments on the try-it
-page.
+page. F8, from his comments of 2026-11-14, is done and replaces F3 to
+F3j's layout: every control in two cells at the top, and two panes under
+them, the view beside both tabs and the open tab.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -388,9 +428,17 @@ and the next thread's task names that branch.
   features.md, F5 and F7, list them, and what each left as it was
   (Blockly's focus colours, its faint zoom and trash icons; Console Dark
   and Field Dark now close, the light looks' dark amber).
+- F8's checks for the owner, which need real screens and fingers
+  (features.md, F8): the panel on a laptop, an iPad both ways and a phone
+  both ways, on both tabs and both targets; touch on the cells' small
+  controls (the segments, the link chip and its caret, Autonomous, Stop
+  and the gear, 32 px tall with touch targets reaching 44 px); the scheme
+  wish with the rover (press Advanced before connecting, then connect);
+  and Stop by touch and by Space with a popover open.
 - Small panel and client items listed under "Open from earlier work" in
-  [features.md](../features.md): label overflow at 480 x 320, `client/ws.py`'s
-  traceback, and no committed stand-in rover.
+  [features.md](../features.md): the top's cells overflowing a phone on its
+  side at 480 x 320 (Stop and the gear spill over the pivot stick's
+  family), `client/ws.py`'s traceback, and no committed stand-in rover.
 - No owner answers yet to the 22 questions (features.md, "The owner's
   answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud
@@ -434,7 +482,10 @@ There:
 - For layout, use Playwright's chromium headless shell only, as
   [instructions.md](instructions.md) says, measuring at 375, 1024 x 768,
   1180 x 820, 1280 and about 1600 px (the owner's screen; the owner puts a
-  laptop or an iPad on its side first). Where the container already has one
+  laptop or an iPad on its side first), and for a change to the top or the
+  panes at F8's twelve sizes too: 320 x 568, 375 x 667, 390 x 844,
+  568 x 320, 844 x 390, 932 x 430, 768 x 1024, 820 x 1180, 1024 x 768,
+  1180 x 820, 1280 x 800 and 1440 x 900. Where the container already has one
   under `/opt/pw-browsers` (its `chromium_headless_shell-<revision>`), skip
   `playwright install` and pin the `playwright` package whose browser
   revision matches it (1.56.1 for revision 1194). Where `cdn.jsdelivr.net` is
