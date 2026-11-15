@@ -21,8 +21,10 @@
  *              labels are built in. The page's CSS lets every touch through
  *              it to the stick;
  *     note     the line under the selector: that the pivots are not
- *              bench-verified, that they need ADVANCED while they are off,
- *              and where to choose it, or a request for a fresh press.
+ *              bench-verified, that they need ADVANCED while they are off
+ *              (the pad's title says where to choose it), or a request
+ *              for a fresh press. Its data-tone says which: "caveat",
+ *              "off" or "warn".
  *
  *   offer(available)    turn the pivots on (ADVANCED) or off. The family
  *                       chosen is kept either way.
@@ -76,21 +78,21 @@ class FamilySelector {
   // words moves the stick under it, and the same words on every layout
   // (the critic's round 1: "Needs Advanced" on a phone on its side and
   // "Pivots need Advanced (at the top)" elsewhere). Each fits the line's
-  // narrowest place, the pivot stick's column at its floor (112 px, on its
-  // side under about 600 px wide) and the 12 px gap beside it, with its
-  // dot: the caveat 108 px measured headless, where "Unverified: go
-  // slowly." took 129. Off, the line says what the stick needs and where
-  // to choose it, where "Advanced only." said neither (F8: the owner asked
-  // why Normal | Advanced sat disabled; a stick greyed out with no way on
-  // in sight reads the same): 117 px in Inter, 123 in DejaVu Sans. The
-  // scheme is in the top's second cell, at the top on every layout but in
-  // a different place across it on each (never its right end, where Stop
-  // and the gear are), and an arrow under the family would point at Pivot
-  // | Sideways, so the line says "top bar". Off, the pad's title says the
-  // rest; on, it has none, to hang over a stick in use.
-  static CAVEAT = "Untried: go slow.";
-  static OFF = "Advanced: top bar";
-  static OFF_TITLE = "Pivots need Advanced: choose Advanced in the scheme switch in the top bar. The NORMAL scheme keeps the pivots off the sticks and the pad.";
+  // narrowest place at the dock's 13 px, the pivot stick's column at its
+  // floor (112 px, on its side under about 600 px wide, and the 12 px gap
+  // beside it; 120 px in a short laptop's stacked column), with its dot:
+  // the caveat 118 px in DejaVu Sans, the widest fallback, measured
+  // headless. Off, the line says what the stick is waiting for, with no
+  // dot: "Advanced: top bar" read as a label and its value, as if Advanced
+  // were on, and named a bar the top no longer has (the review's phones 5,
+  // tablets 3, laptops 5). "Pivots need Advanced (at the top)" is 209 px;
+  // this is 109 in DejaVu Sans, 106 in Inter. Under Pivot | Sideways, its
+  // subject is the family over it, and Advanced is the one word of that
+  // name on the page, in the top's second cell on every layout. Off, the
+  // pad's title says where; on, it has none, to hang over a stick in use.
+  static CAVEAT = "Untried: go slow";
+  static OFF = "Needs Advanced";
+  static OFF_TITLE = "Pivots need Advanced: choose Advanced in Normal | Advanced, at the top. Under Normal the pivots are off, on the sticks and on the pad.";
 
   // The stick's corners, as deflections moveForStick() reads; on screen, up
   // is forward. Each is labelled with the move its quadrant sends.
