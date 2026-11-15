@@ -27,29 +27,46 @@
   animation: programPulse 1s ease-in-out infinite alternate;
 }
 
+/* The toolbar's height (below), for the layouts that place the editor
+   under it on a grid (panel.css). */
+:root { --bar-h: calc(var(--ctl) + 7px); }
+
 /* An id outranks panel.css's [role="tabpanel"][hidden]. The toolbar
-   follows the tab's own width, which the layout sets, not the window's. */
+   follows the tab's own width, which the layout sets, not the window's.
+   No gap: the toolbar is the head of the editor's card (below). */
 #programTab {
   container: program / inline-size;
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: 0;
 }
 
 #programTab[hidden] { display: none; }
 
 /* --- the toolbar ----------------------------------------------------------- */
 
-/* One line of controls the top's size (32 px, 13 px words): Run and Stop
-   program, then at the far end the File menu and the View toggle. Each
-   button's touch target reaches over the gaps above and below it, to
-   44 px, as the top's do over their cell's padding. */
+/* One slim row of controls the top's size (32 px, 13 px words) over the
+   editor, on every layout: Run and Stop program, then at the far end the
+   File menu and the View toggle. It is the head of the editor's card, a
+   cell's 40 px with the editor's edge under it (4 px round the controls,
+   as in the top's cells), so the card's top is the pane's: level with the
+   view's beside it (the critic's round 1 found the two tops 40 px apart,
+   the toolbar over the editor alone). On a phone on its side it took the
+   bands beside the top, in two rows (the critic's round 2: four slabs).
+   Each button's touch target reaches over the padding above and below
+   it, to 44 px, as the top's do over their cell's. */
 .programBar {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 6px;
-  min-height: var(--ctl);
+  height: var(--bar-h);
+  padding: 3px;
   white-space: nowrap;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
 .programBar button {
@@ -163,17 +180,21 @@
   min-height: 0;
 }
 
+/* The card's body, under the toolbar, its head. A container for its
+   height (everything in it is laid over it, so it has no content height
+   to lose): a short editor drops Blockly's zoom buttons (below). */
 .programEditor {
   position: relative;
   /* Blockly's toolbox, flyout and scrollbars carry z-indexes of their own;
      kept inside this box, they stay under the top stuck over the page. */
   isolation: isolate;
+  container: editor / size;
   flex: 1 1 auto;
   min-height: 280px;
   overflow: hidden;
   background: var(--case);
   border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
 }
 
 /* A phone, or a tablet upright: the page is the screen's height on this
@@ -183,100 +204,6 @@
   .programEditor { min-height: 140px; }
 
   .programLog { max-height: 76px; }
-}
-
-/* A phone on its side has under 300 px under the top. The tab spans the
-   screen on the shell's columns (panel.css), and its toolbar takes the
-   bands beside the top, which were empty: Run over Stop program in the
-   left band, at the editor's left edge, File over View in the right, at
-   its right edge, each as wide as its words, lined up with a cell's
-   controls (4 px into a 40 px cell, the cells 6 px apart). Stretched to
-   the bands' width they were four 240 px slabs, two of them grey with no
-   program (the critic's round 2). The editor takes the screen's width
-   under them, the console under it: the state, up to two lines, beside
-   the last thing the program said. Beside the editor, the console left it
-   262 px of a 568 px screen. */
-@media (orientation: landscape) and (max-height: 520px) {
-  .programBar {
-    grid-row: 1;
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: subgrid;
-    grid-template-rows: var(--ctl) var(--ctl);
-    column-gap: normal;
-    row-gap: calc(var(--cell-h) - var(--ctl) + 6px);
-    align-self: start;
-    padding-top: calc((var(--cell-h) - var(--ctl)) / 2);
-  }
-
-  .programBar > button,
-  .programBar .menuHolder {
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  #programRun { grid-area: 1 / 1; justify-self: start; }
-  #programStop { grid-area: 2 / 1; justify-self: start; }
-  .programBar .menuHolder { grid-area: 1 / -2; justify-self: end; margin-left: 0; }
-  #viewToggle { grid-area: 2 / -2; justify-self: end; }
-
-  .programStage {
-    grid-row: 2;
-    grid-column: 3 / -1;
-    margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
-  }
-
-  #programTab[data-view="hidden"] .programStage { grid-column: 1 / -1; }
-
-  .programEditor { min-height: 0; }
-
-  .programConsole { flex-direction: row; }
-
-  .programConsole > * { flex: 1 1 0; min-width: 0; }
-
-  /* Up to two lines, the whole of it on hover (programtab.js): one line
-     cut "Nothing to run yet" to its first words, the only reason on
-     screen why Run was off (the critic's round 2). */
-  .programConsole .programState {
-    display: block;
-    max-height: calc(2 * 1.2em + 12px);
-    overflow: hidden;
-    padding-block: 6px;
-    line-height: var(--lh-tight);
-  }
-
-  .programConsole .programState::before {
-    display: inline-block;
-    margin-right: var(--s-2);
-    vertical-align: 1px;
-  }
-
-  /* The last lines the program said, beside the state, each one line. */
-  .programConsole .programLog {
-    min-height: 0;
-    max-height: 44px;
-    padding-block: var(--s-1);
-    line-height: var(--lh-body);
-    white-space: nowrap;
-    border-top: none;
-    border-left: 1px solid var(--rule);
-  }
-
-  .programConsole .programLog li {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .programConsole .programLog li::before { margin-right: var(--s-2); }
-}
-
-/* On its side and narrow, the bands under 140 px: the words alone. */
-@media (orientation: landscape) and (max-height: 520px) and (max-width: 639.98px) {
-  .programBar .run .icon,
-  .programBar .halt .icon { display: none; }
-
-  .programBar button { padding-inline: var(--s-2); }
 }
 
 #programWorkspace { position: absolute; inset: 0; }
@@ -303,15 +230,15 @@
 
 .programHint[hidden] { display: none; }
 
-@media (min-width: 601px) {
-  /* Clear of the toolbox down the left. */
+/* Clear of the toolbox: down the left (blocks.js's layout, its NARROW
+   query negated), or along the top. */
+@media (min-width: 601px) and (min-height: 521px) {
   .programHint { left: calc(50% + 60px); }
 }
 
 /* A phone, upright or on its side: a step smaller, so it fits a short
    phone's editor (138 px at 375 x 548) or a narrow one (180 px of
-   workspace at 667 x 375) rather than run past it. Upright, clear of the
-   toolbox along the top. */
+   workspace at 667 x 375) rather than run past it. */
 @media (max-width: 959.98px), (max-height: 520.98px) {
   .programHint {
     padding: var(--s-2) var(--s-3);
@@ -320,7 +247,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 600px), (max-height: 520px) {
   .programHint { top: calc(50% + 22px); }
 }
 
@@ -466,6 +393,51 @@
 .programLog li[data-tone="bump"] { color: var(--warn); }
 .programLog li[data-tone="bump"]::before { content: "×"; color: var(--warn); }
 
+/* A phone on its side has under 300 px under the top. The toolbar over
+   the editor as on every layout, the screen's width under the top (or
+   the width the view leaves it, panel.css), and the console under the
+   editor: the state, wrapping, beside the last thing the program said.
+   Beside the editor, the console left it 262 px of a 568 px screen (the
+   critic's round 1); in the bands beside the top, the toolbar was two
+   rows, and before that four 240 px slabs (round 2). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .programStage { margin-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
+
+  .programEditor { min-height: 0; }
+
+  .programConsole { flex-direction: row; }
+
+  .programConsole > * { flex: 1 1 0; min-width: 0; }
+
+  /* As many lines as it needs, never cut: cut to one, "Nothing to run
+     yet" lost its reason, the only one on screen why Run was off (the
+     critic's round 2). */
+  .programConsole .programState {
+    padding-block: 6px;
+    line-height: var(--lh-tight);
+  }
+
+  /* The last lines the program said, beside the state, each one line. */
+  .programConsole .programLog {
+    min-height: 0;
+    max-height: 44px;
+    padding-block: var(--s-1);
+    line-height: var(--lh-body);
+    white-space: nowrap;
+    border-left: 1px solid var(--rule);
+  }
+
+  .programLog:not(:empty) { border-top: none; }
+
+  .programConsole .programLog li {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .programConsole .programLog li::before { margin-right: var(--s-2); }
+}
+
 /* --- Blockly, dressed for the panel ---------------------------------------- */
 
 /* The theme (blocks.js) colours the workspace, flyout and scrollbars; these
@@ -480,7 +452,7 @@
 }
 
 .blocklyToolbox[layout="h"] {
-  padding: var(--s-2);
+  padding: var(--s-1);
   border-right: none;
   border-bottom: 1px solid var(--rule);
 }
@@ -537,41 +509,27 @@
   box-shadow: inset 0 0 0 2px var(--readout);
 }
 
-/* Along the top on a phone: a row of pills that scrolls sideways, fading
-   out at its right end so a category cut there reads as more to come, not
-   a word cut short (the critic's round 2). The fade is a mask (alpha), not
-   a colour. */
+/* Along the top on a phone, upright or on its side (blocks.js): every
+   category in sight, the pills closer, so the seven fit one row of a 568
+   px screen on its side, wrapping to a second where the editor is
+   narrower (an upright phone). A row that scrolled sideways cut one
+   mid-word, faded or not ("Lo" at 375 px, Variables at 568 x 320: the
+   critic's round 2). */
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup {
   display: flex;
-  flex-wrap: nowrap;
-  gap: var(--s-1);
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-right: var(--s-6);
-  -webkit-mask-image: linear-gradient(to right, var(--readout) calc(100% - 32px), transparent);
-  mask-image: linear-gradient(to right, var(--readout) calc(100% - 32px), transparent);
-}
-
-/* A short editor (a phone on its side): the categories closer, so all
-   seven fit its height; the last was cut in half under Variables. */
-@media (max-height: 520px) {
-  .blocklyToolbox:not([layout="h"]) {
-    padding-block: var(--s-2);
-  }
-
-  .blocklyToolbox:not([layout="h"]) .blocklyToolboxCategory.roverCategory {
-    margin-bottom: 2px;
-    padding-block: 5px !important;
-  }
+  flex-wrap: wrap;
+  gap: 2px 0;
 }
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryContainer { margin: 0; flex: none; }
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategory.roverCategory {
   margin: 0;
-  padding: var(--s-2) var(--s-3) !important;
+  padding: 6px !important;
   white-space: nowrap;
 }
+
+.blocklyToolbox[layout="h"] .roverCategory .blocklyTreeRowContentContainer { gap: var(--s-1); }
 
 .blocklyFlyoutButton { fill: var(--raised-hi); }
 
@@ -649,6 +607,32 @@
 @media (hover: hover) {
   .blocklyZoom > image:hover,
   .blocklyTrash > image:hover { opacity: 0.9; }
+}
+
+/* A short editor (a phone with the view shown over it, or on its side):
+   no zoom buttons. Stacked up from the trash can at the foot they ran up
+   under the toolbox along the top, one half shown (the critic's round 2);
+   a pinch or the wheel still zooms. */
+@container editor (max-height: 299.98px) {
+  .blocklyZoom { display: none; }
+}
+
+/* Shorter still (a phone on its side), the trash can too, which ran up
+   under the toolbox the same way: a block dropped on the toolbox goes as
+   it would in the can. And the hint at the foot, as wide as the editor
+   allows (from the middle, half of it), clear of the toolbox however
+   many rows it takes: in the middle of what the toolbox left (two rows of
+   pills over 66 px, the view beside it), it ran up under the pills. */
+@container editor (max-height: 199.98px) {
+  .blocklyTrash { display: none; }
+
+  .programHint {
+    top: auto;
+    bottom: var(--s-3);
+    width: max-content;
+    max-width: calc(100% - 2 * var(--s-3));
+    transform: translateX(-50%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

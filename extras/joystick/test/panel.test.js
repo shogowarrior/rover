@@ -2618,10 +2618,9 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // to the middle of the screen, as on the Drive tab, so a switch of tab
   // moves neither Stop nor anything beside it: the shell's columns are the
   // same three with the middle one split in two (the second makes the
-  // view's 40%), and the top spans both halves. The toolbar takes the
-  // bands either side of it, and under it the editor takes the width, the
-  // view shown or hidden: two panes at most, never the view, the editor and
-  // the console side by side (the critic's round 1).
+  // view's 40%), and the top spans both halves. Under it the editor takes
+  // the width, the view shown or hidden: two panes at most, never the
+  // view, the editor and the console side by side (the critic's round 1).
   const split = "grid-template-columns: var(--stick) max(0px, 40% - var(--stick)) minmax(0, 1fr) var(--stick);";
   check(body(side, ".shell:has(> #programTab:not([hidden]))").includes(split), `the middle column split in two: ${body(side, ".shell:has(> #programTab:not([hidden]))")}`);
   const expected = { ".shell:has(> #programTab:not([hidden]))": "view view main main", '.shell:has(> #programTab[data-view="hidden"]:not([hidden]))': "main main main main" };
@@ -2630,20 +2629,23 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
     check(program[0] && program[0].join(" ") === ". head head .", `${selector}: the top in the middle, over both halves: ${program.map((row) => row.join(" ")).join(" / ")}`);
     check(program[1] && program[1].join(" ") === under, `${selector}: the editor under it, to the right edge: ${program.map((row) => row.join(" ")).join(" / ")}`);
   }
-  // The tab on the shell's own tracks (a subgrid), and no container, which
-  // would leave a subgrid no tracks; its toolbar's halves in the bands and
-  // its stage under the top. The console under the editor, one line.
+  // The tab in its area under the top, a column as on every layout: the
+  // toolbar one slim row over the editor, the console under the editor.
+  // In the bands beside the top, the toolbar was two rows there, and four
+  // 240 px slabs before that (the critic's round 2): nothing here places
+  // the tab, the toolbar or its controls on the shell's tracks.
   const tab = body(side, "#programTab:not([hidden])");
-  check(/grid-template-columns:\s*subgrid;/.test(tab) && /grid-template-rows:\s*subgrid;/.test(tab) && /container-type:\s*normal;/.test(tab) && /grid-row:\s*1 \/ -1;/.test(tab), `the tab on the shell's tracks: ${tab}`);
+  check(!/grid-(row|column|area|template)/.test(tab) && !/display:/.test(tab), `the tab in its area, a column: ${tab}`);
   const programSide = blockRules(stylesheet("program.css"), LANDSCAPE_PHONE) || [];
   const where = (selector) => body(programSide, selector);
-  check(/grid-area:\s*1 \/ 1;/.test(where("#programRun")) && /grid-area:\s*2 \/ 1;/.test(where("#programStop")) && /grid-area:\s*1 \/ -2;/.test(where(".programBar .menuHolder")) && /grid-area:\s*2 \/ -2;/.test(where("#viewToggle")),
-    "Run over Stop program in the left band, File over View in the right");
-  check(/grid-row:\s*2;/.test(where(".programStage")) && !/flex-direction:\s*row/.test(where(".programStage")), `the stage under the top, the console under the editor: ${where(".programStage")}`);
-  // The state up to two lines, the whole of it on hover: one line cut
-  // "Nothing to run yet" to its first words (the critic's round 2).
+  const placed = [...programSide, ...side].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage/.test(r.selector) && /grid-|display:/.test(r.body));
+  check(placed.length === 0, `the toolbar a row over the editor, as everywhere: ${placed.map((r) => r.selector)}`);
+  check(!/flex-direction:\s*row/.test(where(".programStage")), `the console under the editor: ${where(".programStage")}`);
+  // The state as many lines as it needs, never cut: one line cut "Nothing
+  // to run yet" to its first words, the only reason on screen why Run was
+  // off (the critic's round 2).
   const stateLines = where(".programConsole .programState");
-  check(/max-height:\s*calc\(2 \* 1\.2em \+ 12px\);/.test(stateLines) && /overflow:\s*hidden;/.test(stateLines) && /line-height:\s*var\(--lh-tight\);/.test(stateLines), `the state two lines at most: ${stateLines}`);
+  check(stateLines !== "" && !/max-height|overflow|nowrap|text-overflow/.test(stateLines), `the state wraps: ${stateLines}`);
   for (const rules of [side, narrow]) {
     const shell = (body(rules, ".shell, .controls") + body(rules, ".shell")).match(/column-gap:\s*([^;]+);/);
     const dockGap = (body(rules, ".shell, .controls") + body(rules, ".controls")).match(/column-gap:\s*([^;]+);/);
@@ -3600,6 +3602,14 @@ test("program: switching the target mid-run stops the program, and the choice is
   const wideTab = (selector) => wideRules.filter((r) => r.selector === selector).map((r) => r.body).join("");
   check(/grid-template-columns:\s*subgrid;/.test(wideTab('#programTab[data-view="shown"]:not([hidden])')) && /container-type:\s*normal;/.test(wideTab('#programTab[data-view="shown"]:not([hidden])')), "the tab on the shell's tracks, no container");
   check(/grid-area:\s*2 \/ 1;/.test(wideTab('#programTab[data-view="shown"] .programConsole')) && /grid-area:\s*1 \/ 2 \/ 3 \/ 3;/.test(wideTab('#programTab[data-view="shown"] .programEditor')), "the console under the view, the editor the whole right");
+  // The editor's card level with the view beside it: its toolbar, the
+  // card's head, at the top of the view's row, and the editor straight
+  // under it. Over the editor alone, the toolbar put the two tops 40 px
+  // apart (the critic's round 1); nothing pushes it down from that row.
+  const wideBar = wideTab('#programTab[data-view="shown"] .programBar');
+  check(/grid-area:\s*1 \/ 2;/.test(wideBar) && /align-self:\s*start;/.test(wideBar) && !/margin|padding/.test(wideBar), `wide, shown: the toolbar at the top of the view's row: ${wideBar}`);
+  check(/margin-top:\s*var\(--bar-h\);/.test(wideTab('#programTab[data-view="shown"] .programEditor')), "wide, shown: the editor straight under its toolbar");
+  check(!/padding-top|margin-top/.test(wideTab("#programTab")) && !wideRules.some((r) => /#programTab/.test(r.selector) && /(^|[\s;])(row-)?gap:\s*[1-9]/.test(r.body) && !/data-view="shown"/.test(r.selector)), "wide, hidden: the toolbar at the pane's top too, against the editor");
   const aspect = cssRules(outside(panel, "@media"));
   const shellVars = aspect.filter((r) => r.selector === ".shell" && /--va:/.test(r.body)).map((r) => r.body).join("");
   const simVars = aspect.filter((r) => r.selector === 'body[data-target="simulator"] .shell').map((r) => r.body).join("");
@@ -3609,8 +3619,35 @@ test("program: switching the target mid-run stops the program, and the choice is
   check(consoleBox.getAttribute("class") === "programConsole" && consoleBox.parentNode === folded.$("programStage"), "the console is in the stage");
   check(folded.$("programState").title === folded.$("programState").textContent && folded.$("programState").title !== "", `the state whole on hover, where one line cuts it: '${folded.$("programState").title}'`);
   check(!all(folded.$("programTab")).includes(folded.$("simSlot")), "no view of its own in the Program tab");
-  // The toolbar keeps to one row in a phone's tab: its icons go first.
+  // The toolbar is the head of the editor's card on every layout: one slim
+  // row a cell's height, on the card's ground, with no gap between it and
+  // the editor, whose top corners give way to it. In the bands beside the
+  // top of a phone on its side, it was two rows, and four slabs before that
+  // (the critic's round 2: the on-its-side test holds that layout to this).
   const programCss = stylesheet("program.css");
+  const programBase = cssRules(outside(programCss, "@"));
+  const baseOf = (selector) => programBase.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/--bar-h:\s*calc\(var\(--ctl\) \+ 7px\);/.test(baseOf(":root")) && /height:\s*var\(--bar-h\);/.test(baseOf(".programBar")) && /display:\s*flex;/.test(baseOf(".programBar")) && /border-bottom:\s*none;/.test(baseOf(".programBar")) && /border-radius:\s*var\(--r-lg\) var\(--r-lg\) 0 0;/.test(baseOf(".programBar")),
+    `the toolbar a row, the card's head: ${baseOf(".programBar")}`);
+  check(/border-radius:\s*0 0 var\(--r-lg\) var\(--r-lg\);/.test(baseOf(".programEditor")) && /gap:\s*0;/.test(baseOf("#programTab")), `the editor the card's body, straight under it: ${baseOf(".programEditor")} | ${baseOf("#programTab")}`);
+  // Blockly's toolbox along the top of a phone's editor, upright or on its
+  // side (a short screen too: down the left of a short editor the seven
+  // categories ran past its foot), and every category in sight there:
+  // wrapping to a second row, never a row that scrolls and cuts one
+  // mid-word ("Lo" at 375 px: the critic's round 2).
+  const blocksJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "blocks.js"), "utf8");
+  check(/static NARROW = "\(max-width: 600px\), \(max-height: 520px\)";/.test(blocksJs), "the toolbox along the top of a narrow or short screen");
+  const pills = baseOf('.blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup');
+  check(/flex-wrap:\s*wrap;/.test(pills) && !/overflow|mask/.test(pills), `every category in sight, wrapping: ${pills}`);
+  check((blockRules(programCss, "@media (max-width: 600px), (max-height: 520px) {") || []).some((r) => r.selector === ".programHint") && (blockRules(programCss, "@media (min-width: 601px) and (min-height: 521px) {") || []).some((r) => r.selector === ".programHint"),
+    "the hint clear of the toolbox wherever blocks.js puts it");
+  // A short editor drops the zoom buttons, which ran up under the toolbox,
+  // and a shorter one the trash can and puts the hint at its foot.
+  check(/container:\s*editor \/ size;/.test(baseOf(".programEditor")), "the editor a container for its height");
+  check((blockRules(programCss, "@container editor (max-height: 299.98px) {") || []).some((r) => r.selector === ".blocklyZoom" && /display:\s*none/.test(r.body)), "a short editor: no zoom buttons");
+  const shortest = blockRules(programCss, "@container editor (max-height: 199.98px) {") || [];
+  check(shortest.some((r) => r.selector === ".blocklyTrash" && /display:\s*none/.test(r.body)) && shortest.some((r) => r.selector === ".programHint" && /bottom:/.test(r.body)), "shorter still: no trash can, the hint at the foot");
+  // The toolbar keeps to one row in a phone's tab: its icons go first.
   const narrowPane = blockRules(programCss, "@container program (max-width: 459.98px) {") || [];
   check(narrowPane.some((r) => /\.viewWord/.test(r.selector) && /display:\s*none/.test(r.body)), "a narrow tab's View toggle its icon alone");
   // Narrower still, Stop program says "Stop", named in full: the whole of

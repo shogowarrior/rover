@@ -689,11 +689,14 @@ class RoverBlocks {
  *                      blocks keep PALETTE.
  *   onChange(fn)       fn() after the program changes.
  *
- * Under 600 px of screen the toolbox runs across the top, as a row of pills,
- * and the workspace is rebuilt when the screen crosses that width.
+ * Under 600 px of screen, or 520 px of height (a phone on its side), the
+ * toolbox runs across the top, as rows of pills (program.css), and the
+ * workspace is rebuilt when the screen crosses either. Down the left of a
+ * short editor, the seven categories ran past its foot (the critic's
+ * round 2); across the top of a wide one they fit in one row.
  */
 class BlockEditor {
-  static NARROW = "(max-width: 600px)";
+  static NARROW = "(max-width: 600px), (max-height: 520px)";
   static SAVE_DELAY_MS = 400;
 
   static #AsyncFunction = (async () => {}).constructor;
