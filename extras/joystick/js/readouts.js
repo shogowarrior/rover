@@ -1,34 +1,38 @@
 /**
  * What telemetry says about the rover beyond its scan: the mode, and the
  * exploration phase while it explores; the move; the chip temperature; and
- * the motor-shield warning, as the fault card and as the "No motors" badge
- * in the top's first cell. The mode's output, hidden, carries it as
- * data-mode too. (The Autonomous toggle keeps its own state:
- * autotoggle.js; app.js shows the "Rover exploring" badge from mode.)
+ * the motor-shield warning, as the fault line over the scan. The mode's
+ * output, hidden, carries it as data-mode too. (The Autonomous toggle keeps
+ * its own state: autotoggle.js; app.js has the link chip say "No motors"
+ * or "Exploring" where the view does not show the rover's own.)
  *
- *   new Readouts({ mode, move, phaseCell, phase, temp, motorsBadge, motorsFault })
- *     motorsBadge  shown only while the rover says its motor shield did
+ *   new Readouts({ mode, move, phaseCell, phase, temp, motorsFault })
+ *     motorsFault  shown only while the rover says its motor shield did
  *                  not answer; nothing shows while the motors are well.
  *   show(data)   update from a telemetry object; a key it lacks leaves its
  *                readout as it was (motorsReady excepted, below).
  *   linkDown()   the link the readings came over has gone.
  *   clear()      show nothing reported, as the page loads.
  *   mode         the mode telemetry last reported, or null.
+ *   motorsReady  what the rover last said of its motor shield: true, false,
+ *                or null for nothing said over this link.
  */
 class Readouts {
   #ui;
 
-  static MOTORS_TITLE = "No motors: the motor shield did not answer when the rover booted, so the wheels cannot move. Check its wiring and power, then reset the rover with its wheels off the ground.";
-
   #mode = null;
+  #motorsReady = null;
 
-  constructor({ mode, move, phaseCell, phase, temp, motorsBadge, motorsFault }) {
-    this.#ui = { mode, move, phaseCell, phase, temp, motorsBadge, motorsFault };
-    motorsBadge.setAttribute("title", Readouts.MOTORS_TITLE);
+  constructor({ mode, move, phaseCell, phase, temp, motorsFault }) {
+    this.#ui = { mode, move, phaseCell, phase, temp, motorsFault };
   }
 
   get mode() {
     return this.#mode;
+  }
+
+  get motorsReady() {
+    return this.#motorsReady;
   }
 
   show(data) {
@@ -79,8 +83,8 @@ class Readouts {
   // data-ready keeps the three cases apart, for the page's CSS.
   #showMotorsReady(ready) {
     const said = ready === true ? "yes" : ready === false ? "no" : "unknown";
+    this.#motorsReady = ready === true || ready === false ? ready : null;
     this.#ui.motorsFault.hidden = ready !== false;
     this.#ui.motorsFault.dataset.ready = said;
-    this.#ui.motorsBadge.hidden = ready !== false;
   }
 }

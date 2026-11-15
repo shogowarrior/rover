@@ -114,12 +114,17 @@
 /* Stop program is plain, never red: the top's red Stop is the one that
    stops the rover, and the page's one red control. */
 
-/* The View toggle: shown, it is lit as the simulator's own toggles are, a
-   raised ground over a line in the controls' blue. */
+/* The View toggle: shown, it is inverted as a chosen segment is, so it
+   reads as a toggle that is on; a 2 px line under it was too little to
+   tell (the critic's round 2). Hidden, plain. */
 .viewToggle[aria-pressed="true"] {
-  color: var(--readout);
-  background: var(--raised-hi);
-  box-shadow: inset 0 -2px 0 var(--live);
+  color: var(--on-chosen);
+  background: var(--chosen);
+  border-color: transparent;
+}
+
+@media (hover: hover) {
+  .viewToggle[aria-pressed="true"]:hover { color: var(--on-chosen); background: var(--chosen); }
 }
 
 .viewToggle[aria-pressed="false"] { color: var(--dim); }
@@ -137,15 +142,12 @@
   .viewToggle { width: var(--ctl); padding: 0; }
 }
 
-/* Narrower still (a 320 px phone), Stop program its square alone, named
-   and titled in full: with "Run on rover" the row ran the View toggle off
-   the tab (the critic's round 1). */
+/* Narrower still (a 320 px phone), Stop program says "Stop", named and
+   titled in full: with "Run on rover" the whole of it ran the View toggle
+   off the tab (the critic's round 1), and its square alone, grey beside
+   the top's red one, said nothing (round 2). */
 @container program (max-width: 339.98px) {
-  .programBar .halt .icon { display: block; }
-
-  .programBar .halt span { display: none; }
-
-  .programBar .halt { width: var(--ctl); padding: 0; justify-content: center; }
+  .programBar .haltMore { display: none; }
 }
 
 /* --- the stage: the editor, then the console -------------------------------- */
@@ -186,12 +188,14 @@
 /* A phone on its side has under 300 px under the top. The tab spans the
    screen on the shell's columns (panel.css), and its toolbar takes the
    bands beside the top, which were empty: Run over Stop program in the
-   left band, File over View in the right, each the band's width and lined
-   up with a cell's controls (4 px into a 40 px cell, the cells 6 px
-   apart). The editor takes the screen's width under them, the console one
-   line under it: the state, then the last thing the program said, which
-   scrolls back. Beside the editor, the console left it 262 px of a 568 px
-   screen. */
+   left band, at the editor's left edge, File over View in the right, at
+   its right edge, each as wide as its words, lined up with a cell's
+   controls (4 px into a 40 px cell, the cells 6 px apart). Stretched to
+   the bands' width they were four 240 px slabs, two of them grey with no
+   program (the critic's round 2). The editor takes the screen's width
+   under them, the console under it: the state, up to two lines, beside
+   the last thing the program said. Beside the editor, the console left it
+   262 px of a 568 px screen. */
 @media (orientation: landscape) and (max-height: 520px) {
   .programBar {
     grid-row: 1;
@@ -206,17 +210,15 @@
   }
 
   .programBar > button,
-  .programBar .menuHolder,
-  .programBar .menuButton {
-    justify-content: center;
-    width: 100%;
+  .programBar .menuHolder {
     min-width: 0;
+    max-width: 100%;
   }
 
-  #programRun { grid-area: 1 / 1; }
-  #programStop { grid-area: 2 / 1; }
-  .programBar .menuHolder { grid-area: 1 / -2; margin-left: 0; }
-  #viewToggle { grid-area: 2 / -2; }
+  #programRun { grid-area: 1 / 1; justify-self: start; }
+  #programStop { grid-area: 2 / 1; justify-self: start; }
+  .programBar .menuHolder { grid-area: 1 / -2; justify-self: end; margin-left: 0; }
+  #viewToggle { grid-area: 2 / -2; justify-self: end; }
 
   .programStage {
     grid-row: 2;
@@ -228,20 +230,19 @@
 
   .programEditor { min-height: 0; }
 
-  .programConsole {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
+  .programConsole { flex-direction: row; }
 
-  /* One line, its dot inline: the whole state on hover (programtab.js).
-     Scoped to the console, to outrank the rules below. */
+  .programConsole > * { flex: 1 1 0; min-width: 0; }
+
+  /* Up to two lines, the whole of it on hover (programtab.js): one line
+     cut "Nothing to run yet" to its first words, the only reason on
+     screen why Run was off (the critic's round 2). */
   .programConsole .programState {
     display: block;
+    max-height: calc(2 * 1.2em + 12px);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border-bottom: none;
-    border-right: 1px solid var(--rule);
+    padding-block: 6px;
+    line-height: var(--lh-tight);
   }
 
   .programConsole .programState::before {
@@ -250,13 +251,15 @@
     vertical-align: 1px;
   }
 
-  /* As tall as the state's line, each line of the log one line too. */
+  /* The last lines the program said, beside the state, each one line. */
   .programConsole .programLog {
     min-height: 0;
-    max-height: none;
-    padding-block: var(--s-2);
+    max-height: 44px;
+    padding-block: var(--s-1);
     line-height: var(--lh-body);
     white-space: nowrap;
+    border-top: none;
+    border-left: 1px solid var(--rule);
   }
 
   .programConsole .programLog li {
@@ -348,23 +351,68 @@
 
 /* Its state line in the top's 13 px, then the log. */
 .programConsole {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
 }
 
-.programState {
+/* The state, and while the rover target has no link, Connect beside it. */
+.programStateRow {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--s-2);
+  padding-right: var(--s-1);
+}
+
+.programState {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
   margin: 0;
   padding: var(--s-2) var(--s-3);
   font-size: var(--t-ctl);
   font-weight: var(--fw-semi);
   line-height: var(--lh-body);
-  border-bottom: 1px solid var(--rule);
 }
+
+/* The log under the state, ruled off from it, once there is one. */
+.programLog:not(:empty) { border-top: 1px solid var(--rule); }
+
+/* Connect, the next thing to do, in the controls' blue, while the rover
+   target has no link: the line says why Run is off. A 28 px pill in the
+   line's height, its touch target over the console's edges. */
+.consoleConnect {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  min-height: 0;
+  height: var(--seg);
+  padding: 0 var(--s-3);
+  font-size: var(--t-ctl);
+  color: var(--on-live);
+  background: var(--live);
+  border-color: transparent;
+  border-radius: var(--r-full);
+}
+
+.consoleConnect::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--seg) - var(--tap)) / 2) 0;
+}
+
+@media (hover: hover) {
+  .consoleConnect:hover { background: var(--live); filter: brightness(1.1); }
+}
+
+/* Only while the rover is the target and no link is up (app.js). */
+.consoleConnect[hidden] { display: none; }
 
 /* A status dot (panel.css draws them all), in the state's colour. */
 .programState::before { background: var(--dim); }
@@ -390,6 +438,7 @@
 @keyframes programPulse { to { box-shadow: 0 0 0 0 var(--ok-soft); } }
 
 .programLog {
+  flex: 1 1 auto;
   list-style: none;
   margin: 0;
   padding: var(--s-1) var(--s-3) var(--s-2);
@@ -404,7 +453,7 @@
   user-select: text;
 }
 
-.programLog:empty::before { content: "What the program says appears here."; }
+.programLog:empty { display: none; }
 
 .programLog li { display: flex; gap: var(--s-2); }
 .programLog li::before { content: "·"; flex: none; color: var(--faint); }
@@ -488,13 +537,32 @@
   box-shadow: inset 0 0 0 2px var(--readout);
 }
 
-/* Along the top on a phone: a row of pills that scrolls sideways. */
+/* Along the top on a phone: a row of pills that scrolls sideways, fading
+   out at its right end so a category cut there reads as more to come, not
+   a word cut short (the critic's round 2). The fade is a mask (alpha), not
+   a colour. */
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryGroup {
   display: flex;
   flex-wrap: nowrap;
   gap: var(--s-1);
   overflow-x: auto;
   scrollbar-width: none;
+  padding-right: var(--s-6);
+  -webkit-mask-image: linear-gradient(to right, var(--readout) calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, var(--readout) calc(100% - 32px), transparent);
+}
+
+/* A short editor (a phone on its side): the categories closer, so all
+   seven fit its height; the last was cut in half under Variables. */
+@media (max-height: 520px) {
+  .blocklyToolbox:not([layout="h"]) {
+    padding-block: var(--s-2);
+  }
+
+  .blocklyToolbox:not([layout="h"]) .blocklyToolboxCategory.roverCategory {
+    margin-bottom: 2px;
+    padding-block: 5px !important;
+  }
 }
 
 .blocklyToolbox[layout="h"] .blocklyToolboxCategoryContainer { margin: 0; flex: none; }

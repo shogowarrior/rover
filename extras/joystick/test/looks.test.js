@@ -45,19 +45,19 @@ const FIELD = { "--readout": 7, "--dim": 7, "--rule": 3 };
 // track (--raised-hi); the chosen segment (--chosen). A tinted chip, badge
 // or button replaces its fill with the tint.
 const AUDIT = [
-  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case"], TEXT,
-    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the open tab and the link chip while all is well, the Autonomous switch's word, Blockly's toolbox and flyout, a hovered flyout button, the fault card"],
+  ["--readout", ["--case", "--panel", "--raised", "--raised-hi", "--faint", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
+    "the page's text, the readouts, the chosen block category's ring, buttons, menus, the keys' caps, the open tab and the link chip while all is well, the Autonomous switch's word, Blockly's toolbox and flyout, a hovered flyout button, the fault in the scan's card, the rover's alert in the link's popover"],
   ["--dim", ["--case", "--panel", "--raised", "--raised-hi", "--glow over --panel"], TEXT,
-    "captions, the note, the keys' note, unchosen segments, the tabs not open, the link chip with no link, its caret and its address, the Autonomous switch's knob while off, the log, the scan's ticks, the room's walls and labels, a menu item's key"],
+    "captions, the note, the keys' note, unchosen segments, the tabs not open, the link chip with no link, its caret and its address, the Autonomous switch's knob while off, the log, the scan's ticks and its rings' legend, the room's walls and labels, the preview's tag, a menu item's key"],
   ["--on-chosen", ["--chosen"], TEXT, "the chosen segment's word: the target, the scheme, the stick's family, Dark | Light; a chosen scheme also asked for, its dashed frame"],
   ["--live", ["--case", "--raised"], TEXT, "a pending segment, the log's say"],
-  ["--on-live", ["--live"], TEXT, "Connect, in the popover and on the view's connect card, Run, Yes, Update, a held rotate button"],
+  ["--on-live", ["--live"], TEXT, "Connect, in the popover, on the view's connect card and in the Program console's line, Run, Yes, Update, a held rotate button"],
   ["--ok", ["--case", "--panel", "--ok-soft over --panel", "--ok-soft over --case"], TEXT,
     "the log's done, a firmware update's, the Autonomous switch's knob on its tinted track while on"],
   ["--warn", ["--case", "--panel", "--glow over --panel", "--warn-soft over --case", "--warn-soft over --panel"], TEXT,
-    "the note gone bad, the phase, the stick's caption, the GO tick, the link chip lost or stale and the badges, each on its tint in a cell, the fault's headline, the log"],
+    "the note gone bad, the phase, the stick's caption, the link chip lost or stale or saying the rover's alert, on its tint in a cell, the fault's headline in the scan's card, the log"],
   ["--stop-ink", ["--panel", "--glow over --panel", "--stop-soft over --case"], TEXT,
-    "the STOP tick, a stall or a bump in the simulator"],
+    "a stall or a bump in the simulator"],
   ["--on-stop", ["--stop", "--stop-hi"], TEXT, "Stop"],
 
   // A fresh sonar ray is drawn at 0.95.

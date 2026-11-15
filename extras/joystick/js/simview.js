@@ -6,13 +6,19 @@
  * and no Driver, and the simulator's telemetry never goes to the scan fan or
  * the readouts.
  *
- *   new SimView(slot, target)
+ *   new SimView(slot, target, { layout })
  *     slot     the empty element the view fills (#simSlot, in the page's
  *              view pane, beside both tabs, which the layout sizes): the
  *              room takes all of it under one row of controls, fitted with
  *              PAD kept clear around it for a line of words above and
  *              below.
  *     target   the SimTarget it shows, and whose clock it runs.
+ *     layout   the element whose CSS lays the pane out (the page's shell),
+ *              optional: it gets --room-aspect, the room's width over its
+ *              height, whenever the room changes, so the layout can give
+ *              the pane the room's shape (panel.css) rather than letterbox
+ *              it. Only the Program tab's layouts read it: beside the
+ *              Drive tab's sticks a room picked moves nothing.
  *
  *   holdPlayback(why)
  *       Hold the playback at 1x, the faster speeds disabled in the
@@ -79,9 +85,12 @@ class SimView {
   // view is shown, so they never stop.
   #canRest = typeof ResizeObserver === "function";
 
-  constructor(slot, target) {
+  #layout;
+
+  constructor(slot, target, { layout = null } = {}) {
     this.#slot = slot;
     this.#target = target;
+    this.#layout = layout;
     this.#chosen = target.playback;
     this.#build();
     this.#drawRoom();
@@ -435,6 +444,9 @@ class SimView {
     const ui = this.#ui;
     ui.floor.textContent = "";
     ui.labels.textContent = "";
+    // The room's shape, for the layout to give the pane (panel.css).
+    const aspect = (room.width / room.height).toFixed(4);
+    if (this.#layout) this.#layout.style.setProperty("--room-aspect", aspect);
 
     dom.svg("rect", { class: "sim-floor", x: 0, y: 0, width: w, height: h }, ui.floor);
     // A soft grid: every 50 cm, stronger every metre.

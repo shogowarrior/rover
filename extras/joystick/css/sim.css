@@ -146,14 +146,15 @@
 
 /* --- the room --------------------------------------------------------- */
 
+/* The room's stage: the card's own ground, unframed, so the room drawn in
+   it, walls and floor, is the frame. Wherever the pane's shape is not the
+   room's, the margin round the floor is the card, never a black band in a
+   frame of its own (the critic's round 2). */
 .sim-stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  background: var(--case);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
 }
 
 .sim-map {
@@ -305,10 +306,11 @@
   pointer-events: none;
 }
 
+/* The tag bold in the dim ink: a caption, not a warning, so not amber. */
 .sim-badge strong {
   flex: none;
   font-weight: var(--fw-bold);
-  color: var(--warn);
+  color: var(--dim);
 }
 
 .sim-nosend,

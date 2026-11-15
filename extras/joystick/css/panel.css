@@ -660,6 +660,26 @@ input[type="range"]::-moz-range-thumb {
   min-width: 0;
 }
 
+/* The view's shape, for the layouts that size its pane to what it shows
+   (the Program tab's, below): --va its drawing's width over its height,
+   --vcw and --vch what its card adds across and down. The scan's fan is
+   420 x 200 (scan.js), in its card's padding over the readouts line; the
+   room's shape is the simulator's (SimView sets --room-aspect here), under
+   its bar, with the room's margins (SimView.PAD) and the card's padding
+   and edge round it. A pane of another shape letterboxed the room, 60% of
+   it empty at 1024 x 768 (the critic's round 2). */
+.shell {
+  --va: 2.1;
+  --vcw: 8px;
+  --vch: 44px;
+}
+
+body[data-target="simulator"] .shell {
+  --va: var(--room-aspect, 1.3333);
+  --vcw: 34px;
+  --vch: 102px;
+}
+
 /* --- the top: two cells (F8) -------------------------------------------------- */
 
 /* Every control but the open tab's own, in two cells: what the controls
@@ -691,25 +711,27 @@ input[type="range"]::-moz-range-thumb {
   row-gap: 6px;
 }
 
-/* One row, the two cells sharing the width, the second never squeezed
-   below its own content: so the second cell's controls (the tabs, the
-   scheme, Stop and the gear) sit where the viewport alone puts them, and
-   nothing the first cell gains or loses (a badge, "Rover:", the address)
-   moves any of them. Before, the first cell took its content's width, and
-   a badge coming moved the tabs and the scheme 47 to 302 px sideways. The
-   first cell clips what it cannot hold, never spills over Stop's. */
+/* One row: each cell as wide as what it holds, the first at the left and
+   the second, Stop and the gear at its end, at the right, the page's
+   ground between them. Nothing in either cell changes width with the
+   state (each says what its width alone allows: data-fit, below), so
+   neither moves; where the two would meet, the words step down until they
+   do not (app.js measures the row as well as each cell). Two halves left
+   dead ground inside both cells (the critic's round 2: 140 px in the first
+   at 1280, 240 in the second). */
 @container bar (min-width: 900px) {
   .cells {
-    grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr);
+    display: flex;
+    justify-content: space-between;
     column-gap: var(--s-2);
   }
 
-  .drives { overflow-x: clip; }
+  .hcell { flex: none; }
 }
 
 /* A cell: one rounded box, one line of controls 32 px tall, whatever they
-   say. Nothing in it wraps or grows it: a word, a badge or a state only
-   takes width. */
+   say. Nothing in it wraps or grows it: a word or a state only takes
+   width, and each control's width is its slot's, whatever it says. */
 .hcell {
   display: flex;
   align-items: center;
@@ -747,9 +769,14 @@ input[type="range"]::-moz-range-thumb {
 
 #stop { margin-left: 10px; }
 
-/* Autonomous at the first cell's far end: whatever comes or goes before it
-   (a badge, "Rover:", the address) takes the gap, never its place. */
+/* Autonomous at the first cell's far end where the cell spans the screen
+   (a cell a row), right after the link where the cell is as wide as what
+   it holds (one row). The first cell clips what it cannot hold, never
+   spills it over the second (its popover hangs from the top, not from it,
+   so is not clipped). */
 .drives > .autoSwitch { margin-left: auto; }
+
+.drives { overflow-x: clip; }
 
 /* The popovers hung from the cells wrap their words, as the cells' own
    line does not. */
@@ -946,13 +973,16 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   stroke: none;
 }
 
-/* The link chip: a lamp and the link's word (link.js), "Rover:" before it
-   on the simulator target, the address where the cell has room for it
-   (data-fit, below), and a caret: it opens the link's popover. Its word
-   keeps the width of the longest it says (.chipSizer, under it), so a
-   change of state moves nothing after it. All well is quiet, a green lamp;
-   a link that went or went quiet is amber, the word saying which. */
+/* The link chip: a lamp, the link's word (link.js) with "Rover:" before it
+   where the cell has room, the address where it is widest (data-fit,
+   below), and a caret, always: it is a button, and opens the link's
+   popover. Its words, long and short, the rover's alert and the sizers
+   share one cell, so it is as wide whatever it says: the sizers hold the
+   longest it can say at each step, and what shows starts at the cell's
+   left. All well is quiet, a green lamp; a link that went or went quiet,
+   or a rover that needs the operator, is amber, the word saying which. */
 .linkChip {
+  justify-content: flex-start;
   gap: var(--s-2);
   padding: 0 var(--s-2) 0 var(--s-3);
   font-weight: var(--fw-semi);
@@ -961,13 +991,6 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 }
 
 .linkChip .lamp { background: var(--dim); }
-
-.chipFor[hidden],
-.chipHost { display: none; }
-
-/* "Rover:" and the word read as one phrase, a word space apart (5 px):
-   4 px looked like none after the colon. */
-.chipFor { margin-right: -3px; }
 
 .chipWord {
   display: inline-grid;
@@ -978,9 +1001,18 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .chipSizer { visibility: hidden; }
 
+/* The long words, "Rover:" with them, where the cell has room; the short
+   ones elsewhere (below). The rover's alert in the state's place while
+   there is one (app.js). */
+.chipShort,
+.chipHost,
+.linkChip:not([data-alert=""]) .chipSay,
+.linkChip[data-alert=""] .chipAlert { display: none; }
+
 .linkChip .caret {
   width: var(--glyph);
   height: var(--glyph);
+  margin-left: auto;
   color: var(--dim);
 }
 
@@ -992,142 +1024,79 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .linkChip[data-say="up"] .lamp { background: var(--ok); }
 
-.linkChip:is([data-say="lost"], [data-say="stale"]) {
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) {
   color: var(--warn);
   background: var(--warn-soft);
   border-color: var(--warn);
 }
 
-.linkChip:is([data-say="lost"], [data-say="stale"]) :is(.lamp, .caret) { color: var(--warn); }
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) :is(.lamp, .caret) { color: var(--warn); }
 
-.linkChip:is([data-say="lost"], [data-say="stale"]) .lamp { background: var(--warn); }
-
-/* What needs the operator, only while it is so: amber, a warning's glyph
-   and its word, titled in full (readouts.js, app.js); a press opens the
-   reason in words, for a touch screen, which cannot hover. */
-.badge {
-  gap: var(--s-1);
-  padding: 0 var(--s-3) 0 var(--s-2);
-  font-weight: var(--fw-semi);
-  color: var(--warn);
-  background: var(--warn-soft);
-  border-color: transparent;
-  border-radius: var(--r-full);
-}
-
-@media (hover: hover) {
-  .badge:hover { background: var(--warn-soft); border-color: var(--warn); }
-}
-
-.badge[aria-expanded="true"] { border-color: var(--warn); }
-
-.badge[hidden] { display: none; }
-
-/* A badge that goes takes its open reason with it: a note with no badge
-   over it spoke of what was no longer so. */
-.badge[hidden] + .badgeNote { display: none; }
-
-.badge .icon {
-  width: var(--glyph);
-  height: var(--glyph);
-}
-
-/* The reason, under the cells as the link's popover hangs. */
-.badgeNote {
-  top: 100%;
-  right: auto;
-  left: 0;
-  width: min(20rem, 100%);
-  padding: var(--s-2) var(--s-3);
-}
-
-.badgeNote p {
-  margin: 0;
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
-  color: var(--readout);
-}
+.linkChip:is([data-say="lost"], [data-say="stale"], [data-alert="motors"], [data-alert="exploring"]) .lamp { background: var(--warn); }
 
 /* The words a cell gives up where it cannot hold them all (app.js,
-   fitSteps: data-fit, measured, so it follows what the cell holds now, a
-   badge or "Rover:" included, and the fonts the device has). The first
-   cell, from the most it says: the address on the chip ("host"); every
-   word; Sim and Auto ("short"); the badges' glyphs alone ("glyphs"); every
-   control closer to its words, and the chip without its caret ("snug");
-   the chip's lamp alone ("lamp"), its title saying the rest, which only a
-   cell under 300 px wide comes to with no badge showing. The second: every word; Adv
-   ("short"); the segments closer to their words ("tight"); and in a cell
-   under 300 px wide alone (a 320 px phone), 12 px words ("small"). Stop
-   stays 16 px from the scheme, and the gear square. */
+   fitSteps: data-fit, measured against the most each slot can say, so the
+   step follows the cell's width and the fonts the device has, never the
+   state). The first cell, from the most it says: the address on the chip
+   ("host", a screen 1280 px wide or more); every word; Sim, Auto and the
+   link's short words ("short"); every control closer to its words
+   ("snug"); the link's short words at 12 px ("small"); and the chip's lamp
+   and caret alone ("lamp"), its title saying the rest. The second: every
+   word; the segments closer to their words ("tight"); 12 px words
+   ("small"); and only where nothing else fits (a 320 px phone), Adv
+   ("short"). Stop stays 16 px from the scheme, and the gear square. */
 .drives[data-fit="host"] .chipHost {
   display: inline;
   font-weight: var(--fw-medium);
   color: var(--dim);
 }
 
-/* With the address beside it, the word takes its own width: kept at the
-   longest word's, it left a dead gap before the address. */
-.drives[data-fit="host"] .chipSizer { display: none; }
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord, .chipLong, .chipFor) { display: none; }
 
-.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord) { display: none; }
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segShort, .autoShort, .chipShort) { display: inline; }
 
-.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) :is(.target .segShort, .autoShort) { display: inline; }
-
-.drives:is([data-fit="short"], [data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .autoSwitch {
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
   gap: 6px;
   padding-inline: var(--s-2) 6px;
 }
 
-.drives:is([data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .badgeWord { display: none; }
-
-.drives:is([data-fit="glyphs"], [data-fit="snug"], [data-fit="lamp"]) .badge {
-  width: var(--ctl);
-  padding: 0;
-}
-
-.drives:is([data-fit="snug"], [data-fit="lamp"]) {
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) {
   --seg-x: 7px;
   gap: 4px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="lamp"]) .linkChip {
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .linkChip {
   gap: 5px;
-  padding: 0 6px;
+  padding: 0 4px 0 var(--s-2);
 }
 
-.drives:is([data-fit="snug"], [data-fit="lamp"]) .chipFor { margin-right: 0; }
-
-.drives:is([data-fit="snug"], [data-fit="lamp"]) .autoSwitch {
+.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
   gap: var(--s-1);
   padding-inline: var(--s-1) 2px;
 }
 
-/* The chip is a button by its pill and edge: its caret goes before any
-   word does. */
-.drives:is([data-fit="snug"], [data-fit="lamp"]) .linkChip .caret { display: none; }
+.drives[data-fit="small"] .chipWord { font-size: var(--t-sm); }
 
-.drives[data-fit="lamp"] .badge { width: var(--seg); }
+.drives[data-fit="lamp"] .chipWord { display: none; }
 
-.drives[data-fit="lamp"] :is(.chipWord, .chipFor) { display: none; }
-
-.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) .scheme .segWord:not(:last-child) { display: none; }
-
-.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) .scheme .segShort { display: inline; }
-
-.hands:is([data-fit="tight"], [data-fit="small"]) {
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) {
   --seg-x: 7px;
   --tab-x: 5px;
   gap: 4px;
 }
 
-.hands:is([data-fit="tight"], [data-fit="small"]) #stop { margin-left: 12px; }
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) #stop { margin-left: 12px; }
 
-.hands[data-fit="small"] {
+.hands:is([data-fit="short"], [data-fit="small"]) {
   --seg-x: 6px;
   --tab-x: 3px;
 }
 
-.hands[data-fit="small"] :is(button, .segmented button) { font-size: var(--t-sm); }
+.hands:is([data-fit="short"], [data-fit="small"]) :is(button, .segmented button) { font-size: var(--t-sm); }
+
+.hands[data-fit="short"] .scheme .segWord:not(:last-child) { display: none; }
+
+.hands[data-fit="short"] .scheme .segShort { display: inline; }
 
 /* The link's popover: the address, Connect, and what the link has to say.
    It hangs from the top, below the cells, never over them (a phone's
@@ -1144,6 +1113,22 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .linkPanel .menuLabel { padding: 0; }
 
+/* What needs the operator about the rover, while the chip says it: amber,
+   as the chip is. */
+.linkAlert {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--readout);
+  background: var(--warn-soft);
+  border-radius: var(--r-sm);
+}
+
+.linkAlert[hidden] { display: none; }
+
+/* The address and Connect: one row of the top's 32 px controls, each
+   reaching over the row's gaps to a full touch target. */
 .linkRow {
   display: flex;
   gap: var(--s-2);
@@ -1155,19 +1140,33 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 #host {
   flex: 1;
   min-width: 0;
-  height: var(--tap);
+  height: var(--ctl);
   padding: 0 var(--s-3);
   font-family: var(--mono);
-  font-size: var(--t-md);
+  font-size: var(--t-ctl);
   color: var(--readout);
   background: var(--case);
   border: 1px solid var(--edge);
-  border-radius: var(--r-md);
+  border-radius: var(--r-full);
   -webkit-user-select: text;
   user-select: text;
 }
 
-#connect { flex: none; }
+#connect {
+  position: relative;
+  flex: none;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-4);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
+
+#connect::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--ctl) - var(--tap)) / 2) 0;
+}
 
 /* With no link, connecting is the next thing to do. */
 body[data-link="down"] #connect {
@@ -1214,25 +1213,25 @@ body[data-link="down"] #connect {
 /* What the other target shows takes no room: the rover's parts here, the
    simulator's slot by its hidden attribute (app.js), which tells the view
    it is out of sight. */
-body[data-target="simulator"] .view > :is(.fault, .scan, .readouts) { display: none; }
+body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 
-/* A fault the rover reports about itself, over its scan. Amber, not red:
-   nothing is moving that should stop; the rover simply cannot move. It
-   takes height from the scan, at most half the pane, and scrolls the rest:
-   at its own height on a short phone it ran past the pane. */
+/* A fault the rover reports about itself, in the scan's card at its top,
+   the fan under it. Amber, not red: nothing is moving that should stop;
+   the rover simply cannot move. It takes height from the fan, at most half
+   the card, and scrolls the rest. A bar of its own over the card read as a
+   third row under the top's two cells (the critic's round 2). */
 .fault {
-  flex: 0 1 auto;
   min-height: 0;
-  max-height: 50%;
+  max-height: 50cqh;
   overflow-y: auto;
-  margin: 0 0 var(--s-2);
-  padding: var(--s-2) var(--s-3);
+  margin: 0 var(--s-2) var(--s-1);
+  padding: 6px var(--s-3);
   font-size: var(--t-xs);
   line-height: var(--lh-body);
   color: var(--readout);
   background: var(--warn-soft);
   border: 1px solid var(--warn);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
 }
 
 /* One line, a caret for the rest: the summary is the fault, the details
@@ -1296,10 +1295,12 @@ body[data-target="simulator"] .view > :is(.fault, .scan, .readouts) { display: n
   min-height: 0;
 }
 
-/* The fan and, with no link, the connect card, in one cell: the card over
-   the fan's faint rings, the card at its full size. */
-.scan { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
-.scan > * { grid-area: 1 / 1; }
+/* The fault, while there is one, in a row at the card's top; under it the
+   fan and, with no link, the connect card, in one cell: the card over the
+   fan's faint rings, the card at its full size. */
+.scan { grid-template: auto minmax(0, 1fr) / minmax(0, 1fr); }
+.scan > * { grid-area: 2 / 1; }
+.scan > .fault { grid-area: 1 / 1; }
 
 /* With no link, whatever the tab or the width, over the faint fan: the
    next thing to do, rather than an empty pane that reads as a fault. Not
@@ -1460,9 +1461,15 @@ body[data-link="connecting"] .connectGo {
   fill: var(--dim);
 }
 
-/* The ring labels take their ring's colour. */
-.tick.stop { fill: var(--stop-ink); }
-.tick.go { fill: var(--warn); }
+/* The rings' legend under the fan, quiet: smaller than the bearings'
+   names and in the dim ink, its rings' dashes saying which is which. In
+   red and amber, at about 22 px on a wide screen, it outshouted the
+   readouts, and a red STOP word vied with Stop (the critic's round 2). */
+.tick.ringLabel {
+  font-size: calc(var(--scan-tick) * 0.75);
+  font-weight: var(--fw-semi);
+  fill: var(--dim);
+}
 
 /* Without a live link the fan is history: the wedges fade and the numbers
    grey, still legible. A clear way greys too, still drawn open: its green,
@@ -1841,12 +1848,22 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 }
 
 /* Narrower still (a 320 px phone, a phone on its side at the stick's
-   floor), the words go and the arrows stay, each button named and titled
-   with its own: the word alone said less than the arrow does. */
+   floor: 50 px a button), the arrow comes back at 12 px beside the word at
+   11 px, closer to it: the arrow alone said nothing a word does, the word
+   alone could read as a strafe (the critic's rounds 1 and 2). 50 px holds
+   both in DejaVu Sans, the widest fallback, measured headless. */
 @container spin (max-width: 129.98px) {
-  .spin .icon { display: block; }
+  .spin button {
+    gap: 2px;
+    padding: 0 3px;
+    font-size: var(--t-xs);
+  }
 
-  .spin .spinWord { display: none; }
+  .spin .icon {
+    display: block;
+    width: 12px;
+    height: 12px;
+  }
 }
 
 /* No transition on press: a control that moves a robot must feel
@@ -1944,22 +1961,20 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
      120 px, so the editor keeps its floor (program.css) on the screen:
      400 px is the rest of the column, the top (106), the band's margin
      (8), the toolbar and its gap (40), the editor's floor and its gap
-     (148), the console (86) and the padding under it (12). */
+     (148), the console (86) and the padding under it (12). And never
+     taller than what it shows needs at the screen's width (the fan's
+     shape, or the room's): the rest was empty pane. */
   .shell:has(> #programTab:not([hidden])) {
     grid-template-rows: auto auto minmax(0, 1fr);
     height: 100vh;
     height: 100dvh;
   }
 
-  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(120px, min(33 * var(--svh), 100 * var(--svh) - 400px), 480px); }
+  .shell:has(> #programTab:not([hidden])) > .view { height: clamp(120px, min(33 * var(--svh), 100 * var(--svh) - 400px, (100vw - 2 * var(--gutter) - var(--vcw)) / var(--va) + var(--vch)), 480px); }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
 
   #programTab { padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px)); }
-
-  /* On the Drive tab a fault gives way to the scan at the pane's foot
-     rather than run past it: a short phone's pane is under 300 px. */
-  .shell:has(> #driveTab:not([hidden])) .fault { max-height: 45%; }
 }
 
 /* A short phone screen (its browser's bars showing), 760 px or less: most
@@ -2008,6 +2023,66 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    the sheet was wider than everything over it and flush to the foot (the
    critic's round 1, at 820 x 1180). The sticks keep their 240 px cap; the
    view takes the gutter from its own height. */
+/* A tablet upright, or any screen 600 to 959 px wide over 520 px tall:
+   on the Program tab the view, when shown, is a band over the editor, as
+   wide as what it shows needs at the band's height (the room's shape, or
+   the fan's: --va), and the console beside it, at least 200 px wide,
+   takes the rest of the band. The room filled 315 to 380 px of a 720 px
+   band, black bars either side (the critic's round 2). A band whose view
+   reaches the console's floor (the fan's wide shape) is only as tall as
+   that view needs. The toolbar and the editor under the band, the whole
+   width; with the view hidden the console goes back under the editor. */
+@media (min-width: 600px) and (max-width: 959.98px) and (min-height: 521px) {
+  .shell:has(> #programTab[data-view="shown"]:not([hidden])) {
+    --band-0: clamp(200px, 38 * var(--svh), 460px);
+    --view-w: min((var(--band-0) - var(--vch)) * var(--va) + var(--vcw), min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-2) - 200px);
+    --band-h: min(var(--band-0), (var(--view-w) - var(--vcw)) / var(--va) + var(--vch));
+    grid-template-columns: var(--view-w) minmax(0, 1fr);
+    grid-template-rows: auto var(--band-h) minmax(0, 1fr);
+    grid-template-areas:
+      "head head"
+      "view ."
+      ".    .";
+    column-gap: var(--s-2);
+  }
+
+  .shell:has(> #programTab[data-view="shown"]:not([hidden])) > .view {
+    height: auto;
+    margin-bottom: 0;
+  }
+
+  #programTab[data-view="shown"]:not([hidden]) {
+    grid-row: 2 / -1;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    gap: 0 var(--s-2);
+    container-type: normal;
+  }
+
+  #programTab[data-view="shown"] .programStage { display: contents; }
+
+  #programTab[data-view="shown"] .programConsole {
+    grid-area: 1 / 2;
+    min-height: 0;
+  }
+
+  #programTab[data-view="shown"] .programLog { max-height: none; }
+
+  #programTab[data-view="shown"] .programBar {
+    grid-area: 2 / 1 / 3 / 3;
+    align-self: start;
+    margin-top: var(--s-2);
+  }
+
+  #programTab[data-view="shown"] .programEditor {
+    grid-area: 2 / 1 / 3 / 3;
+    min-height: 0;
+    margin-top: calc(2 * var(--s-2) + var(--ctl));
+  }
+}
+
 @media (min-width: 720px) and (max-width: 959.98px) and (min-height: 761px) {
   :root { --shell-max: 960px; }
 
@@ -2055,12 +2130,28 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     padding-bottom: var(--s-4);
   }
 
+  /* The Program tab: the view about 40% of the width (from 320 to 560
+     px) on the left, as tall as what it shows needs at that width (the
+     fan's shape, or the room's: --va, above), and the console under it
+     taking the rest of the column; the editor, its toolbar over it, the
+     whole of the right. In a pane the screen's height the fan filled
+     only its foot, 450 px empty over it at 1280 x 800, and the room had
+     150 px of black over and under it (the critic's round 2). At least
+     240 px of the height is the console's, the top's and the padding's. */
   .shell:has(> #programTab:not([hidden])) {
-    grid-template-columns: clamp(320px, 40%, 560px) minmax(0, 1fr);
+    --view-w: clamp(320px, 0.4 * (min(100vw, var(--shell-max)) - 2 * var(--gutter) - var(--s-4)), 560px);
+    --view-h: min((var(--view-w) - var(--vcw)) / var(--va) + var(--vch), 100 * var(--svh) - 240px);
+    grid-template-columns: var(--view-w) minmax(0, 1fr);
+    grid-template-rows: auto var(--view-h) minmax(0, 1fr);
+    grid-template-areas:
+      "head head"
+      "view main"
+      ".    main";
   }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "head"
       "main";
@@ -2068,13 +2159,48 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
   .shell:has(> #programTab[data-view="hidden"]:not([hidden])) > .view { display: none; }
 
+  /* The tab spans both columns on the shell's own tracks (subgrid): the
+     toolbar and the editor in the right column, the console in the left
+     under the view, 8 px clear of it. The toolbar level with the room's
+     bar inside the view's card (its edge and padding, 9 px), and the
+     editor's top level with the room's. No container here: a container is
+     laid out on its own (layout containment), and a subgrid that is one
+     gets no tracks at all. */
+  #programTab[data-view="shown"]:not([hidden]) {
+    grid-row: 2 / -1;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    gap: 0 var(--s-4);
+    container-type: normal;
+  }
+
+  #programTab[data-view="shown"] .programStage { display: contents; }
+
+  #programTab[data-view="shown"] .programBar {
+    grid-area: 1 / 2;
+    align-self: start;
+    margin-top: calc(1px + var(--s-2));
+  }
+
+  #programTab[data-view="shown"] .programEditor {
+    grid-area: 1 / 2 / 3 / 3;
+    min-height: 0;
+    margin-top: calc(1px + var(--s-2) + var(--ctl) + 6px);
+  }
+
+  #programTab[data-view="shown"] .programConsole {
+    grid-area: 2 / 1;
+    min-height: 0;
+    margin-top: var(--s-2);
+  }
+
+  #programTab[data-view="shown"] .programLog { max-height: none; }
+
   .view { margin-bottom: 0; }
 
-  .fault {
-    margin-bottom: var(--s-3);
-    padding: var(--s-3) var(--s-4);
-    font-size: var(--t-sm);
-  }
+  .fault { font-size: var(--t-sm); }
 
   .fault strong { font-size: var(--t-md); }
 
@@ -2099,10 +2225,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
   .dock { align-self: end; }
 
-  /* Its toolbar level with the view's, which sits inside the view's card
-     (its edge and padding, 9 px), and the editor's top level with the
-     room's, 6 px under: the two panes' tops were 9 px apart, and the
-     editor's 7 px off the room's (the critic's round 1). */
+  /* With the view hidden, the editor and the console under it fill the
+     page, scrolling inside the tab past the editor's floor; the toolbar
+     where it is with the view shown, 9 px down, so nothing in it moves. */
   #programTab {
     overflow-y: auto;
     min-height: 0;
@@ -2338,6 +2463,23 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 #optionsPanel #firmwareChoose { flex: none; }
 
+/* Its buttons the top's 32 px controls, each reaching over the gaps round
+   it to a full touch target. */
+#optionsPanel .firmware button {
+  position: relative;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-4);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
+
+#optionsPanel .firmware button::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--ctl) - var(--tap)) / 2) 0;
+}
+
 #optionsPanel #firmwareChosen {
   min-width: 0;
   font-size: var(--t-sm);
@@ -2349,13 +2491,14 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
    typing in a field that inherits the page's user-select: none. */
 #optionsPanel #firmwarePassword {
   width: 100%;
-  height: var(--tap);
+  height: var(--ctl);
   padding: 0 var(--s-3);
   font: inherit;
+  font-size: var(--t-ctl);
   color: var(--readout);
   background: var(--case);
   border: 1px solid var(--edge);
-  border-radius: var(--r-md);
+  border-radius: var(--r-full);
   -webkit-user-select: text;
   user-select: text;
 }

@@ -92,10 +92,10 @@ class ScanView {
   #build() {
     const { VIEW_W, VIEW_H, CY, R_MAX, RANGE_CM, FAN_HALF, CX } = ScanView;
     this.#svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
-    // The rover at the foot of a pane taller than the fan, and what lies
-    // ahead of it above: centred, a tall pane's spare height lay empty both
-    // over the fan and under the rover.
-    this.#svg.setAttribute("preserveAspectRatio", "xMidYMax meet");
+    // Centred in a pane of another shape: pinned to the foot of a tall
+    // pane, the fan left all its spare height in one empty band over it,
+    // 250 to 450 px on a wide screen (the critic's round 2).
+    this.#svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
     // A wedge that stops short of the red STOP ring has a return within STOP_CM
     // along that ray, which makes the threshold legible spatially rather than
@@ -120,7 +120,7 @@ class ScanView {
       if (!ring.text) continue;
       const [x] = ScanView.#polar(90 + ring.side * FAN_HALF, r);
       const at = { x: x.toFixed(1), y: CY + 14, "text-anchor": "middle" };
-      dom.svg("text", { class: `tick ${ring.kind}`.trim(), ...at }, this.#svg, ring.text);
+      dom.svg("text", { class: `tick ringLabel ${ring.kind}`.trim(), ...at }, this.#svg, ring.text);
     }
 
     this.#views = BEARINGS.map((b) => ({

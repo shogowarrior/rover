@@ -60,7 +60,11 @@
  */
 class ProgramTab {
   static RUN_LABELS = Object.freeze({ rover: "Run on rover", simulator: "Preview" });
-  static EMPTY = "Nothing to run yet: drag blocks in, or load an example from the File menu.";
+  // An empty editor: the console's line says only that, the reason Run is
+  // off; the advice is the editor's own placeholder, said once (the
+  // critic's round 2: the same advice three times). Run's title says both.
+  static EMPTY = "No blocks yet.";
+  static EMPTY_TITLE = "Nothing to run yet: drag blocks in from the toolbox, or load an example from the File menu.";
   static LOG_LINES = 200;
   // What the File menu's items do, and why one cannot now (F3f: disabled,
   // with a title that says why).
@@ -345,7 +349,7 @@ class ProgramTab {
     const empty = Boolean(editor && editor.empty);
     ui.runLabel.textContent = ProgramTab.RUN_LABELS[kind] || `Run on ${kind}`;
     ui.run.disabled = !editor || empty || !idle || !readiness.ok;
-    ui.run.title = !editor ? this.#editorWhy : !idle ? ProgramTab.TITLES.running : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY : ProgramTab.TITLES.run[kind] || "";
+    ui.run.title = !editor ? this.#editorWhy : !idle ? ProgramTab.TITLES.running : !readiness.ok ? readiness.why : empty ? ProgramTab.EMPTY_TITLE : ProgramTab.TITLES.run[kind] || "";
     ui.stop.disabled = state !== "running";
 
     // Without an editor no item can act, so neither can the menu. With one,

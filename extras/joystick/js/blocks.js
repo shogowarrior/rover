@@ -632,7 +632,7 @@ class RoverBlocks {
         flyoutForegroundColour: ink,
         flyoutOpacity: 1,
         scrollbarColour: lookToken("--dim"),
-        scrollbarOpacity: 0.35,
+        scrollbarOpacity: 0.25,
         // A shadow of the block where it would drop, in the look's ink:
         // white would vanish on a light look's case.
         insertionMarkerColour: ink,
@@ -828,6 +828,11 @@ class BlockEditor {
 
   #inject(state) {
     const narrow = this.#narrow.matches;
+    // Slim scrollbars: Blockly's own are 15 px, 25 on a touch screen, thick
+    // grey bars that looked unstyled (the critic's round 2). The workspace
+    // pans by a drag anywhere, so the bar is a cue more than a handle.
+    const bars = this.#Blockly.Scrollbar;
+    if (bars && typeof bars.scrollbarThickness === "number") bars.scrollbarThickness = 11;
     const workspace = this.#Blockly.inject(this.#container, {
       toolbox: RoverBlocks.toolbox(),
       theme: RoverBlocks.theme(this.#Blockly),

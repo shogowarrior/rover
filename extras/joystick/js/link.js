@@ -4,7 +4,7 @@
  * state, and turning frames into telemetry objects and the rover's word about
  * a firmware update.
  *
- *   new Link({ body, host, connect, chip, linkState, linkHost, note, proxy, storageKey })
+ *   new Link({ body, host, connect, chip, linkState, linkShort, linkHost, note, proxy, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
  *     host        the address field (host or host:port), in the link
  *                 popover; Enter connects, and leaves the field, so the
@@ -17,8 +17,9 @@
  *                 "lost", "connecting", "up", "stale"), and is titled with
  *                 the state and the address in full, since a narrow cell
  *                 shows its lamp alone;
- *     linkState   the state's word, in it; linkHost: the address, in it (a
- *                 wide screen shows it);
+ *     linkState   the state's word, in it; linkShort: its short word, which
+ *                 a narrow cell shows in its place (panel.css); linkHost:
+ *                 the address, in it (a wide screen shows it);
  *     note        the status line, in the popover;
  *     proxy       the connect card's button, in the view pane while there
  *                 is no link: a press of it is a press of connect. It says
@@ -68,6 +69,15 @@ class Link {
     up: "Connected",
     stale: "No data",
   });
+  // The same, where the top's first cell is narrow (a phone): a word still,
+  // never the lamp alone while one fits (the critic's round 2).
+  static SHORT = Object.freeze({
+    down: "Offline",
+    lost: "Lost",
+    connecting: "Linking…",
+    up: "Live",
+    stale: "No data",
+  });
   static TITLE = Object.freeze({
     down: (address) => `Not connected to the rover (${address}). Press for the address and Connect.`,
     lost: (address) => `Link lost: the rover at ${address} stopped answering. Press for the address and Connect.`,
@@ -113,8 +123,8 @@ class Link {
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
 
-  constructor({ body, host, connect, chip, linkState, linkHost, note, proxy, storageKey }) {
-    this.#ui = { body, host, connect, chip, linkState, linkHost, note, proxy };
+  constructor({ body, host, connect, chip, linkState, linkShort, linkHost, note, proxy, storageKey }) {
+    this.#ui = { body, host, connect, chip, linkState, linkShort, linkHost, note, proxy };
     this.#storageKey = storageKey;
 
     // The card's button does what Connect does, whatever that is now, and
@@ -263,9 +273,10 @@ class Link {
   // The chip: its word, data-say for its colour, and the whole of it, with
   // the address, as its title. The connect card's button with it.
   #say(said) {
-    const { chip, linkState, proxy } = this.#ui;
+    const { chip, linkState, linkShort, proxy } = this.#ui;
     chip.dataset.say = said;
     linkState.textContent = Link.LABEL[said];
+    if (linkShort) linkShort.textContent = Link.SHORT[said];
     chip.title = Link.TITLE[said](this.#address || "no address yet");
     proxy.textContent = Link.PROXY[said](this.#address);
     proxy.title = Link.PROXY_TITLE[said](this.#address);

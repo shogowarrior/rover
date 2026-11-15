@@ -1345,17 +1345,28 @@ test("the view: the tag and the motion in the room's margins, and the key in the
 });
 
 // The view fills its slot, the view pane, on every layout and beside either
-// tab: the pane's size is the shell grid's (panel.css), never the room's,
-// so a room picked moves nothing on the page. The room is fitted inside
-// the stage it is given, SimView.PAD kept clear around it.
+// tab: the pane's size is the shell grid's (panel.css). Beside the Drive
+// tab that is never the room's, so a room picked moves no stick; beside the
+// Program tab, where no stick is, the shell takes the room's shape
+// (--room-aspect, from SimView's layout) so the pane is as tall as the room
+// needs at its width, not a band that letterboxes it (the critic's round
+// 2). The room is fitted inside the stage it is given, SimView.PAD kept
+// clear around it.
 test("the view: it fills its slot on every layout, and each room fits whatever stage it is given", () => {
   const { page, byClass } = pageWithView();
   const slot = page.$("simSlot");
+  const shell = slot.parentNode.parentNode;
   for (const name of ["--room-aspect", "--room-pad-x", "--room-pad-y"]) {
-    assert.equal(slot.style.getPropertyValue(name), "", `${name} set on nothing`);
+    assert.equal(slot.style.getPropertyValue(name), "", `${name} not on the slot`);
   }
+  assert.equal(shell.getAttribute("class"), "shell", "the slot's view in the shell");
+  const shape = () => page.evalIn("(targets.simulator.room.width / targets.simulator.room.height).toFixed(4)");
+  assert.equal(shell.style.getPropertyValue("--room-aspect"), shape(), "the room's shape on the shell, the layout");
+  for (const name of ["--room-pad-x", "--room-pad-y"]) assert.equal(shell.style.getPropertyValue(name), "", `${name} set on nothing`);
   const css = stylesheet("sim.css");
-  assert.ok(!/--room-/.test(css + stylesheet("panel.css") + stylesheet("program.css")), "and read by nothing");
+  assert.ok(!/--room-/.test(css + stylesheet("program.css")), "read by neither sim.css nor program.css");
+  const panelRules = cssRules(stylesheet("panel.css")).filter((r) => /--room-/.test(r.body));
+  assert.deepEqual(panelRules.map((r) => `${r.selector} { ${r.body.trim()} }`), ['body[data-target="simulator"] .shell { --va: var(--room-aspect, 1.3333);\n  --vcw: 34px;\n  --vch: 102px; }'], "panel.css reads it once, as the view's aspect on the simulator target");
   assert.equal(blockRules(css, "@media (min-width: 960px) and (min-height: 521px) {"), null, "no layout of its own: one view on every layout");
   const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
   const view = rule(".sim");
@@ -1385,6 +1396,7 @@ test("the view: it fills its slot on every layout, and each room fits whatever s
       for (const side of ["left", "right", "top", "bottom"]) assert.ok(edges[side] >= PAD[side] - 0.5, `${at}: PAD clear on the ${side}`);
       const tight = (a, b) => Math.abs(edges[a] - PAD[a]) < 1 && Math.abs(edges[b] - PAD[b]) < 1;
       assert.ok(tight("left", "right") || tight("top", "bottom"), `${at}: as large as fits`);
+      assert.equal(shell.style.getPropertyValue("--room-aspect"), shape(), `${key}: its shape on the shell`);
     }
   }
   assert.deepEqual(page.errors, []);

@@ -41,14 +41,16 @@
     <header class="bar">
       <div class="cells">
         <!-- What the controls drive, and its state: the target first, as
-             the owner asked; the link; what needs the operator, only while
-             it is so; and Autonomous at the cell's far end, in the other
-             cell from Stop, so that a press that misses Stop cannot start
-             the rover exploring. The cell is as wide on every target and in
-             every state (panel.css), and Autonomous at its end, so nothing
-             in either cell moves as a badge comes or goes. Where the cell
-             cannot hold every word, app.js steps them down (data-fit):
-             Sim and Auto first, then the badges' words, then the link's. -->
+             the owner asked; the link, which also says what needs the
+             operator about the rover; and Autonomous at the cell's end, in
+             the other cell from Stop, so that a press that misses Stop
+             cannot start the rover exploring. Each of the three is a slot
+             of one width whatever it says, on either target and in every
+             state: the words a cell shows are chosen by its width alone
+             (app.js steps them down, data-fit: the address first, then
+             Sim, Auto and the link's short words, then the link's lamp
+             alone), so nothing in either cell moves as the link, the
+             target or the rover's state changes. -->
         <div class="hcell drives" role="group" aria-label="What the controls drive">
           <!-- Rover | Simulator: what the Drive tab's controls drive and
                what a program runs on, for the whole page. targetswitch.js
@@ -56,21 +58,34 @@
                offers the rover alone, and hides. -->
           <div class="segmented target" id="target" role="group" aria-label="Drive and run programs on"></div>
 
-          <!-- The link: its lamp and its word (link.js), the rover's link
-               on the simulator target too, so it says whose; the address
-               where the cell has room for it. It opens the link's popover,
-               which hangs from the top (panel.css): the address, Connect,
-               and what link.js has to say. Not modal: Stop stays one press
-               while it is open, and the keys stay the panel's (Space is
-               Stop, even with Connect focused). -->
-          <button type="button" class="linkChip" id="linkChip" data-say="down">
+          <!-- The rover's link: its lamp, then its word (link.js), "Rover:"
+               before it where the cell has room, so it never reads as the
+               simulator's, the address where the cell is widest, and a
+               caret: a button that opens the link's popover, which hangs
+               from the top (panel.css): the address, Connect, and what
+               link.js has to say. Not modal: Stop stays one press while it
+               is open, and the keys stay the panel's (Space is Stop, even
+               with Connect focused). It also says what needs the operator
+               about the rover, amber, in the word's place, while it is so
+               and nothing on screen says it already (app.js): a motor
+               shield that did not answer, or on the simulator target a
+               rover exploring, which must not move unseen. Its words, long
+               or short, and the sizers under them share one cell, so it is
+               as wide whatever it says. -->
+          <button type="button" class="linkChip" id="linkChip" data-say="down" data-alert="">
             <span class="lamp" aria-hidden="true"></span>
-            <span class="chipFor" id="chipFor" hidden>Rover:</span>
-            <span class="chipWord"><span id="linkState">Not connected</span><span class="chipSizer" aria-hidden="true">Not connected</span></span>
+            <span class="chipWord">
+              <span class="chipSay"><span class="chipFor" id="chipFor">Rover: </span><span class="chipLong" id="linkState">Not connected</span><span class="chipShort" id="linkShort">Offline</span></span>
+              <span class="chipAlert"><span class="chipFor">Rover: </span><span id="chipAlert"></span></span>
+              <span class="chipSizer chipLong" aria-hidden="true">Rover: Not connected</span>
+              <span class="chipSizer chipShort" aria-hidden="true">No motors</span>
+            </span>
             <span class="chipHost" id="linkHost"></span>
             <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
           </button>
           <div class="menu linkPanel" id="linkPanel" role="group" aria-label="The link to the rover" hidden>
+            <!-- What needs the operator, in words, while the chip says it. -->
+            <p class="linkAlert" id="linkAlert" hidden></p>
             <label class="menuLabel" for="host">Rover address</label>
             <div class="linkRow">
               <input id="host" value="192.168.0.115" spellcheck="false"
@@ -81,24 +96,6 @@
             <p id="note" aria-live="polite"></p>
           </div>
 
-          <!-- What needs the operator, each shown only while it is so, amber,
-               titled in full: the motor shield that did not answer
-               (readouts.js), and on the simulator target a rover still
-               exploring (app.js), which must not move unseen. The word
-               where the cell has room for it, the glyph alone where not; a
-               press opens the reason, its title, for a touch screen, which
-               has no hover (app.js). -->
-          <button type="button" class="badge" id="motorsBadge" aria-label="No motors" hidden>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8 21.5 20H2.5z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
-            <span class="badgeWord" aria-hidden="true">No motors</span>
-          </button>
-          <div class="menu badgeNote" id="motorsNote" role="note" hidden><p id="motorsWhy"></p></div>
-          <button type="button" class="badge" id="exploringBadge" aria-label="Rover exploring" hidden
-                  title="Rover exploring: the rover reports that it is driving itself. The simulator target leaves it be; Stop stops it.">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
-            <span class="badgeWord" aria-hidden="true">Rover exploring</span>
-          </button>
-          <div class="menu badgeNote" id="exploringNote" role="note" hidden><p id="exploringWhy"></p></div>
           <!-- The rover's mode, as telemetry last reported it (readouts.js). -->
           <output id="mode" hidden>—</output>
 
@@ -202,22 +199,6 @@
          a stick, so it may be positioned: on a phone on its side it lies over
          the middle of the Drive tab, between the sticks. -->
     <section class="view" id="view" aria-label="What the controls drive">
-      <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
-           it again when the rover says true, says nothing, or the link goes.
-           It says what a reset does because a power-on or EN reset starts
-           exploration: once the shield answers, the wheels turn straight
-           away, likely with the operator's hands still on the wiring.
-           data-ready says what the rover last said. -->
-      <!-- One line, the rest a press away: four lines of it took the scan's
-           height on a phone. The No motors badge in the top opens the same
-           reason. -->
-      <details class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
-        <summary title="What to do"><strong>No motor shield: the wheels can't move</strong></summary>
-        <p>It did not answer when the rover booted. Check its I2C wiring and
-        power, then reset the rover with its wheels off the ground: after a
-        power-on or the EN button it starts exploring.</p>
-      </details>
-
       <!-- The rover perceives the world as five ultrasonic returns, taken
            straight ahead and at 35 and 70 degrees to either side. Drawing
            them at those bearings, rather than as a neutral row of numbers, is
@@ -228,6 +209,25 @@
            per bearing -- from the constants protocol.js mirrors, so nothing
            here is a hand-computed arc that could drift from them. -->
       <section class="scan" aria-label="Ultrasonic scan">
+        <!-- Shown while telemetry says "motorsReady": false. readouts.js hides
+             it again when the rover says true, says nothing, or the link goes.
+             It says what a reset does because a power-on or EN reset starts
+             exploration: once the shield answers, the wheels turn straight
+             away, likely with the operator's hands still on the wiring.
+             data-ready says what the rover last said. -->
+        <!-- One line at the top of the scan's card, the rest a press away:
+             four lines of it took the scan's height on a phone. It takes its
+             height from the fan, inside the card, never a bar of its own
+             over it (the critic's round 2). Where no scan shows (the
+             simulator target, the view folded on the Program tab), the link
+             chip says "No motors" in its place (app.js). -->
+        <details class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
+          <summary title="What to do"><strong>No motor shield: the wheels can't move</strong></summary>
+          <p>It did not answer when the rover booted. Check its I2C wiring and
+          power, then reset the rover with its wheels off the ground: after a
+          power-on or the EN button it starts exploring.</p>
+        </details>
+
         <svg id="scan" role="img" aria-labelledby="scanDesc">
           <title id="scanDesc">Live ultrasonic scan at five bearings</title>
         </svg>
@@ -338,7 +338,7 @@
         <button type="button" class="halt" id="programStop" disabled aria-label="Stop program"
                 title="End the program. The rover stops if the program was driving it.">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
-          <span>Stop program</span>
+          <span>Stop<span class="haltMore"> program</span></span>
         </button>
         <!-- The File menu, at the far end of its row with the View toggle:
              what is used now and then and moves nothing. popover.js opens
@@ -399,7 +399,15 @@
         <!-- What is running and why it stopped, then everything the program
              and the runner said. -->
         <div class="programConsole">
-          <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
+          <div class="programStateRow">
+            <p class="programState" id="programState" data-tone="idle" aria-live="polite">Loading the block editor…</p>
+            <!-- With no link on the rover target, the next thing to do, in
+                 the line that says why Run is off: a press of Connect, in the
+                 link's popover (app.js). On a phone this tab's view, and its
+                 connect card, start folded. -->
+            <button type="button" class="consoleConnect" id="programConnect" hidden
+                    title="Connect to the rover at the address in the link's popover.">Connect</button>
+          </div>
           <ol class="programLog" id="programLog" aria-label="Program output"></ol>
         </div>
       </div>
