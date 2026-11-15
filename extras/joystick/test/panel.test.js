@@ -327,7 +327,8 @@ test("a socket that never opens reads Not reachable, one that went reads Link lo
   check(page.$("linkChip").dataset.say === "unreachable", `said ${page.$("linkChip").dataset.say}`);
   check(page.$("linkState").textContent === "Not reachable", `chip ${page.$("linkState").textContent}`);
   check(page.$("connectTitle").textContent === "Not reachable", `card ${page.$("connectTitle").textContent}`);
-  check(page.$("connectGo").textContent === "Try again", `card button ${page.$("connectGo").textContent}`);
+  check(page.$("connectGo").textContent === "Try 10.0.0.99 again", `card button ${page.$("connectGo").textContent}`);
+  check(page.$("connectGo").dataset.verb === "Try again", `its verb alone, for a narrow card: ${page.$("connectGo").dataset.verb}`);
   check(/^Not reachable: no rover answered at 10\.0\.0\.99\./.test(page.$("linkChip").title), `chip title ${page.$("linkChip").title}`);
   check(page.doc.body.dataset.link === "down" && heard.downs() === "linkLost", `down as ${heard.downs()}`);
   page.fire(page.$("connectGo"), "click"); // Try again is a press of Connect
@@ -338,7 +339,16 @@ test("a socket that never opens reads Not reachable, one that went reads Link lo
   page.evalIn("__downs.length = 0");
   page.sockets[1].serverDrop();
   check(page.$("linkChip").dataset.say === "lost" && page.$("linkState").textContent === "Link lost", `chip ${page.$("linkState").textContent}`);
-  check(page.$("connectTitle").textContent === "Link lost" && page.$("connectGo").textContent === "Reconnect", `card ${page.$("connectTitle").textContent} / ${page.$("connectGo").textContent}`);
+  check(page.$("connectTitle").textContent === "Link lost" && page.$("connectGo").textContent === "Reconnect to 10.0.0.99", `card ${page.$("connectTitle").textContent} / ${page.$("connectGo").textContent}`);
+  // Another address typed since is no reconnect: the card says where a
+  // press goes, at once (the reviewers' round 2: "Reconnect" went to an
+  // address typed since, unseen).
+  page.$("host").value = "10.9.9.9";
+  page.fire(page.$("host"), "input");
+  check(page.$("connectGo").textContent === "Connect to 10.9.9.9" && page.$("connectGo").dataset.verb === "Connect" && page.$("connectHost").textContent === "10.9.9.9", `typed: ${page.$("connectGo").textContent} | ${page.$("connectHost").textContent}`);
+  page.$("host").value = "10.0.0.99";
+  page.fire(page.$("host"), "input");
+  check(page.$("connectGo").textContent === "Reconnect to 10.0.0.99", `typed back: ${page.$("connectGo").textContent}`);
   check(heard.downs() === "linkLost", `down as ${heard.downs()}`);
   page.fire(page.$("connect"), "click");
   page.fire(page.$("connect"), "click"); // Cancel: a deliberate disconnect
@@ -859,6 +869,98 @@ test("Stop always sends STOP; the Autonomous toggle sends RESUME when off and ST
   check(page.$("cw").dataset.held === undefined, "unlit");
 });
 
+// A press of Autonomous on the rover is a request only a frame confirms,
+// up to half a second later: a second press meanwhile, to undo the first,
+// went by the old report and sent RESUME_AUTONOMOUS again, leaving the
+// rover exploring (the reviewers' round 2). Pending, it goes the other way
+// from what was asked: the safe direction.
+test("Autonomous: a press waits, marked, for a frame, and a second press before one undoes it: STOP last", () => {
+  const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
+  const auto = page.$("auto");
+  const pressed = () => auto.getAttribute("aria-pressed");
+  let mark = count(ws);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `the first press: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "on" && pressed() === "false", `marked pending on, still off as reported: ${auto.dataset.pending} ${pressed()}`);
+  page.clock.advance(120);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS,STOP", `a second press before a frame undoes it: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "off" && pressed() === "false", `pending off: ${auto.dataset.pending}`);
+  // A frame from before both reports MANUAL, as asked last: settled.
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(auto.dataset.pending === undefined && pressed() === "false", `settled: ${auto.dataset.pending} ${pressed()}`);
+
+  // T the same: twice before a frame ends on STOP.
+  mark = count(ws);
+  for (const type of ["keydown", "keyup", "keydown", "keyup"]) page.fire(page.doc.body, type, { key: "t", repeat: false });
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS,STOP", `T twice: ${names(ws, mark)}`);
+
+  // Pending on, a frame reports it: lit, the mark gone; a press then stops.
+  page.fire(auto, "click");
+  ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(auto.dataset.pending === undefined && pressed() === "true", `confirmed: ${auto.dataset.pending} ${pressed()}`);
+  // A request the rover never takes is given up after CONFIRM_FRAMES
+  // frames that do not report it, never shown as applied meanwhile.
+  mark = count(ws);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "STOP" && auto.dataset.pending === "off", `on: STOP, pending off: ${names(ws, mark)}`);
+  const frames = page.evalIn("AutoToggle.CONFIRM_FRAMES");
+  for (let i = 1; i <= frames; i++) {
+    ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+    check(pressed() === "true" && (i < frames ? auto.dataset.pending === "off" : auto.dataset.pending === undefined), `frame ${i} of ${frames}: ${pressed()} ${auto.dataset.pending}`);
+  }
+  // Any other press supersedes a request: Stop after it, then the switch
+  // goes by the report again.
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  page.fire(auto, "click");
+  page.fire(page.$("stop"), "click");
+  check(auto.dataset.pending === undefined, `Stop supersedes it: ${auto.dataset.pending}`);
+  mark = count(ws);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `then a press resumes, as the switch says: ${names(ws, mark)}`);
+  // A link that goes forgets it; the simulator is never pending.
+  ws.serverDrop();
+  check(auto.dataset.pending === undefined, "the link gone: nothing pending");
+  page.fire(page.$("target").children[1], "click");
+  page.fire(auto, "click");
+  page.fire(auto, "click");
+  check(auto.dataset.pending === undefined && pressed() === "false", `the simulator takes it at once, twice back off: ${pressed()}`);
+  // The mark is drawn: a dashed edge in the controls' blue.
+  const mark2 = cssRules(panelCss()).find((r) => r.selector === "#auto[data-pending] .track");
+  check(mark2 && /border-style:\s*dashed;/.test(mark2.body) && /border-color:\s*var\(--live\);/.test(mark2.body), `drawn dashed: ${mark2 && mark2.body}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
+// With no link on the rover target, Autonomous and T sent nothing and did
+// nothing anyone could see: a switch that read as broken (the reviewers'
+// round 2). They open the link's popover, saying why, and the switch's
+// title says it while the link is down.
+test("Autonomous with no link: nothing sent, the link's popover opens and says why, and the title says so", () => {
+  const page = loadPage();
+  const auto = page.$("auto");
+  check(/Needs a link to the rover/.test(auto.getAttribute("title")), `titled so while down: ${auto.getAttribute("title")}`);
+  page.fire(auto, "pointerdown");
+  page.fire(auto, "click");
+  check(page.sockets.length === 0, "nothing opened, nothing sent");
+  check(!page.$("linkPanel").hidden && page.$("linkChip").getAttribute("aria-expanded") === "true", "the link's popover open");
+  check(/Autonomous needs the rover connected/.test(page.$("note").textContent), `its note says why: ${page.$("note").textContent}`);
+  check(auto.getAttribute("aria-pressed") === "false" && auto.dataset.pending === undefined, "the switch off, nothing pending");
+  // T the same, and with the popover open already it stays open.
+  page.fire(page.doc.body, "keydown", { key: "t", repeat: false });
+  check(!page.$("linkPanel").hidden && page.sockets.length === 0, "T: still open, nothing sent");
+  // Connecting is no link yet either.
+  page.fire(page.$("connect"), "click");
+  const ws = page.sockets[0];
+  page.fire(auto, "click");
+  check(ws.sent.length === 0 && /Needs a link/.test(auto.getAttribute("title")), "connecting: nothing sent");
+  ws.serverOpen();
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(!/Needs a link/.test(auto.getAttribute("title")), `up: the plain title: ${auto.getAttribute("title")}`);
+  page.fire(auto, "click");
+  check(names(ws).join() === "RESUME_AUTONOMOUS", `up: a press resumes: ${names(ws)}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
+});
+
 test("speed slider re-speeds a held move (throttled)", () => {
   const page = loadPage();
   const ws = connectOpen(page);
@@ -1058,7 +1160,7 @@ test("the scan: a connect card over it while no link is up, and the scan empty u
   check(empty() === "no", "a frame without distances is a frame: the rover is there");
   ws.serverDrop();
   check(page.doc.body.dataset.link === "down" && empty() === "no", "gone: its last scan stays, as history");
-  check(go.textContent === "Reconnect" && /again/.test(go.title), `after a lost link: ${go.textContent} | ${go.title}`);
+  check(go.textContent === "Reconnect to 10.0.0.7" && /again/.test(go.title), `after a lost link: ${go.textContent} | ${go.title}`);
   ws = connectOpen(page);
   check(empty() === "yes", "a new link starts from nothing");
   ws.serverMsg(telemetry({ distanceFront: 80 }));
@@ -1099,6 +1201,12 @@ test("the scan: a connect card over it while no link is up, and the scan empty u
   check(/grid-area:\s*3 \/ 1;/.test(cell(".scan > *")) && /grid-area:\s*1 \/ 1;/.test(cell(".scan > .fault")) && /grid-area:\s*2 \/ 1;/.test(cell(".scan > .scanLegend")), `the card and the fan in the cell, the legend and the fault over them: ${cell(".scan > *")} | ${cell(".scan > .scanLegend")} | ${cell(".scan > .fault")}`);
   const own = cssRules(panelCss()).find((r) => r.selector === ".connectCard");
   check(own && /display:\s*none/.test(own.body), "otherwise not shown");
+  // On a layer over the fan, whatever fades the fan: an opacity on the
+  // SVG made it a stacking context that painted over the unpositioned card
+  // and took every press of Connect (the reviewers' round 2).
+  check(own && /position:\s*relative;/.test(own.body) && /z-index:\s*[1-9]\d*;/.test(own.body), `the card on a layer of its own: ${own && own.body}`);
+  const cardRules = cssRules(panelCss()).filter((r) => /\.connectCard\b/.test(r.selector));
+  check(!cardRules.some((r) => /position:\s*static|z-index:\s*(auto|0|-)/.test(r.body)), `no rule takes the card off its layer: ${cardRules.filter((r) => /position|z-index/.test(r.body)).map((r) => r.selector)}`);
   // Under the card, with no link and no scan from one, the whole fan is
   // faint, its rings included, and nothing in it reads: no bearing's name
   // or reading stuck out at the card's corners (the critic's round 3).
@@ -2448,10 +2556,17 @@ test("schemes: a wish is said in words on the connect card and in the link's pop
   check(notes().every((n) => n.hidden), `nothing to say at first: ${said()}`);
   check(all(page.$("view")).includes(page.$("connectWish")) && all(page.$("view")).filter((n) => /\bconnectCard\b/.test(n.getAttribute("class") || "")).some((card) => all(card).includes(page.$("connectWish"))), "one on the connect card");
   check(all(page.$("linkPanel")).includes(page.$("linkWish")), "one in the link's popover");
+  const pivotLine = () => page.$("pivotNote").textContent;
+  check(pivotLine() === "Needs Advanced", `the pivot stick's line at first: ${pivotLine()}`);
   page.fire(schemeButton(page, "ADVANCED"), "click");
   check(notes().every((n) => !n.hidden && n.textContent === "Advanced goes to the rover once it connects."), `wished: ${said()}`);
+  // The pivot stick's line says when Advanced comes, not that it is
+  // needed, which under the dashed Advanced said the opposite (the
+  // reviewers' round 2), in its one wording, which fits its narrowest.
+  check(pivotLine() === "Advanced on link" && page.$("pivotNote").dataset.tone === "off", `the pivot stick's line, wished: ${pivotLine()}`);
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(notes().every((n) => n.textContent === "Normal goes to the rover once it connects."), `replaced: ${said()}`);
+  check(pivotLine() === "Needs Advanced", `Normal wished: ${pivotLine()}`);
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(notes().every((n) => n.hidden), `dropped: ${said()}`);
 
@@ -2461,30 +2576,38 @@ test("schemes: a wish is said in words on the connect card and in the link's pop
   check(page.$("linkWish").textContent === "Advanced goes to the rover once it connects.", `connected, no frame yet: ${said()}`);
   ws.serverMsg(telemetry({ scheme: undefined }));
   check(page.$("linkWish").textContent === "Advanced goes to the rover once it reports its scheme." && !page.$("linkWish").hidden, `a frame that names none: ${said()}`);
+  check(pivotLine() === "Advanced waits", `the pivot stick's line, waiting for a report: ${pivotLine()}`);
   ws.serverMsg(telemetry({ scheme: "NORMAL" }));
   check(notes().every((n) => n.hidden) && ws.sent.join() === '{"scheme":"ADVANCED"}', `sent, and said no more: ${said()}, ${ws.sent}`);
+  check(pivotLine() === "Needs Advanced", `the wish spent, the rover on Normal: ${pivotLine()}`);
+  ws.serverMsg(telemetry({ scheme: "ADVANCED" }));
+  check(pivotLine() === "Untried: go slow", `Advanced reported: the caveat: ${pivotLine()}`);
+  ws.serverMsg(telemetry({ scheme: "NORMAL" }));
   ws.serverDrop();
   page.fire(schemeButton(page, "NORMAL"), "click");
   check(page.$("connectWish").textContent === "Normal goes to the rover once it connects.", `a wish after the link went: ${said()}`);
 
   // Drawn as the wished segment is: --dim words behind a dashed ring in
   // --live. In the compact row a short view makes of the card (a phone's
-  // Drive tab), its title gone, the note a line over the buttons, as wide
-  // as they are; gone only where the view is narrow too, Change address
-  // with it, where the link's popover still says it.
+  // band over the Program tab's editor), its title gone, the note a line
+  // over the buttons, across the card, narrow or not (the reviewers'
+  // round 2: at 320 x 568 it was dropped over 150 px of bare view); gone
+  // only where there is no room for a line over them, where the link's
+  // popover still says it.
   const rules = cssRules(panelCss());
   const ring = rules.find((r) => r.selector === ".schemeWish::before");
   check(ring && /border:\s*1px dashed var\(--live\)/.test(ring.body), `the dashed ring: ${ring && ring.body}`);
   const words = rules.find((r) => r.selector === ".schemeWish");
   check(words && /color:\s*var\(--dim\)/.test(words.body), `its words: ${words && words.body}`);
-  const short = blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || [];
+  const short = blockRules(panelCss(), "@container scan (max-height: 169.98px) {") || [];
   const shortHidden = short.filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
   const shortNote = short.filter((r) => r.selector === ".connectCard .schemeWish").map((r) => r.body).join("");
   check(/\.connectTitle/.test(shortHidden) && !/schemeWish/.test(shortHidden), `a short card's title gone, the note kept: ${shortHidden}`);
-  check(/grid-row:\s*1;/.test(shortNote) && /grid-column:\s*1 \/ span 2;/.test(shortNote) && /width:\s*0;/.test(shortNote) && /min-width:\s*100%;/.test(shortNote)
-    && short.some((r) => r.selector === ".connectCard > button" && /grid-row:\s*2;/.test(r.body)), `a short card's note a line over its buttons, as wide as they are: ${shortNote}`);
-  const narrowHidden = (blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 329.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
-  check(/\.connectCard \.schemeWish/.test(narrowHidden), `gone where the short view is narrow too: ${narrowHidden}`);
+  check(/grid-area:\s*1 \/ 1 \/ auto \/ -1;/.test(shortNote) && short.some((r) => r.selector === ".connectGo" && /grid-area:\s*3 \/ 2;/.test(r.body)), `a short card's note a line over its buttons, across the card: ${shortNote}`);
+  const narrowHidden = (blockRules(panelCss(), "@container scan (max-height: 169.98px) and (max-width: 329.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  check(!/schemeWish/.test(narrowHidden), `kept where the short view is narrow too: ${narrowHidden}`);
+  const noRoom = (blockRules(panelCss(), "@container scan (max-height: 119.98px) {") || []).filter((r) => /display:\s*none;/.test(r.body)).map((r) => r.selector).join();
+  check(/\.connectCard \.schemeWish/.test(noRoom), `gone only with no room for a line over the buttons: ${noRoom}`);
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
@@ -3416,7 +3539,7 @@ test("schemes: the caption and the pivot stick's line change nothing's height ab
   // a bar the top no longer has (the review's phones 5, tablets 3,
   // laptops 5). It never hides, which would take its height too, and has
   // no second, shorter copy for a narrow row.
-  const said = ["CAVEAT", "OFF", "PRESS_AGAIN"].map((name) => page.evalIn(`FamilySelector.${name}`));
+  const said = ["CAVEAT", "OFF", "PRESS_AGAIN", "WISHED.waiting", "WISHED.heard"].map((name) => page.evalIn(`FamilySelector.${name}`));
   check(said.every((text) => text.length > 0 && text.length <= 17), `the line's words: ${said}`);
   const off = page.evalIn("FamilySelector.OFF");
   check(/^Needs? Advanced\b/.test(off) && !/\bbar\b|:/.test(off), `off, it says what the stick needs, not as a label and its value: '${off}'`);
@@ -4671,6 +4794,12 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   check(oneRow.some((r) => r.selector === ".hcell.drives" && /flex:\s*none;/.test(r.body)), "the first cell as wide as what it holds, never squeezed");
   check(oneRow.some((r) => r.selector === ".hcell.hands" && /flex:\s*1 1 0;/.test(r.body)), "the second cell the rest of the row");
   check(!oneRow.some((r) => r.selector === ".hcell"), "no rule for both cells alike");
+  // In one row the second cell's controls keep to its far end, its spare
+  // room at its start: the first cell growing as the chip says "Rover:" or
+  // an alert moves none of them (the reviewers' round 2: Advanced moved
+  // 227 px as telemetry came, and a click aimed at it landed on Normal).
+  check(oneRow.some((r) => r.selector === ".hcell.hands > .tabs" && /margin-left:\s*auto;/.test(r.body)) && oneRow.some((r) => r.selector === ".hcell.hands > .scheme" && /margin-right:\s*0;/.test(r.body)),
+    "in one row, the second cell's tabs and scheme at its far end, by Stop");
   // Where the two would meet, the first clips what it cannot hold rather
   // than spill over Stop's; the words step down first (below), so it never
   // has to. Not the cells themselves: the gear's popover hangs from the
@@ -4685,17 +4814,33 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // cell tries its steps from the most it says and keeps the first whose
   // content fits, so the words follow the fonts the device has and the
   // cell's width, and nothing else. The first cell: the address on the chip
-  // (a screen 1280 px wide), every word, the alerts' glyphs for their
-  // words, Sim and Auto and the rover's glyph for its name, every control
-  // closer, 12 px words, the chip's lamp. The second: every word, the
-  // segments closer, and closer still, both at 13 px (a 375 px phone),
-  // 12 px words, and Adv only where nothing else fits. What comes and goes
-  // in the chip (the rover's name, both alerts) is measured shown
-  // (data-fitting), so the step never depends on the state; where the
-  // cells share a row, either cell running over counts, and the row.
+  // (wherever it fits: the reviewers' round 2, an iPad upright), every
+  // word, Sim and Auto, every control closer, the rover's glyph for its
+  // name keeping the alerts' words (on an iPad on its side they were
+  // glyphs that look alike), or else "Rover:" kept and the alerts' glyphs
+  // (a phone on its side), both glyphs, 12 px words, the chip's word in
+  // the room left. The second: every word, the segments closer, and closer
+  // still, both at 13 px (a 375 px phone), 12 px words, and Adv only where
+  // nothing else fits (a 320 px phone: 15 px short of Advanced). What comes and goes in the chip (the
+  // rover's name, both alerts) is measured shown (data-fitting), so the
+  // step never depends on the state; where the cells share a row, either
+  // cell running over counts, and the row.
   const appJs = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\], runsOver\)/.test(appJs) && /fitSteps\(firstCell, \[\.\.\.\(wideTop && wideTop\.matches \? \["host"\] : \[\]\), "words", "glyphs", "short", "snug", "small", "lamp"\], runsOver\)/.test(appJs), "each cell's steps, from the most it says");
-  check(/matchMedia\("\(min-width: 1280px\)"\)/.test(appJs) && /\[firstCell, secondCell, cellsRow\]\.some\(\(box\) => box\.scrollWidth > box\.clientWidth\)/.test(appJs), "the address from 1280 px, and either cell's overflow or the row's counts");
+  check(/fitSteps\(secondCell, \["words", "tight", "snug", "small", "short"\], runsOver\)/.test(appJs) && /fitSteps\(firstCell, \["host", "words", "short", "snug", "rover", "glyphs", "icons", "small", "lamp"\], runsOver\)/.test(appJs), "each cell's steps, from the most it says");
+  check(!/matchMedia\("\(min-width: 1280px\)"\)/.test(appJs) && /const runsOver = \(\) => runsPast\(firstCell\) \|\| runsPast\(secondCell\) \|\| cellsRow\.scrollWidth > cellsRow\.clientWidth;/.test(appJs), "the address wherever it fits, and either cell's overflow or the row's counts");
+  // A cell runs over when its last control laid out ends past its content
+  // box, not only when it scrolls: a chip in the cell's padding touched
+  // its outline (the reviewers' round 2, tablets 3).
+  const runsPast = (cellRight, lastRight) => page0Run(cellRight, lastRight);
+  function page0Run(cellRight, lastRight) {
+    const p = loadPage();
+    const cell = p.doc.documentElement.querySelector(".hcell.drives");
+    cell.clientWidth = cellRight;
+    for (const child of cell.children) child.clientWidth = 0;
+    p.$("linkChip").clientWidth = lastRight;
+    return p.evalIn("runsPast(document.querySelector('.hcell.drives'))");
+  }
+  check(runsPast(300, 300) === false && runsPast(300, 301) === true, "past the content box's end by a pixel runs over");
   check(/cellsRow\.dataset\.fitting = "yes";[\s\S]*fitSteps\(firstCell[\s\S]*delete cellsRow\.dataset\.fitting;/.test(appJs), "measured with the chip's coming and going parts shown");
   const fitting = rules.find((r) => r.selector === ".cells[data-fitting] :is(.chipFor, .chipAlert)[hidden]");
   check(fitting && /display:\s*inline-flex;/.test(fitting.body) && /visibility:\s*hidden;/.test(fitting.body), `shown, out of sight, while measured: ${fitting && fitting.body}`);
@@ -4703,7 +4848,7 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // somewhere else changes; the state never refits the cells.
   check(/new ResizeObserver\(fitTheTop\)/.test(appJs) && /new MutationObserver\(fitTheTop\)\.observe\(byId\("linkChip"\), \{ attributes: true, attributeFilter: \["data-host"\] \}\)/.test(appJs), "measured again as the cells' width or the address changes, never the state");
   const page0 = loadPage();
-  check(page0.doc.documentElement.querySelector(".hcell.drives").dataset.fit === "words" && page0.doc.documentElement.querySelector(".hcell.hands").dataset.fit === "words", "a page that cannot measure keeps every word");
+  check(page0.doc.documentElement.querySelector(".hcell.drives").dataset.fit === "host" && page0.doc.documentElement.querySelector(".hcell.hands").dataset.fit === "words", "a page that cannot measure keeps every word");
   // A box that fits at some steps and not others, and one that fits at none.
   const box = (fits) => ({ dataset: {}, clientWidth: 100, get scrollWidth() { return fits.includes(this.dataset.fit) ? 100 : 101; } });
   const some = box(["short", "glyphs"]);
@@ -4728,10 +4873,13 @@ test("the top: two cells, one row from 900 px, Stop beside the gear and Autonomo
   // own: "Connect" and "Linking…" on a phone said other things than the
   // words elsewhere (the critics' round 3).
   check(!rules.some((r) => /\.chip(Short|Long)\b/.test(r.selector)) && page0.evalIn("Link.SHORT") === undefined && page0.doc.getElementById("linkShort") === null, "no short words of the link's own");
-  check(byFit(/\.alertWord/).some((r) => /\[data-fit="glyphs"\]/.test(r.selector) && /\[data-fit="lamp"\]/.test(r.selector) && !/\[data-fit="words"\]/.test(r.selector) && /display:\s*none/.test(r.body)), "the alerts' words go from the glyphs step, their glyphs stay");
+  const alertWords = byFit(/\.alertWord/).filter((r) => /display:\s*none/.test(r.body));
+  check(alertWords.length === 1 && /\[data-fit="glyphs"\]/.test(alertWords[0].selector) && /\[data-fit="icons"\]/.test(alertWords[0].selector) && /\[data-fit="lamp"\]/.test(alertWords[0].selector) && !/\[data-fit="(words|short|snug|rover)"\]/.test(alertWords[0].selector), "the alerts' words go only from the glyphs step, after Sim, Auto and Rover:; their glyphs stay");
   check(byFit(/\.autoShort/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /\.target \.segShort/.test(r.selector) && /display:\s*inline/.test(r.body)), "Sim and Auto from the short step");
-  check(byFit(/\.chipForWord/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /display:\s*none/.test(r.body)) && byFit(/\.roverGlyph/).some((r) => /\[data-fit="short"\]/.test(r.selector) && /display:\s*block/.test(r.body)), "Rover: gives way to the rover's glyph at the short step");
-  check(byFit(/\.chipWord/).length === 1 && /^\.drives\[data-fit="lamp"\] \.chipWord$/.test(byFit(/\.chipWord/)[0].selector), "the chip's lamp and caret alone only at the last step");
+  const roverWord = byFit(/\.chipForWord/).filter((r) => /display:\s*none/.test(r.body));
+  check(roverWord.length === 1 && /\[data-fit="rover"\]/.test(roverWord[0].selector) && /\[data-fit="icons"\]/.test(roverWord[0].selector) && !/\[data-fit="(short|snug|glyphs)"\]/.test(roverWord[0].selector) && byFit(/\.roverGlyph/).some((r) => /\[data-fit="rover"\]/.test(r.selector) && !/\[data-fit="(short|snug|glyphs)"\]/.test(r.selector) && /display:\s*block/.test(r.body)),
+    "Rover: gives way to the rover's glyph only after Sim, Auto and snug, and is kept beside the alerts' glyphs (the reviewers' round 2: phones on their side had room)");
+  check(byFit(/\.chipWord/).length === 0, "the chip's word never put out of sight by a step: at the last, it says what fits");
   const byElse = wordRules.filter((r) => !/data-fit/.test(r.selector) && !/display:\s*none/.test(r.body) && !/^\.chipWord$/.test(r.selector));
   check(byElse.length === 0, `no viewport or container rule shows a word the cell may not hold: ${byElse.map((r) => r.selector)}`);
   // A cell is one line of controls, 40 px tall whatever they say: nothing
@@ -4973,27 +5121,73 @@ test("alerts: the chip keeps the link's word, and says No motors and a rover exp
   page.clock.advance(page.evalIn("Link.STALE_MS"));
   check(page.doc.body.dataset.link === "stale" && alerts() === "exploring" && word() === "No data", `stale: the word says so, the rover last seen exploring beside it: ${word()} ${alerts()}`);
   check(known() === "last" && /as last reported/.test(titleOf(page.$("alertExploring"))), `dashed, as last reported: ${known()}`);
+  // A Stop down a stale link, which may be half-open, proves nothing: the
+  // warning stays, and stays when the link then drops (the reviewers'
+  // round 2: it was cleared, and nothing was left to say the rover might
+  // be exploring still).
+  page.fire(page.$("stop"), "click");
+  check(alerts() === "exploring" && known() === "last", `a Stop over a stale link leaves it said: ${alerts()}`);
   ws.serverDrop();
   check(alerts() === "exploring" && known() === "last" && word() === "Link lost", `lost: still said, as last reported: ${alerts()} ${word()}`);
   // A Stop with no link reaches nothing: the rover may be exploring still.
   page.fire(page.$("stop"), "click");
   check(alerts() === "exploring", "a Stop with no link leaves it said");
+  // The chip said again with no change of state (down to down: an address
+  // no socket can be opened for) keeps the alerts' words in its title.
+  page.evalIn(`globalThis.RealWebSocket = WebSocket; WebSocket = class extends RealWebSocket {
+    constructor(url) { if (/bad/.test(url)) throw new SyntaxError("not a URL"); super(url); } };`);
+  page.$("host").value = "bad host";
+  page.fire(page.$("connect"), "click");
+  page.evalIn("WebSocket = RealWebSocket;");
+  check(word() === "Not reachable" && page.doc.body.dataset.link === "down", `no socket for it: ${word()}`);
+  check(/^Rover exploring, as last reported: /.test(titleOf(chip)) && /Not reachable: no rover answered at bad host/.test(titleOf(chip)), `the alert kept in the chip's title: ${titleOf(chip)}`);
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("host"), "input");
+  check(/^Rover exploring, as last reported: /.test(titleOf(chip)) && /10\.0\.0\.7/.test(titleOf(chip)), `and as an address is typed: ${titleOf(chip)}`);
   // A new link, before its first frame, knows nothing new.
-  const again = connectOpen(page);
+  let again = connectOpen(page);
   check(alerts() === "exploring" && known() === "last", `a new link, before its first frame: ${known()}`);
   again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
   check(alerts() === "exploring" && known() === "now", "its first frame: exploring now");
-  // A Stop that goes out over the link: said no more, until a frame says
-  // the rover explores still.
+  // Even a Stop over a link that is up only asks: the warning goes with
+  // the frame that reports MANUAL, and with nothing else.
   page.fire(page.$("stop"), "click");
-  check(alerts() === "" && !shown("alertExploring"), "a Stop over the link ends it");
+  check(alerts() === "exploring" && known() === "now", `a Stop over the link leaves it until a frame answers: ${alerts()}`);
   again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
-  check(alerts() === "exploring", "until the rover says it explores still");
+  check(alerts() === "exploring", "the rover says it explores still");
   again.serverMsg(telemetry({ mode: "MANUAL" }));
   check(alerts() === "", "and gone with MANUAL");
   again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
   toRover();
   check(alerts() === "" && page.$("chipFor").hidden, "gone on the rover target, with the rover's name");
+
+  // The simulator target says it in words too, over the simulator: on a
+  // phone the chip's glyph alone was the one cue (the reviewers' round 2).
+  const away = page.$("roverAway");
+  toSim();
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  check(!away.hidden && away.dataset.known === "now" && /exploring on its own/.test(away.textContent) && /Stop stops it/.test(away.textContent), `the view's line: ${away.hidden} ${away.textContent}`);
+  check(away.parentNode === page.$("view") && away.getAttribute("role") === "status" && /^Rover exploring: /.test(titleOf(away)), "in the view, a status, titled in full");
+  again.serverDrop();
+  check(!away.hidden && away.dataset.known === "last" && /^Last seen exploring/.test(away.textContent) && /as last reported/.test(titleOf(away)), `the link gone: last known, dashed: ${away.textContent}`);
+  again = connectOpen(page);
+  again.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(away.hidden, "gone with MANUAL");
+  again.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
+  toRover();
+  check(away.hidden, "the rover target: the switch says it");
+  const awayCss = cssRules(panelCss()).filter((r) => /\.roverAway\b/.test(r.selector));
+  const awayBase = awayCss.filter((r) => r.selector === ".roverAway").map((r) => r.body).join("");
+  check(/flex:\s*none;/.test(awayBase) && /white-space:\s*nowrap;/.test(awayBase) && /(^|[^-])color:\s*var\(--warn\);/.test(awayBase) && /background:\s*var\(--warn-soft\);/.test(awayBase)
+    && awayCss.some((r) => r.selector === '.roverAway[data-known="last"]' && /dashed var\(--warn\)/.test(r.body)), `one amber line, dashed once last known: ${awayBase}`);
+  // Each alert its own shape, neither two circles (the reviewers' round 2:
+  // a slashed circle and a circled needle looked alike at 14 px): a motor
+  // struck through, and a route. The rover's own glyph a side view with
+  // its aerial, not the simulator's rover seen from above.
+  const shapes = (el) => all(el).filter((n) => ["CIRCLE", "RECT", "PATH"].includes(n.tagName)).map((n) => n.tagName).join();
+  check(shapes(page.$("alertMotors")) === "RECT,PATH" && shapes(page.$("alertExploring")) === "PATH", `the alerts' shapes: ${shapes(page.$("alertMotors"))} | ${shapes(page.$("alertExploring"))}`);
+  const glyph = all(page.$("chipFor")).find((n) => n.tagName === "SVG");
+  check(glyph && shapes(glyph) === "RECT,CIRCLE,CIRCLE,PATH", `the rover's glyph, side on, wheels and aerial: ${glyph && shapes(glyph)}`);
 
   // No motors: the fault line in the scan's card on the rover target, the
   // chip on the simulator's, whose view shows no scan.
@@ -5064,7 +5258,7 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   const shell = page.$("driveTab").parentNode;
   check(view.parentNode === shell && page.$("programTab").parentNode === shell, "a sibling of both tabs, a cell of the shell's grid");
   const kids = view.children.filter((n) => n.tagName && n.tagName !== "#TEXT").map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
-  check(kids.join() === "scan,simSlot,readouts", `the scan, the simulator's slot and the readouts: ${kids}`);
+  check(kids.join() === "scan,roverAway,simSlot,readouts", `the scan, the line saying the rover explores, the simulator's slot and the readouts: ${kids}`);
   check(page.$("motorsFault").parentNode === page.$("scan").parentNode, "the fault in the scan's card");
   for (const canvas of [page.canvas, page.pivotCanvas]) {
     for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
@@ -5530,22 +5724,57 @@ test("program: the View toggle is quiet, shown or folded", () => {
   check(loud.length === 0, `nothing paints it as a choice or a live control: ${loud.map((r) => r.selector)}`);
 });
 
-// In a short view (a phone's band over the editor, the middle of a phone
-// on its side), the connect card is one compact row under the fan, its
-// button and Change address: sized for a tall pane, it covered most of a
-// short fan (the review's tablets 2).
+// In a short view (a phone's band over the editor, under 170 px), the
+// connect card is one compact row under the fan, its button and Change
+// address: sized for a tall pane, it covered most of a short fan (the
+// review's tablets 2). Only that short: from 260 px, a 375 x 667 phone's
+// Drive tab (229 px) showed the row at its foot under bare ground where
+// the whole card fits (the reviewers' round 2).
 test("program: the connect card is a compact row under the fan in a short view", () => {
-  const short = blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || [];
+  check(blockRules(panelCss(), "@container scan (max-height: 259.98px) {") !== null && !(blockRules(panelCss(), "@container scan (max-height: 259.98px) {") || []).some((r) => /grid-row|background:\s*none/.test(r.body)), "under 260 px, still the card: only tighter");
+  const short = blockRules(panelCss(), "@container scan (max-height: 169.98px) {") || [];
   const card = short.filter((r) => r.selector === ".scan > .connectCard").map((r) => r.body).join("");
-  check(/grid-auto-flow:\s*column;/.test(card) && /place-self:\s*end center;/.test(card) && /background:\s*none;/.test(card) && /box-shadow:\s*none;/.test(card), `one row, at the foot, with no card around it: ${card}`);
+  check(/grid-row:\s*9;/.test(card) && /place-self:\s*end stretch;/.test(card) && /background:\s*none;/.test(card) && /box-shadow:\s*none;/.test(card), `one row, at the foot, across the card, with no card around it: ${card}`);
   check(short.some((r) => r.selector.split(/,\s*/).includes(".connectTitle") && /display:\s*none;/.test(r.body)), "its title in the top's chip, not over the fan");
   check(!short.some((r) => /connectGo|connectAddress/.test(r.selector) && /display:\s*none/.test(r.body)), "Connect and Change address both there");
   // Narrow too (a phone on its side at 480 px), Connect alone, whole: beside
   // it, Change address wrapped and cut the button to "ct to 192.16". The
-  // top's link chip changes the address there.
-  const narrow = blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 329.98px) {") || [];
-  check(narrow.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector)), "a short, narrow view: Connect alone");
-  check(/grid-auto-columns:\s*minmax\(0, max-content\);/.test(card) && short.some((r) => r.selector === ".connectAddress" && /white-space:\s*nowrap;/.test(r.body)), "each on one line, the button giving way first");
+  // top's link chip changes the address there. So in the card of a short,
+  // narrow view.
+  const narrow = blockRules(panelCss(), "@container scan (max-height: 169.98px) and (max-width: 329.98px) {") || [];
+  check(narrow.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)) && !narrow.some((r) => /connectGo/.test(r.selector) && /display:\s*none/.test(r.body)), "a short, narrow view: Connect alone");
+  const narrowCard = blockRules(panelCss(), "@container scan (max-height: 259.98px) and (max-width: 229.98px) {") || [];
+  check(narrowCard.some((r) => r.selector.split(/,\s*/).includes(".connectAddress") && /display:\s*none;/.test(r.body)), "a short, narrow card: Connect alone");
+  check(/grid-template-columns:\s*minmax\(0, 1fr\) repeat\(2, minmax\(0, max-content\)\) minmax\(0, 1fr\);/.test(card) && short.some((r) => r.selector === ".connectAddress" && /white-space:\s*nowrap;/.test(r.body)), "each on one line, the button giving way first");
+});
+
+// The card's button names the address a press goes to; where the card is
+// too narrow for both, measured, it says the verb alone and a line of the
+// card the address (the reviewers' round 2: at 480 x 320 "Connect to
+// 192.168.0.115" ran into its pill's ends).
+test("the connect card: the verb alone and the address on a line of its own where the button would be cut", () => {
+  const page = loadPage();
+  const go = page.$("connectGo");
+  const card = go.parentNode;
+  check(card.dataset.fit === "full" && go.textContent === "Connect to 192.168.0.115" && page.$("connectHost").textContent === "192.168.0.115", `wide enough: ${card.dataset.fit} ${go.textContent}`);
+  // Cut short: what a browser measures of a pill too narrow for its words.
+  Object.defineProperty(go, "scrollWidth", { configurable: true, get: () => (go.textContent.length > 10 ? 200 : 80) });
+  go.clientWidth = 150;
+  page.$("host").value = "10.0.0.7";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "verb" && go.textContent === "Connect" && page.$("connectHost").textContent === "10.0.0.7" && /10\.0\.0\.7/.test(go.title), `narrow: ${card.dataset.fit} ${go.textContent} | ${page.$("connectHost").textContent}`);
+  const ws = connectOpen(page);
+  ws.serverDrop();
+  check(card.dataset.fit === "verb" && go.textContent === "Reconnect" && page.$("connectHost").textContent === "10.0.0.7", `lost: ${go.textContent} | ${page.$("connectHost").textContent}`);
+  go.clientWidth = 400;
+  page.$("host").value = "10.0.0.8";
+  page.fire(page.$("host"), "input");
+  check(card.dataset.fit === "full" && go.textContent === "Connect to 10.0.0.8", `room again, another address: ${card.dataset.fit} ${go.textContent}`);
+  const rules = cssRules(panelCss());
+  const own = rules.filter((r) => r.selector === ".connectHost").map((r) => r.body).join("");
+  const shown = rules.filter((r) => r.selector === '.connectCard[data-fit="verb"] .connectHost').map((r) => r.body).join("");
+  check(/display:\s*none;/.test(own) && /white-space:\s*nowrap;/.test(own) && /color:\s*var\(--dim\);/.test(own) && /display:\s*block;/.test(shown), `the line only with the verb alone: ${own} | ${shown}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 /* --- the target: the Drive tab on the simulator ---------------------------- */
@@ -6318,7 +6547,16 @@ test("look: the link chip keeps its lamp's colour at every width, a link that we
   // alone, its title saying the rest. The caret never goes: a press opens
   // the popover at every width.
   const hides = rules.filter((r) => /^\.drives/.test(r.selector) && /data-fit/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector);
-  check(hides.includes('.drives[data-fit="lamp"] .chipWord') && !hides.some((each) => /\.caret\b/.test(each)), `at the last step the chip's word goes, its caret stays: ${hides}`);
+  check(!hides.some((each) => /\.chipWord|\.caret\b/.test(each)), `at the last step the chip's word and its caret stay: ${hides}`);
+  // There the chip takes the rest of its cell, its word the room left,
+  // said only where it fits whole (app.js, data-word): a lamp and a caret
+  // alone left the cell's last 90 px bare (the reviewers' round 2).
+  const bodyOf = (selector) => rules.filter((r) => r.selector === selector).map((r) => r.body).join("");
+  const lampChip = bodyOf('.drives[data-fit="lamp"] .linkChip');
+  const lampWord = bodyOf('.drives[data-fit="lamp"] .chipWord');
+  const cut = bodyOf('.linkChip[data-word="cut"] .chipSay');
+  check(/flex:\s*1 1 auto;/.test(lampChip) && /min-width:\s*0;/.test(lampChip) && /flex:\s*1 1 0;/.test(lampWord) && /overflow:\s*hidden;/.test(lampWord) && /visibility:\s*hidden;/.test(cut),
+    `the last step: the chip the rest of the cell, its word what fits: ${lampChip} | ${lampWord} | ${cut}`);
   check(!rules.some((r) => r.selector.split(",").some((each) => /\.caret\b/.test(each) && /linkChip|drives/.test(each)) && /display:\s*none/.test(r.body)), "the chip's caret at every width");
   // One outline per cell: no edge on the chip, a track or the gear in a
   // cell, the chip and the tracks on their fill.
@@ -6396,7 +6634,7 @@ test("look: the chosen segment's word stays on its chip, the only ground its ink
   const steps = '.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"])';
   const stopGap = flat.find((r) => r.selector === `${steps} #stop`);
   const tightGap = flat.find((r) => r.selector === steps);
-  check(stopGap && /margin-left:\s*12px/.test(stopGap.body) && tightGap && /gap:\s*4px/.test(tightGap.body), "Stop 12 px and the cell's 4 px gap from the scheme when tight: 16 px");
+  check(stopGap && /margin-left:\s*12px/.test(stopGap.body) && tightGap && /gap:\s*4px/.test(tightGap.body) && !flat.some((r) => /^\.hands/.test(r.selector) && /(^|[\s;{])gap:\s*[0-3]px|margin-left:\s*([0-9]|1[01])px/.test(r.body)), "Stop 12 px and the cell's 4 px gap from the scheme when tight: 16 px, at every step");
   const bar = cssRules(outside(css, "@media")).find((r) => r.selector === ".bar");
   check(bar && /container:\s*bar \/ inline-size;/.test(bar.body), `the top a container the cells ask: ${bar && bar.body}`);
   // The pivot stick's family steps down by its own area's width, as the

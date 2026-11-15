@@ -838,6 +838,16 @@ body[data-target="simulator"] .shell {
   .hcell.drives { flex: none; }
 
   .hcell.hands { flex: 1 1 0; }
+
+  /* The second cell's controls at its far end, before Stop and the gear,
+     the room it has to spare at its start: the first cell's growth, as
+     the chip says "Rover:" or an alert, only uses that room up. From the
+     cell's start, the tabs and Normal | Advanced moved up to 275 px as
+     telemetry came, and a click aimed at Advanced landed on Normal (the
+     reviewers' round 2, tablets 2 and laptops 1). */
+  .hcell.hands > .tabs { margin-left: auto; }
+
+  .hcell.hands > .scheme { margin-right: 0; }
 }
 
 /* A cell: one rounded box, one line of controls 32 px tall, whatever they
@@ -1068,6 +1078,16 @@ body[data-target="simulator"] .shell {
    so its track's edge is dashed. The simulator's is always known. */
 body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="true"] .track { border-style: dashed; }
 
+/* Pressed, and not yet reported (autotoggle.js): the track's edge dashed
+   in the controls' blue, breathing as a scheme asked for does, the knob
+   where the rover last said, so a request the rover did not take cannot
+   look applied, and a press that did something never looks like none. */
+#auto[data-pending] .track {
+  border-style: dashed;
+  border-color: var(--live);
+  animation: pending 800ms ease-in-out infinite alternate;
+}
+
 /* Stop: red, the page's one red control, its square alone; its title says
    the rest. As wide as a key, no taller than the cell's controls. */
 #stop {
@@ -1172,8 +1192,6 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   outline-offset: -1px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipAlert[data-known="last"] { outline-offset: 1px; }
-
 .chipFor[hidden],
 .chipAlert[hidden] { display: none; }
 
@@ -1218,18 +1236,27 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
    fitSteps: data-fit, measured against the most each slot can say, so the
    step follows the cell's width and the fonts the device has, never the
    state). The first cell, from the most it says: the address on the chip
-   ("host", a screen 1280 px wide or more); every word; the alerts' glyphs
-   for their words ("glyphs"); Sim, Auto and the rover's glyph for its name
-   ("short"); every control closer to its words ("snug"); the link's word
-   at 12 px ("small"); and the chip's lamp, the glyphs and its caret alone
-   ("lamp"), its title saying the rest. The link's words are the same at
-   every step but the last: one word for each state, never a short one of
-   its own (the critics' round 3). The second: every word; the segments
-   closer to their words ("tight"), and closer still ("snug"), at 13 px
-   both, so a 375 px phone and one on its side keep the first cell's size
-   of word; 12 px words ("small"); and only where nothing else fits (a
-   320 px phone), Adv ("short"). Stop stays 16 px from the scheme, and the
-   gear square. */
+   ("host", wherever the cell has room for it: an iPad upright has, the
+   reviewers' round 2 said, where a 1280 px screen was asked for); every
+   word; Sim and Auto ("short"); every control closer to its words
+   ("snug"); the rover's glyph for "Rover:", keeping the alerts' words
+   ("rover"); else "Rover:" kept and the alerts' glyphs for their words
+   ("glyphs"); both glyphs ("icons"); the link's word at 12 px ("small");
+   and last ("lamp") the chip's word in the room the cell has left, said
+   only where the word fits it whole (app.js, data-word), its title and
+   popover saying the rest. The alerts keep their words as long as any
+   other word but the link's own can give way: an iPad on its side said
+   them in glyphs that look alike, which a touch screen cannot hover (the
+   reviewers' round 2, tablets 1); and where they cannot, "Rover:" is kept
+   while it fits, as it does on a phone on its side (phones 7). Only the
+   width chooses: "rover" is the narrower of the two only by the 45 px
+   "Rover:" takes, "glyphs" by the alerts' 170. The link's words are the same at every step but the last:
+   one word for each state, never a short one of its own (the critics'
+   round 3). The second: every word; the segments closer to their words
+   ("tight"), and closer still ("snug"), at 13 px both, so a 375 px phone
+   and one on its side keep the first cell's size of word; 12 px words
+   ("small"); and only where nothing else fits (a 320 px phone), Adv
+   ("short"). Stop stays 16 px from the scheme, and the gear square. */
 
 /* The address (Link's --host, a CSS string) 8 px after the link's word,
    in each sizer too: so the slot is as wide with it whatever it says, and
@@ -1243,55 +1270,78 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   color: var(--dim);
 }
 
-.drives:is([data-fit="glyphs"], [data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .alertWord { display: none; }
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord) { display: none; }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segWord:not(:last-child), .autoWord, .chipForWord) { display: none; }
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segShort, .autoShort) { display: inline; }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) :is(.target .segShort, .autoShort) { display: inline; }
+.drives:is([data-fit="rover"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .chipForWord { display: none; }
+
+.drives:is([data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .alertWord { display: none; }
 
 /* The rover's glyph for its name, in the lamp's place: the lamp gives way
    to it on the simulator target, and while the fit measures, where the
    name is shown on either target. */
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipFor .roverGlyph { display: block; }
+.drives:is([data-fit="rover"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .chipFor .roverGlyph { display: block; }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipFor:not([hidden]) + .lamp,
-.cells[data-fitting] .drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .lamp { display: none; }
+.drives:is([data-fit="rover"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .chipFor:not([hidden]) + .lamp,
+.cells[data-fitting] .drives:is([data-fit="rover"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .lamp { display: none; }
 
-.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
+.drives:is([data-fit="short"], [data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
   gap: 6px;
   padding-inline: var(--s-2) 6px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) {
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) {
   --seg-x: 6px;
   gap: 4px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .linkChip {
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .linkChip {
   gap: 3px;
   padding: 0 2px 0 6px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .chipAlert { padding: 0; }
+.drives[data-fit="lamp"] .linkChip { gap: 2px; }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .linkChip .caret {
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .chipAlert { padding: 0; }
+
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .chipAlert[data-known="last"] { outline-offset: 1px; }
+
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .linkChip .caret {
   width: 14px;
   height: 14px;
 }
 
-.drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
+.drives:is([data-fit="snug"], [data-fit="rover"], [data-fit="glyphs"], [data-fit="icons"], [data-fit="small"], [data-fit="lamp"]) .autoSwitch {
   gap: var(--s-1);
   padding-inline: var(--s-1) 2px;
 }
 
-.drives[data-fit="small"] .chipWord { font-size: var(--t-sm); }
-
-.drives[data-fit="lamp"] .chipWord { display: none; }
+.drives:is([data-fit="small"], [data-fit="lamp"]) .chipWord { font-size: var(--t-sm); }
 
 /* The last step is a 320 px phone's, and the middle column of a phone on
    its side: the target's segments closer still, so that Autonomous ends
-   48 px or more short of Stop under it (43 at 6 px). */
+   48 px or more short of Stop under it (43 at 6 px). The chip takes the
+   rest of the cell, its caret at the cell's end, and its word the room
+   left after the lamp and the glyphs, a slot as wide whatever the chip
+   says: the words that fit it whole are said there, the longer ones only
+   in its title and popover (app.js, data-word "cut"), never cut short. A
+   chip of a lamp and a caret alone left the cell's last 90 px bare (the
+   reviewers' round 2, phones 9). */
 .drives[data-fit="lamp"] { --seg-x: 4px; }
+
+.drives[data-fit="lamp"] .linkChip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.drives[data-fit="lamp"] .chipWord {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.linkChip[data-word="cut"] .chipSay { visibility: hidden; }
 
 .hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"]) {
   --seg-x: 7px;
@@ -1306,9 +1356,20 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
   --tab-x: 3px;
 }
 
-.hands:is([data-fit="short"], [data-fit="small"]) {
+.hands[data-fit="small"] {
   --seg-x: 6px;
   --tab-x: 3px;
+}
+
+/* A 320 px phone's. Advanced whole there needs 15 px more than the
+   segments at 4 px and the tabs at 2 px leave (measured headless, the
+   reviewers' round 2 asked): closer still, the segments' words meet their
+   pills' ends and the tabs' words each other, so Adv stays, the scheme's
+   title saying Advanced. The tabs 2 px, so the gear keeps clear of the
+   cell's outline. */
+.hands[data-fit="short"] {
+  --seg-x: 6px;
+  --tab-x: 2px;
 }
 
 .hands:is([data-fit="short"], [data-fit="small"]) :is(button, .segmented button) { font-size: var(--t-sm); }
@@ -1470,6 +1531,33 @@ body[data-link="down"] #connect {
    it is out of sight. */
 body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 
+/* On the simulator target, a rover that reports, or last reported, that
+   it explores, in words at the view's top (app.js, markAlert): one amber
+   line over the simulator, as the motor fault is one over the scan,
+   dashed once the link has gone or gone quiet. It takes its height from
+   the simulator's, inside the view. */
+.roverAway {
+  flex: none;
+  margin: 0 0 var(--s-1);
+  padding: 2px var(--s-2);
+  overflow: hidden;
+  font-size: var(--t-sm);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-tight);
+  color: var(--warn);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--warn-soft);
+  border-radius: var(--r-md);
+}
+
+.roverAway[data-known="last"] {
+  outline: 1px dashed var(--warn);
+  outline-offset: -1px;
+}
+
+.roverAway[hidden] { display: none; }
+
 /* A fault the rover reports about itself, in the scan's card at its top,
    the fan under it. Amber, not red: nothing is moving that should stop;
    the rover simply cannot move. It takes height from the fan, at most half
@@ -1579,8 +1667,15 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 /* With no link, whatever the tab or the width, over the faint fan: the
    next thing to do, rather than an empty pane that reads as a fault. Not
    while a link is up (or stale): the link chip says how it is. A link
-   that goes keeps its last scan, dimmed, under the card. */
+   that goes keeps its last scan, dimmed, under the card. On a layer of
+   its own, over the fan, whatever the fan's fade does: a faint fan is an
+   SVG with an opacity, a stacking context of its own, which painted over
+   the unpositioned card and took every press of its buttons (the
+   reviewers' round 2: the first screen's Connect did nothing). It is in
+   the view, never a stick's ancestor, so it may be positioned. */
 .connectCard {
+  position: relative;
+  z-index: 1;
   display: none;
   place-self: center;
   justify-items: center;
@@ -1655,24 +1750,61 @@ body[data-link="connecting"] .connectGo {
   .connectAddress:hover { color: var(--readout); background: none; }
 }
 
-/* A short view (a phone's band over the Program tab's editor, or the
-   middle of a phone on its side): the card one compact row, its button
-   and Change address, under the fan in a row of the card's own, where it
-   covers nothing. Over the middle of a short fan, the card sized for a
-   tall pane hid most of it (the review's tablets 2). The row is the
-   scan's last, whatever rows come before it; its title is the link
-   chip's word, in the top. A scheme wish's note, while there is one, is
-   a line over the buttons, as wide as they are: a phone shows no title,
-   and its Drive tab's view is this short (375 x 667), where the note
-   was the link popover's alone. */
+/* The address a press goes to, on a line of its own under the title,
+   where the card is too narrow for it beside the button's verb (app.js,
+   fitConnect(), data-fit "verb"): "Reconnect to 192.168.0.115" ran into
+   its pill's ends at 480 x 320 (the reviewers' round 2). Quieter than the
+   title, and cut short with its title saying it, never wrapped. */
+.connectHost {
+  display: none;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--t-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  color: var(--dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.connectCard[data-fit="verb"] .connectHost { display: block; }
+
+/* A view under 260 px tall: the card tighter, so that its title, the
+   address where it has a line, a wish's note and both buttons fit over
+   the fan's row. Where it is narrow too (the middle of a phone on its
+   side, at 480 px), Connect alone: the top's link chip changes the
+   address there. */
 @container scan (max-height: 259.98px) {
+  .connectCard {
+    gap: var(--s-1);
+    padding: var(--s-2) var(--s-3);
+  }
+}
+
+@container scan (max-height: 259.98px) and (max-width: 229.98px) {
+  .connectAddress { display: none; }
+}
+
+/* A shorter view (a phone's band over the Program tab's editor, 136 px
+   tall on a 320 px phone): the card one compact row, its button and
+   Change address, under the fan in a row of the card's own, where it
+   covers nothing. Over the middle of a short fan, the card sized for a
+   tall pane hid most of it (the review's tablets 2). Only under 170 px:
+   from 260 px, a 375 x 667 phone's Drive tab (229 px) showed the row at
+   its foot under 180 px of bare ground, where the whole card fits (the
+   reviewers' round 2). The row is the scan's last, whatever rows come
+   before it, across the card; its title is the link chip's word, in the
+   top. A scheme wish's note, while there is one, is a line over the
+   buttons, and the address one under it where the button says its verb
+   alone, each across the card: a phone shows no title. */
+@container scan (max-height: 169.98px) {
   .scan > .connectCard {
     grid-row: 9;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, max-content);
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, max-content)) minmax(0, 1fr);
     align-items: center;
-    place-self: end center;
-    gap: var(--s-1);
+    place-self: end stretch;
+    gap: 2px var(--s-1);
     margin-top: var(--s-1);
     padding: 2px;
     background: none;
@@ -1684,25 +1816,24 @@ body[data-link="connecting"] .connectGo {
 
   .connectAddress { white-space: nowrap; }
 
-  .connectCard > button { grid-row: 2; }
+  .connectCard .schemeWish { grid-area: 1 / 1 / auto / -1; }
 
-  /* No width of its own (min-width's percentage counts as none while the
-     columns are sized), so the buttons set the row's, and it wraps in it. */
-  .connectCard .schemeWish {
-    grid-row: 1;
-    grid-column: 1 / span 2;
-    width: 0;
-    min-width: 100%;
-  }
+  .connectCard .connectHost { grid-area: 2 / 1 / auto / -1; }
+
+  .connectGo { grid-area: 3 / 2; }
+
+  .connectAddress { grid-area: 3 / 3; }
 }
 
-/* A short view that is narrow too (the middle of a phone on its side, at
-   480 px): Connect alone, whole, its address in it; the top's link chip,
-   over it, changes the address, and its popover says a scheme wish.
-   Beside it, Change address wrapped to two lines and cut the button to
-   "ct to 192.16". */
-@container scan (max-height: 259.98px) and (max-width: 329.98px) {
-  .connectAddress,
+/* Narrow too: Connect alone, centred, as in the card above. */
+@container scan (max-height: 169.98px) and (max-width: 329.98px) {
+  .connectAddress { display: none; }
+
+  .connectGo { grid-column: 2 / 4; }
+}
+
+/* No room for a line over the buttons: the wish is the link popover's. */
+@container scan (max-height: 119.98px) {
   .connectCard .schemeWish { display: none; }
 }
 
@@ -2892,6 +3023,7 @@ body:not([data-link="up"]) .readouts :is(output, #phase) { color: var(--dim); }
 @media (prefers-reduced-motion: reduce) {
   .wedge { transition: none; }
   .segmented button[data-pending="yes"],
+  #auto[data-pending] .track,
   .linkChip[data-say="connecting"] .lamp { animation: none; }
 }
 

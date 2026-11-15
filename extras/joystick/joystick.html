@@ -87,7 +87,11 @@
                word, never in its place (app.js): a motor shield that did
                not answer, and on the simulator target a rover exploring,
                which must not move unseen (glyphs where the cell is narrow,
-               each titled); and a caret, flipped while the popover is open.
+               each titled, each its own shape: a motor struck through,
+               and a winding route; the rover's own glyph a rover seen
+               from the side, with its aerial, where the simulator's is
+               seen from above); and a caret, flipped while the popover
+               is open.
                A press opens the link's popover, which hangs below the
                cells from the chip's left edge (panel.css): the address,
                Connect, and what link.js has to say. Not modal: Stop stays
@@ -97,17 +101,17 @@
                slot is as wide whatever it says. -->
           <button type="button" class="linkChip" id="linkChip" data-say="down" data-alert="">
             <span class="chipFor" id="chipFor" hidden>
-              <svg class="icon roverGlyph" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.5"/><path d="M2.25 4v3M13.75 4v3M2.25 9v3M13.75 9v3"/></svg>
+              <svg class="icon roverGlyph" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="7" width="12.5" height="4" rx="1.25"/><circle cx="4.75" cy="12.25" r="1.5"/><circle cx="11.25" cy="12.25" r="1.5"/><path d="M11 7V3.75M8.75 2.75a3.25 3.25 0 0 1 4.5 0"/></svg>
               <span class="chipForWord">Rover:</span>
             </span>
             <span class="lamp" aria-hidden="true"></span>
             <span class="chipWord"><span class="chipSay" id="linkState">Not connected</span></span>
             <span class="chipAlert" id="alertMotors" hidden>
-              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.4"/><path d="M3.2 12.8 12.8 3.2"/></svg>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="5" width="9" height="6" rx="1.25"/><path d="M10.5 8h3.75M4 5V3.5h4V5M1.75 14.25 14.25 1.75"/></svg>
               <span class="alertWord">No motors</span>
             </span>
             <span class="chipAlert" id="alertExploring" hidden>
-              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="M10.6 5.4 9.1 9.1 5.4 10.6 6.9 6.9z"/></svg>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 13.5h2.75c2.5 0 1.5-5.5 4-5.5h.5c2 0 2.25-4.5 4.25-4.5M11.5 1.75l2.25 1.75-2 2"/></svg>
               <span class="alertWord">Rover exploring</span>
             </span>
             <svg class="icon caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>
@@ -255,10 +259,14 @@
              thing to do. Its title is the link's state, as the chip says
              it ("Connecting to" the address while connecting), and its
              button is a press of Connect, in the link's popover, and says
-             what that press does (link.js); Change address opens that
-             popover with the focus in the address (app.js). -->
-        <div class="connectCard" role="group" aria-labelledby="connectTitle">
+             what that press does and to which address (link.js); where
+             the card is too narrow for both, the button says the verb
+             alone and the line under the title the address (app.js,
+             data-fit). Change address opens that popover with the focus
+             in the address (app.js). -->
+        <div class="connectCard" role="group" aria-labelledby="connectTitle" data-fit="full">
           <p class="connectTitle" id="connectTitle">Not connected</p>
+          <p class="connectHost" id="connectHost"></p>
           <!-- A scheme pressed meanwhile, in words (scheme.js): sent once
                the rover connects. -->
           <p class="schemeWish" id="connectWish" hidden></p>
@@ -267,6 +275,12 @@
                   title="Change address: open the link's popover, with the rover's address ready to type.">Change address</button>
         </div>
       </section>
+
+      <!-- On the simulator target, while the rover reports or last
+           reported that it explores, the words over the simulator: the
+           chip's glyph alone, on a phone, was the one cue that a rover
+           sent exploring was driving itself unseen (app.js, markAlert). -->
+      <p class="roverAway" id="roverAway" role="status" hidden></p>
 
       <!-- The simulator's one view, on both tabs while the simulator is the
            target. simview.js fills it; nothing else is ever put in it. -->
