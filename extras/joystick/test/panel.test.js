@@ -2923,32 +2923,32 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   const placed = [...programSide, ...side].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage/.test(r.selector) && /grid-|display:/.test(r.body));
   check(placed.length === 0, `the toolbar a row over the editor, as everywhere: ${placed.map((r) => r.selector)}`);
   check(!/flex-direction:\s*row/.test(where(".programStage")) && !programSide.some((r) => /programConsole/.test(r.selector)), `the console under the editor: ${where(".programStage")}`);
-  // From 568 to 699 px wide (568 x 320, 667 x 375) the cells are a cell a
-  // row in the middle, and the bands beside them were empty while the editor
+  // From 568 px wide (568 x 320, 844 x 390) the cells are a cell a row in
+  // the middle, and the bands beside them were empty while the editor
   // under them had about 90 px (the review's phones 0): the toolbar takes
   // them, Run over Stop program on the left and File over View on the
   // right, a row a cell's, and the editor's card starts under the cells,
   // the width the view leaves it. Two rows of two, never the four slabs.
-  const bands = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) and (max-width: 699.98px) {") || [];
+  const bands = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [];
   const banded = (selector) => body(bands, selector);
   check(/grid-area:\s*1 \/ 1 \/ -1 \/ -1;/.test(banded("#programTab:not([hidden])")) && /grid-template-columns:\s*subgrid;/.test(banded("#programTab:not([hidden])")) && /container-type:\s*normal;/.test(banded("#programTab:not([hidden])")),
-    `under 700 px: the tab on the shell's tracks, no container: ${banded("#programTab:not([hidden])")}`);
+    `from 568 px: the tab on the shell's tracks, no container: ${banded("#programTab:not([hidden])")}`);
   check(/grid-area:\s*1 \/ 1 \/ 2 \/ -1;/.test(banded("#programTab .programBar")) && /grid-template-rows:\s*var\(--ctl\) var\(--ctl\);/.test(banded("#programTab .programBar")),
-    `under 700 px: the toolbar two rows of the top's height, beside it: ${banded("#programTab .programBar")}`);
+    `from 568 px: the toolbar two rows of the top's height, beside it: ${banded("#programTab .programBar")}`);
   const spot = { "#programRun": "1 / 1", "#programStop": "2 / 1", "#programTab .menuHolder": "1 / -2", "#viewToggle": "2 / -2" };
-  for (const [selector, area] of Object.entries(spot)) check(banded(selector).includes(`grid-area: ${area};`), `under 700 px: ${selector} in its band: ${banded(selector)}`);
+  for (const [selector, area] of Object.entries(spot)) check(banded(selector).includes(`grid-area: ${area};`), `from 568 px: ${selector} in its band: ${banded(selector)}`);
   check(/grid-area:\s*2 \/ 3 \/ 3 \/ -1;/.test(banded("#programTab .programStage")) && /grid-area:\s*2 \/ 1 \/ 3 \/ -1;/.test(banded('#programTab[data-view="hidden"] .programStage')),
-    "under 700 px: the editor's card under the cells, beside the view or the screen's width");
-  // From 700 px wide the cells fit one row, so they take it, as on a wide
-  // screen, and the editor and the console the height under it: a row
-  // each they left the editor 150 to 200 px (the review's phones 0). The
-  // view takes the left two fifths, shown.
-  const row = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (min-width: 700px) {") || [];
-  const oneRow = (selector) => body(row, selector);
-  check(/grid-template-columns:\s*minmax\(0, 2fr\) minmax\(0, 3fr\);/.test(oneRow(".shell:has(> #programTab:not([hidden]))")) && areas(oneRow(".shell:has(> #programTab:not([hidden]))")) === '"head head" "view main"'
-    && areas(oneRow('.shell:has(> #programTab[data-view="hidden"]:not([hidden]))')) === '"head" "main"', `from 700 px: the top across, the view and the editor under it: ${oneRow(".shell:has(> #programTab:not([hidden]))")}`);
-  check(/display:\s*flex;/.test(oneRow(".shell:has(> #programTab:not([hidden])) .cells")) && /flex:\s*1 1 0;/.test(oneRow(".shell:has(> #programTab:not([hidden])) .hcell.hands")),
-    "from 700 px: the cells one row, the second taking the rest");
+    "from 568 px: the editor's card under the cells, beside the view or the screen's width");
+  // At no width on its side does the Program tab put the cells anywhere
+  // the Drive tab does not: from 700 px they once took one row across the
+  // screen on this tab alone, and a switch of tab moved Stop 198 px
+  // across and 46 up at 844 x 390 (the merge's round 2). Stop stays put on
+  // a switch of tab, on every layout.
+  const sideBlocks = panelCss().match(/@media \(orientation: landscape\) and \(max-height: 520px\)[^{]*\{/g) || [];
+  const cellsMoved = sideBlocks.flatMap((head) => mediaRules(head) || []).filter((r) => /programTab/.test(r.selector) && /\.(cells|hcell)\b/.test(r.selector));
+  check(cellsMoved.length === 0, `on its side, nothing lays the cells out by tab: ${cellsMoved.map((r) => r.selector)}`);
+  const sideHeads = sideBlocks.flatMap((head) => mediaRules(head) || []).filter((r) => /^\.shell:has\(> #programTab/.test(r.selector) && /grid-template-areas/.test(r.body)).map((r) => areas(r.body).split('" "')[0].replace(/"/g, "").trim());
+  check(sideHeads.every((row) => row === ". head head ." || row === "head head head head"), `on its side, the top where the Drive tab has it: ${sideHeads}`);
   // File's menu hangs from its button as on every layout, never moved, and
   // stops at the screen's foot under the top and the toolbar (in the
   // bands, under the cells' first row), scrolling inside past that:
@@ -2956,23 +2956,32 @@ test("on its side: a stick down each edge, Stop between them, and nothing in the
   // under the top.
   const fileMenu = where("#programMenuList");
   check(!/\btop:/.test(fileMenu)
-    && /max-height:\s*calc\(100 \* var\(--svh\) - var\(--cell-h\) - 3 \* var\(--s-2\) - \(var\(--bar-h\) - 3px\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
-    && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, on the screen: ${fileMenu}`);
-  const bandMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) and (max-width: 699.98px) {") || [], "#programMenuList");
+    && /max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - var\(--ctl\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(fileMenu)
+    && /overflow-y:\s*auto;/.test(fileMenu), `the File menu under the toolbar, under both rows of cells, on the screen: ${fileMenu}`);
+  const bandMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {") || [], "#programMenuList");
   check(!/\btop:/.test(bandMenu) && /max-height:\s*calc\(100 \* var\(--svh\) - var\(--cell-h\) - 2 \* var\(--s-2\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(bandMenu),
     `in the band, from the cells' first row to the foot: ${bandMenu}`);
   // Under 568 px (480 x 320) the top spans the screen, a cell a row, and
   // leaves no bands: the toolbar in the top's row lay under the cells, Run
   // out of reach (the merge of the cells' and the Program tab's round 2).
   // There the toolbar heads the editor's card, a row under the top, and
-  // the File menu stops at the foot under both rows of cells.
+  // the File menu stops at the foot under both rows of cells (the rule
+  // for every width on its side, above, which the bands' overrides).
   const narrowSide = mediaRules("@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [];
   check(areas(body(narrowSide, ".shell:has(> #programTab:not([hidden]))")).startsWith('"head head head head"'), `under 568 px: the top across the screen: ${body(narrowSide, ".shell:has(> #programTab:not([hidden]))")}`);
-  const narrowPlaced = [...narrowSide, ...(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [])].filter((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle|programStage|^#programTab:not/.test(r.selector) && /grid-|display:/.test(r.body));
-  check(narrowPlaced.length === 0 && !/max-width: 699\.98px\) \{/.test(panelCss().replace(/min-width: 568px\) and \(max-width: 699\.98px/g, "")), `under 568 px: the toolbar a row of the tab's own, never in the top's: ${narrowPlaced.map((r) => r.selector)}`);
-  const narrowMenu = body(blockRules(stylesheet("program.css"), "@media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {") || [], "#programMenuList");
-  check(/max-height:\s*calc\(100 \* var\(--svh\) - 2 \* var\(--cell-h\) - 6px - 3 \* var\(--s-2\) - \(var\(--bar-h\) - 3px\) - var\(--s-1\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\);/.test(narrowMenu),
-    `under 568 px: the File menu from under both rows of cells to the foot: ${narrowMenu}`);
+  // The tab starts under the top, on the shell's tracks, its toolbar a
+  // row across the screen and the editor's card under it, beside the view
+  // or the screen's width; the view, shown, starts level with the card.
+  // Beside a 40% view the card was 245 px, and its toolbar needs 277: View
+  // lay past its edge (measured headless).
+  check(/grid-area:\s*2 \/ 1 \/ -1 \/ -1;/.test(body(narrowSide, "#programTab:not([hidden])")) && /grid-template-columns:\s*subgrid;/.test(body(narrowSide, "#programTab:not([hidden])")) && /container-type:\s*normal;/.test(body(narrowSide, "#programTab:not([hidden])")),
+    `under 568 px: the tab under the top, on the shell's tracks: ${body(narrowSide, "#programTab:not([hidden])")}`);
+  check(/grid-area:\s*1 \/ 1 \/ 2 \/ -1;/.test(body(narrowSide, "#programTab .programBar")) && /grid-area:\s*2 \/ 3 \/ 3 \/ -1;/.test(body(narrowSide, "#programTab .programStage")) && /grid-area:\s*2 \/ 1 \/ 3 \/ -1;/.test(body(narrowSide, '#programTab[data-view="hidden"] .programStage')),
+    "under 568 px: the toolbar a row across under the top, the editor's card under it");
+  check(/margin-top:\s*calc\(var\(--ctl\) \+ var\(--s-2\)\);/.test(body(narrowSide, ".shell:has(> #programTab:not([hidden])) > .view")), "under 568 px: the view level with the editor's card, under the toolbar");
+  // The bands' rules start at 568 px: nothing else on its side places the
+  // toolbar in the top's row.
+  check((panelCss().match(/@media \(orientation: landscape\) and \(max-height: 520px\)[^{]*\{/g) || []).every((head) => /min-width: 568px|max-width: 567\.98px/.test(head) || !(mediaRules(head) || []).some((r) => /programBar|#programRun|#programStop|menuHolder|#viewToggle/.test(r.selector))), "the toolbar placed only by the bands' rules and the narrow ones");
   // The state one line on every layout, never a height that follows what
   // it says (program.css's base rule; the program tests hold it), and
   // nothing on its side makes it more: the reason Run is off is short on

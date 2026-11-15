@@ -510,25 +510,25 @@
      inside past that (panel.css fades its ends). Uncapped, its 278 px ran
      69 px past a 568 x 320 screen's foot, and opening it scrolled the
      page, which slid the toolbar, File with it, under the top (the
-     critic's round 2). Its top: the top's padding over the cells (8 px
-     and the notch's inset), the cells in one row and the 8 px under them,
-     then the toolbar down to its button's foot (its height but its 3 px
-     padding under the button) and the menu's 4 px gap (panel.css lays
-     out the top on this tab). */
+     critic's round 2). In the bands, from 568 px, it starts higher
+     (below); under 568 px its top is the top's padding over the cells
+     (8 px and the notch's inset), the cells a row each, 6 px apart, and
+     the 8 px under them, then the toolbar, a bare row of buttons (below),
+     and the menu's 4 px gap (panel.css lays out the top on this tab). */
   #programMenuList {
-    max-height: calc(100 * var(--svh) - var(--cell-h) - 3 * var(--s-2) - (var(--bar-h) - 3px) - var(--s-1) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - 3 * var(--s-2) - var(--ctl) - var(--s-1) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     scrollbar-width: thin;
   }
 }
 
-/* On its side, 568 to 699 px wide, the cells stay a cell a row in the
+/* On its side, 568 px wide or more, the cells stay a cell a row in the
    middle, and the toolbar takes the empty bands beside them (panel.css
    places it): its buttons as wide as their words, closer to them, with
    no icons, and the editor's card all body, every corner round. The File
    menu hangs from its button in the right band, at the cells' first row:
    from 48 px down to 8 px over the foot. */
-@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) and (max-width: 699.98px) {
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 568px) {
   .programBar {
     height: auto;
     padding: 0;
@@ -549,13 +549,25 @@
   }
 }
 
-/* On its side under 568 px (480 x 320), the top spans the screen, a cell a
-   row (panel.css), and the toolbar heads the editor's card under it: the
-   File menu starts a cell and its 6 px lower than over one row. */
+/* Under 568 px (480 x 320) the toolbar is a row of its own under the top,
+   across the screen, over the view as well as the editor's card
+   (panel.css places it): no card's head, a bare row as in the bands, and
+   the card all body. */
 @media (orientation: landscape) and (max-height: 520px) and (max-width: 567.98px) {
-  #programMenuList {
-    max-height: calc(100 * var(--svh) - 2 * var(--cell-h) - 6px - 3 * var(--s-2) - (var(--bar-h) - 3px) - var(--s-1) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  .programBar {
+    height: auto;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
   }
+
+  .programBar .run .icon,
+  .programBar .halt .icon { display: none; }
+
+  .programBar button { padding-inline: 10px; }
+
+  .programEditor { border-radius: var(--r-lg); }
 }
 
 /* --- Blockly, dressed for the panel ---------------------------------------- */
