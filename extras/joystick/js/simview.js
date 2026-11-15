@@ -9,9 +9,8 @@
  *   new SimView(slot, target, { layout })
  *     slot     the empty element the view fills (#simSlot, in the page's
  *              view pane, beside both tabs, which the layout sizes): the
- *              room takes all of it under one row of controls, fitted with
- *              PAD kept clear around it for a line of words above and
- *              below.
+ *              room takes all of it under one row, the controls and what
+ *              the rover is doing, fitted with PAD kept clear around it.
  *     target   the SimTarget it shows, and whose clock it runs.
  *     layout   the element whose CSS lays the pane out (the page's shell),
  *              optional: it gets --room-aspect, the room's width over its
@@ -48,9 +47,12 @@ class SimView {
   static CM = 100;
   // A stroke as wide on screen at any scale.
   static #THIN = Object.freeze({ "vector-effect": "non-scaling-stroke" });
-  // Room kept clear around the floor, in screen pixels: the tag's line sits
-  // above it and the motion's below, never over the room.
-  static PAD = Object.freeze({ top: 20, right: 8, bottom: 26, left: 8 });
+  // Room kept clear around the floor, in screen pixels: the walls' stroke,
+  // and nothing more. The words that once had a line above the floor and
+  // another below it are in the bar's one row, and the room has the rest:
+  // the owner asked twice for it to be bigger, and at 568 x 320 the two
+  // lines and the bar took half the pane.
+  static PAD = Object.freeze({ top: 3, right: 3, bottom: 3, left: 3 });
   // A ray's reading fades over about two sweeps, so an old one looks old.
   static RAY_FADE_MS = 1400;
   // The trail fades over this long, drawn in this many bands of age.
@@ -166,7 +168,7 @@ class SimView {
   }
 
   // The root, not the stage: a view too short for the room shows only the
-  // foot, whose wheels still turn.
+  // bar, whose wheels still turn.
   #shown() {
     return this.#ui.root.getClientRects().length > 0;
   }
@@ -213,10 +215,11 @@ class SimView {
     const root = dom.html("div", { class: "sim" }, this.#slot);
     ui.root = root;
 
-    // The controls, in one row of the panel's 32 px controls: the room, the
-    // playback speed, pause and reset, and at the far end the settings. A
-    // narrow view gives the room's list up to the settings (sim.css), where
-    // the same choice waits; a held playback hides its list (holdPlayback).
+    // One row of the panel's 32 px controls: the room, the playback speed,
+    // pause and reset, then what the rover is doing, and at the far end the
+    // settings. A narrow view gives the room's list up to the settings
+    // (sim.css), where the same choice waits, and keeps of the rest what
+    // fits; a held playback hides its list (holdPlayback).
     const bar = dom.html("div", { class: "sim-bar" }, root);
     ui.rooms = [this.#roomPick(bar)];
     // One list for the playback speed at every width. While paused it shows
@@ -236,12 +239,30 @@ class SimView {
     ui.reset = this.#tool(bar, "Reset: put the rover back where it starts and clear the trail (stops a preview). " +
       "Without it, the next preview goes on from where the last one stopped.", "M3.2 8a4.8 4.8 0 1 0 1.4-3.4M3.5 2.5v2.6h2.6", "sim-reset");
     ui.reset.addEventListener("click", () => this.#target.reset());
+
+    // The bar's middle: the wheels now, the move and how fast; that this is
+    // an idealised preview, or the latest word from it; the scale and the
+    // clock. One line, each part giving way where the view is narrow
+    // (sim.css), the move and the clock last.
+    const status = dom.html("div", { class: "sim-status" }, bar);
+    this.#buildInset(status);
+    ui.move = dom.html("output", { class: "sim-move" }, status, "STOP");
+    ui.twist = dom.html("span", { class: "sim-twist" }, status, "standing still");
+    ui.badge = dom.html("span", { class: "sim-badge", title: "Idealised preview: nothing is sent to the rover" }, status);
+    dom.html("strong", {}, ui.badge, "Idealised preview");
+    dom.html("span", { class: "sim-nosend" }, ui.badge, "nothing is sent to the rover");
+    // When it was said, then what: a narrow view drops the time (sim.css).
+    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite", "data-empty": "yes" }, ui.badge);
+    ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
+    ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
+    ui.scale = dom.html("span", { class: "sim-scale", "aria-hidden": "true" }, status);
+    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
+    dom.html("span", {}, ui.scale, "1 m");
+    ui.clock = dom.html("span", { class: "sim-clock" }, status, "0.0 s");
+
     ui.more = this.#tool(bar, "Settings: the room, rays, trail, wheel drag and the key", "M2.5 4.5h11M2.5 8h11M2.5 11.5h11M5.5 3v3M10.5 6.5v3M7 10v3", "sim-settings");
 
-    // The room, taking every pixel the bar leaves. What it says lies in the
-    // margins kept clear round the floor (SimView.PAD), never over it: along
-    // the top, that this is an idealised preview and the latest word from
-    // it; along the foot, the wheels, the motion, the scale and the clock.
+    // The room, taking every pixel the bar leaves, nothing over it.
     ui.stage = dom.html("div", { class: "sim-stage" }, root);
     // A group, not an image: an image's contents are presentational, and the
     // rover inside it, a focusable button, would be announced as nothing.
@@ -261,26 +282,6 @@ class SimView {
     ui.bumps = dom.svg("g", { class: "sim-bumps" }, ui.world);
     this.#buildRover(ui.world);
     ui.labels = dom.svg("g", { class: "sim-labels" }, ui.map);
-
-    // The top margin: a tag, and the latest word from the preview in place
-    // of the tag's second half once there is one.
-    ui.badge = dom.html("div", { class: "sim-badge", title: "Idealised preview: nothing is sent to the rover" }, ui.stage);
-    dom.html("strong", {}, ui.badge, "Idealised preview");
-    dom.html("span", { class: "sim-nosend" }, ui.badge, "nothing is sent to the rover");
-    // When it was said, then what: a narrow view drops the time (sim.css).
-    ui.log = dom.html("span", { class: "sim-log", "aria-live": "polite", "data-empty": "yes" }, ui.badge);
-    ui.logAt = dom.html("span", { class: "sim-log-at" }, ui.log);
-    ui.logText = dom.html("span", { class: "sim-log-text" }, ui.log);
-
-    // The foot margin: what the rover is doing, one line.
-    const foot = dom.html("div", { class: "sim-foot" }, ui.stage);
-    this.#buildInset(foot);
-    ui.move = dom.html("output", { class: "sim-move" }, foot, "STOP");
-    ui.twist = dom.html("span", { class: "sim-twist" }, foot, "standing still");
-    ui.scale = dom.html("span", { class: "sim-scale", "aria-hidden": "true" }, foot);
-    ui.scaleBar = dom.html("span", { class: "sim-scale-bar" }, ui.scale);
-    dom.html("span", {}, ui.scale, "1 m");
-    ui.clock = dom.html("span", { class: "sim-clock" }, foot, "0.0 s");
 
     // Folded away until asked for: the less used controls, what the drag
     // setting means, the key and what "idealised" leaves out. Its keys are
@@ -508,16 +509,12 @@ class SimView {
     // the room's shape; the floor sits centred in what PAD leaves. A larger
     // pad on one side moves the floor away from it: with the sign the other
     // way round the floor sat 18 px under the stage's top and 22 over its
-    // foot, and the badge over the room ran onto the floor's edge.
+    // foot.
     const vw = Math.max(width, 1) / s;
     const vh = Math.max(height, 1) / s;
     const left = -(vw - w) / 2 - (PAD.left - PAD.right) / (2 * s);
     const top = -h - (vh - h) / 2 - (PAD.top - PAD.bottom) / (2 * s);
     ui.map.setAttribute("viewBox", `${left.toFixed(2)} ${top.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
-    // The lines above and below the floor keep to its edges, where a wide
-    // stage leaves room over and under it (sim.css).
-    const spare = Math.max(0, (height - PAD.top - PAD.bottom - h * s) / 2);
-    ui.stage.style.setProperty("--floor-y", `${Math.floor(spare)}px`);
 
     for (const label of ui.labels.children || []) {
       const size = 10 / s;

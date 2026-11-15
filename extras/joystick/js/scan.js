@@ -3,14 +3,27 @@
  * them, as wedges that reach out to the distance each one reads.
  *
  *   new ScanView(svg)   lays the fan out in the empty <svg>, with nothing
- *                       to draw yet.
+ *                       to draw yet, and fits it to the svg's box whenever
+ *                       that changes (a ResizeObserver, where there is one).
  *   show(data)          draws a telemetry object's distances.
  *   clear()             draws none: no frame has come over the link yet.
+ *   fit(width, height)  lays the fan out for a box that size, in CSS
+ *                       pixels; the observer calls it.
  *
  * svg[data-empty] is "yes" from clear(), and as built, until the next
  * show(): the page's empty state keys on it (panel.css). A frame without
  * distances is not empty: the rover sends none until it has measured every
  * bearing once.
+ *
+ * Two layouts, whichever draws the fan larger in the box. Wide (a box about
+ * twice as wide as tall, the Program tab's view): the side readings beyond
+ * the ends of their wedges. Tall (anything squarer, the Drive tab's view on
+ * every layout): the side readings under the ends of their wedges, so the
+ * fan's arcs span the box. A fan always 420 units wide left a square pane
+ * 40% empty, 180 px over it and as much under it at 1024 x 768 (the
+ * critic's round 2). svg[data-layout] says which, and --scan-k (on the svg)
+ * is the screen pixels per unit, which panel.css divides into the labels'
+ * sizes so a fan three times its size does not draw 45 px figures.
  *
  * Nothing here touches the DOM until a ScanView is built, so the file also
  * loads in Node, for BEARINGS.
@@ -32,9 +45,24 @@ const BEARINGS = [
 
 class ScanView {
   // Layout in the SVG's own units. Readings sit just beyond R_MAX; the strip
-  // below the rover holds the ring labels.
+  // below the rover holds the side readings in the tall layout.
   static VIEW_W = 420;
   static VIEW_H = 200;
+  // The tall layout's box: the fan's arcs and the front readings, with the
+  // side readings tucked under the wedges' ends.
+  static TALL_X = 58;
+  static TALL_W = 304;
+  // The legend's rows, in screen pixels (panel.css sets its type to match),
+  // and the units over the fan they may take: none reaches FL's or F's
+  // label, whatever the scale.
+  static LEGEND_ROW_PX = 13;
+  static LEGEND_ROOM = 36;
+  // A reading's type, in units (panel.css's --scan-reading), and the most
+  // it may take on screen (the cap in panel.css's .reading): a bearing's
+  // name sits a reading's height over it, so the two stay together as the
+  // cap shrinks the reading.
+  static READING_UNITS = 15;
+  static READING_MAX_PX = 28;
   static CX = ScanView.VIEW_W / 2; // the rover
   static CY = ScanView.VIEW_H - 20;
   static R_MIN = 24; // wedges start clear of the rover's dot
@@ -68,12 +96,33 @@ class ScanView {
   }
 
   #svg;
-  #views; // per bearing: { key, screen, wedge, reading }
+  #views; // per bearing: { key, screen, wedge, reading, label }
+  #legend; // { group, rows }
 
   constructor(svg) {
     this.#svg = svg;
     this.#build();
+    this.#lay("wide", 1);
     this.clear();
+    if (typeof ResizeObserver === "function") {
+      new ResizeObserver(() => {
+        const { width, height } = svg.getBoundingClientRect();
+        this.fit(width, height);
+      }).observe(svg);
+    }
+  }
+
+  // The layout that draws the fan larger in a box this size, and the scale
+  // it draws at. Tall wins only by a tenth, so a box near the wide layout's
+  // shape (the Program tab's view is sized to it) never flips between them.
+  // A box with no size (the view hidden) changes nothing.
+  fit(width, height) {
+    if (!(width > 0 && height > 0)) return;
+    const { VIEW_W, VIEW_H, TALL_W } = ScanView;
+    const wide = Math.min(width / VIEW_W, height / VIEW_H);
+    const tall = Math.min(width / TALL_W, height / VIEW_H);
+    if (tall > 1.1 * wide) this.#lay("tall", tall);
+    else this.#lay("wide", wide);
   }
 
   show(data) {
@@ -90,8 +139,7 @@ class ScanView {
   // firmware (and in its copy in protocol.js) moves its ring, label and colour
   // together.
   #build() {
-    const { VIEW_W, VIEW_H, CY, R_MAX, RANGE_CM, FAN_HALF, CX } = ScanView;
-    this.#svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
+    const { CY, RANGE_CM, CX } = ScanView;
     // Centred in a pane of another shape: pinned to the foot of a tall
     // pane, the fan left all its spare height in one empty band over it,
     // 250 to 450 px on a wide screen (the critic's round 2).
@@ -104,24 +152,33 @@ class ScanView {
     // to meet the chassis. A side return never stops a cruise; one within a few
     // centimetres of the chassis makes it sidestep away. So a red L or R wedge
     // along a corridor wall, with the rover cruising on, is expected, not a
-    // missed obstacle. Labels hang below the rover's baseline, where no wedge can
-    // reach, under one foot of their ring: STOP and GO on opposite sides, since
-    // their rings are too close together to label on the same one. The outer
-    // ring is full reach and needs no label.
+    // missed obstacle. The outer ring is full reach and needs no label.
     const rings = [
       { cm: RANGE_CM, kind: "" },
-      { cm: 100, kind: "", text: "100", side: 1 },
-      { cm: GO_CM, kind: "go", text: `${GO_CM} GO`, side: -1 },
-      { cm: STOP_CM, kind: "stop", text: `${STOP_CM} STOP`, side: 1 },
+      { cm: 100, kind: "", text: "100 cm" },
+      { cm: GO_CM, kind: "go", text: `${GO_CM} GO` },
+      { cm: STOP_CM, kind: "stop", text: `${STOP_CM} STOP` },
     ];
     for (const ring of rings) {
-      const r = ScanView.radiusFor(ring.cm);
-      dom.svg("path", { class: `ring ${ring.kind}`.trim(), d: ScanView.#ringPath(r) }, this.#svg);
-      if (!ring.text) continue;
-      const [x] = ScanView.#polar(90 + ring.side * FAN_HALF, r);
-      const at = { x: x.toFixed(1), y: CY + 14, "text-anchor": "middle" };
-      dom.svg("text", { class: `tick ringLabel ${ring.kind}`.trim(), ...at }, this.#svg, ring.text);
+      dom.svg("path", { class: `ring ${ring.kind}`.trim(), d: ScanView.#ringPath(ScanView.radiusFor(ring.cm)) }, this.#svg);
     }
+
+    // The rings' legend, quiet, in the fan's top-left corner, where no wedge
+    // or label reaches: each ring's dashes, then its distance and name in the
+    // dim ink, at the page's smallest type whatever the fan's scale (#lay
+    // draws the group in screen pixels). Under the rings' feet, in red and
+    // amber at the fan's scale, it was about 22 px on a wide screen, louder
+    // than the readouts, and a red STOP word vied with Stop (the critic's
+    // round 2). STOP first, then GO, then the 100 cm ring, the first to go
+    // where the corner is short.
+    const group = dom.svg("g", { class: "scanLegend", "aria-hidden": "true" }, this.#svg);
+    const rows = [...rings].reverse().filter((ring) => ring.text).map((ring, i) => {
+      const row = dom.svg("g", { transform: `translate(0 ${i * ScanView.LEGEND_ROW_PX})` }, group);
+      dom.svg("path", { class: `ring ${ring.kind}`.trim(), d: "M0 6.5 H14" }, row);
+      dom.svg("text", { class: "ringLabel", x: 19, y: 10, "text-anchor": "start" }, row, ring.text);
+      return row;
+    });
+    this.#legend = { group, rows };
 
     this.#views = BEARINGS.map((b) => ({
       key: b.key,
@@ -129,19 +186,63 @@ class ScanView {
       wedge: dom.svg("path", { class: "wedge", d: "" }, this.#svg),
     }));
 
-    // Each reading sits just past full reach and extends away from the fan, so
-    // no wedge ever runs under a number. Its bearing is labelled above it.
+    // Each reading, with its bearing's name over it, where #lay puts it.
     BEARINGS.forEach((b, i) => {
       const view = this.#views[i];
-      const [x, y] = ScanView.#polar(view.screen, R_MAX + 12);
-      const outward = Math.cos(radians(view.screen));
-      const anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
-      const at = { x: x.toFixed(1), "text-anchor": anchor };
-      view.reading = dom.svg("text", { class: "reading", ...at, y: (y + 5).toFixed(1) }, this.#svg, "—");
-      dom.svg("text", { class: "tick", ...at, y: (y - 10).toFixed(1) }, this.#svg, b.label);
+      view.reading = dom.svg("text", { class: "reading" }, this.#svg, "—");
+      view.label = dom.svg("text", { class: "tick" }, this.#svg, b.label);
     });
 
     dom.svg("circle", { cx: CX, cy: CY, r: 4, fill: "var(--readout)" }, this.#svg);
+  }
+
+  // Each reading sits just past full reach and extends away from the fan, so
+  // no wedge ever runs under a number. In the tall layout the side ones sit
+  // under the ends of their wedges instead, below the rover's baseline where
+  // no wedge reaches, reading inward. The legend's rows show while they fit
+  // the corner above FL's label, two at least or none.
+  #lay(layout, k) {
+    const { VIEW_W, VIEW_H, TALL_X, TALL_W, R_MAX, CX, CY, HALF_WIDTH, LEGEND_ROW_PX, LEGEND_ROOM } = ScanView;
+    const tall = layout === "tall";
+    const size = Math.min(ScanView.READING_UNITS, ScanView.READING_MAX_PX / k);
+    this.#svg.dataset.layout = layout;
+    this.#svg.setAttribute("viewBox", tall ? `${TALL_X} 0 ${TALL_W} ${VIEW_H}` : `0 0 ${VIEW_W} ${VIEW_H}`);
+    for (const view of this.#views) {
+      const outward = Math.cos(radians(view.screen));
+      let x;
+      let readingY;
+      let labelY;
+      let anchor;
+      if (tall && Math.abs(outward) > 0.9) {
+        const side = Math.sign(outward);
+        // The wedge's lower edge, at full reach, and a little outside it;
+        // the name just under it, the reading under the name.
+        x = CX + R_MAX * Math.cos(radians(view.screen - side * HALF_WIDTH)) + 3 * side;
+        labelY = CY - 2;
+        readingY = labelY + size + 2;
+        anchor = side < 0 ? "start" : "end";
+      } else {
+        // The reading by the arc, the name over it.
+        const [px, py] = ScanView.#polar(view.screen, R_MAX + 12);
+        x = px;
+        readingY = py + 5;
+        labelY = readingY - size;
+        anchor = outward < -0.3 ? "end" : outward > 0.3 ? "start" : "middle";
+      }
+      for (const [text, y] of [[view.reading, readingY], [view.label, labelY]]) {
+        text.setAttribute("x", x.toFixed(1));
+        text.setAttribute("y", y.toFixed(1));
+        text.setAttribute("text-anchor", anchor);
+      }
+    }
+    this.#svg.style.setProperty("--scan-k", k.toFixed(3));
+    // Labels under about 7 px are a smudge (panel.css hides them).
+    this.#svg.dataset.labels = k >= 0.68 ? "all" : k >= 0.45 ? "readings" : "none";
+    const { group, rows } = this.#legend;
+    const fits = Math.floor((LEGEND_ROOM * k) / LEGEND_ROW_PX);
+    group.setAttribute("transform", `translate(${(tall ? TALL_X : 0) + 2} 2) scale(${(1 / k).toFixed(4)})`);
+    group.setAttribute("visibility", fits >= 2 ? "visible" : "hidden");
+    rows.forEach((row, i) => row.setAttribute("visibility", i < fits ? "inherit" : "hidden"));
   }
 
   #showDistance(view, cm) {

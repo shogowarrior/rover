@@ -1039,9 +1039,14 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   const g = (n) => page.evalIn(n);
   const [CX, CY, RMIN, RMAX, HW] = ["CX", "CY", "R_MIN", "R_MAX", "HALF_WIDTH"].map((n) => g(`ScanView.${n}`));
   const [W, H] = [g("ScanView.VIEW_W"), g("ScanView.VIEW_H")];
-  check(page.$("scan").getAttribute("viewBox") === `0 0 ${W} ${H}`, "viewBox set");
-  const nodes = all(page.$("scan"));
-  const rings = nodes.filter((n) => /^ring/.test(n.getAttribute("class") || ""));
+  const [TX, TW] = [g("ScanView.TALL_X"), g("ScanView.TALL_W")];
+  const svg = page.$("scan");
+  check(svg.getAttribute("viewBox") === `0 0 ${W} ${H}` && svg.dataset.layout === "wide", "viewBox set, wide until measured");
+  const nodes = all(svg);
+  const legend = nodes.find((n) => n.getAttribute("class") === "scanLegend");
+  const inLegend = new Set(legend ? all(legend) : []);
+  const fan = nodes.filter((n) => !inLegend.has(n));
+  const rings = fan.filter((n) => /^ring/.test(n.getAttribute("class") || ""));
   const radii = rings.map((n) => Number(n.getAttribute("d").match(/A([\d.]+)/)[1]));
   const want = [g("ScanView.RANGE_CM"), 100, g("GO_CM"), g("STOP_CM")].map((cm) => page.evalIn(`ScanView.radiusFor(${cm})`));
   check(radii.length === 4 && radii.every((r, i) => Math.abs(r - want[i]) < 0.06), `ring radii ${radii} vs ${want}`);
@@ -1066,23 +1071,12 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
     check(y0 < CY && y1 < CY, "ring above the baseline");
   }
 
-  // Text boxes (worst-case strings) must stay inside the view, off every wedge's
-  // largest possible sector, and off each other.
-  const texts = nodes.filter((n) => n.tagName === "TEXT");
-  const boxes = texts.map((n) => {
-    const cls = n.getAttribute("class");
-    const big = cls === "reading";
-    const str = big ? "no echo" : n.textContent;
-    const w = str.length * (big ? 9.0 : 6.8);
-    const x = Number(n.getAttribute("x"));
-    const y = Number(n.getAttribute("y"));
-    const a = n.getAttribute("text-anchor");
-    const x0 = a === "end" ? x - w : a === "start" ? x : x - w / 2;
-    return { str, x0, x1: x0 + w, y0: y - (big ? 11 : 7), y1: y + (big ? 3 : 1) };
-  });
-  check(texts.every((n) => n.getAttribute("text-anchor")), "every label anchored");
-  for (const b of boxes) {
-    check(b.x0 >= 0 && b.x1 <= W && b.y0 >= 0 && b.y1 <= H, `'${b.str}' inside view: ${JSON.stringify(b)}`);
+  // In either layout, text boxes (worst-case strings, at the drawing's own
+  // size: on screen a label only ever shrinks from it) must stay inside
+  // the view, off every wedge's largest possible sector, and off each
+  // other; and so must the legend, in its corner, at any scale it shows at.
+  const texts = fan.filter((n) => n.tagName === "TEXT");
+  const sector = (b) => {
     let hits = 0;
     for (let x = b.x0; x <= b.x1; x += 0.5) {
       for (let y = b.y0; y <= b.y1; y += 0.5) {
@@ -1092,18 +1086,121 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
         for (const brg of g("BEARINGS")) if (Math.abs(ang - (90 + brg.bearing)) <= HW) hits++;
       }
     }
-    check(hits === 0, `'${b.str}' overlaps a wedge (${hits} samples)`);
-  }
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const p = boxes[i], q = boxes[j];
-      const overlap = p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
-      check(!overlap, `'${p.str}' overlaps '${q.str}'`);
+    return hits;
+  };
+  const legendTexts = legend ? all(legend).filter((n) => n.tagName === "TEXT") : [];
+  check(legendTexts.map((n) => n.textContent).join(",") === "25 STOP,40 GO,100 cm" && legendTexts.every((n) => n.getAttribute("class") === "ringLabel"), `the legend, STOP first: ${legendTexts.map((n) => n.textContent)}`);
+  check(legend && legend.getAttribute("aria-hidden") === "true", "the legend is decoration: the rings' meaning is in the fan's title and the readings");
+  const legendBox = (left) => {
+    const [, k] = (legend.getAttribute("transform").match(/scale\(([\d.]+)\)/) || []).map(Number);
+    const rows = legend.children.filter((row) => row.getAttribute("visibility") !== "hidden").length;
+    const widest = Math.max(...legendTexts.map((n) => n.textContent.length));
+    return { str: "legend", rows, x0: left, x1: left + (19 + widest * 7) * k, y0: 0, y1: 2 + rows * g("ScanView.LEGEND_ROW_PX") * k };
+  };
+  // The type's sizes in units at a scale: the drawing's own, capped on
+  // screen (panel.css, mirrored in ScanView for the names' places).
+  const [RS, RMAXPX] = [g("ScanView.READING_UNITS"), g("ScanView.READING_MAX_PX")];
+  const rootVar = (name) => Number((panelCss().match(new RegExp(`${name}:\\s*([\\d.]+)px;`)) || [])[1]);
+  check(RS === rootVar("--scan-reading"), `ScanView's reading size is panel.css's: ${RS} vs ${rootVar("--scan-reading")}`);
+  check(new RegExp(`calc\\(${RMAXPX}px / var\\(--scan-k, 1\\)\\)`).test(cssRules(outside(panelCss(), "@media")).filter((r) => r.selector === ".reading").map((r) => r.body).join("")), `and its cap: ${RMAXPX}px`);
+  const TS = rootVar("--scan-tick");
+  for (const [layout, x0, x1, shape] of [["wide", 0, W, (k) => [W * k, H * k * 1.02]], ["tall", TX, TX + TW, (k) => [TW * k, H * k * 1.5]]]) {
+    // From where the labels first show to three times the drawing's size.
+    for (const k of [0.6, 0.72, 0.73, 0.9, 1.2, 2, 3.2]) {
+      page.evalIn(`scanView.fit(${shape(k).join(", ")})`);
+      check(svg.dataset.layout === layout, `${layout} at ${k}: ${svg.dataset.layout}`);
+      check(svg.getAttribute("viewBox") === `${x0} 0 ${x1 - x0} ${H}`, `${layout}: its box: ${svg.getAttribute("viewBox")}`);
+      check(svg.style.getPropertyValue("--scan-k") === k.toFixed(3), `${layout} at ${k}: --scan-k ${svg.style.getPropertyValue("--scan-k")}`);
+      const rs = Math.min(RS, RMAXPX / k) / RS;
+      const ts = Math.min(TS, 14 / k) / TS;
+      const boxes = texts.map((n) => {
+        const big = n.getAttribute("class") === "reading";
+        const str = big ? "no echo" : n.textContent;
+        const em = big ? rs : ts;
+        const tw = str.length * (big ? 9.0 : 6.8) * em;
+        const x = Number(n.getAttribute("x"));
+        const y = Number(n.getAttribute("y"));
+        const a = n.getAttribute("text-anchor");
+        const left = a === "end" ? x - tw : a === "start" ? x : x - tw / 2;
+        return { str, x0: left, x1: left + tw, y0: y - (big ? 11 : 7) * em, y1: y + (big ? 3 : 1) * em };
+      });
+      check(texts.every((n) => n.getAttribute("text-anchor")), `${layout}: every label anchored`);
+      for (const b of boxes) {
+        check(b.x0 >= x0 && b.x1 <= x1 && b.y0 >= 0 && b.y1 <= H, `${layout} at ${k}: '${b.str}' inside view: ${JSON.stringify(b)}`);
+        const hits = sector(b);
+        check(hits === 0, `${layout} at ${k}: '${b.str}' overlaps a wedge (${hits} samples)`);
+      }
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const p = boxes[i], q = boxes[j];
+          const overlap = p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+          check(!overlap, `${layout} at ${k}: '${p.str}' overlaps '${q.str}'`);
+        }
+      }
+      // A name sits right over its reading, at any scale.
+      for (const b of scanBearings(page)) {
+        const label = texts.find((n) => n !== b.reading && n.getAttribute("x") === b.reading.getAttribute("x") && n.getAttribute("class") === "tick");
+        const gap = label && Number(b.reading.getAttribute("y")) - Number(label.getAttribute("y"));
+        check(label && gap > 0 && gap <= RS * rs + 2.1, `${layout} at ${k}: ${b.key}'s name over its reading: ${gap}`);
+      }
+      // The legend: two rows at least or none, in the corner, clear of
+      // every label and wedge.
+      const shown = legend.getAttribute("visibility") !== "hidden";
+      const box = legendBox(x0 + 2);
+      if (!shown) {
+        check(k < (2 * g("ScanView.LEGEND_ROW_PX")) / g("ScanView.LEGEND_ROOM"), `${layout} at ${k}: the legend hidden only where two rows do not fit`);
+        continue;
+      }
+      check(box.rows >= 2, `${layout} at ${k}: two rows at least: ${box.rows}`);
+      check(box.x1 <= x1 && sector(box) === 0, `${layout} at ${k}: the legend inside the view, off every wedge: ${JSON.stringify(box)}`);
+      const hit = boxes.find((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1);
+      check(!hit, `${layout} at ${k}: the legend overlaps '${hit && hit.str}': ${JSON.stringify(box)}`);
     }
   }
+  // A box with no size (the view hidden) changes nothing.
+  page.evalIn("scanView.fit(0, 0)");
+  check(svg.dataset.layout === "tall", "an unmeasured box keeps the layout");
   const tickTexts = texts.filter((n) => n.getAttribute("class").startsWith("tick")).map((n) => n.textContent);
-  check(["100", "40 GO", "25 STOP", "L", "FL", "F", "FR", "R"].every((t) => tickTexts.includes(t)), `ticks ${tickTexts}`);
+  check(["L", "FL", "F", "FR", "R"].every((t) => tickTexts.includes(t)) && tickTexts.length === 5, `ticks ${tickTexts}`);
   check(!tickTexts.some((t) => /°/.test(t)), "no servo-angle ticks");
+});
+
+// The fan fits its box as the box changes: the layout that draws it larger,
+// tall wherever the box is squarer than the wide one's shape by a tenth, so
+// a box sized to the wide layout (the Program tab's view) never flips; and
+// labels that would be a smudge go.
+test("scan fit: the larger layout for the box, measured as it changes, and smudged labels gone", () => {
+  const page = loadPage({ frames: true });
+  const svg = page.$("scan");
+  check(svg.resizeObserved, "the fan's box observed");
+  const fitTo = (w, h) => {
+    svg.clientWidth = w;
+    svg.clientHeight = h;
+    page.resized();
+  };
+  fitTo(712, 488);
+  check(svg.dataset.layout === "tall" && svg.style.getPropertyValue("--scan-k") === (712 / 304).toFixed(3), `an iPad's pane: tall: ${svg.dataset.layout} ${svg.style.getPropertyValue("--scan-k")}`);
+  fitTo(470, 228);
+  check(svg.dataset.layout === "wide", `a box the wide layout's shape: wide: ${svg.dataset.layout}`);
+  fitTo(400, 200);
+  check(svg.dataset.layout === "wide", `a box 2:1: still wide: ${svg.dataset.layout}`);
+  fitTo(380, 200);
+  check(svg.dataset.layout === "tall", `squarer by more than a tenth: tall: ${svg.dataset.layout}`);
+  const labels = (w, h) => {
+    fitTo(w, h);
+    return svg.dataset.labels;
+  };
+  check(labels(350, 393) === "all" && labels(180, 120) === "readings" && labels(100, 80) === "none", "the bearings' names go first, then the readings");
+  const css = panelCss();
+  const hides = cssRules(css).filter((r) => /#scan\[data-labels/.test(r.selector) && /display:\s*none/.test(r.body)).map((r) => r.selector).join(" ");
+  check(/data-labels="readings"\] :is\(\.tick, \.scanLegend\)/.test(hides) && /data-labels="none"\] :is\(\.tick, \.scanLegend, \.reading\)/.test(hides), `panel.css hides them: ${hides}`);
+  // Never larger on screen than a reading or a name needs, whatever the
+  // fan's scale; the legend at the page's smallest type, in the dim ink.
+  const rule = (selector) => cssRules(outside(css, "@media")).filter((r) => r.selector === selector).map((r) => r.body).join("");
+  check(/font-size:\s*min\(var\(--scan-reading\), calc\(28px \/ var\(--scan-k, 1\)\)\);/.test(rule(".reading")), `readings capped: ${rule(".reading")}`);
+  check(/font-size:\s*min\(var\(--scan-tick\), calc\(14px \/ var\(--scan-k, 1\)\)\);/.test(rule(".tick")), `names capped: ${rule(".tick")}`);
+  check(/font-size:\s*var\(--t-xs\);/.test(rule(".ringLabel")) && /fill:\s*var\(--dim\);/.test(rule(".ringLabel")), `the legend quiet: ${rule(".ringLabel")}`);
+  check(page.errors.length === 0, `errors ${page.errors}`);
 });
 
 function arcCentre(x1, y1, x2, y2, r, sweep) {
@@ -2574,14 +2671,19 @@ test("motorsReady: the fault trades height with the scan inside the view, never 
 
 // The readouts' line is one line of one height: where it cannot hold every
 // caption and value, the captions go first (out of sight, still read out),
-// and only then is a value cut short. Measured, as the top's cells are, and
-// again as each frame changes what it says. Each cell is titled with its
-// caption.
+// then the values take the smaller type, then the chip's temperature goes
+// the same way, so the move and the phase are never cut short (the
+// critic's round 1). Measured, as the top's cells are, and again as each
+// frame changes what it says. Each cell is titled with its caption.
 test("readouts: the captions go before a value is cut short, each cell titled with its own", () => {
   const app = fs.readFileSync(path.join(PANEL_ROOT, "js", "app.js"), "utf8");
-  check(/fitSteps\(readoutsLine, \["words", "bare"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
-  const bare = cssRules(panelCss()).find((r) => r.selector === '.readouts[data-fit="bare"] .cell .label');
-  check(bare && /clip-path:\s*inset\(50%\)/.test(bare.body) && !/display:\s*none/.test(bare.body), `the captions out of sight, still read: ${bare && bare.body}`);
+  check(/fitSteps\(readoutsLine, \["words", "bare", "small", "nochip"\], cutShort\)/.test(app) && /value\.scrollWidth > value\.clientWidth/.test(app) && /new MutationObserver\(fitReadouts\)/.test(app) && /new ResizeObserver\(fitReadouts\)/.test(app), "measured, again as it changes");
+  const hidden = cssRules(panelCss()).find((r) => /\.readouts:is\(\[data-fit="bare"\], \[data-fit="small"\], \[data-fit="nochip"\]\) \.cell \.label/.test(r.selector));
+  check(hidden && /clip-path:\s*inset\(50%\)/.test(hidden.body) && !/display:\s*none/.test(hidden.body), `the captions out of sight, still read: ${hidden && hidden.body}`);
+  check(hidden && hidden.selector.includes('.readouts[data-fit="nochip"] .cell:has(> #temp)'), `last, the chip's temperature, the same way: ${hidden && hidden.selector}`);
+  const smaller = cssRules(panelCss()).find((r) => r.selector === '.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell output');
+  check(smaller && /font-size:\s*var\(--t-sm\);/.test(smaller.body), `then the values the smaller type: ${smaller && smaller.body}`);
+  check(!cssRules(panelCss()).some((r) => /\.readouts/.test(r.selector) && /#(move|phase)|\.cell:first-child|#phaseCell/.test(r.selector) && /display:\s*none|clip-path/.test(r.body)), "the move and the phase never hidden");
   const line = cssRules(outside(panelCss(), "@media")).find((r) => r.selector === ".readouts");
   check(line && /height:\s*var\(--readouts-h\);/.test(line.body) && /white-space:\s*nowrap;/.test(line.body), "one line, one height");
   const page = loadPage();
@@ -4526,16 +4628,14 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   const simBase = cssRules(outside(sim, "@media"));
   check(/container:\s*sim \/ size;/.test(rule(simBase, ".sim")) && /height:\s*100%;/.test(rule(simBase, ".sim")), `the view fills its slot, a size container: ${rule(simBase, ".sim")}`);
   check(/min-height:\s*0;/.test(rule(base, ".simSlot .sim")), `the pane's height, not the view's floor: ${rule(base, ".simSlot .sim")}`);
-  // Too short for the room, its place goes to the wheels and the motion,
-  // which stay; the bar too, until shorter still. Never a row of words
-  // under the room: they lie in its margins (sim.test.js).
-  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 119.98px) {") || [];
+  // Too short for the room, the room goes and the bar stays, with the
+  // wheels and the motion in it. Never a row of words under the room:
+  // they are in the bar's one row (sim.test.js).
+  const short = blockRules(outside(sim, "@media"), "@container sim (max-height: 99.98px) {") || [];
   const hidden = short.find((r) => /display:\s*none;/.test(r.body));
-  check(hidden && [".sim-map", ".sim-badge"].every((c) => hidden.selector.includes(c)), `short: the room and its tag go: ${hidden && hidden.selector}`);
-  check(!short.some((r) => /\.sim-(foot|inset|move|bar|stage)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "short: the wheels, the motion and the bar stay");
-  const shorter = blockRules(outside(sim, "@media"), "@container sim (max-height: 71.98px) {") || [];
-  const goes = (shorter.find((r) => /display:\s*none;/.test(r.body)) || { selector: "" }).selector;
-  check(goes.trim() === ".sim-bar", `shorter: the bar goes, the motion stays: ${goes}`);
+  check(hidden && hidden.selector.trim() === ".sim-stage", `short: the room goes: ${hidden && hidden.selector}`);
+  const heights = [...outside(sim, "@media").matchAll(/@container sim \(max-height: [\d.]+px\) \{/g)].flatMap((m) => blockRules(outside(sim, "@media"), m[0]) || []);
+  check(!heights.some((r) => /\.sim-(bar|status|inset|move)\b/.test(r.selector) && /display:\s*none/.test(r.body)), "however short, the bar, the wheels and the motion stay");
   check(page.errors.length === 0, `errors ${page.errors}`);
 });
 

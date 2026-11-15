@@ -665,9 +665,10 @@ input[type="range"]::-moz-range-thumb {
    --vcw and --vch what its card adds across and down. The scan's fan is
    420 x 200 (scan.js), in its card's padding over the readouts line; the
    room's shape is the simulator's (SimView sets --room-aspect here), under
-   its bar, with the room's margins (SimView.PAD) and the card's padding
-   and edge round it. A pane of another shape letterboxed the room, 60% of
-   it empty at 1024 x 768 (the critic's round 2). */
+   its bar's one row (32 px and a 4 px gap), with the walls' margin
+   (SimView.PAD, 3 px) and the card's padding and edge round it. A pane of
+   another shape letterboxed the room, 60% of it empty at 1024 x 768 (the
+   critic's round 2). */
 .shell {
   --va: 2.1;
   --vcw: 8px;
@@ -676,8 +677,8 @@ input[type="range"]::-moz-range-thumb {
 
 body[data-target="simulator"] .shell {
   --va: var(--room-aspect, 1.3333);
-  --vcw: 34px;
-  --vch: 102px;
+  --vcw: 24px;
+  --vch: 60px;
 }
 
 /* --- the top: two cells (F8) -------------------------------------------------- */
@@ -1274,12 +1275,22 @@ body[data-target="simulator"] .view > :is(.scan, .readouts) { display: none; }
 
 .fault strong {
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: var(--t-sm);
   line-height: var(--lh-tight);
   color: var(--warn);
 }
 
 .fault p { margin: var(--s-1) 0 0; }
+
+/* One line on every card: a narrow one (a phone's, 288 px) says the
+   first half alone, where the whole wrapped to two lines and took the
+   fan's height. The summary's title and the details say the rest. */
+@container scan (max-width: 329.98px) {
+  .faultMore { display: none; }
+}
 
 .fault[hidden] { display: none; }
 
@@ -1404,18 +1415,14 @@ body[data-link="connecting"] .connectGo {
   .connectCard { padding: var(--s-2); }
 }
 
-/* The fan draws at min(width / 420, height / 200) of its own size in the
-   card's room. Below about 7 px a label is a smudge, so the ring and
-   bearing names go first (under 0.68 of full size), then the readings
-   (under 0.45): the wedges alone still show, by colour and length, what
-   is close and on which side. Under 32 px they are a smudge too. */
-@container scan (max-width: 285.98px) or (max-height: 135.98px) {
-  .tick { display: none; }
-}
-
-@container scan (max-width: 188.98px) or (max-height: 89.98px) {
-  .reading { display: none; }
-}
+/* The fan draws at --scan-k screen pixels a unit (scan.js, which picks
+   the layout that draws it larger). Below about 7 px a label is a smudge,
+   so the bearings' names go first, with the legend (under 0.68 px a
+   unit), then the readings (under 0.45): the wedges alone still show, by
+   colour and length, what is close and on which side. scan.js says which
+   in data-labels. Under 32 px they are a smudge too. */
+#scan[data-labels="readings"] :is(.tick, .scanLegend),
+#scan[data-labels="none"] :is(.tick, .scanLegend, .reading) { display: none; }
 
 @container scan (max-height: 31.98px) {
   #scan { display: none; }
@@ -1458,29 +1465,34 @@ body[data-link="connecting"] .connectGo {
 }
 
 /* No text-anchor here: scan.js sets it per label, and a CSS rule would
-   override the attribute. */
+   override the attribute. Each at the drawing's own size, but never more
+   than 28 px (a reading) or 14 px (a bearing's name) on screen: the fan
+   grows to fill its pane, three times its size on a laptop, and its
+   labels need not. */
 .reading {
   font-family: var(--gauge);
-  font-size: var(--scan-reading);
+  font-size: min(var(--scan-reading), calc(28px / var(--scan-k, 1)));
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   fill: var(--readout);
 }
 
 .tick {
-  font-size: var(--scan-tick);
+  font-size: min(var(--scan-tick), calc(14px / var(--scan-k, 1)));
   font-weight: var(--fw-bold);
   letter-spacing: var(--track-label);
   fill: var(--dim);
 }
 
-/* The rings' legend under the fan, quiet: smaller than the bearings'
-   names and in the dim ink, its rings' dashes saying which is which. In
-   red and amber, at about 22 px on a wide screen, it outshouted the
-   readouts, and a red STOP word vied with Stop (the critic's round 2). */
-.tick.ringLabel {
-  font-size: calc(var(--scan-tick) * 0.75);
+/* The rings' legend, in the fan's corner (scan.js draws it in screen
+   pixels): the page's smallest type, in the dim ink, its rings' dashes
+   saying which is which. In red and amber, at about 22 px on a wide
+   screen, it outshouted the readouts, and a red STOP word vied with Stop
+   (the critic's round 2). */
+.ringLabel {
+  font-size: var(--t-xs);
   font-weight: var(--fw-semi);
+  letter-spacing: var(--track-label);
   fill: var(--dim);
 }
 
@@ -1494,9 +1506,9 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* The readouts: one line at the scan's foot, ending its card: the move,
    the chip's temperature, and the phase while the rover explores, each a
-   caption and its value. One height whatever it says: a value too long
-   for the line is cut short, never wrapped, and the phase comes and goes
-   at its end. */
+   caption and its value. One height whatever it says: never wrapped,
+   the line takes the steps below before any value is cut short, and the
+   phase comes and goes at its end. */
 .readouts {
   flex: none;
   display: flex;
@@ -1546,14 +1558,27 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 
 /* Where the line cannot hold every caption and value (app.js, fitSteps),
    the captions go before any value is cut short: out of sight, still
-   read out, and each cell titled with its own. */
-.readouts[data-fit="bare"] .cell .label {
+   read out, and each cell titled with its own. Then the values take the
+   smaller type, and last the chip's temperature goes the same way, so
+   the move and the phase are never cut, however long (ROTATE_COUNTERCLOCKWISE
+   beside SIDESTEP on a 320 px phone; the critic's round 1). */
+.readouts:is([data-fit="bare"], [data-fit="small"], [data-fit="nochip"]) .cell .label,
+.readouts[data-fit="nochip"] .cell:has(> #temp) {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+.readouts:is([data-fit="small"], [data-fit="nochip"]) {
+  gap: var(--s-2);
+  padding-inline: var(--s-3);
+}
+
+.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell output { font-size: var(--t-sm); }
+
+.readouts:is([data-fit="small"], [data-fit="nochip"]) .cell + .cell::before { margin-right: 2px; }
 
 #phase[data-tone="warn"] { color: var(--warn); }
 

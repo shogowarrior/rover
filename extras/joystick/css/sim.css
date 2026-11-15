@@ -1,9 +1,9 @@
 /* The simulator's view (js/simview.js). It fills #simSlot, the page's view
    pane on the simulator target, beside both tabs, which the shell's grid
-   sizes (css/panel.css): one row of controls, and the room under it taking
-   every pixel left. What the view says lies in the room's margins, a line
-   above the floor and a line below it, never over the floor. The rest (the
-   key, the drag, what "idealised" leaves out) folds into the settings.
+   sizes (css/panel.css): one row, the controls and what the rover is
+   doing, and the room under it taking every pixel left, nothing over the
+   floor. The rest (the key, the drag, what "idealised" leaves out) folds
+   into the settings.
 
    The palette is the look's (css/looks.css), the room's own colours (its
    grid, the rover's plate and deck) included: green for a clear way and a
@@ -30,7 +30,7 @@
   container: sim / size;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-1);
   width: 100%;
   height: 100%;
   /* The slot sets the height (panel.css); this is only a floor, should it
@@ -43,7 +43,8 @@
 /* --- controls --------------------------------------------------------- */
 
 /* One row, never two, of the panel's 32 px controls: the room, the
-   playback speed, pause and reset, and the settings at the far end. */
+   playback speed, pause and reset, what the rover is doing, and the
+   settings at the far end. */
 .sim-bar {
   display: flex;
   align-items: center;
@@ -87,17 +88,18 @@
 /* The settings at the bar's far end. */
 .sim-settings { margin-left: auto; }
 
-/* A bar too narrow for the room's list beside the rest (a phone upright,
-   the middle of one on its side) gives it to the settings, where the same
-   list waits: the speed, pause and reset stay one press. The list in the
-   settings shows only here. The widths are the bar's: the room's list at
-   its narrowest worth having (120 px) beside the speed (52), the three
-   tools (96) and the gaps (16), with a little to spare. */
+/* A bar too narrow for the room's list beside the rest (a phone, the
+   Program tab's view beside the editor) gives it to the settings, where
+   the same list waits: the speed, pause and reset stay one press, and what
+   the rover is doing keeps its room. The list in the settings shows only
+   here. The width is the bar's: the room's list (168 px), the speed (56),
+   the three tools (96), the gaps (20) and the padding (16), with the move,
+   its wheels and the clock (110) and a line about it beside them. */
 .sim-more .sim-room-row { display: none; }
 
 .sim-room-row .sim-room { grid-column: 1 / -1; }
 
-@container sim (max-width: 299.98px) {
+@container sim (max-width: 559.98px) {
   .sim-bar .sim-room { display: none; }
   .sim-more .sim-room-row { display: grid; }
 }
@@ -144,17 +146,169 @@
   stroke-linejoin: round;
 }
 
+/* --- what the rover is doing ----------------------------------------- */
+
+/* The bar's middle, one line: the wheels, the move and how fast, then (to
+   the right) the tag or the latest word from the preview, the scale and
+   the clock. How fast takes what the rest leave, cut short; the rest go
+   whole, or not at all, as the bar narrows (below). */
+.sim-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-inline: var(--s-1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sim-inset {
+  flex: none;
+  width: 18px;
+  height: 22px;
+}
+
+.sim-inset .sim-plate { stroke-width: 0.5; }
+.sim-inset .sim-wheel { stroke-width: 0.45; }
+
+.sim-arrow { fill: var(--case); }
+.sim-arrow[data-turn="back"] { transform: rotate(180deg); transform-box: fill-box; transform-origin: center; }
+.sim-arrow[data-turn="free"] { fill: none; }
+
+/* A pivot's name is long (PIVOT_SIDEWAYS_BACKWARD_RIGHT): on a phone it
+   is cut short rather than push the settings off the bar. */
+.sim-move {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  font-weight: var(--fw-semi);
+}
+
+.sim-move[data-stalled="yes"] { color: var(--stop-ink); }
+
+.sim-twist {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--t-xs);
+  color: var(--dim);
+}
+
+/* The tag, and the latest word from the preview in place of its second
+   half once there is one: a caption in the dim ink, not a warning, so
+   not amber. */
+.sim-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  overflow: hidden;
+  font-size: var(--t-xs);
+  color: var(--dim);
+}
+
+.sim-badge strong {
+  flex: none;
+  font-weight: var(--fw-bold);
+  color: var(--dim);
+}
+
+.sim-nosend,
+.sim-log {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-badge[data-said="yes"] .sim-nosend,
+.sim-log[data-empty="yes"] { display: none; }
+
+.sim-log { font-family: var(--mono); }
+
+.sim-log[data-tone="bump"] { color: var(--stop-ink); }
+
+.sim-scale {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--dim);
+}
+
+.sim-scale-bar {
+  display: block;
+  height: 5px;
+  border: 1px solid var(--dim);
+  border-top: none;
+}
+
+.sim-clock {
+  flex: none;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  font-weight: var(--fw-semi);
+  font-variant-numeric: tabular-nums;
+  color: var(--readout);
+}
+
+.sim-clock[data-paused="yes"] { color: var(--warn); }
+
+/* As the bar narrows, the line keeps the words that matter, the widest
+   and least needed going first: the tag's second half and the time of
+   the latest word, then the scale (a metre is 170 px of a laptop's room),
+   then the tag, then how fast (sooner where the speed's list is on the
+   bar: the Drive tab holds the playback, and the list leaves it), and on
+   the narrowest (the Program tab's view on a phone on its side) the
+   wheels and the clock, leaving the move. How fast goes whole: cut to
+   "stan..." it read as broken. */
+@container sim (max-width: 999.98px) {
+  .sim-log-at,
+  .sim-nosend { display: none; }
+}
+
+@container sim (max-width: 899.98px) {
+  .sim-scale { display: none; }
+}
+
+@container sim (max-width: 479.98px) {
+  .sim-badge strong { display: none; }
+}
+
+@container sim (max-width: 419.98px) {
+  .sim:not([data-held="yes"]) .sim-twist { display: none; }
+}
+
+@container sim (max-width: 319.98px) {
+  .sim-twist { display: none; }
+}
+
+@container sim (max-width: 259.98px) {
+  .sim-inset,
+  .sim-clock { display: none; }
+  .sim-status { padding-inline: 0; }
+}
+
 /* --- the room --------------------------------------------------------- */
 
-/* The room's stage: the card's own ground, unframed, so the room drawn in
-   it, walls and floor, is the frame. Wherever the pane's shape is not the
-   room's, the margin round the floor is the card, never a black band in a
-   frame of its own (the critic's round 2). */
+/* The room's stage: the scan card's dotted ground, unframed, so the room
+   drawn on it, walls and floor, is the frame. Wherever the pane's shape is
+   not the room's, the margin round the floor is ground, as round the
+   rover's scan, never a black band in a frame of its own (the critic's
+   round 2). */
 .sim-stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  background: radial-gradient(circle, var(--raised) 1px, transparent 1.5px) 0 0 / var(--s-5) var(--s-5);
 }
 
 .sim-map {
@@ -287,149 +441,12 @@
 .sim-rover[data-dragging] .sim-handle,
 .sim-rover[data-dragging] .sim-handle-line { opacity: 1; }
 
-/* The room's top margin (SimView.PAD.top): the tag, and the latest word
-   from the preview in place of its second half once there is one. One
-   line, cut short rather than wrapped. */
-.sim-badge {
-  position: absolute;
-  top: calc(3px + var(--floor-y, 0px));
-  left: var(--s-2);
-  right: var(--s-2);
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: var(--t-xs);
-  line-height: 14px;
-  color: var(--dim);
-  pointer-events: none;
-}
-
-/* The tag bold in the dim ink: a caption, not a warning, so not amber. */
-.sim-badge strong {
-  flex: none;
-  font-weight: var(--fw-bold);
-  color: var(--dim);
-}
-
-.sim-nosend,
-.sim-log {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sim-badge[data-said="yes"] .sim-nosend,
-.sim-log[data-empty="yes"] { display: none; }
-
-.sim-log { font-family: var(--mono); }
-
-.sim-log[data-tone="bump"] { color: var(--stop-ink); }
-
-/* The room's foot margin (SimView.PAD.bottom): the wheels now, the move
-   and how fast, then the scale and the clock at the right. One line. */
-.sim-foot {
-  position: absolute;
-  bottom: calc(2px + var(--floor-y, 0px));
-  left: var(--s-2);
-  right: var(--s-2);
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  height: 22px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.sim-inset {
-  flex: none;
-  width: 18px;
-  height: 22px;
-}
-
-.sim-inset .sim-plate { stroke-width: 0.5; }
-.sim-inset .sim-wheel { stroke-width: 0.45; }
-
-.sim-arrow { fill: var(--case); }
-.sim-arrow[data-turn="back"] { transform: rotate(180deg); transform-box: fill-box; transform-origin: center; }
-.sim-arrow[data-turn="free"] { fill: none; }
-
-.sim-move {
-  flex: none;
-  font-family: var(--mono);
-  font-size: var(--t-sm);
-  font-weight: var(--fw-semi);
-}
-
-.sim-move[data-stalled="yes"] { color: var(--stop-ink); }
-
-.sim-twist {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: var(--t-xs);
-  color: var(--dim);
-}
-
-.sim-scale {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--s-1);
-  font-family: var(--mono);
-  font-size: var(--t-xs);
-  color: var(--dim);
-}
-
-.sim-scale-bar {
-  display: block;
-  height: 5px;
-  border: 1px solid var(--dim);
-  border-top: none;
-}
-
-.sim-clock {
-  flex: none;
-  font-family: var(--mono);
-  font-size: var(--t-sm);
-  font-weight: var(--fw-semi);
-  font-variant-numeric: tabular-nums;
-  color: var(--readout);
-}
-
-.sim-clock[data-paused="yes"] { color: var(--warn); }
-
-/* A narrow view (a phone) keeps the words that matter: the message's own
-   time goes, then the tag's second half and the scale. */
-@container sim (max-width: 419.98px) {
-  .sim-log-at,
-  .sim-nosend { display: none; }
-}
-
-@container sim (max-width: 259.98px) {
-  .sim-scale { display: none; }
-}
-
 /* --- a view too short for the room ------------------------------------- */
 
 /* Where the room would be a strip (a short phone's band over the editor),
-   the view shows the wheels and the motion instead, in the room's place,
-   the wheels larger. Shorter still, the bar goes too: the motion alone. */
-@container sim (max-height: 119.98px) {
-  .sim-map,
-  .sim-badge { display: none; }
-
-  .sim-stage { display: flex; align-items: center; }
-
-  .sim-foot { position: static; flex: 1 1 auto; height: auto; padding-inline: var(--s-2); }
-
-  .sim-inset { width: 26px; height: 32px; }
-}
-
-@container sim (max-height: 71.98px) {
-  .sim-bar { display: none; }
+   it goes: the bar stays, with the wheels and the motion in it. */
+@container sim (max-height: 99.98px) {
+  .sim-stage { display: none; }
 }
 
 /* --- the key, and the folded panel ------------------------------------ */

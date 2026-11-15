@@ -688,12 +688,13 @@ if (typeof MutationObserver === "function") new MutationObserver(fitTheTop).obse
 fitTheTop();
 
 // The readouts' line the same way: its captions go before a value is cut
-// short (each cell titled with its caption), as each frame changes what it
-// says. One line, one height, whatever it holds.
+// short (each cell titled with its caption), then its values take the
+// smaller type, then the chip's temperature goes, as each frame changes
+// what it says. One line, one height, whatever it holds.
 const readoutsLine = document.querySelector(".readouts");
 // Its values shrink to fit, cut short: the line overflows where one is.
 const cutShort = (line) => [...line.querySelectorAll("output")].some((value) => value.scrollWidth > value.clientWidth);
-const fitReadouts = () => fitSteps(readoutsLine, ["words", "bare"], cutShort);
+const fitReadouts = () => fitSteps(readoutsLine, ["words", "bare", "small", "nochip"], cutShort);
 if (typeof ResizeObserver === "function") new ResizeObserver(fitReadouts).observe(readoutsLine);
 if (typeof MutationObserver === "function") {
   new MutationObserver(fitReadouts).observe(readoutsLine, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });

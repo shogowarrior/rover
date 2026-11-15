@@ -219,11 +219,12 @@
         <!-- One line at the top of the scan's card, the rest a press away:
              four lines of it took the scan's height on a phone. It takes its
              height from the fan, inside the card, never a bar of its own
-             over it (the critic's round 2). Where no scan shows (the
-             simulator target, the view folded on the Program tab), the link
-             chip says "No motors" in its place (app.js). -->
+             over it (the critic's round 2). A narrow card says the first
+             half alone (panel.css), never two lines. Where no scan shows
+             (the simulator target, the view folded on the Program tab), the
+             link chip says "No motors" in its place (app.js). -->
         <details class="fault" id="motorsFault" role="alert" data-ready="unknown" hidden>
-          <summary title="What to do"><strong>No motor shield: the wheels can't move</strong></summary>
+          <summary title="No motor shield: the wheels can't move. What to do"><strong>No motor shield<span class="faultMore">: the wheels can't move</span></strong></summary>
           <p>It did not answer when the rover booted. Check its I2C wiring and
           power, then reset the rover with its wheels off the ground: after a
           power-on or the EN button it starts exploring.</p>
