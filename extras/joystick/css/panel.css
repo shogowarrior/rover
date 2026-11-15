@@ -1005,7 +1005,6 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
    ones elsewhere (below). The rover's alert in the state's place while
    there is one (app.js). */
 .chipShort,
-.chipHost,
 .linkChip:not([data-alert=""]) .chipSay,
 .linkChip[data-alert=""] .chipAlert { display: none; }
 
@@ -1042,11 +1041,20 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
    link's short words ("short"); every control closer to its words
    ("snug"); the link's short words at 12 px ("small"); and the chip's lamp
    and caret alone ("lamp"), its title saying the rest. The second: every
-   word; the segments closer to their words ("tight"); 12 px words
-   ("small"); and only where nothing else fits (a 320 px phone), Adv
-   ("short"). Stop stays 16 px from the scheme, and the gear square. */
-.drives[data-fit="host"] .chipHost {
-  display: inline;
+   word; the segments closer to their words ("tight"), and closer still
+   ("snug"), at 13 px both, so a 375 px phone and one on its side keep the
+   first cell's size of word; 12 px words ("small"); and only where nothing
+   else fits (a 320 px phone), Adv ("short"). Stop stays 16 px from the
+   scheme, and the gear square. */
+
+/* The address (Link's --host, a CSS string) 8 px after whichever word the
+   chip shows, in its sizer too: so the chip is as wide with it whatever it
+   says, and the space a shorter word leaves falls before the caret, not
+   between the word and the address (the critic's round 1: "Connected", a
+   gap, then the address). One font, the address quieter. */
+.drives[data-fit="host"] :is(.chipSay, .chipAlert, .chipSizer.chipLong)::after {
+  content: var(--host, "");
+  margin-left: var(--s-2);
   font-weight: var(--fw-medium);
   color: var(--dim);
 }
@@ -1061,7 +1069,7 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 }
 
 .drives:is([data-fit="snug"], [data-fit="small"], [data-fit="lamp"]) {
-  --seg-x: 7px;
+  --seg-x: 6px;
   gap: 4px;
 }
 
@@ -1079,13 +1087,18 @@ body:not([data-target="simulator"]):not([data-link="up"]) #auto[aria-pressed="tr
 
 .drives[data-fit="lamp"] .chipWord { display: none; }
 
-.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) {
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"]) {
   --seg-x: 7px;
   --tab-x: 5px;
   gap: 4px;
 }
 
-.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="small"]) #stop { margin-left: 12px; }
+.hands:is([data-fit="short"], [data-fit="tight"], [data-fit="snug"], [data-fit="small"]) #stop { margin-left: 12px; }
+
+.hands[data-fit="snug"] {
+  --seg-x: 5px;
+  --tab-x: 3px;
+}
 
 .hands:is([data-fit="short"], [data-fit="small"]) {
   --seg-x: 6px;
@@ -1935,11 +1948,12 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
 /* Every layout but the side-by-side one (the media query below, negated):
    the top stuck over a page that may scroll. */
 @media (max-width: 959.98px), (max-height: 520.98px) {
-  /* The top 8 px from the screen's edge (or the notch's inset), and 8 px
-     over the view: 102 px in all, where 12 and 12 made it 110 on a tall
-     phone (the critic's round 1). The sticks' budgets keep counting 12
-     above, so the 4 px saved go to the view, and no stick moves. */
-  .shell { --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
+  /* The top 6 px from the screen's edge (or the notch's inset), as the two
+     cells are apart, and 8 px over the view: the cells' foot 92 px down,
+     where 12 above made it 98, and 110 with 12 under (the critic's round
+     1). The sticks' budgets keep counting 12 above, so the 6 px saved go
+     to the view, and no stick moves. */
+  .shell { --shell-top: calc(6px + env(safe-area-inset-top, 0px)); }
 
   .bar { padding-bottom: var(--s-2); }
 
@@ -1999,7 +2013,7 @@ body:not([data-link="up"]) .reading { fill: var(--dim); }
     --stick: clamp(112px, min(var(--stick-w), 60 * var(--svh) - 224px - env(safe-area-inset-bottom, 0px)), 240px);
   }
 
-  .shell { --shell-top: calc(var(--s-2) + env(safe-area-inset-top, 0px)); }
+  .shell { --shell-top: calc(6px + env(safe-area-inset-top, 0px)); }
 
   /* The scan gives way to the dock down to nothing: with its padding it
      could not, and a row opening above the dock moved the stick (360 x 560,
