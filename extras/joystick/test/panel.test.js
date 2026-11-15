@@ -872,12 +872,16 @@ test("Stop always sends STOP; the Autonomous toggle sends RESUME when off and ST
 // A press of Autonomous on the rover is a request only a frame confirms,
 // up to half a second later: a second press meanwhile, to undo the first,
 // went by the old report and sent RESUME_AUTONOMOUS again, leaving the
-// rover exploring (the reviewers' round 2). Pending, it goes the other way
-// from what was asked: the safe direction.
-test("Autonomous: a press waits, marked, for a frame, and a second press before one undoes it: STOP last", () => {
+// rover exploring (the reviewers' round 2); from on, going the other way
+// from the request did the same (round 3). A press while one is pending
+// sends STOP, whichever way it went: the safe direction.
+test("Autonomous: a press waits, marked, for a frame, and a press while one waits sends STOP: two quick presses end stopped, from off or on", () => {
   const { page, ws } = connected(telemetry({ mode: "MANUAL" }));
   const auto = page.$("auto");
   const pressed = () => auto.getAttribute("aria-pressed");
+  const tTwice = () => {
+    for (const type of ["keydown", "keyup", "keydown", "keyup"]) page.fire(page.doc.body, type, { key: "t", repeat: false });
+  };
   let mark = count(ws);
   page.fire(auto, "click");
   check(names(ws, mark).join() === "RESUME_AUTONOMOUS", `the first press: ${names(ws, mark)}`);
@@ -892,23 +896,35 @@ test("Autonomous: a press waits, marked, for a frame, and a second press before 
 
   // T the same: twice before a frame ends on STOP.
   mark = count(ws);
-  for (const type of ["keydown", "keyup", "keydown", "keyup"]) page.fire(page.doc.body, type, { key: "t", repeat: false });
+  tTwice();
   check(names(ws, mark).join() === "RESUME_AUTONOMOUS,STOP", `T twice: ${names(ws, mark)}`);
+  ws.serverMsg(telemetry({ mode: "MANUAL" }));
+  check(auto.dataset.pending === undefined, `settled again: ${auto.dataset.pending}`);
 
-  // Pending on, a frame reports it: lit, the mark gone; a press then stops.
+  // Pending on, a frame reports it: lit, the mark gone.
   page.fire(auto, "click");
   ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
   check(auto.dataset.pending === undefined && pressed() === "true", `confirmed: ${auto.dataset.pending} ${pressed()}`);
-  // A request the rover never takes is given up after CONFIRM_FRAMES
-  // frames that do not report it, never shown as applied meanwhile.
+  // From on, two quick presses end with STOP too, never RESUME_AUTONOMOUS:
+  // the knob stays on until a frame comes, so an Off press that seems not
+  // to have taken is pressed again (the reviewers' round 3).
   mark = count(ws);
   page.fire(auto, "click");
-  check(names(ws, mark).join() === "STOP" && auto.dataset.pending === "off", `on: STOP, pending off: ${names(ws, mark)}`);
+  page.clock.advance(150);
+  page.fire(auto, "click");
+  check(names(ws, mark).join() === "STOP,STOP", `from on, twice: ${names(ws, mark)}`);
+  check(auto.dataset.pending === "off" && pressed() === "true", `pending off, still on as reported: ${auto.dataset.pending} ${pressed()}`);
+  // A request the rover never takes is given up after CONFIRM_FRAMES
+  // frames that do not report it, never shown as applied meanwhile.
   const frames = page.evalIn("AutoToggle.CONFIRM_FRAMES");
   for (let i = 1; i <= frames; i++) {
     ws.serverMsg(telemetry({ mode: "AUTONOMOUS" }));
     check(pressed() === "true" && (i < frames ? auto.dataset.pending === "off" : auto.dataset.pending === undefined), `frame ${i} of ${frames}: ${pressed()} ${auto.dataset.pending}`);
   }
+  // T twice from on, nothing pending: STOP and STOP.
+  mark = count(ws);
+  tTwice();
+  check(names(ws, mark).join() === "STOP,STOP" && auto.dataset.pending === "off", `T twice from on: ${names(ws, mark)} ${auto.dataset.pending}`);
   // Any other press supersedes a request: Stop after it, then the switch
   // goes by the report again.
   ws.serverMsg(telemetry({ mode: "MANUAL" }));

@@ -352,9 +352,10 @@ layout F3 to F3j built:
   MANUAL; on the simulator target a line at the top of the view says it
   too;
 - a press of Autonomous on the rover is marked, its track dashed, until a
-  frame reports the mode asked for; a second press before then undoes it,
-  ending with STOP; and with no link a press opens the link's popover and
-  says why;
+  frame reports the mode asked for; a press while one is pending sends
+  STOP, so two quick presses always end stopped, from off or from on, and
+  off and on again to retry a halted rover waits for the switch to show
+  off; and with no link a press opens the link's popover and says why;
 - Normal | Advanced is never greyed out for want of a link: a press before
   the rover reports a scheme is a wish, said in words on the card and in
   the popover, sent as soon as the rover reports one (and only while the
@@ -487,12 +488,13 @@ and the next thread's task names that branch.
   and the gear, 32 px tall with touch targets reaching 44 px); the connect
   card's buttons by touch at first load; the scheme wish with the rover
   (press Advanced before connecting, then connect); Autonomous with the
-  rover (its dashed track until the rover reports, two quick presses
-  leaving it stopped, and a press with no link opening the link's
-  popover); Stop by touch and by Space with a popover open; "Rover
-  exploring" on the simulator target, in the chip and the view's line,
-  dashed once the rover's link is cut and kept through a Stop until the
-  rover reports MANUAL; the chip's glyphs told apart by shape on a phone;
+  rover (its dashed track until the rover reports; two quick presses
+  leaving it stopped, tried from off and again from on with the rover
+  exploring; a press with no link opening the link's popover); Stop by
+  touch and by Space with a popover open; "Rover exploring" on the
+  simulator target, in the chip and the view's line, dashed once the
+  rover's link is cut and kept through a Stop until the rover reports
+  MANUAL; the chip's glyphs told apart by shape on a phone;
   the grey pivot stick reading as off under NORMAL; on a phone on its
   side, the Program tab's toolbar in the bands and Stop in the same place
   on both tabs; a laptop's Program tab with the console under the view; a

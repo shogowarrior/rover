@@ -1297,7 +1297,8 @@ other way: pressed while off it sends RESUME_AUTONOMOUS, pressed while on
 STOP, each a press as before, and a program it stops says Autonomous was
 pressed, not Stop. T presses it too. Until a frame names the mode it is off, so a
 press resumes, as the button did. A halted rover still reports
-AUTONOMOUS: off and on again retries it at once.
+AUTONOMOUS: off and on again retries it at once, the second press once the
+switch shows off.
 
 On a phone the header and the foot bar are as they were, words and all,
 but for the mode pill in the motors pill's place on the simulator target
@@ -1871,11 +1872,14 @@ panel", says how each part works; this says what changed and why.
 - **Autonomous waits for the rover.** A press on the rover is a request:
   the switch shows only what telemetry reports, its track dashed while the
   request waits, until a frame reports the mode asked for or three have
-  not. A second press before then goes the other way from the request, so
-  a quick undo ends with STOP; any other press of the operator's, a new
-  link or a lost one forgets the request. With no link a press sends
-  nothing, opens the link's popover and says there that Autonomous needs
-  the rover connected: a switch that did nothing read as broken.
+  not. A press while a request is pending sends STOP, so two quick
+  presses always end stopped, from off or from on, and off and on again
+  to retry a halted rover waits for the switch to show off; only a press
+  with nothing pending goes by the report. Any other press of the
+  operator's, a new link or a lost one forgets the request. With no link
+  a press sends nothing, opens the link's popover and says there that
+  Autonomous needs the rover connected: a switch that did nothing read as
+  broken.
 - **The view pane**, one element beside both tabs. On the rover target
   the scan's card: the rings' legend ("25 cm stop · 40 cm go · 100 cm",
   12 px) a row of its own in its top-left corner, the motor fault in that
@@ -2067,8 +2071,9 @@ buttons, the firmware's status line, and, from the merge, nothing on a
 phone on its side laying the cells out by tab. The second review's fixes
 added: the connect card on its own layer, naming its address, its verb
 alone where that would be cut, and its compact row only under 170 px;
-Autonomous's pending press, a quick undo ending with STOP, and a press
-with no link; "Rover exploring" kept through a Stop until a frame reports
+Autonomous's pending press, a press while one is pending sending STOP
+(so two quick presses end stopped, from off or on), and a press with no
+link; "Rover exploring" kept through a Stop until a frame reports
 MANUAL, and the view's line saying it; both cells' steps, a cell's last
 control inside its box, and the second cell's controls held to its far
 end; the pivot stick's line under a wish; the wide Program tab's grid; the
@@ -2099,8 +2104,9 @@ stacked dock column. Panel tests 346/346.
   an iPad, at first load: under the faint fan's layer they once took no
   press;
 - Autonomous with the rover: a press dashes its track until the rover
-  reports the mode, two quick presses leave the rover stopped, and with no
-  link a press opens the link's popover and says why;
+  reports the mode, two quick presses leave the rover stopped, tried from
+  off and again from on with the rover exploring, and with no link a
+  press opens the link's popover and says why;
 - on a phone, the chip's glyphs told apart by shape (the rover side on, No
   motors, Rover exploring) without hovering;
 - a laptop's Program tab: the view's column about half the width, the

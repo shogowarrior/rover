@@ -26,8 +26,9 @@
  * the mode last reported, dimmed (panel.css).
  *
  * A rover that halted (boxed in, or its sensor silent) still reports
- * AUTONOMOUS and retries by itself every 5 s; turned off and on again, it
- * retries at once, from a fresh sweep.
+ * AUTONOMOUS and retries by itself every 5 s; turned off, and on again once
+ * the switch shows off (a frame, up to half a second), it retries at once,
+ * from a fresh sweep.
  *
  * A press on the rover is a request, which only a frame confirms, and the
  * switch shows nothing new until one does: up to half a second, more over
@@ -35,12 +36,17 @@
  * asked for, pending, and marks the switch so (data-pending, "on" or
  * "off", which panel.css draws as a dashed track), aria-pressed still the
  * rover's word, until a frame reports that mode or CONFIRM_FRAMES frames
- * have not. A press while one is pending goes the other way from what was
- * asked, not from what was last reported: a second press to undo a first
- * sends STOP after RESUME_AUTONOMOUS, never RESUME_AUTONOMOUS twice (the
- * reviewers' round 2: a quick press again to undo it left the rover
- * exploring). A stale link keeps the request pending, since no frame comes
- * to settle it; a link that goes, or a new one, forgets it, and so does
+ * have not. A press while one is pending sends STOP, whichever way that
+ * request went: only a press with nothing pending takes its direction from
+ * the report, so RESUME_AUTONOMOUS goes out only from a switch that shows
+ * off with nothing pending, and two quick presses always end with STOP,
+ * from off (RESUME_AUTONOMOUS, STOP) or from on (STOP, STOP). The
+ * reviewers' rounds 2 and 3: a quick press again to undo the first left
+ * the rover exploring, from off when it went by the report, and from on
+ * when it went the other way from the request (the knob does not move
+ * until a frame comes, so an Off press that seems not to have taken is
+ * pressed again). A stale link keeps the request pending, since no frame
+ * comes to settle it; a link that goes, or a new one, forgets it, and so does
  * any other press of the operator's (the Driver's onManualInput: Stop, a
  * stick, a rotate button or a drive key), whose command was the rover's
  * last word: T after Stop resumes, as the switch, off, says it will. The
@@ -139,7 +145,8 @@ class AutoToggle {
 
   // Rendered again at once for the simulator, whose mode changes as it
   // takes the command; the rover's comes with its next frame, and until
-  // then the request is pending. From a pending request, the other way.
+  // then the request is pending. With one pending, STOP, whichever way it
+  // went: never RESUME_AUTONOMOUS from a switch not confirmed off.
   #press() {
     if (this.#local) {
       if (this.on) this.#driver.stopRover({ reason: "autonomous" });
@@ -152,7 +159,7 @@ class AutoToggle {
       this.#unlinked();
       return;
     }
-    const asked = (this.#pending || this.#reported) === MODE_AUTONOMOUS ? MODE_MANUAL : MODE_AUTONOMOUS;
+    const asked = this.#pending !== null || this.#reported === MODE_AUTONOMOUS ? MODE_MANUAL : MODE_AUTONOMOUS;
     if (asked === MODE_MANUAL) this.#driver.stopRover({ reason: "autonomous" });
     else this.#driver.resumeAutonomous();
     this.#pending = asked;

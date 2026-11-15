@@ -778,12 +778,13 @@ firmwareUpdate.onStart(() => {
 // (the reviewers' round 2: an iPad upright has, where a 1280 px screen was
 // asked). Neither cell's height can change: a cell is one line whatever it
 // says. The alerts' words go after every other word but the link's, Sim
-// and Auto and the rover's glyph for "Rover:" first; the second cell keeps
-// its 13 px words and Advanced whole down to a 375 px phone ("snug"), its
-// 12 px words and Advanced down to a 320 px phone ("tiny"), and gives up
-// Advanced only past that: at 12 px on a 375 px phone and on a phone on
-// its side, its words were a size under the first cell's (the critic's
-// round 1).
+// and Auto and the rover's glyph for "Rover:" first. The second cell's
+// steps: every word ("words"); its segments closer together and closer
+// still ("tight", "snug"), keeping its 13 px words and Advanced whole down
+// to a 375 px phone; 12 px words ("small"); and Adv for Advanced only on a
+// 320 px phone ("short"), where Advanced whole is 15 px short. At 12 px
+// on a 375 px phone and on a phone on its side, its words were a size
+// under the first cell's (the critic's round 1).
 const cellsRow = document.querySelector(".cells");
 const firstCell = document.querySelector(".hcell.drives");
 const secondCell = document.querySelector(".hcell.hands");

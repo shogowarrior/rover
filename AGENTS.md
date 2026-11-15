@@ -454,11 +454,11 @@ beside the gear. Autonomous and Stop are in different cells so that a
 press that misses Stop cannot start the rover exploring, and Autonomous
 sits near its cell's start, so that where the cells stack it is never
 over Stop (48 px from it at the least, at 320 x 568 and 568 x 320); the
-gear, Stop's one neighbour, only opens Options. Every switch is the same
-segmented control, words only, the chosen segment inverted. Each cell is
-one line of controls and says as much as its width allows: `fitTheTop()`
-in `js/app.js` measures its `data-fit` steps from the most words to the
-fewest. The first cell: the chip's address after its word, wherever the
+gear, Stop's one neighbour, only opens Options. Every switch but
+Autonomous (a track and knob) is the same segmented control, words only,
+the chosen segment inverted. Each cell is one line of controls and says as
+much as its width allows: `fitTheTop()` in `js/app.js` measures its
+`data-fit` steps from the most words to the fewest. The first cell: the chip's address after its word, wherever the
 cell has room for it, measured (`host`); every word; Sim and Auto
 (`short`); its controls closer together (`snug`); the rover's glyph for
 "Rover:" (`rover`); else "Rover:" kept and the alerts' glyphs for their
@@ -760,20 +760,22 @@ press that lets go of everything held and stops a program. On the rover a
 press is a request, which only a frame confirms: it is marked pending
 (`data-pending`, a dashed `--live` track) while `aria-pressed` stays what
 telemetry reports, until a frame reports that mode or
-`AutoToggle.CONFIRM_FRAMES` (3) frames have not. A press while one is
-pending goes the other way from the request, not from the last report, so
-a quick press to undo one ends with STOP, never RESUME_AUTONOMOUS twice;
-T, which presses the switch, does the same. Any other press of the
-operator's (Stop, a stick, a rotate button, a drive key, through
-`Driver.onManualInput()`), a new link or a lost one forgets the request; a
-stale link keeps it, since no frame comes to settle it. The simulator
+`AutoToggle.CONFIRM_FRAMES` (3) frames have not. A press while a request
+is pending sends STOP, whichever way the request went, so two quick
+presses always end stopped, from off or from on; only a press with
+nothing pending goes by the report. T, which presses the switch, does the
+same. Any other press of the operator's (Stop, a stick, a rotate button, a
+drive key, through `Driver.onManualInput()`), a new link or a lost one
+forgets the request; a stale link keeps it, since no frame comes to settle
+it. The simulator
 takes the mode at once, with nothing pending. Until a frame names the mode
 the switch is off: with a link a press resumes, as the button it replaced
 did; with none (down or connecting) a press sends nothing, opens the
 link's popover and says there why ("Autonomous needs the rover connected:
 connect, then press it again."), and the switch's title says a press needs
 the link. A halted rover still reports AUTONOMOUS, so off and on again
-retries it at once.
+retries it at once, the second press once the switch shows off (a frame,
+up to half a second): pressed before then, it is a STOP.
 
 **The target switch**, Rover | Simulator, first in the top's first cell on
 every layout and both tabs, is a `TargetSwitch` (`js/targetswitch.js`) for
