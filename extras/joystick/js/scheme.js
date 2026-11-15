@@ -12,7 +12,8 @@
  *     link that went) neither segment is pressed, and both take a press:
  *     never greyed for want of a link, which the owner read as broken (F8).
  *     A press there is a wish: that segment is marked pending and titled
- *     so, and nothing is sent. When a frame next names a scheme, a wish for
+ *     so, its notes say it in words (a touch screen shows no title), and
+ *     nothing is sent. When a frame next names a scheme, a wish for
  *     the other one sends one {"scheme": NAME}, pending as below, and the
  *     wish is gone either way. A press on the other segment replaces the
  *     wish, a press on the wished one drops it. Firmware from before schemes
@@ -36,13 +37,18 @@
  * once by a choice, with nothing to confirm and nothing sent over the Link.
  * So Normal | Advanced work with no rover. The rover's reports are kept
  * meanwhile, and a wish for it with them, and shown again when the toggle
- * is unbound.
+ * is unbound. Nothing goes to the rover while bound, a wish included: it
+ * waits, unseen, and is settled as the toggle is unbound if the rover has
+ * named a scheme by then, or by the next frame that names one.
  *
- *   new SchemeToggle({ link, group, choice })
+ *   new SchemeToggle({ link, group, choice, notes })
  *     link     a Link, to send the scheme message;
  *     group    the toggle's container, which gets data-state = "unknown",
  *              "known", "pending" or "stale" for the page's CSS;
- *     choice   the empty element the two segments are built in.
+ *     choice   the empty element the two segments are built in;
+ *     notes    elements that say a wish in words while there is one, and
+ *              are hidden while there is none: the link's popover, and the
+ *              connect card over the rover's scan (optional).
  *
  *   show(data)    update from the rover's telemetry.
  *   linkStale()   telemetry has stopped, though the socket is open.
@@ -76,21 +82,30 @@ class SchemeToggle {
   static SHORT = Object.freeze({ [SCHEME_ADVANCED]: "Adv" });
   static UNKNOWN_TITLE = "The rover has not reported its control scheme: a choice is sent to it as soon as it does.";
   static WISH_TITLE = "Sent to the rover as soon as it reports its scheme (firmware from before schemes never does). Press again to drop it.";
+  // A wish in words, where the page shows it: before a link has brought
+  // a frame, and after (firmware that names no scheme).
+  static WISH_NOTE = Object.freeze({
+    waiting: (label) => `${label} goes to the rover once it connects.`,
+    heard: (label) => `${label} goes to the rover once it reports its scheme.`,
+  });
 
   #link;
   #group;
+  #notes;
   #buttons = new Map(); // scheme -> its segment
   #reported = null; // the rover's, as telemetry last reported it, or null
   #local = null; // what bind() gave: shown and set instead, or null
   #stale = false; // telemetry has stopped since it was reported
   #pending = null; // the scheme asked for and not yet reported, or null
   #wanted = null; // the scheme wished for while the rover's is unknown, or null
+  #heard = false; // a frame has come over the link since it was last down
   #pendingTimer = null;
   #listeners = new Listeners();
 
-  constructor({ link, group, choice }) {
+  constructor({ link, group, choice, notes = [] }) {
     this.#link = link;
     this.#group = group;
+    this.#notes = notes.filter(Boolean);
     for (const { scheme, label } of SchemeToggle.OPTIONS) {
       const button = labelSegment(segment(choice, () => this.#choose(scheme)), {
         word: label, short: SchemeToggle.SHORT[scheme] || null, hint: SchemeToggle.HINTS[scheme],
@@ -121,11 +136,10 @@ class SchemeToggle {
   show(data) {
     const reported = SchemeToggle.OPTIONS.some((option) => option.scheme === data.scheme) ? data.scheme : null;
     this.#stale = false;
+    this.#heard = true;
     if (reported === null || reported === this.#pending) this.#settle();
-    const wanted = reported === null ? null : this.#wanted;
-    if (wanted !== null) this.#wanted = null;
     this.#set(reported);
-    if (wanted !== null && wanted !== reported) this.#request(wanted);
+    this.#spendWish();
   }
 
   // Stale is not lost: the scheme stays shown, for the stick still drives
@@ -138,6 +152,7 @@ class SchemeToggle {
 
   linkDown() {
     this.#stale = false;
+    this.#heard = false;
     this.#settle();
     this.#set(null);
   }
@@ -149,6 +164,7 @@ class SchemeToggle {
     this.#local = local;
     this.#render();
     if (this.scheme !== previous) this.#listeners.emit(this.scheme, previous);
+    this.#spendWish();
   }
 
   // A click on the scheme already shown, confirmed or pending, sends nothing.
@@ -185,6 +201,21 @@ class SchemeToggle {
     clearTimeout(this.#pendingTimer);
     this.#pending = scheme;
     this.#pendingTimer = setTimeout(() => this.#settle(), SchemeToggle.CONFIRM_MS);
+    this.#render();
+  }
+
+  // A wish is settled once the rover has named a scheme, and only while the
+  // toggle shows the rover's: bound to the simulator nothing goes to the
+  // rover but Stop (targetswitch.js), so a frame then leaves the wish
+  // waiting, unseen, and unbinding settles it (the reviewer's round 1: a
+  // wish went to the rover from the simulator target, where nobody saw it).
+  // A stale link waits for the next frame, as a press would. A wish for the
+  // scheme the rover reports goes nowhere; one for the other is a request.
+  #spendWish() {
+    const wanted = this.#wanted;
+    if (this.#local || wanted === null || this.#reported === null || this.#stale) return;
+    this.#wanted = null;
+    if (wanted !== this.#reported) this.#request(wanted);
     this.#render();
   }
 
@@ -235,6 +266,15 @@ class SchemeToggle {
       button.disabled = stale;
       if (option === pending || option === wish) button.dataset.pending = "yes";
       else delete button.dataset.pending;
+    }
+    // The wish in words, as well as in its segment's title, which a touch
+    // screen never shows (the reviewer's round 1, on an iPad: a dashed
+    // segment that said nothing).
+    const label = wish && SchemeToggle.OPTIONS.find((option) => option.scheme === wish).label;
+    const note = label ? SchemeToggle.WISH_NOTE[this.#heard ? "heard" : "waiting"](label) : "";
+    for (const element of this.#notes) {
+      element.textContent = note;
+      element.hidden = !note;
     }
   }
 }

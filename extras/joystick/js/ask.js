@@ -6,13 +6,15 @@
  *     dialog  the <dialog>, outside the tabs, so no hidden tab can hide it
  *             while it is open.
  *     text    where the question goes.
- *     yes     the button that agrees: each question names its action on it.
+ *     yes     the button that agrees: each question names its action on it,
+ *             and its title says what it answers.
  *     no      Cancel, which has the focus as the dialog opens, so a
- *             reflexive Enter does nothing.
+ *             reflexive Enter does nothing. Titled NO_TITLE.
  *
  *   ask({ title, text, yes })
  *            show the question: title is the dialog's accessible name, text
- *            the question, yes the agreeing button's label. A promise of
+ *            the question, yes the agreeing button's label, which its title
+ *            (yesTitle) repeats with the question it answers. A promise of
  *            true when that button is pressed; Cancel, Escape, or anything
  *            else that closes the dialog, is false. While a question is
  *            waiting, another is false at once: one question at a time.
@@ -25,6 +27,14 @@
  * so a question asked there was answered no before anyone read it.
  */
 class AskDialog {
+  // Every button on the page says on hover what it does (F8, the owner's
+  // ask): these two answered in words alone, untitled (the reviewer's
+  // round 1).
+  static NO_TITLE = "Cancel (Escape): answer no, and nothing changes.";
+  static yesTitle = (yes, title) => `${yes}: answer yes to “${title}”`;
+  // Before the first question, which names it.
+  static YES_TITLE = "Answer yes to the question.";
+
   #dialog;
   #text;
   #yes;
@@ -33,6 +43,8 @@ class AskDialog {
     this.#dialog = dialog;
     this.#text = text;
     this.#yes = yes;
+    no.title = AskDialog.NO_TITLE;
+    yes.title = AskDialog.YES_TITLE;
     yes.addEventListener("click", () => dialog.close("yes"));
     no.addEventListener("click", () => dialog.close("no"));
   }
@@ -49,6 +61,7 @@ class AskDialog {
     dialog.setAttribute("aria-label", title);
     this.#text.textContent = text;
     this.#yes.textContent = yes;
+    this.#yes.title = AskDialog.yesTitle(yes, title);
     dialog.returnValue = "";
     return new Promise((resolve) => {
       const answered = () => {

@@ -123,6 +123,9 @@
             </div>
             <!-- How to connect, and why the link went. -->
             <p id="note" aria-live="polite"></p>
+            <!-- A scheme pressed before the rover reported one, in words
+                 (scheme.js): sent as it does. -->
+            <p class="schemeWish" id="linkWish" hidden></p>
           </div>
         </div>
 
@@ -256,6 +259,9 @@
              popover with the focus in the address (app.js). -->
         <div class="connectCard" role="group" aria-labelledby="connectTitle">
           <p class="connectTitle" id="connectTitle">Not connected</p>
+          <!-- A scheme pressed meanwhile, in words (scheme.js): sent once
+               the rover connects. -->
+          <p class="schemeWish" id="connectWish" hidden></p>
           <button type="button" class="connectGo" id="connectGo">Connect</button>
           <button type="button" class="connectAddress" id="changeAddress"
                   title="Change address: open the link's popover, with the rover's address ready to type.">Change address</button>
