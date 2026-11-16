@@ -78,9 +78,13 @@ instead.
    If nothing matches, the board is not plugged in or the CH340/CP210x driver
    is missing. Report that rather than guessing at a port.
 
-   A USB upload ends by resetting the board through its EN pin, and the ESP32
-   reports an EN reset as a power-on, so the rover **starts exploring the
-   moment the upload finishes**, with the cable still attached. Stop here and
+   A USB upload ends by resetting the board through its EN pin. Every boot
+   comes up in manual and `DriveTrain::begin()` releases the wheels, but the
+   shield keeps driving them through the reset itself (about half a second,
+   and for good if the new firmware never boots that far), and checks at
+   boot may follow. A build with `AUTONOMOUS_AT_POWER_ON` on would also
+   **start exploring the moment the upload finishes**, since the ESP32
+   reports an EN reset as a power-on. Stop here and
    ask the operator to confirm that the rover is on a stand with its wheels
    clear of the bench, or that the motor supply is switched off. **Do not
    upload until they reply that it is.** Warning them in the same turn as the
@@ -105,7 +109,8 @@ instead.
    ~/.platformio/penv/bin/pio device monitor -e car_wire
    ```
    Opening the port can reset the board through EN just as an upload does,
-   and that reset starts it exploring. Unless the operator has already
+   and the wheels run on through that reset until the firmware releases
+   them. Unless the operator has already
    confirmed, for this session, that the rover is on a stand or its motors are
    off, stop and ask as in step 3 before opening it.
 
@@ -114,12 +119,13 @@ instead.
 
 ## After flashing: which mode the rover wakes in
 
-A power-on starts the rover exploring, and to the ESP32 a reset through EN
-(the button, a USB upload, often the serial monitor opening) is a power-on:
-that is why steps 3 and 5 stop and ask. After an **OTA** flash, or any other
-reset that is not a power-on (a crash, the watchdog, a brownout), it comes up
-in **manual** mode, stopped, and waits to be told. Tell the operator so, or a
-rover sitting still reads as a failed flash. To start exploring, press
+Every reset comes up in **manual** mode, stopped, and waits to be told: a
+power-on, a reset through EN (the button, a USB upload, often the serial
+monitor opening), an **OTA** flash, a crash, the watchdog or a brownout. Only
+a build with `AUTONOMOUS_AT_POWER_ON` on in `src/Features.h` explores after a
+power-on or EN. Steps 3 and 5 stop and ask all the same, because the wheels
+run on through a reset. Tell the operator so, or a rover sitting still reads
+as a failed flash. To start exploring, press
 **Autonomous** in the browser panel or `t` in `client/drive.py`.
 
 ## Reading a boot failure
@@ -145,13 +151,16 @@ touching the code:
   - Anything else is a panic: follow the backtrace.
 - **The wheels never turn** — the motor shield is missing, unpowered, or not
   on I2C. Telemetry says so: `"motorsReady": false`, which the panel shows as
-  a warning and `client/drive.py` as `NO MOTORS`. The firmware also prints
-  `Motor shield not found on I2C (0x60); motors disabled.` at boot, after
-  three tries. Everything else keeps running, so the rover still answers
+  a warning and `client/drive.py` as `NO MOTORS`. The serial console also
+  shows `[0.412] ROVER WARN Motor shield: no answer on I2C at 0x60; no wheel
+  will turn` at boot, after three tries. Everything else keeps running, so the rover still answers
   over WiFi, but the shield is only probed at boot: fix the wiring or power,
   then reset the rover (wheels off the ground) before looking again. Check
   the shield's motor power and its seating on the headers.
-- **Boots, hangs before `Wireless connected:`** — WiFi credentials in
-  `src/config.h` are wrong, or the AP is unreachable. The firmware waits about
-  10 s, prints `WiFi unavailable; continuing offline.`, and keeps retrying
-  from `loop()`; if it never gets that far, the hang is earlier than WiFi.
+- **Boots, prints `Connecting to` and its dots, then no `Online at` line** —
+  WiFi credentials in `src/config.h` are wrong, or the AP is unreachable. The
+  firmware waits about 10 s, prints
+  `[10.512] ROVER WARN WiFi: not connected; carrying on offline, retrying every 10 s`,
+  and keeps retrying from `loop()`; once it joins it prints
+  `ROVER Online at <address>: the link and OTA are up`. If it never gets as
+  far as `Connecting to`, the hang is earlier than WiFi.

@@ -504,8 +504,10 @@ and the next thread's task names that branch.
 - F6's checks for the owner, which need the rover: bench-checklist.md,
   section 10, including the trial boot. Nothing about updates from the
   panel has run on a board yet.
-- F9's checks for the owner, which need the rover: flash PR #12 or later
-  over USB, then bench-checklist.md, sections 6 (the pad's new buttons, pad
+- F9's checks for the owner, which need the rover: flash the build that
+  merges branch `claude/project-thread-r8ezpe` with F9 (main after its
+  pull request, not PR #12, which held only manual at boot) or later over
+  USB, then bench-checklist.md, sections 6 (the pad's new buttons, pad
   control off) and 11 (the serial console, the priority, settings lasting
   through a reset, the checks, recording with `client/ws.py`).
 - F5's and F7's checks for the owner, which need a real screen:
@@ -533,9 +535,8 @@ and the next thread's task names that branch.
   show them); and on an iPhone a tap into the address or the OTA password,
   whose 13 px words Safari may zoom the page for (it zooms into a field
   under 16 px).
-- Small panel and client items listed under "Open from earlier work" in
-  [features.md](../features.md): `client/ws.py`'s traceback, and no
-  committed stand-in rover.
+- A small item listed under "Open from earlier work" in
+  [features.md](../features.md): no committed stand-in rover.
 - No owner answers yet to the 22 questions (features.md, "The owner's
   answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud

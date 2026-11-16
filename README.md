@@ -39,8 +39,9 @@ default install path, `~/.platformio/penv/bin/pio`.
    ```
    ~/.platformio/penv/bin/pio run -e car_wire
    ```
-3. **Flash over USB the first time**, with the rover on a stand (it starts
-   exploring as soon as it boots), and watch it join the network:
+3. **Flash over USB the first time**, with the rover on a stand (it boots in
+   manual, but the shield can keep driving the wheels through a reset), and
+   watch it join the network:
    ```
    ~/.platformio/penv/bin/pio run -e car_wire -t upload
    ~/.platformio/penv/bin/pio device monitor -e car_wire
@@ -95,12 +96,24 @@ stops within half a second.
 | Move | Left joystick, eight directions | `w` `s` forward and back, `a` `d` strafe | Left stick, eight directions |
 | Pivot (Advanced only) | Right joystick: pick Pivot or Sideways over it, and its quadrant picks the pivot; under Normal it is shown, off | -- | Hold L1 (pivot) or R1 (pivot sideways) and push the left stick |
 | Rotate | Hold the Left or Right button | `q` `e` | L2 left (ccw), R2 right (cw) |
-| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to 50; trigger pull, up to 25 |
+| Speed | Slider, 0-255 (scaled by stick deflection) | `-` `+`, starting at 64 | Stick deflection, up to a top speed of 50 that D-pad up and down step by 25 (back to 50 when the pad goes silent or pad control is switched); trigger pull, up to half of it |
 | Control scheme | Normal \| Advanced, at the top | -- | SELECT; the player LEDs show it (1 Normal, 2 Advanced) |
 | Programs | The Program tab | -- | -- |
 | Simulator | Rover \| Simulator, at the top: the Drive tab and programs drive a simulated rover | -- | -- |
-| Stop | Stop, the red square at the top | space | Cross (a held stick then drives again only from centre), or let go of the stick |
+| Stop | Stop, the red square at the top | space | Cross (a held stick then drives again only from centre), or let go of the stick; Cross stops even with pad control off |
+| Sonar (manual mode) | Options, Rover: Sweep, Front or Aim, with the Aim slider; or drag on the scan's fan to aim it | -- | Right stick pans it (Aim), R3 points it ahead (Front), Triangle sweeps |
+| Pad control | Options, Rover: Pad On or Off | -- | Off, the pad drives and changes nothing (Cross still stops); player LED 4 says so |
+| Who drives first | Options, Rover: Priority, USB then PAD then WIFI by default | -- | -- |
+| Checks | Options, Rover: Run checks (asks first: the rover belongs on its stand), and Checks at boot | -- | -- |
+| Log and graphs | Log, at the end of the scan's readouts | -- | -- |
 | Back to autonomous | The Autonomous toggle, lit while the rover explores: a press while it is lit stops the rover | `t` (on the panel it presses the toggle) | START |
+
+The USB serial console is a controller too: it takes the panel's JSON
+messages, one to a line (`{"move": 1, "speed": 120, "duration": 400}`,
+`{"settings": {"sonar": "SWEEP"}}`), and prints the rover's log. When more
+than one controller sends, the one ranked first in the priority wins: one
+ranked below is refused while another drove within the last second, and
+Stop from anyone always stops the rover. Nothing is queued.
 
 The panel takes `drive.py`'s keys too: the drive and speed keys while its
 Drive tab shows, Space and `t` on either tab. The gear's Options list them.
@@ -108,9 +121,34 @@ Holding two drive keys drives the one pressed last; the left joystick has
 the diagonals.
 
 Every boot starts in manual: the wheels still, and the sonar, after one
-sweep, held straight ahead. Autonomous (the panel's switch, `t` in
+sweep, held straight ahead (Front, the default) or as the rover's settings
+say (Options, Rover: Sweep, Front or Aim). Autonomous (the panel's switch, `t` in
 drive.py, or the pad's START) sends it exploring. It drops to manual if it
 loses WiFi or an OTA flash starts.
+
+## Logs, metrics and graphs
+
+The rover keeps a log of what it did and why, a line each with whose it
+was (USB, the pad, WiFi or the rover itself): who took control, what was
+refused, every change of setting, each check's result, why exploring
+stopped. The panel's Log button, at the end of the scan's readouts, opens
+it with filters by whose and for warnings, and Graphs beside it draws the
+loop rate, free memory, the WiFi signal, the chip's temperature and the
+front distance over the last ten minutes; Save downloads all of it. The
+serial console prints the same lines.
+
+To keep more than the panel's ten minutes, record on the computer:
+
+```
+python3 client/ws.py --db rover.db                  # every frame into SQLite
+python3 client/ws.py --prometheus 9101              # /metrics for Prometheus and Grafana
+python3 client/ws.py --db rover.db --import rover-log.jsonl --no-listen
+                                                    # a recording the panel saved
+```
+
+`ws.py` only listens: it never takes control. The rover pushes nothing
+anywhere itself, since a write that waits on the network would stall its
+loop.
 
 ## Updating from the panel
 
@@ -174,10 +212,15 @@ surface sends no echo (`SIM_SONAR`).
 flowchart LR
   panel[Browser panel] -- "WebSocket :81" --> RC[RemoteControl]
   drive[drive.py] -- "WebSocket :81" --> RC
+  usb[Serial console] -- "USB" --> SR[SerialControl]
   pad[PS3 pad] -- Bluetooth --> GP[Gamepad]
   GP --> GS[GamepadSession]
-  RC --> R[Rover]
-  GS --> R
+  RC --> C["Control: who drives"]
+  SR --> C
+  GS --> C
+  C --> R[Rover]
+  C -- settings --> ST["Settings, kept in flash"]
+  ST --> R
   NW["Network: WiFi, OTA"] -- "link lost, OTA start" --> R
   RC -- "firmware image" --> FU[FirmwareUpdate]
   FU -- "stand down" --> R
@@ -187,16 +230,17 @@ flowchart LR
   EX -- RangeScanner --> SC["Scanner: servo and sonar"]
 ```
 
-`Rover` decides who is in control, drives the wheels through the one path
-that clamps every input, and releases them when each command's deadline
-passes. `Explorer` is the autonomy, a state machine that sweeps, cruises,
+`Control` decides which controller may drive, by the priority in
+`Settings`, with no queue. `Rover` decides between exploring and manual,
+drives the wheels through the one path that clamps every input, and
+releases them when each command's deadline passes. `Explorer` is the autonomy, a state machine that sweeps, cruises,
 turns, backs off, sidesteps or halts. `GamepadSession` holds the pad's rules,
 and `FirmwareUpdate` a firmware update's over the link. They are plain C++
 that reach the hardware only through small interfaces, so they are tested on
 your computer rather than on the robot. The adapters around them
-(`DriveTrain`, `Scanner`, `Network`, `RemoteControl`, `FlashSlot`, `Gamepad`)
-only translate. The
-WebSocket format is in `src/Protocol.h`, and [AGENTS.md](AGENTS.md) explains
+(`DriveTrain`, `Scanner`, `Network`, `RemoteControl`, `SerialControl`,
+`SettingsStore`, `FlashSlot`, `Gamepad`) only translate. The
+WebSocket and serial format is in `src/Protocol.h`, and [AGENTS.md](AGENTS.md) explains
 the design and the rules it keeps.
 
 ## Testing
@@ -205,9 +249,10 @@ the design and the rules it keeps.
 ~/.platformio/penv/bin/pio test -e native     # unit tests on the host, no board needed
 python3 tools/check_protocol.py               # the clients agree with the firmware
 node --test extras/joystick/test/             # the browser panel and its simulator, in Node
+python3 -m unittest discover -s client -p 'test_*.py'  # ws.py's recorder and exporter
 ```
 
-CI runs all three, parses the Python scripts in `client/` and every panel
+CI runs all four, parses the Python scripts in `client/` and every panel
 script, and builds every board environment on each pull request and each
 push to `main`. What no test can know (which motor is on which terminal,
 which way the servo turns) is covered by
@@ -218,9 +263,12 @@ which way the servo turns) is covered by
 - **Bench-test first.** None of the wiring has been verified. Work through
   the bench checklist with the wheels off the ground before the rover drives
   on the floor, and keep it on a stand whenever you flash it.
-- **It moves on power-up.** Switching it on starts exploration straight away,
-  and so does a USB flash, which resets the board the same way. An OTA flash,
-  from PlatformIO or the panel, or a crash comes back in manual.
+- **Every boot comes up in manual.** Switching it on, a USB or OTA flash, a
+  crash or the watchdog: the wheels stay still and the sonar does what its
+  setting says (Front, by default). Only firmware built with
+  `AUTONOMOUS_AT_POWER_ON` on in `src/Features.h` would start exploring at a
+  power-on, a USB flash included. Keep it on a stand all the same: the
+  shield drives the wheels on through a reset, and Run checks turns them.
 - **Motor voltage.** PWM duty is a fraction of the pack voltage, and
   `MOTOR_SPEED_LIMIT` in `src/Tuning.h` is still 255, so at full speed a full
   3S pack drives the 3-6 V TT motors at about twice their rating. Cap it

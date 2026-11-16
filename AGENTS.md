@@ -16,8 +16,9 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 ## Ground rules
 
 - **Never flash the board or open its serial monitor.** Uploading moves a
-  physical robot, and opening the monitor can reset the board into
-  exploring; only the operator does either. An update from the panel's
+  physical robot, and opening the monitor can reset the board through EN
+  (it comes back in manual, but the motor shield keeps driving the wheels
+  through the reset); only the operator does either. An update from the panel's
   Options is a flash too. Build and test freely.
 - **Never read `src/config.h`** by any means. See [config.h](#srcconfigh).
 - **Never change a pin assignment unprompted.** See [Pins](#pins).
@@ -77,11 +78,11 @@ that turns that on would start exploring. It also never exits on its own.
 | `src/SelfTest.{h,cpp}` | The checks: the shield, the sonar, each wheel, the moves. Pure |
 | `src/Explorer.{h,cpp}` | Autonomous exploration state machine, and where manual mode points the sonar; `ExploreParams` holds its thresholds. Pure |
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
-| `src/Protocol.{h,cpp}` | The JSON format, both directions, for the WebSocket and the serial console: commands, settings, telemetry, log lines, metrics, firmware updates' messages. Pure (ArduinoJson builds on the host) |
+| `src/Protocol.{h,cpp}` | The JSON format of the WebSocket, both directions (commands, settings, telemetry, log lines, metrics, firmware updates' messages), and of the messages the serial console takes. Pure (ArduinoJson builds on the host) |
 | `src/FirmwareUpdate.{h,cpp}` | The rules of a firmware update over the link: one client, the password, stand down, motion ends it, silence, the restart. Pure |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
 | `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to commands through `Control`, re-send and silence timing, START, SELECT, Cross, the sonar's buttons, the D-pad's speed, pad control off, when to rewrite the player LEDs. Pure |
-| `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age: every wrap-safe time comparison |
+| `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age, `ageOf()` for a stamp that may be later than `now`: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors`, `RangeScanner` and `FirmwareSlot` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
 | `src/Tuning.h` | Behaviour constants shared by the firmware and the tests |
@@ -114,8 +115,9 @@ that turns that on would start exploring. It also never exits on its own.
 ## Architecture
 
 `main.cpp` builds the object graph and does nothing else. Each pass of
-`loop()` calls `rover.update(now)`, then `gamepad.update()`, which reads its
-own clock (see the mailbox below), then `serialControl.update(now)`, then
+`loop()` calls `rover.update(now)`, then `control.update(now)`, which
+forgets a lapsed hold, then `gamepad.update()`, which reads its own clock
+(see the mailbox below), then `serialControl.update(now)`, then
 `network.update(now)`, which serves OTA and the WebSocket, and last writes
 the settings to flash when that is due.
 
@@ -249,8 +251,9 @@ released:
 - The *driver*, the WebSocket client that last sent a command, disconnects:
   `Control::lost()` releases the wheels through `Rover::stop()` and keeps
   the mode, if the rover's motion is still WiFi's (not if the pad or the
-  console has taken over since, or WiFi's command was refused). A
-  telemetry-only listener coming and going does not stop anything.
+  console has taken over since, or WiFi's command was refused, or was a
+  STOP under another controller's hold, which makes no client the driver).
+  A telemetry-only listener coming and going does not stop anything.
 - The USB console has no disconnect to notice: the duration cap is its
   deadman, so a script holds a move by re-sending it, as the panel does.
 - A client stops answering the heartbeat: the server pings every client each
@@ -306,7 +309,11 @@ ends them. They turn the wheels and drive the rover forward and sideways,
 so they are held like a move: a wheel step starts only if a `RUN_CHECKS`
 came within `CHECK_HOLD_MS` (1 s), and a client that stops re-sending turns
 no more wheels, the one turning stopping at its own deadline. One within
-`CHECK_HOLD_MS` of the last never starts another run. Any command, STOP included, switches to manual; only
+`CHECK_HOLD_MS` of the last never starts another run, even once a STOP or
+any other command has ended the run: a STOP from anyone ends it for good,
+though its controller's re-sends are still coming, and only after
+`CHECK_HOLD_MS` without one does the next start a run. Any command, STOP
+included, switches to manual; only
 `RESUME_AUTONOMOUS` (code 19) switches back, restarting exploration from a
 fresh sweep. Sent while already exploring, it restarts an explorer that has
 halted (clearing `boxed in` or `sensor silent`) and otherwise does nothing.
@@ -365,9 +372,11 @@ in `Explorer.h`.
 
 ## Wire protocol
 
-JSON text frames over a WebSocket on port 81, and the same messages, one to
-a line, over the USB serial console (all but a firmware update's).
-`src/Protocol.h` is the reference; in short:
+JSON text frames over a WebSocket on port 81. The USB serial console takes
+the client-to-rover messages (all but a firmware update's), one JSON object
+to a line, and answers only with the `EventLog`, as text lines
+(`[12.345] USB   WARN text`); telemetry, settings and metrics go to
+WebSocket clients alone. `src/Protocol.h` is the reference; in short:
 
 - **Client to rover:** `{"move": <code>, "speed": 0..255, "duration": <ms>}`.
   A missing or mistyped field defaults to STOP, speed 0 and 750 ms, so a
@@ -674,13 +683,16 @@ fan's readings, its 25 and 40 cm rings and the readouts' values dim
 together, the values faded too. Where the rover holds its sonar still in
 manual mode (telemetry's `sonar` FRONT or AIM), only the bearing it points
 at is measured again, so the fan dims the others' wedges and readings
-(`data-held`) as last seen; while it aims, a ray in the operator's blue
+(`data-held`) as last seen; while it aims (in manual mode, with no check
+under way: exploring and the checks point the sonar their own ways), a ray
+in the operator's blue
 runs from the rover at the aim, a mark across it where `aimCm` falls and
 the reading by it, haloed ("…" before one is in, "no echo"). On the rover
 target with a live link and the rover's settings in, a drag on the fan
 aims the sonar where it points (`ScanView.onAim`), as the Aim slider in
 Options does: a setting, never a command, sent at most every 100 ms with
-the latest last, the drag's ray dashed until the rover reports its aim;
+the latest last, the drag's ray dashed while the drag lasts, and the
+aim the rover reports drawn once it ends;
 the fan takes no scroll then (`touch-action: none`). No third stick. On the simulator target the view holds the
 one `SimView`, in `#simSlot`, which is hidden by its attribute on the
 rover target so that an idle view knows it is out of sight and draws
@@ -1259,8 +1271,13 @@ operator passes one to an upload instead.
 - `millis()` wraps every 49.7 days. Compare times only through `src/Timing.h`:
   `timing::reached(now, deadline)` for a deadline in the future (signed),
   `timing::since(now, then)` or `timing::elapsed(now, then, interval)` for an
-  age (unsigned, so it stays right for any age up to 49.7 days). Never
-  `now >= deadline`.
+  age (unsigned, so it stays right for any age up to 49.7 days), and
+  `timing::ageOf(now, then)` for the age of a stamp that may be later than
+  `now` (loop() reads `now` once, but the pad and the WebSocket server stamp
+  with their own clocks later in the pass, which `since()` makes ~49.7 days
+  old). What `ageOf()` compares must be forgotten once it lapses
+  (`Control::update()`, `SelfTest::update()`), so it is never 49.7 days old
+  either. Never `now >= deadline`.
 - Library and platform versions are pinned exactly in `platformio.ini`. Bump
   one at a time and re-run everything.
 - Comments explain why, and often name the bug a line prevents.

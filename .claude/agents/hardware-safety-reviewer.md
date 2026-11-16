@@ -66,14 +66,22 @@ adding anything slow before it lengthens the time the wheels run on
 unsupervised after a reset. Re-probing a missing shield from `loop()` would
 block on I2C and, if it answered, start the wheels with nobody expecting it.
 
-**No failsafe on loss of control.** The rover is driven over WiFi, or over
-Bluetooth when the gamepad is compiled in. Enumerate the ways the link dies
-and confirm each one ends with the motors released:
+**No failsafe on loss of control.** The rover is driven over WiFi, over the
+USB serial console, or over Bluetooth when the gamepad is compiled in, each
+command through `Control`'s priority. Enumerate the ways the link dies and
+confirm each one ends with the motors released:
 
 - the driving client disconnects — `RemoteControl::onEvent`,
-  `WStype_DISCONNECTED` for the `driver` → `Rover::stop`, which releases the
-  motors and keeps the mode (exploration carries on: it was not that
-  client's to stop);
+  `WStype_DISCONNECTED` for the `driver` → `Control::lost(SOURCE_WIFI)` →
+  `Rover::stop`, which releases the motors and keeps the mode (exploration
+  carries on: it was not that client's to stop). It stops only if the
+  rover's motion is still WiFi's: a pad or console that took over since
+  keeps driving, and a WiFi command refused, or a STOP under another
+  controller's hold (`Control::STOPPED`), makes no client the driver;
+- the USB console goes quiet or its cable is pulled — there is no
+  disconnect to notice, so the duration cap is its deadman, and
+  `CHECK_HOLD_MS` the checks': a wheel step starts only while `RUN_CHECKS`
+  keeps coming;
 - the client vanishes without closing — the WebSocket heartbeat (ping every
   second, drop after two missed pongs) turns it into a disconnect. Every
   `WStype_DISCONNECTED` clears the slot's missed pongs
@@ -112,8 +120,13 @@ finding, and so is a disconnect path that does not stop the rover.
 reached from `Network::update`. That means commands stop being received
 (including stop commands) and OTA recovery becomes impossible. Flag every
 `delay()`, every unbounded `while`, every busy-wait. The known bounded waits
-are `Scanner::measureCm` (the sonar echo, ~30 ms) and `Network::connect`
-(setup only). `WEBSOCKETS_TCP_TIMEOUT` in `platformio.ini` exists because the
+are `Scanner::measureCm` (the sonar echo, ~30 ms), `Network::connect`
+(setup only), and the settings' write to NVS in `main.cpp`'s
+`saveSettings()`, which can erase a flash sector: it runs only once
+`Settings::saveDue()` holds, the settings still for
+`SETTINGS_SAVE_DELAY_MS` and `rover.atRest()`. A write that loses either
+gate, or a time comparison in it that a stamp later than `now` can wrap
+(`timing::ageOf()` is why it does not), is a finding. `WEBSOCKETS_TCP_TIMEOUT` in `platformio.ini` exists because the
 library's default let one stray byte hold `loop()` for 83 minutes; at 2 each
 handshake read gives up after 2 s, but a peer that trickles bytes, or several
 stalled at once, can still hold the loop until the watchdog fires. The

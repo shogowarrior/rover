@@ -21,11 +21,14 @@ has to repeat it.
    ~/.platformio/penv/bin/pio run -e car_wire -t upload
    ~/.platformio/penv/bin/pio device monitor -e car_wire
    ```
-   Expect `Wireless connected: <address>` and `OTA and WebSocket services up.`
-   If you see `Motor shield not found on I2C (0x60); motors disabled.`, stop
-   and reseat or power the shield: nothing below will work. Telemetry says
-   the same with `"motorsReady": false`, so you can check it without the
-   serial monitor.
+   The rover's log is echoed there, a line each, its time since boot and
+   whose it is first. Expect
+   `[0.405] ROVER Boot after a power-on or EN reset, in manual mode` and,
+   once WiFi is up, `ROVER Online at <address>: the link and OTA are up`.
+   If you see `ROVER WARN Motor shield: no answer on I2C at 0x60; no wheel
+   will turn`, stop and reseat or power the shield: nothing below will
+   work. Telemetry says the same with `"motorsReady": false`, so you can
+   check it without the serial monitor.
 3. Connect the keyboard client and press **space**. That takes control
    (each telemetry line starts `MANUAL`) and stops the wheels:
    ```
@@ -386,7 +389,10 @@ resets the board through EN on most boards, which comes up in manual.
    first. The log reports the shield, each bearing's echoes, then each wheel
    alone and each move. Any drive, Stop or Autonomous ends them at once, and
    so does switching to another window mid-run: within a second no other
-   wheel turns, and the log says "Checks stopped: no RUN_CHECKS". Type
+   wheel turns, and the log says "Checks stopped: no RUN_CHECKS". Run them
+   again and, while a wheel turns, press Cross on the pad (or Space in
+   `drive.py`): the checks end and do not start over, though the panel
+   was still holding them. Type
    `{"move": 20}` once into the serial console: the shield and the sonar
    are checked, and the checks stop before the wheels. Turn the checks at
    boot on and press EN: the log reports the shield and the sonar, and no
