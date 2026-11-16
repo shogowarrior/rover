@@ -7,6 +7,11 @@
  * the window, and its line, in inline SVG on the look's tokens, so a look
  * picked restyles it with no redraw. No library.
  *
+ * Until the window has filled, the charts span from the first sample kept
+ * (a minute at the least) rather than ten minutes, so a fresh link's lines
+ * fill the width instead of a sliver at its right edge; each chart's words
+ * say the span it shows.
+ *
  * A line breaks where no sample came for a while (the link down, or quiet)
  * and where the front reading heard no echo (999 is not a distance), so
  * a gap never reads as a slope. Each chart is drawn to the window's width
@@ -28,6 +33,8 @@ class RoverGraphs {
   // A line breaks where samples are further apart than this many of their
   // intervals.
   static GAP = 3.5;
+  // The least span the charts show, while the window fills.
+  static MIN_SPAN_MS = 60 * 1000;
 
   static SERIES = Object.freeze([
     Object.freeze({
@@ -85,11 +92,20 @@ class RoverGraphs {
 
   draw() {
     const end = this.#clock();
-    const start = end - RoverHistory.WINDOW_MS;
-    for (const chart of this.#charts) this.#drawChart(chart, start, end);
+    const firsts = [this.#history.metrics, this.#history.telemetry].map((list) => (list.length ? list[0].at : Infinity));
+    const first = Math.min(...firsts, end - RoverGraphs.MIN_SPAN_MS);
+    const start = Math.max(end - RoverHistory.WINDOW_MS, first);
+    const span = RoverGraphs.spanWords(end - start);
+    for (const chart of this.#charts) this.#drawChart(chart, start, end, span);
   }
 
-  #drawChart({ series, figure, now, range, svg, line }, start, end) {
+  // "the last 10 minutes", "the last 3 minutes", "the last minute".
+  static spanWords(ms) {
+    const minutes = Math.max(1, Math.round(ms / 60000));
+    return minutes === 1 ? "the last minute" : `the last ${minutes} minutes`;
+  }
+
+  #drawChart({ series, figure, now, range, svg, line }, start, end, span) {
     const { W, H, GAP } = RoverGraphs;
     const samples = (series.from === "metrics" ? this.#history.metrics : this.#history.telemetry)
       .filter((sample) => sample.at >= start)
@@ -104,7 +120,7 @@ class RoverGraphs {
     if (!values.length) {
       line.setAttribute("d", "");
       range.textContent = "";
-      const why = samples.length ? `${series.about}: no reading in the last 10 minutes.` : `${series.about}: nothing received in the last 10 minutes.`;
+      const why = samples.length ? `${series.about}: no reading in ${span}.` : `${series.about}: nothing received in ${span}.`;
       figure.title = why;
       svg.setAttribute("aria-label", why);
       return;
@@ -134,8 +150,8 @@ class RoverGraphs {
     line.setAttribute("d", d);
     range.textContent = hi > lo ? `${series.say(lo)} to ${series.say(hi)}` : "";
     const said = hi > lo
-      ? `${series.about} over the last 10 minutes: from ${series.say(lo)} to ${series.say(hi)}, ${latest === null ? "no reading" : series.say(latest)} last.`
-      : `${series.about} over the last 10 minutes: ${series.say(hi)} throughout.`;
+      ? `${series.about} over ${span}: from ${series.say(lo)} to ${series.say(hi)}, ${latest === null ? "no reading" : series.say(latest)} last.`
+      : `${series.about} over ${span}: ${series.say(hi)} throughout.`;
     figure.title = said;
     svg.setAttribute("aria-label", said);
   }

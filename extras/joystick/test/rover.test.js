@@ -654,6 +654,16 @@ test("graphs: five charts over the last 10 minutes, a line broken where nothing 
   check(/from 400 Hz to 418 Hz/.test(chart("loopHz").title) && all(chart("loopHz")).find((n) => n.tagName === "SVG").getAttribute("aria-label") === chart("loopHz").title, chart("loopHz").title);
   const xs = line("loopHz").match(/[ML]-?[\d.]+/g).map((s) => Number(s.slice(1)));
   check(xs.every((x) => x >= 0 && x <= page.evalIn("RoverGraphs.W")), "inside the window");
+  // 20 s of samples span the chart's last minute, not a sliver of ten.
+  check(Math.min(...xs) > 0.6 * page.evalIn("RoverGraphs.W"), `a fresh link fills the last minute: ${Math.min(...xs)}`);
+  check(/over the last minute/.test(chart("loopHz").title), chart("loopHz").title);
+  // Two minutes of samples span the two minutes, from the first.
+  for (let t = 0; t < 120000; t += 2000) {
+    ws.serverMsg({ metrics: { ...STREAM.metrics[0].metrics, loopHz: 400 } });
+    page.clock.advance(2000);
+  }
+  const xs2 = line("loopHz").match(/[ML]-?[\d.]+/g).map((s) => Number(s.slice(1)));
+  check(Math.min(...xs2) < 1 && /over the last 2 minutes/.test(chart("loopHz").title), `${Math.min(...xs2)} ${chart("loopHz").title}`);
 
   // Ten minutes on, the old samples are gone.
   page.clock.advance(10 * 60 * 1000);

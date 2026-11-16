@@ -2269,7 +2269,7 @@ why.
   - A Log button on the scan's readouts opens a drawer under the scan: the
     last 500 lines, filtered by controller (USB, Pad, WiFi, Rover) and to
     warnings, with Save (JSON lines, which `client/ws.py --import` reads),
-    and graphs of the last 10 minutes (loop rate, free heap, WiFi, the
+    and graphs of up to the last 10 minutes (loop rate, free heap, WiFi, the
     chip's temperature, the front distance). Closed, the button counts new
     warnings.
   - A line at the top of the view says when the pad or the USB console has

@@ -734,7 +734,9 @@ WiFi signal from the metrics, and the chip's temperature and the front
 distance from telemetry, each a row of inline SVG with its latest value
 and its range, the line in `--live`, broken where nothing came for 3.5 of
 its intervals or the front heard no echo; drawn as samples arrive, only
-while the drawer is open. Where the drawer is 600 px wide or more (a
+while the drawer is open. The charts span the 10 minutes kept, or, until
+those have filled, from the first sample kept (a minute at the least), so
+a fresh link's lines fill the width. Where the drawer is 600 px wide or more (a
 container query) the graphs stand beside the lines; narrower, Log | Graphs
 picks one. Nothing in the drawer is a command, and nothing in it keeps its
 keys: Space stops the rover with the focus on any of its buttons.
