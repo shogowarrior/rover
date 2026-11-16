@@ -19,8 +19,10 @@ void Rover::update(uint32_t now) {
   if (currentMode == MODE_AUTONOMOUS) {
     const Explorer::Motion motion = explorer.update(now, !moving);
     if (motion.requested) drive(motion.move, tuning::EXPLORE_SPEED, motion.durationMs, now);
+  } else if (!explorer.hasScan()) {
+    explorer.survey(now);  // one sweep, so every bearing has a reading
   } else {
-    explorer.survey(now);
+    explorer.lookAhead(now);  // then the servo rests, the front kept live
   }
 }
 

@@ -69,6 +69,9 @@ Explorer::Motion Explorer::update(uint32_t now, bool motorsIdle) {
       return motionDone(now, motorsIdle) ? startSweep(now) : noMotion();
     case HALTED:
       return reached(now, phaseUntil) ? retryAfterHalt(now) : noMotion();
+    case LOOK:
+      // Its readings are the front's alone: decide nothing on them.
+      return startSweep(now);
   }
   return noMotion();
 }
@@ -76,6 +79,14 @@ Explorer::Motion Explorer::update(uint32_t now, bool motorsIdle) {
 void Explorer::survey(uint32_t now) {
   if (currentPhase != SWEEP) startSweep(now);
   stepSweep(now, false);
+}
+
+void Explorer::lookAhead(uint32_t now) {
+  if (currentPhase != LOOK) {
+    currentPhase = LOOK;
+    aim(now, 0);
+  }
+  if (readyToPing(now)) record(FRONT, ping(now));
 }
 
 const char* Explorer::phaseName() const {
@@ -86,6 +97,7 @@ const char* Explorer::phaseName() const {
     case BACKOFF: return "BACKOFF";
     case SIDESTEP: return "SIDESTEP";
     case HALTED: return "HALTED";
+    case LOOK: return "LOOK";
   }
   return "UNKNOWN";
 }

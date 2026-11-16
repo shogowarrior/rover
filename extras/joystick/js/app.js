@@ -410,7 +410,7 @@ const programConnect = byId("programConnect");
 const ALERTS = Object.freeze({
   motors: {
     element: byId("alertMotors"),
-    why: () => "No motors: the rover's motor shield did not answer when it booted, so the wheels cannot move. Check its wiring and power, then reset the rover with its wheels off the ground: after a power-on or the EN button it starts exploring.",
+    why: () => "No motors: the rover's motor shield did not answer when it booted, so the wheels cannot move. Check its wiring and power, then reset the rover with its wheels off the ground.",
   },
   exploring: {
     element: byId("alertExploring"),

@@ -107,9 +107,10 @@ Drive tab shows, Space and `t` on either tab. The gear's Options list them.
 Holding two drive keys drives the one pressed last; the left joystick has
 the diagonals.
 
-After a power-on the rover explores. After any other reset (an OTA flash, a
-crash, the watchdog) it starts in manual and waits, and it drops to manual
-if it loses WiFi or an OTA flash starts.
+Every boot starts in manual: the wheels still, and the sonar, after one
+sweep, held straight ahead. Autonomous (the panel's switch, `t` in
+drive.py, or the pad's START) sends it exploring. It drops to manual if it
+loses WiFi or an OTA flash starts.
 
 ## Updating from the panel
 

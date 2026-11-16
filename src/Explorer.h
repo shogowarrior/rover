@@ -73,7 +73,10 @@ struct ExploreParams {
 
 class Explorer {
  public:
-  enum Phase { SWEEP, CRUISE, TURN, BACKOFF, SIDESTEP, HALTED };
+  // LOOK is manual mode's alone: the sonar held straight ahead
+  // (lookAhead()). Telemetry names the phase only while exploring, so it is
+  // never reported.
+  enum Phase { SWEEP, CRUISE, TURN, BACKOFF, SIDESTEP, HALTED, LOOK };
 
   // The five sweep bearings, left to right.
   enum Bearing { LEFT, FRONT_LEFT, FRONT, FRONT_RIGHT, RIGHT, BEARING_COUNT };
@@ -95,9 +98,15 @@ class Explorer {
   // requested motion has ended.
   Motion update(uint32_t now, bool motorsIdle);
 
-  // Keep sweeping and measuring without ever asking to move. Manual mode runs
-  // this so the telemetry stays live while a person drives.
+  // Keep sweeping and measuring without ever asking to move.
   void survey(uint32_t now);
+
+  // Hold the sonar straight ahead, still, and keep measuring the front,
+  // without ever asking to move. Manual mode runs this once every bearing
+  // has been measured (survey() until then), so the front's reading stays
+  // live while a person drives, and the servo does not sweep back and forth
+  // on a rover at rest. update() starts from a fresh sweep after it.
+  void lookAhead(uint32_t now);
 
   Phase phase() const { return currentPhase; }
   const char* phaseName() const;
