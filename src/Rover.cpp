@@ -32,7 +32,14 @@ void Rover::update(uint32_t now) {
 }
 
 void Rover::command(int move, int speed, int durationMs, uint32_t now) {
-  // Any command ends the checks: STOP above all.
+  // RUN_CHECKS starts the checks, from still wheels, or, re-sent, holds
+  // them (SelfTest.h).
+  if (move == RUN_CHECKS) {
+    setMode(MODE_MANUAL, now, "Manual: a command took control");
+    if (selfTest.press(now, motors.ready())) release(now);
+    return;
+  }
+  // Any other command ends the checks: STOP above all.
   selfTest.cancel(now, "a command took control");
   // The one command that gives control back. On a halted explorer it starts
   // over: the operator is saying the way is open now.
@@ -54,11 +61,6 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
     // Stopping is the only safe interpretation.
     log.add(now, EventLog::WARN, "Unknown move code %d: stopped", move);
     release(now);
-    return;
-  }
-  if (move == RUN_CHECKS) {
-    release(now);
-    selfTest.start(now, motors.ready(), true);
     return;
   }
   drive(static_cast<MoveCode>(move), speed, durationMs, now);

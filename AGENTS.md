@@ -145,8 +145,10 @@ acts on it, and on to `Rover::command()`. Changes of setting go to
 `Settings`, which `Rover`, `Control` and `GamepadSession` read, and which
 `main.cpp` loads from flash at boot and writes back when due. Everything
 the rover does and decides goes in the `EventLog` as one short line, with
-whose it is; `main.cpp` echoes each line on the serial console and
-`RemoteControl` sends it to every client.
+whose it is; `main.cpp` echoes each line on the serial console (leaving a
+line off, and saying so, rather than wait on a full buffer) and
+`RemoteControl` sends it to every client. A refusal, and a STOP from below
+the controller in control, are logged once a hold however many arrive.
 
 **The pure core** is `Rover`, `Explorer`, `SelfTest`, `GamepadSession`,
 `Control`, `Settings`, `EventLog`, `MovePatterns`, `Protocol`, `Kinematics`
@@ -300,7 +302,11 @@ moves: it sweeps once, so every bearing has a reading, then holds it ahead
 keeps sweeping (`SWEEP`), as `Settings::sonar()` says. The checks
 (`RUN_CHECKS`, code 20) run in manual mode too, taking control as any
 command does; any other command, a stand-down or the driver's disconnect
-ends them. Any command, STOP included, switches to manual; only
+ends them. They turn the wheels and drive the rover forward and sideways,
+so they are held like a move: a wheel step starts only if a `RUN_CHECKS`
+came within `CHECK_HOLD_MS` (1 s), and a client that stops re-sending turns
+no more wheels, the one turning stopping at its own deadline. One within
+`CHECK_HOLD_MS` of the last never starts another run. Any command, STOP included, switches to manual; only
 `RESUME_AUTONOMOUS` (code 19) switches back, restarting exploration from a
 fresh sweep. Sent while already exploring, it restarts an explorer that has
 halted (clearing `boxed in` or `sensor silent`) and otherwise does nothing.
@@ -370,7 +376,7 @@ a line, over the USB serial console (all but a firmware update's).
   checks that the longest a client sends fits. Move codes are in
   `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, 19
   `RESUME_AUTONOMOUS`, and 20 `RUN_CHECKS`, which turns the wheels (the
-  panel asks first). A command from a controller ranked below the one in
+  panel asks first) and is held by re-sending it, as a move is. A command from a controller ranked below the one in
   control is refused (see Invariants). A browser page may connect only from a file, this
   computer or the local network (`protocol::originAllowed()`): the panel
   opens from a file, and a page served from `localhost`, a private IPv4
@@ -1047,7 +1053,9 @@ nothing and sends no STOP on release; it drives once that hold lapses. The
 rest of its buttons are settings, which take no control: the right stick
 pans the sonar (`AIM`, up to `GAMEPAD_PAN_DEG_PER_S` at full deflection,
 from where it aims), R3 points it ahead (`FRONT`) and Triangle sweeps; the
-D-pad's up and down step the top speed by `GAMEPAD_SPEED_STEP`. Pad control
+D-pad's up and down step the top speed by `GAMEPAD_SPEED_STEP`, which goes
+back to `GAMEPAD_MAX_SPEED` when the pad goes silent or is turned off or on,
+so a pad picked up again never starts fast. Pad control
 is a setting too (`pad`, from any controller): off, the pad drives and
 changes nothing, but Cross still stops the rover, and player LED 4 says so.
 Turned off or on, whatever the pad drove stops and a held stick waits for

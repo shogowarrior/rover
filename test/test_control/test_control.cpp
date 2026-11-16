@@ -146,6 +146,26 @@ void test_stop_from_anyone_is_always_acted_on(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, driving());
 }
 
+// A client sending STOP after STOP, or a move after a move, under someone
+// else's hold is said once a hold, and said again once a fresh hold begins.
+void test_refusals_and_stops_from_below_are_said_once_a_hold(void) {
+  for (uint32_t t = 0; t < 600; t += 50) {
+    control->command(SOURCE_PAD, MOVE_FORWARD, 100, 400, t);
+    control->command(SOURCE_WIFI, STOP, 0, 0, t + 10);
+    control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, t + 20);
+  }
+  TEST_ASSERT_EQUAL_INT(1, logged("STOP, though PAD has control", EventLog::WARN, SOURCE_WIFI));
+  TEST_ASSERT_EQUAL_INT(1, logged("Refused MOVE_LEFT: PAD has control", EventLog::WARN, SOURCE_WIFI));
+  // The pad's hold lapses, and it takes control afresh.
+  const uint32_t later = 600 + HOLD + 100;
+  control->command(SOURCE_PAD, MOVE_FORWARD, 100, 400, later);
+  control->command(SOURCE_WIFI, STOP, 0, 0, later + 10);
+  control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, later + 20);
+  TEST_ASSERT_EQUAL_INT(2, logged("STOP, though PAD has control", EventLog::WARN, SOURCE_WIFI));
+  TEST_ASSERT_EQUAL_INT(2, logged("Refused MOVE_LEFT: PAD has control", EventLog::WARN, SOURCE_WIFI));
+  TEST_ASSERT_EQUAL_INT(1, logged("PAD has control: MOVE_FORWARD", EventLog::INFO, SOURCE_PAD));
+}
+
 // STOP takes an exploring rover over, from any controller, as before.
 void test_stop_takes_over_from_exploring(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
@@ -332,6 +352,7 @@ int main(int, char**) {
   RUN_TEST(test_a_held_stick_keeps_control);
   RUN_TEST(test_a_refusal_is_logged_once_until_control_passes);
   RUN_TEST(test_stop_from_anyone_is_always_acted_on);
+  RUN_TEST(test_refusals_and_stops_from_below_are_said_once_a_hold);
   RUN_TEST(test_stop_takes_over_from_exploring);
   RUN_TEST(test_autonomous_and_checks_wait_for_control_too);
   RUN_TEST(test_exploring_holds_no_control);

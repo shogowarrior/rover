@@ -597,17 +597,29 @@ struct Drive {
   uint32_t at;
 };
 
+// A client holding the checks, as the panel does: RUN_CHECKS again every
+// 200 ms (its REPEAT_MS) since `heldAt`.
+void holdChecks(uint32_t now, uint32_t& heldAt) {
+  if (now - heldAt >= 200) {
+    heldAt = now;
+    rover->command(RUN_CHECKS, 0, 0, now);
+  }
+}
+
 // Runs the checks from `from` until they end, at most 60 s, recording each
-// new drive (a rewrite of the one under way is not one). Returns the time
-// they ended.
-uint32_t runChecks(uint32_t from, std::vector<Drive>& drives) {
+// new drive (a rewrite of the one under way is not one), and holding them
+// unless `hold` is false. Returns the time they ended.
+uint32_t runChecks(uint32_t from, std::vector<Drive>& drives, bool hold = true) {
   uint32_t now = from;
+  uint32_t heldAt = from;
   int calls = motors->driveCalls;
   const MovePattern* last = nullptr;
   int lastSpeed = -1;
   const bool ended = advanceUntil(
       now, 60000, 5,
       [&](uint32_t t) {
+        if (hold) holdChecks(t, heldAt);
+        clockNow = t;
         rover->update(t);
         const char* check = rover->status().check;
         if (check != nullptr) TEST_ASSERT_TRUE_MESSAGE(strlen(check) <= SelfTest::STEP_NAME_MAX, check);
@@ -720,8 +732,14 @@ void test_anything_that_takes_control_ends_the_checks(void) {
     rover->begin(Rover::MODE_MANUAL, 0);
     rover->command(RUN_CHECKS, 0, 0, 0);
     uint32_t now = 0;
-    const bool wheelTurning =
-        advanceUntil(now, 30000, 5, updateRover, [] { return motors->driving; });
+    uint32_t heldAt = 0;
+    const bool wheelTurning = advanceUntil(
+        now, 30000, 5,
+        [&](uint32_t t) {
+          holdChecks(t, heldAt);
+          updateRover(t);
+        },
+        [] { return motors->driving; });
     TEST_ASSERT_TRUE(wheelTurning);
     endAt(now);
     TEST_ASSERT_NULL(rover->status().check);
@@ -748,11 +766,95 @@ void test_the_status_names_the_check_under_way(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(RUN_CHECKS, 0, 0, 0);
   uint32_t now = 0;
-  TEST_ASSERT_TRUE(advanceUntil(now, 30000, 5, updateRover, [] { return motors->driving; }));
+  uint32_t heldAt = 0;
+  const auto held = [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+  };
+  TEST_ASSERT_TRUE(advanceUntil(now, 30000, 5, held, [] { return motors->driving; }));
   TEST_ASSERT_EQUAL_STRING("wheel FL", rover->status().check);
-  TEST_ASSERT_TRUE(advanceUntil(now, 60000, 5, updateRover, [] {
+  TEST_ASSERT_TRUE(advanceUntil(now, 60000, 5, held, [] {
     return rover->status().check != nullptr && std::string(rover->status().check) == "rotate cw";
   }));
+}
+
+// The deadman's rule: one RUN_CHECKS, from a client that then goes quiet
+// (a script that died, a single line typed into the serial console), checks
+// the shield and the sonar and turns no wheel.
+void test_unheld_checks_turn_no_wheel(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  scanner->setAll(150.0f);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  const uint32_t end = runChecks(0, drives, false);
+  TEST_ASSERT_EQUAL_size_t(0, drives.size());
+  TEST_ASSERT_TRUE(logged("Sonar right: 3 of 3 pings heard an echo"));
+  TEST_ASSERT_TRUE(logged("Checks stopped: no RUN_CHECKS for 1000 ms, so no wheel turns", EventLog::WARN));
+  assertStaysStopped(end);
+}
+
+// Re-sends stop mid-run: the wheel turning stops at its own deadline, and
+// no other turns.
+void test_checks_stop_soon_after_the_resends_do(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  uint32_t now = 0;
+  uint32_t heldAt = 0;
+  TEST_ASSERT_TRUE(advanceUntil(
+      now, 60000, 5,
+      [&](uint32_t t) {
+        holdChecks(t, heldAt);
+        updateRover(t);
+      },
+      [] { return rover->status().check != nullptr && std::string(rover->status().check) == "wheel RR"; }));
+  // The last re-send was at heldAt: by then and a step's drive later, still.
+  const uint32_t stillBy = heldAt + tuning::CHECK_HOLD_MS + tuning::CHECK_DRIVE_MS;
+  TEST_ASSERT_TRUE(advanceUntil(now, stillBy - now + 5, 5, updateRover,
+                                [] { return !motors->driving && rover->status().check == nullptr; }));
+  TEST_ASSERT_TRUE(logged("Checks stopped: no RUN_CHECKS", EventLog::WARN));
+  assertStaysStopped(now);
+}
+
+// Re-sends that cross the run's end, before the client sees it ended, never
+// start a second run; a fresh RUN_CHECKS after a pause, or after any other
+// command, does.
+void test_resends_never_start_a_second_run(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  uint32_t now = runChecks(0, drives);
+  TEST_ASSERT_EQUAL_size_t(8, drives.size());
+  uint32_t heldAt = now;
+  const int calls = motors->driveCalls;
+  advance(now, 3000, 5, [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+    TEST_ASSERT_NULL(rover->status().check);
+  });
+  TEST_ASSERT_EQUAL_INT(calls, motors->driveCalls);
+
+  now = runFor(now, tuning::CHECK_HOLD_MS + 100);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+
+  rover->command(STOP, 0, 0, now + 5);
+  TEST_ASSERT_NULL(rover->status().check);
+  rover->command(RUN_CHECKS, 0, 0, now + 10);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
+// The checks at boot turn no wheel, and a RUN_CHECKS during them starts the
+// whole checks.
+void test_a_run_during_the_boot_checks_starts_the_whole_checks(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->checkWithoutWheels(0);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+  uint32_t now = runFor(0, 300);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_TRUE(logged("Checks stopped: started again"));
+  std::vector<Drive> drives;
+  runChecks(now, drives);
+  TEST_ASSERT_EQUAL_size_t(8, drives.size());
 }
 
 // --- the log ------------------------------------------------------------------
@@ -817,6 +919,10 @@ int main(int, char**) {
   RUN_TEST(test_checks_with_a_silent_sonar_warn);
   RUN_TEST(test_anything_that_takes_control_ends_the_checks);
   RUN_TEST(test_the_checks_take_control_from_exploration);
+  RUN_TEST(test_unheld_checks_turn_no_wheel);
+  RUN_TEST(test_checks_stop_soon_after_the_resends_do);
+  RUN_TEST(test_resends_never_start_a_second_run);
+  RUN_TEST(test_a_run_during_the_boot_checks_starts_the_whole_checks);
   RUN_TEST(test_the_status_names_the_check_under_way);
   RUN_TEST(test_mode_changes_and_stand_downs_are_logged);
   return UNITY_END();

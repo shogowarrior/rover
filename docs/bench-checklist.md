@@ -220,6 +220,7 @@ On the stand:
   straight up can show either. SELECT again goes back to NORMAL.
 - **D-pad up** and **down** step the top speed by 25: the stick fully
   pushed drives faster, then slower. The log says each new top speed.
+  Switch the pad off and on: it starts again from 50.
 - The **right stick** pans the sonar, left and right, faster the further it
   is pushed; telemetry's `sonar` shows `AIM` and `aim` the angle, and the
   servo follows. **R3** (the right stick pressed) points it straight ahead
@@ -383,9 +384,13 @@ resets the board through EN on most boards, which comes up in manual.
    mode is no setting.
 4. **The checks.** Run checks from Options, on the stand: the panel asks
    first. The log reports the shield, each bearing's echoes, then each wheel
-   alone and each move. Any drive, Stop or Autonomous ends them at once.
-   Turn the checks at boot on and press EN: the log reports the shield and
-   the sonar, and no wheel turns.
+   alone and each move. Any drive, Stop or Autonomous ends them at once, and
+   so does switching to another window mid-run: within a second no other
+   wheel turns, and the log says "Checks stopped: no RUN_CHECKS". Type
+   `{"move": 20}` once into the serial console: the shield and the sonar
+   are checked, and the checks stop before the wheels. Turn the checks at
+   boot on and press EN: the log reports the shield and the sonar, and no
+   wheel turns.
 5. **Keeping it.** On a computer on the same network,
    `python3 client/ws.py --db rover.db --prometheus 9101` records the
    stream and serves `http://127.0.0.1:9101/metrics`; after a minute,

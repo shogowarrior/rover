@@ -37,6 +37,7 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
     stopDriving(now);
     awaitingRelease = true;
     panning = false;
+    resetTopSpeed(now);
   }
   const bool enabled = padInUse;
 
@@ -111,7 +112,9 @@ void GamepadSession::update(const GamepadReport& report, uint32_t now) {
 }
 
 // The library never reports a disconnect: a pad that goes silent is gone,
-// and the STOP for what it drove follows from update()'s silent report.
+// and the STOP for what it drove follows from update()'s silent report. A
+// pad that comes back starts from the boot's top speed, as one turned off
+// and on does: whoever picks it up next did not choose the faster one.
 void GamepadSession::notePresence(bool fresh, uint32_t now) {
   if (fresh == present) return;
   present = fresh;
@@ -120,7 +123,14 @@ void GamepadSession::notePresence(bool fresh, uint32_t now) {
   } else {
     log.add(now, EventLog::WARN, SOURCE_PAD, "Pad silent for %lu ms: gone",
             static_cast<unsigned long>(tuning::GAMEPAD_SILENCE_MS));
+    resetTopSpeed(now);
   }
+}
+
+void GamepadSession::resetTopSpeed(uint32_t now) {
+  if (topSpeed == tuning::GAMEPAD_MAX_SPEED) return;
+  topSpeed = tuning::GAMEPAD_MAX_SPEED;
+  log.add(now, EventLog::INFO, SOURCE_PAD, "Pad: top speed back to %d", topSpeed);
 }
 
 void GamepadSession::stepTopSpeed(const GamepadReport& report, uint32_t now) {

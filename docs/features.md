@@ -2238,9 +2238,14 @@ why.
   pings.
 - **The checks**: Run checks (`RUN_CHECKS`, code 20) checks the shield, pings
   each bearing three times, turns each wheel alone and then the moves, each
-  result a line in the log; the panel asks first, since the wheels turn.
-  The checks at boot, a setting, do only the shield and the sonar.
-- **The pad**: D-pad up and down step its top speed, the right stick, R3 and
+  result a line in the log; the panel asks first, since the moves drive the
+  rover forward and sideways. They are held like a move: the panel re-sends
+  `RUN_CHECKS` while they run, and once a client stops (a closed panel, a
+  script that died) no other wheel turns. A single `RUN_CHECKS` typed into
+  the serial console checks the shield and the sonar, then stops. The
+  checks at boot, a setting, do only the shield and the sonar.
+- **The pad**: D-pad up and down step its top speed (back to 50 when the pad
+  goes silent or is turned off), the right stick, R3 and
   Triangle the sonar, and pad control off leaves only Cross, as Stop;
   player LED 4 says it is off. The SixaxisPairTool (or sixpair) is needed
   again only if the pad has been paired with another host since, or

@@ -70,12 +70,32 @@ const char* resetName(esp_reset_reason_t reason) {
   }
 }
 
+// Log lines the serial console has missed since it last had room.
+uint32_t echoSkipped = 0;
+
 // The serial console's copy of each log line, as it is added, with whose
-// line it is.
+// line it is. Writing waits once the TX buffer is full, and loop() must not
+// wait (AGENTS.md, Invariants): a line with no room is left off the console
+// (clients still get it), and the next line that has room says how many
+// were.
 void echoToSerial(const EventLog::Entry& entry) {
-  Serial.printf("[%lu.%03lu] %-5s %s%s\n", static_cast<unsigned long>(entry.atMs / 1000),
-                static_cast<unsigned long>(entry.atMs % 1000), sourceName(entry.source),
-                entry.level == EventLog::WARN ? "WARN " : "", entry.text);
+  char line[EventLog::TEXT_MAX + 32];
+  const int written = snprintf(line, sizeof(line), "[%lu.%03lu] %-5s %s%s\n",
+                               static_cast<unsigned long>(entry.atMs / 1000),
+                               static_cast<unsigned long>(entry.atMs % 1000), sourceName(entry.source),
+                               entry.level == EventLog::WARN ? "WARN " : "", entry.text);
+  if (written <= 0) return;
+  const size_t length = written < static_cast<int>(sizeof(line)) ? static_cast<size_t>(written) : sizeof(line) - 1;
+  const size_t notice = echoSkipped > 0 ? 40 : 0;  // "(N log lines not echoed)"
+  if (static_cast<size_t>(Serial.availableForWrite()) < length + notice) {
+    echoSkipped++;
+    return;
+  }
+  if (echoSkipped > 0) {
+    Serial.printf("(%lu log lines not echoed)\n", static_cast<unsigned long>(echoSkipped));
+    echoSkipped = 0;
+  }
+  Serial.write(reinterpret_cast<const uint8_t*>(line), length);
 }
 
 // The settings as the last boot left them, if there are any. Before
@@ -116,7 +136,8 @@ void saveSettings(uint32_t now) {
 }  // namespace
 
 void setup() {
-  // Room for a burst of log lines: printing waits once the buffer is full.
+  // Room for a burst of log lines: echoToSerial() leaves a line off the
+  // console rather than wait for room.
   Serial.setTxBufferSize(1024);
   Serial.begin(tuning::SERIAL_BAUD);
   // First: it releases wheels the shield kept driving through a reset.
