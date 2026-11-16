@@ -35,9 +35,12 @@ class KindTest(unittest.TestCase):
             self.assertEqual("log", kind_of(frame))
         for frame in STREAM["metrics"]:
             self.assertEqual("metrics", kind_of(frame))
+        for frame in STREAM["settings"]:
+            self.assertEqual("settings", kind_of(frame))
 
     def test_anything_else_is_not_a_frame(self):
-        for other in (None, [], "text", {}, {"ota": "next", "offset": 0}, {"log": 5}, {"metrics": []}):
+        for other in (None, [], "text", {}, {"ota": "next", "offset": 0}, {"log": 5}, {"metrics": []},
+                      {"settings": "NORMAL"}):
             self.assertIsNone(kind_of(other), other)
 
 
@@ -64,6 +67,13 @@ class StoreTest(unittest.TestCase):
         firmware = self.db.execute(
             "SELECT json_extract(frame, '$.check') FROM telemetry WHERE check_step IS NOT NULL").fetchone()[0]
         self.assertEqual("wheel FL", firmware)
+        # Who had control, where telemetry says.
+        holders = dict(self.db.execute("SELECT json_extract(frame, '$.check'), control FROM telemetry "
+                                       "WHERE control IS NOT NULL AND check_step IS NOT NULL"))
+        self.assertEqual({"wheel FL": "USB"}, holders)
+        self.assertEqual(
+            sum(1 for frame in TELEMETRY.values() if "control" in frame),
+            self.db.execute("SELECT COUNT(*) FROM telemetry WHERE control IS NOT NULL").fetchone()[0])
 
     def test_metrics_are_kept(self):
         for at, frame in enumerate(STREAM["metrics"]):
@@ -81,6 +91,23 @@ class StoreTest(unittest.TestCase):
         warnings = [row[0] for row in self.db.execute("SELECT text FROM log WHERE warn ORDER BY rowid")]
         self.assertEqual([f["log"] for f in STREAM["log"] if f.get("warn")], warnings)
 
+    # The log filters by whose line it is.
+    def test_log_lines_keep_whose_they_are(self):
+        for frame in STREAM["log"]:
+            self.store.add(frame, 3000.0)
+        for source in ("USB", "PAD", "WIFI", "ROVER"):
+            texts = [row[0] for row in self.db.execute("SELECT text FROM log WHERE src = ? ORDER BY rowid", (source,))]
+            self.assertEqual([f["log"] for f in STREAM["log"] if f["src"] == source], texts, source)
+
+    def test_settings_are_kept(self):
+        for at, frame in enumerate(STREAM["settings"]):
+            self.assertTrue(self.store.add(frame, 4000.0 + at))
+        rows = list(self.db.execute(
+            "SELECT scheme, sonar, aim, pad, priority, checks_at_boot FROM settings ORDER BY at"))
+        expected = [(v["scheme"], v["sonar"], v["aim"], v["pad"], ",".join(v["priority"]), int(v["checksAtBoot"]))
+                    for v in (frame["settings"] for frame in STREAM["settings"])]
+        self.assertEqual(expected, rows)
+
     # Another boot can reuse a number: only the same number, time and text
     # are the same line.
     def test_a_line_of_another_boot_with_the_same_number_is_kept(self):
@@ -94,7 +121,7 @@ class StoreTest(unittest.TestCase):
         self.assertFalse(self.store.add({"ota": "next", "offset": 0}, 1.0))
         self.assertFalse(self.store.add(None, 1.0))
         self.assertFalse(self.store.add({"log": "no number"}, 1.0))
-        for table in ("telemetry", "metrics", "log"):
+        for table in ("telemetry", "metrics", "log", "settings"):
             self.assertEqual(0, self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
     # The panel's Save: one {"at", "frame"} a line, "at" in ms.
@@ -136,8 +163,23 @@ class ExporterTest(unittest.TestCase):
         self.assertEqual("50", samples['rover_distance_cm{bearing="front_left"}'])
         self.assertEqual("412", samples["rover_loop_hz"])
         self.assertEqual("0.038", samples["rover_loop_max_seconds"])
-        self.assertEqual("1", samples['rover_log_lines_total{level="warn"}'])
+        self.assertEqual("1", samples['rover_log_lines_total{level="warn",source="ROVER"}'])
+        self.assertEqual("0", samples['rover_log_lines_total{level="warn",source="USB"}'])
+        self.assertEqual("1", samples['rover_control{source="WIFI"}'])
+        self.assertEqual("0", samples['rover_control{source="PAD"}'])
         self.assertNotIn("rover_sonar_aim_degrees", samples)
+        self.assertNotIn("rover_checks_at_boot", samples)
+
+    def test_settings_are_exported_as_labels(self):
+        self.exporter.set_connected(True)
+        self.exporter.add(TELEMETRY["sweeping"], 99.0)
+        self.exporter.add(STREAM["settings"][1], 99.1)
+        samples = self.samples()
+        self.assertEqual(
+            "1", samples['rover_settings_info{scheme="ADVANCED",sonar="AIM",pad="OFF",priority="WIFI,USB,PAD"}'])
+        self.assertEqual("1", samples["rover_checks_at_boot"])
+        # No one has control: each controller reads 0.
+        self.assertEqual({"0"}, {value for name, value in samples.items() if name.startswith("rover_control{")})
 
     def test_aim_only_while_aiming(self):
         self.exporter.set_connected(True)
@@ -161,7 +203,7 @@ class ExporterTest(unittest.TestCase):
 
     def test_every_sample_is_a_number_prometheus_reads(self):
         self.exporter.set_connected(True)
-        for frame in list(TELEMETRY.values()) + STREAM["metrics"] + STREAM["log"]:
+        for frame in list(TELEMETRY.values()) + STREAM["metrics"] + STREAM["log"] + STREAM["settings"]:
             self.exporter.add(frame, 99.0)
             for value in self.samples().values():
                 self.assertTrue(value == "NaN" or not math.isnan(float(value)))

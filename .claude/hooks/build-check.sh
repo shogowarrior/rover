@@ -62,6 +62,13 @@ case "$file" in
   extras/joystick/* | test/vectors/* | src/*) panel=yes ;;
 esac
 
+# client/ws.py's recorder and exporter against the frames in test/vectors/
+# (under a second).
+clients=no
+case "$file" in
+  client/*.py | test/vectors/*) clients=yes ;;
+esac
+
 # The secrets guard's case table, after an edit to either hook or the table.
 guard=no
 case "$file" in
@@ -131,6 +138,13 @@ if [ "$panel" = yes ]; then
         grep -vE '^[[:space:]]*(at |generatedMessage:|code:|actual:|expected:|operator:|[-+] |[{}]$)')" \
       '^✖|check\(s\) failed|^    [^ ]|Error|^ℹ (tests|fail) '
   printf '%s\n' "$out" | grep -E 'checks passed|^ℹ (tests|fail) '
+fi
+
+if [ "$clients" = yes ]; then
+  require python3 "Client tests (client/test_*.py)"
+  out=$(python3 -m unittest discover -s client -p 'test_*.py' 2>&1) ||
+    fail "Client tests (client/test_*.py) FAILED" "$out" '^(FAIL|ERROR|AssertionError|Traceback)|Error'
+  printf '%s\n' "$out" | tail -1
 fi
 
 if [ "$guard" = yes ]; then

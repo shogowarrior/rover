@@ -31,6 +31,9 @@ guard blocks every call, and the build check says what it skipped.
   - anything in `src/`, `extras/joystick/` (the panel's page, styles, scripts
     and tests) or `test/vectors/` (the cases the panel's tests share with the
     host tests): `node --test extras/joystick/test/` (about two seconds);
+  - a `.py` file in `client/`, or anything in `test/vectors/`:
+    `python3 -m unittest discover -s client -p 'test_*.py'`, the recorder
+    and exporter against the firmware's frames (under a second);
   - anything under `.claude/hooks/`: `python3 .claude/hooks/test_guard.py`,
     the secrets guard's cases (a few seconds).
 

@@ -19,7 +19,9 @@ The standard library only, so it runs wherever Python does, and imports
 without websockets: client/test_recorder.py tests it on its own.
 
 The frames are src/Protocol.h's: telemetry has "mode"; a log line has
-"log", "seq", "t" and "warn" when it is a warning; metrics have "metrics".
+"log", "seq", "t", "src" (whose line it is: USB, PAD, WIFI or ROVER) and
+"warn" when it is a warning; metrics have "metrics"; the settings have
+"settings", sent as a client connects and each time they change.
 The panel's Save writes the same frames as JSON lines, each
 {"at": <ms since 1970 when it arrived>, "frame": {...}}, which
 Store.import_lines() reads back.
@@ -51,15 +53,22 @@ DISTANCE_FAR_CM = 999
 STALE_S = 5.0
 
 
+# Who may drive the rover, and who else writes its log (src/Source.h).
+SOURCES = ("USB", "PAD", "WIFI", "ROVER")
+
+
 def kind_of(frame):
-    """"telemetry", "log" or "metrics" for one of the rover's frames, or None
-    for anything else (a firmware update's reply, or not a frame at all)."""
+    """"telemetry", "log", "metrics" or "settings" for one of the rover's
+    frames, or None for anything else (a firmware update's reply, or not a
+    frame at all)."""
     if not isinstance(frame, dict):
         return None
     if isinstance(frame.get("log"), str):
         return "log"
     if isinstance(frame.get("metrics"), dict):
         return "metrics"
+    if isinstance(frame.get("settings"), dict):
+        return "settings"
     if isinstance(frame.get("mode"), str):
         return "telemetry"
     return None
@@ -87,6 +96,7 @@ CREATE TABLE IF NOT EXISTS telemetry (
   check_step TEXT, pad TEXT, phase TEXT, halt TEXT,
   d_left REAL, d_front_left REAL, d_front REAL, d_front_right REAL, d_right REAL,
   firmware TEXT,
+  control TEXT,                 -- who has control: USB, PAD or WIFI; none while no one has
   frame TEXT NOT NULL           -- the whole frame, as JSON
 );
 CREATE INDEX IF NOT EXISTS telemetry_at ON telemetry (at);
@@ -103,11 +113,21 @@ CREATE TABLE IF NOT EXISTS log (
   seq INTEGER NOT NULL,         -- numbered from a random start each boot
   t_ms INTEGER NOT NULL,        -- the rover's clock: ms since its boot
   warn INTEGER NOT NULL,
+  src TEXT,                     -- whose line: USB, PAD, WIFI or ROVER
   text TEXT NOT NULL,
   UNIQUE (seq, t_ms, text)      -- a line sent again on a reconnect is kept once
 );
 CREATE INDEX IF NOT EXISTS log_at ON log (at);
 CREATE INDEX IF NOT EXISTS log_warn ON log (warn, at);
+CREATE INDEX IF NOT EXISTS log_src ON log (src, at);
+CREATE TABLE IF NOT EXISTS settings (
+  at REAL NOT NULL,
+  scheme TEXT, sonar TEXT, aim INTEGER, pad TEXT,
+  priority TEXT,                -- the controllers first to last, as "USB,PAD,WIFI"
+  checks_at_boot INTEGER,
+  frame TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS settings_at ON settings (at);
 """
 
 
@@ -130,7 +150,7 @@ class Store:
         whole = json.dumps(frame, separators=(",", ":"))
         if kind == "telemetry":
             self.db.execute(
-                "INSERT INTO telemetry VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO telemetry VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     at,
                     _text(frame.get("mode")),
@@ -148,6 +168,7 @@ class Store:
                     _text(frame.get("halt")),
                     *(_number(frame.get(key)) for _, key in BEARINGS),
                     _text(frame.get("firmware")),
+                    _text(frame.get("control")),
                     whole,
                 ),
             )
@@ -164,13 +185,30 @@ class Store:
                     whole,
                 ),
             )
+        elif kind == "settings":
+            values = frame["settings"]
+            priority = values.get("priority")
+            names = priority if isinstance(priority, list) and all(isinstance(n, str) for n in priority) else None
+            self.db.execute(
+                "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    at,
+                    _text(values.get("scheme")),
+                    _text(values.get("sonar")),
+                    _number(values.get("aim")),
+                    _text(values.get("pad")),
+                    ",".join(names) if names is not None else None,
+                    _flag(values.get("checksAtBoot")),
+                    whole,
+                ),
+            )
         else:
             seq, t_ms = _number(frame.get("seq")), _number(frame.get("t"))
             if seq is None or t_ms is None:
                 return False
             self.db.execute(
-                "INSERT OR IGNORE INTO log VALUES (?,?,?,?,?)",
-                (at, seq, t_ms, 1 if frame.get("warn") is True else 0, frame["log"]),
+                "INSERT OR IGNORE INTO log VALUES (?,?,?,?,?,?)",
+                (at, seq, t_ms, 1 if frame.get("warn") is True else 0, _text(frame.get("src")), frame["log"]),
             )
         self.db.commit()
         return True
@@ -205,9 +243,10 @@ class Exporter:
 
     Gauges for what telemetry and the metrics last said, counters for the
     sonar's pings (which restart from 0 when the rover does, as Prometheus
-    expects of a counter) and for the log lines seen since this started.
-    rover_up says whether the link is up and telemetry fresh; while it is 0
-    nothing else about the rover is reported."""
+    expects of a counter) and for the log lines seen since this started, by
+    level and by whose line it is. rover_up says whether the link is up and
+    telemetry fresh; while it is 0 nothing else about the rover is
+    reported."""
 
     def __init__(self, clock=time.time):
         self.clock = clock
@@ -216,7 +255,8 @@ class Exporter:
         self.telemetry = None
         self.telemetry_at = 0.0
         self.metrics = None
-        self.lines = {"info": 0, "warn": 0}
+        self.settings = None
+        self.lines = {}  # (level, source): lines seen
 
     def set_connected(self, connected):
         with self.lock:
@@ -229,14 +269,18 @@ class Exporter:
                 self.telemetry, self.telemetry_at = frame, at
             elif kind == "metrics":
                 self.metrics = frame["metrics"]
+            elif kind == "settings":
+                self.settings = frame["settings"]
             elif kind == "log":
-                self.lines["warn" if frame.get("warn") is True else "info"] += 1
+                source = frame.get("src")
+                key = ("warn" if frame.get("warn") is True else "info", source if source in SOURCES else "ROVER")
+                self.lines[key] = self.lines.get(key, 0) + 1
 
     def exposition(self):
         """The text Prometheus scrapes."""
         with self.lock:
             fresh = self.connected and self.telemetry is not None and self.clock() - self.telemetry_at < STALE_S
-            telemetry, metrics, lines = self.telemetry, self.metrics, dict(self.lines)
+            telemetry, metrics, settings, lines = self.telemetry, self.metrics, self.settings, dict(self.lines)
         out = []
 
         def metric(name, kind, help_text, samples):
@@ -250,7 +294,8 @@ class Exporter:
 
         metric("rover_up", "gauge", "1 while the link to the rover is up and its telemetry fresh.", [("", int(fresh))])
         metric("rover_log_lines_total", "counter", "Lines of the rover's log seen since this exporter started.",
-               [('{level="info"}', lines["info"]), ('{level="warn"}', lines["warn"])])
+               [(f'{{level="{level}",source="{source}"}}', lines.get((level, source), 0))
+                for level in ("info", "warn") for source in SOURCES])
         if not fresh:
             return "\n".join(out) + "\n"
 
@@ -264,6 +309,9 @@ class Exporter:
                [("", _number(t.get("temperature")))])
         metric("rover_distance_cm", "gauge", "The sonar at each bearing; NaN where no echo came back.",
                [(f'{{bearing="{label}"}}', _distance(t.get(key))) for label, key in BEARINGS])
+        holder = t.get("control")
+        metric("rover_control", "gauge", "1 for the controller that has control, 0 for the others.",
+               [(f'{{source="{source}"}}', int(holder == source)) for source in SOURCES[:3]])
         if t.get("sonar") == "AIM":
             metric("rover_sonar_aim_degrees", "gauge", "Where manual mode aims the sonar, positive left.",
                    [("", _number(t.get("aim")))])
@@ -285,6 +333,18 @@ class Exporter:
                    [("", _number(m.get("pings")))])
             metric("rover_sonar_silent_pings_total", "counter", "Sonar pings since boot that heard no echo.",
                    [("", _number(m.get("noEcho")))])
+        if settings:
+            priority = settings.get("priority")
+            labels = {
+                "scheme": settings.get("scheme"),
+                "sonar": settings.get("sonar"),
+                "pad": settings.get("pad"),
+                "priority": ",".join(priority) if isinstance(priority, list) else None,
+            }
+            text = ",".join(f'{key}="{_label(value)}"' for key, value in labels.items() if isinstance(value, str))
+            metric("rover_settings_info", "gauge", "The rover's settings, as labels.", [(f"{{{text}}}", 1)])
+            metric("rover_checks_at_boot", "gauge", "1 when the rover checks its shield and sonar at boot.",
+                   [("", _flag(settings.get("checksAtBoot")))])
         return "\n".join(out) + "\n"
 
     def serve(self, host, port):
@@ -323,6 +383,11 @@ def _distance(value):
 def _scaled(value, factor):
     value = _number(value)
     return None if value is None else value * factor
+
+
+def _label(value):
+    # Prometheus's text format escapes these three in a label's value.
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def _sample(value):

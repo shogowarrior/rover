@@ -48,7 +48,7 @@ jobs:
       # script the panel loads (joy.js included) and its tests.
       - name: Parse the clients
         run: |
-          python -m py_compile client/drive.py client/ws.py
+          python -m py_compile client/drive.py client/ws.py client/recorder.py client/test_recorder.py
           for script in extras/joystick/joy.js extras/joystick/js/*.js extras/joystick/test/*.js; do
             node --check "$script"
           done
@@ -60,6 +60,11 @@ jobs:
       # not read.
       - name: Panel tests
         run: node --test extras/joystick/test/
+      # client/ws.py's recorder and Prometheus exporter against the frames
+      # in test/vectors/, as the firmware writes them. The standard library
+      # only: no websockets needed.
+      - name: Client tests
+        run: python -m unittest discover -s client -p 'test_*.py'
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
