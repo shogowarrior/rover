@@ -39,6 +39,10 @@ const PIVOT_SIDEWAYS_BACKWARD_LEFT = 16;
 const ROTATE_CLOCKWISE = 17;
 const ROTATE_COUNTERCLOCKWISE = 18;
 const RESUME_AUTONOMOUS = 19;
+// Runs the rover's checks (SelfTest.h): the sonar at each bearing, then each
+// wheel alone and four moves, so the rover belongs on its stand. A command
+// like any other: anything sent after it ends the checks.
+const RUN_CHECKS = 20;
 
 // The control schemes, as protocol::schemeName() in src/Protocol.cpp spells
 // them. A client changes the rover's scheme by sending {"scheme": <name>}
@@ -56,6 +60,25 @@ const SCHEME_ADVANCED = "ADVANCED";
 // compares these with writeTelemetry().
 const MODE_AUTONOMOUS = "AUTONOMOUS";
 const MODE_MANUAL = "MANUAL";
+
+// The settings (src/Settings.h), which the rover sends as {"settings": {...}}
+// to a client that connects and to every client as they change, and takes
+// back in that same shape, holding only what a client changes. These are the
+// names in it, as src/ spells them; check_protocol.py compares them.
+// Where manual mode points the sonar (protocol::sonarName()).
+const SONAR_MODES = ["SWEEP", "FRONT", "AIM"];
+// The pad, as telemetry reports it under "pad" (protocol::padName()).
+const PAD_STATES = ["OFF", "WAITING", "CONNECTED"];
+// Whose a log line is ("src"), who holds control (telemetry's "control"),
+// and the priority's names: the first three are the controllers, which the
+// priority ranks (sourceName() in src/Source.h).
+const SOURCES = ["USB", "PAD", "WIFI", "ROVER"];
+// tuning::SONAR_AIM_MAX_DEG in src/Tuning.h: the furthest either side of
+// straight ahead the sonar aims, in degrees, positive left.
+const AIM_MAX_DEG = 80;
+// tuning::CONTROL_HOLD_MS in src/Tuning.h: a controller keeps control this
+// long after its last command, against those ranked below it.
+const CONTROL_HOLD_MS = 1000;
 
 // kinematics::MOTOR_SPEED_MAX in src/Kinematics.h: the motor driver takes a
 // byte, so no command asks for more.
