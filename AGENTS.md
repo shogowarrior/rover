@@ -25,9 +25,9 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
   is flashed. Build after every firmware change, run the host tests after
   every change to the pure modules, run `tools/check_protocol.py` after
   changing a client or a value a client mirrors, run the panel's tests after
-  changing the browser panel or anything in `src/`, and run both the host
-  tests and the panel's tests after changing `test/vectors/`, whose cases
-  both read.
+  changing the browser panel or anything in `src/`, the client tests after
+  changing a Python client, and the host tests, the panel's tests and the
+  client tests after changing `test/vectors/`, whose cases all three read.
 
 ## Commands
 
@@ -39,6 +39,7 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 ~/.platformio/penv/bin/pio test -e native              # host-side unit tests, no board needed
 python3 tools/check_protocol.py                        # the clients' copies of the protocol match src/
 node --test extras/joystick/test/                      # the browser panel against a fake DOM, no rover needed
+python3 -m unittest discover -s client -p 'test_*.py'  # client/ws.py's recorder and exporter, no rover needed
 ```
 
 Building a board environment needs `src/config.h`. In a fresh clone the
@@ -69,12 +70,17 @@ that turns that on would start exploring. It also never exits on its own.
 |------|------|
 | `src/main.cpp` | Composition root: every object allocated statically and wired by reference; `setup()` and `loop()` |
 | `src/Rover.{h,cpp}` | Mode arbitration, move deadlines, and the one clamped path to the motors. Pure |
-| `src/Explorer.{h,cpp}` | Autonomous exploration state machine; `ExploreParams` holds its thresholds. Pure |
+| `src/Control.{h,cpp}` | Who may drive when several controllers send: every command from USB, the pad and WiFi, in one format, through the priority, with no queue. Pure |
+| `src/Settings.{h,cpp}` | Every setting a controller can change (scheme, sonar, aim, pad control, priority, checks at boot), each change logged, and when to save them. Pure |
+| `src/Source.h` | The controllers (USB, PAD, WIFI) and the rover itself (ROVER), and their names on the wire |
+| `src/EventLog.{h,cpp}` | The rover's log: a fixed ring of short lines, each with whose it is. Pure |
+| `src/SelfTest.{h,cpp}` | The checks: the shield, the sonar, each wheel, the moves. Pure |
+| `src/Explorer.{h,cpp}` | Autonomous exploration state machine, and where manual mode points the sonar; `ExploreParams` holds its thresholds. Pure |
 | `src/MovePatterns.{h,cpp}` | The table from move code to four wheel directions, and telemetry move names. Pure |
-| `src/Protocol.{h,cpp}` | The WebSocket JSON format, both directions, firmware updates' messages included. Pure (ArduinoJson builds on the host) |
+| `src/Protocol.{h,cpp}` | The JSON format, both directions, for the WebSocket and the serial console: commands, settings, telemetry, log lines, metrics, firmware updates' messages. Pure (ArduinoJson builds on the host) |
 | `src/FirmwareUpdate.{h,cpp}` | The rules of a firmware update over the link: one client, the password, stand down, motion ends it, silence, the restart. Pure |
 | `src/Kinematics.{h,cpp}` | Clamping, sensor normalisation, stick-to-move mapping. Pure |
-| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to rover commands, re-send and silence timing, START, SELECT, Cross, when to rewrite the player LEDs. Pure |
+| `src/GamepadSession.{h,cpp}` | The gamepad's rules: pad reports to commands through `Control`, re-send and silence timing, START, SELECT, Cross, the sonar's buttons, the D-pad's speed, pad control off, when to rewrite the player LEDs. Pure |
 | `src/Timing.h` | `timing::reached()` for a deadline, `since()` and `elapsed()` for an age: every wrap-safe time comparison |
 | `src/Hardware.h` | The `Motors`, `RangeScanner` and `FirmwareSlot` interfaces between the pure core and the hardware |
 | `src/MoveCodes.h` | The move-code enum: the wire protocol. Append only |
@@ -84,18 +90,21 @@ that turns that on would start exploring. It also never exits on its own.
 | `src/DriveTrain.{h,cpp}` | `Motors` on the Adafruit Motor Shield V2, and whether it answered at boot |
 | `src/Scanner.{h,cpp}` | `RangeScanner`: the servo and both HC-SR04s |
 | `src/Network.{h,cpp}` | WiFi station, ArduinoOTA, the OTA password both update paths check, confirming a new image once online, and the WiFi-loss failsafe |
-| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands, scheme changes and firmware updates in, telemetry out, driver tracking, heartbeat |
+| `src/RemoteControl.{h,cpp}` | WebSocket server on port 81: commands, settings and firmware updates in; telemetry, settings, log lines and metrics out; driver tracking, heartbeat |
+| `src/SerialControl.{h,cpp}` | The USB serial console as a controller: the same JSON messages, one to a line |
+| `src/SettingsStore.{h,cpp}` | The settings' copy in flash (NVS, through `Preferences`), so they last from boot to boot |
 | `src/FlashSlot.{h,cpp}` | `FirmwareSlot` on arduino-esp32's `Update`: writes the other app slot, checks the image, and the running image's MD5 |
 | `src/Gamepad.{h,cpp}` | PS3 controller over Bluetooth: only the callback's mailbox, and the player LED write. Compiled in only with `ROVER_ENABLE_GAMEPAD` |
 | `src/config.h` | WiFi credentials. Gitignored. **Off limits** |
 | `src/config.example.h` | The template for `config.h`; CI compiles against it |
-| `test/test_*/` | Host tests: kinematics, move patterns, explorer, rover, gamepad, protocol, firmware update |
+| `test/test_*/` | Host tests: kinematics, move patterns, event log, explorer, rover (the checks among it), gamepad, control and settings, protocol, firmware update |
 | `test/fakes/` | Fake `Motors`, `RangeScanner` and `FirmwareSlot` for the host tests |
 | `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does, `Vectors.h` reads `test/vectors/` |
-| `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames |
+| `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames; log lines, metrics and settings (`stream.json`), which the client tests read too |
 | `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
-| `client/ws.py` | Telemetry listener only |
+| `client/ws.py` | Listener only: prints what the rover sends, records it in SQLite (`--db`), serves it to Prometheus (`--prometheus`) |
+| `client/recorder.py` | `ws.py`'s SQLite store and Prometheus exporter; standard library only. `client/test_recorder.py` tests it against `test/vectors/` |
 | `client/rover.ipynb` | Notebook experiments over the same link |
 | `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). Two cells at the top hold every control but the open tab's; under them the view (the rover's scan, or a simulator in the rover's place) beside a Drive tab of sticks or a Program tab of block programs. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
@@ -106,16 +115,19 @@ that turns that on would start exploring. It also never exits on its own.
 
 `main.cpp` builds the object graph and does nothing else. Each pass of
 `loop()` calls `rover.update(now)`, then `gamepad.update()`, which reads its
-own clock (see the mailbox below), then `network.update(now)`, which serves
-OTA and the WebSocket.
+own clock (see the mailbox below), then `serialControl.update(now)`, then
+`network.update(now)`, which serves OTA and the WebSocket, and last writes
+the settings to flash when that is due.
 
 ```
-  RemoteControl (WebSocket :81, Protocol) --+ commands
-  Gamepad (PS3) -> GamepadSession ----------+-----------> Rover --Motors--------> DriveTrain
-  Network (WiFi, OTA) ----------------------+ standDown:    |   (MovePatterns)   (Motor Shield V2)
-                                              link lost,    |
-                                              OTA start  Explorer --RangeScanner--> Scanner
-                                                                                   (servo, HC-SR04s)
+  RemoteControl (WebSocket :81) --+ WIFI  commands     Control
+  SerialControl (USB serial) -----+ USB  ------------> (priority, -----> Rover --Motors--------> DriveTrain
+  Gamepad (PS3) -> GamepadSession + PAD                 no queue)          |   (MovePatterns)   (Motor Shield V2)
+                        |                                                  |
+                        +--- settings ---> Settings <--- reads ------------+  Explorer, SelfTest
+                                              |                            |      |
+  Network (WiFi, OTA) -- standDown: link lost, OTA start --> Rover   SettingsStore  --RangeScanner--> Scanner
+                                                                     (NVS)            (servo, HC-SR04s)
 
   RemoteControl --image--> FirmwareUpdate --FirmwareSlot--> FlashSlot
                            (standDown as it begins;          (Update: the other app slot)
@@ -125,16 +137,29 @@ OTA and the WebSocket.
 `Network` also starts `RemoteControl` once WiFi is up and serves it each loop,
 and gives `FirmwareUpdate` and ArduinoOTA the one OTA password.
 
-**The pure core** is `Rover`, `Explorer`, `GamepadSession`, `MovePatterns`,
-`Protocol`, `Kinematics` and `FirmwareUpdate`, with `Timing.h`. None of it
+Three controllers can drive the rover: the USB serial console (USB), the
+gamepad (PAD) and every WebSocket client together (WIFI). Each sends the
+same messages (`protocol::readMessage()`), and each command goes through
+`Control`, which decides by the priority in `Settings` whether the rover
+acts on it, and on to `Rover::command()`. Changes of setting go to
+`Settings`, which `Rover`, `Control` and `GamepadSession` read, and which
+`main.cpp` loads from flash at boot and writes back when due. Everything
+the rover does and decides goes in the `EventLog` as one short line, with
+whose it is; `main.cpp` echoes each line on the serial console and
+`RemoteControl` sends it to every client.
+
+**The pure core** is `Rover`, `Explorer`, `SelfTest`, `GamepadSession`,
+`Control`, `Settings`, `EventLog`, `MovePatterns`, `Protocol`, `Kinematics`
+and `FirmwareUpdate`, with `Timing.h`. None of it
 calls Arduino: time arrives as a `now` argument, and the hardware is reached
 only through the interfaces in `Hardware.h`. That is what lets
 `pio test -e native` test mode arbitration, move deadlines, clamping, the
-whole of autonomy, the gamepad's rules, the wire format and a firmware
-update's rules on the host, compiled as gnu++11 like the board.
+whole of autonomy, the checks, the gamepad's rules, who may drive, the
+settings, the wire format and a firmware update's rules on the host,
+compiled as gnu++11 like the board.
 
 **The adapters** are `DriveTrain`, `Scanner`, `Network`, `RemoteControl`,
-`FlashSlot` and `Gamepad`. They only translate between the core and a library, and they are not
+`SerialControl`, `SettingsStore`, `FlashSlot` and `Gamepad`. They only translate between the core and a library, and they are not
 host-tested, so keep them thin. Logic that could be wrong belongs in the core,
 with a test. If a core module seems to need `millis()`, a motor or `Serial`,
 pass the value in or add an interface instead.
@@ -164,7 +189,12 @@ fails), and indefinitely if the board never boots that far. The only
 probe's retries. A firmware update over the link holds the loop for each
 chunk it writes, and for up to about 2 s where `Update` erases a 64 KB block
 of flash: that is why a chunk is asked for only with the rover at rest, and
-why any motion ends an update (see below).
+why any motion ends an update (see below). Writing the settings to flash can
+hold the loop for an erase too, so `main.cpp` writes them only once they
+have been still for `SETTINGS_SAVE_DELAY_MS` (3 s) and the rover is at rest
+(`Settings::saveDue()`): never on every change, which the pad's right stick
+makes on every pass while it pans the sonar. The serial console reads at most
+128 bytes a pass, only what has already arrived.
 
 **Motors are released by deadline, not by waiting.** `Rover::drive()` sets the
 wheels and records `moveDeadline`; `Rover::update()`, every loop, releases them
@@ -196,12 +226,31 @@ client that stops sending stops the rover. Clients keep moving by re-sending
 Any client's repeat interval must stay well inside the duration it asks for,
 which the cap bounds.
 
+**Commands are arbitrated, never queued.** `Control` acts on a command the
+moment it arrives, or refuses it; nothing waits to run later, so the rover
+only ever does what someone asked of it just now, and a burst from one
+controller cannot delay another's STOP. A controller that drove holds
+control for `CONTROL_HOLD_MS` (1 s) after its last command, longer than any
+client's 200 ms re-send so a held stick never loses it between two. Within
+that, a controller ranked above it in `Settings`' priority (USB, then PAD,
+then WIFI, by default) takes over at once, and one ranked below is refused,
+the refusal logged once until control passes. STOP is never refused: Stop is
+one press from every controller, though it hands no one control, and a
+higher-ranked controller still driving moves the rover again with its next
+re-send (the log says so). Settings are not commands and are never refused.
+Exploring and the checks are no controller's: any accepted command takes over
+from them.
+
 **Loss of control stops the rover.** Each of these ends with the motors
 released:
 
 - The *driver*, the WebSocket client that last sent a command, disconnects:
-  `Rover::stop()` releases the wheels and keeps the mode. A telemetry-only
-  listener coming and going does not stop anything.
+  `Control::lost()` releases the wheels through `Rover::stop()` and keeps
+  the mode, if the rover's motion is still WiFi's (not if the pad or the
+  console has taken over since, or WiFi's command was refused). A
+  telemetry-only listener coming and going does not stop anything.
+- The USB console has no disconnect to notice: the duration cap is its
+  deadman, so a script holds a move by re-sending it, as the panel does.
 - A client stops answering the heartbeat: the server pings every client each
   second and drops one that misses two pongs in a row, which counts as a
   disconnect. This also keeps a vanished client's full send buffer from
@@ -226,7 +275,9 @@ released:
   never reads as fresh again, however long the silence.
 - Every boot starts in manual (`startupMode()` in `main.cpp`), so a
   recovering rover stays put once `DriveTrain::begin()` has released the
-  wheels (see above). `AUTONOMOUS_AT_POWER_ON` in `Features.h`, off, would
+  wheels (see above). It is deliberately not a setting: any WiFi client can
+  change a setting, and none may send the next power-on exploring. The
+  checks a setting may run at boot (`checksAtBoot`) turn no wheel. `AUTONOMOUS_AT_POWER_ON` in `Features.h`, off, would
   let a power-on (the EN button, and so a USB flash, included) start
   exploring; any other reset (OTA from either path, crash, watchdog,
   brownout) starts in manual regardless. An update over the link restarts
@@ -243,8 +294,13 @@ If you add a new way to lose the link, add its failsafe in the same change.
 
 **Autonomous and manual never both drive.** In `MODE_AUTONOMOUS`,
 `Rover::update()` runs `Explorer::update()`, which may request motion; in
-`MODE_MANUAL` it runs `Explorer::survey()`, which keeps sweeping and measuring
-but never moves. Any command, STOP included, switches to manual; only
+`MODE_MANUAL` it runs `Explorer::survey()`, which points the sonar but never
+moves: it sweeps once, so every bearing has a reading, then holds it ahead
+(`FRONT`, the default), at the angle a client or the pad set (`AIM`), or
+keeps sweeping (`SWEEP`), as `Settings::sonar()` says. The checks
+(`RUN_CHECKS`, code 20) run in manual mode too, taking control as any
+command does; any other command, a stand-down or the driver's disconnect
+ends them. Any command, STOP included, switches to manual; only
 `RESUME_AUTONOMOUS` (code 19) switches back, restarting exploration from a
 fresh sweep. Sent while already exploring, it restarts an explorer that has
 halted (clearing `boxed in` or `sensor silent`) and otherwise does nothing.
@@ -303,23 +359,34 @@ in `Explorer.h`.
 
 ## Wire protocol
 
-JSON text frames over a WebSocket on port 81. `src/Protocol.h` is the
-reference; in short:
+JSON text frames over a WebSocket on port 81, and the same messages, one to
+a line, over the USB serial console (all but a firmware update's).
+`src/Protocol.h` is the reference; in short:
 
 - **Client to rover:** `{"move": <code>, "speed": 0..255, "duration": <ms>}`.
   A missing or mistyped field defaults to STOP, speed 0 and 750 ms, so a
   malformed command stops the rover. Frames over `protocol::COMMAND_MAX_BYTES`
   (256 bytes) and invalid JSON are ignored, and `test_longest_command_fits`
   checks that the longest a client sends fits. Move codes are in
-  `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, and 19
-  `RESUME_AUTONOMOUS`. A browser page may connect only from a file, this
+  `src/MoveCodes.h`: 0 `STOP` to 18 `ROTATE_COUNTERCLOCKWISE`, 19
+  `RESUME_AUTONOMOUS`, and 20 `RUN_CHECKS`, which turns the wheels (the
+  panel asks first). A command from a controller ranked below the one in
+  control is refused (see Invariants). A browser page may connect only from a file, this
   computer or the local network (`protocol::originAllowed()`): the panel
   opens from a file, and a page served from `localhost`, a private IPv4
   address or a `.local` name works too.
-- **Client to rover, configuration:** `{"scheme": "NORMAL" | "ADVANCED"}`
-  (no `move`) sets the control scheme below. It is not a command: it neither
-  takes control nor stops anything, so a client may send it while the rover
-  explores. An unknown scheme name is ignored.
+- **Client to rover, configuration:** `{"settings": {...}}` (no `move`)
+  holding any of `scheme` (`NORMAL` | `ADVANCED`), `sonar` (`SWEEP` |
+  `FRONT` | `AIM`), `aim` (degrees, positive left, clamped to
+  `SONAR_AIM_MAX_DEG`, 80), `pad` (`ON` | `OFF`), `priority` (`USB`, `PAD`
+  and `WIFI` once each, first first) and `checksAtBoot` (true or false).
+  The older `{"scheme": ...}` still sets the scheme alone. A setting is not
+  a command: it neither takes control nor stops anything, so a client may
+  send one while the rover explores, and any controller may change any of
+  them. A value the rover does not know is ignored, and the rest still
+  applies. Each change is logged as its source's (the aim alone is not).
+  The rover keeps its settings in flash, in the shape it sends them, so they
+  last from boot to boot.
 - **Firmware updates,** between the rover and the one client updating it
   (see [Firmware updates](#firmware-updates-over-the-link)): text messages
   carrying `"ota"` (no `move`), which are not commands either, and binary
@@ -342,10 +409,25 @@ reference; in short:
   (32 hex digits, the MD5 of the `firmware.bin` it came from): a rover that
   sends it takes updates over the link, and one from before reads an `ota`
   message as a STOP that takes control, so a client sends none to a rover
-  without it. A frame must fit `protocol::TELEMETRY_MAX_BYTES`
-  (384 bytes; `Protocol.h` says why), and `test_longest_telemetry_fits` fails
-  the host tests when a new key would not. `test/vectors/telemetry.json`
-  holds example frames, key for key, that `test_protocol` checks.
+  without it. `sonar` is always sent, with `aim` while it is `AIM` and
+  `aimCm` once a reading there is in; `check` names the check under way;
+  `pad` (`OFF`, `WAITING` or `CONNECTED`) comes only from a build with the
+  gamepad; `control` names the controller holding control, while one does.
+  A frame must fit `protocol::TELEMETRY_MAX_BYTES` (512 bytes; `Protocol.h`
+  says why), and `test_longest_telemetry_fits` fails the host tests when a
+  new key would not. `test/vectors/telemetry.json` holds example frames,
+  key for key, that `test_protocol` checks.
+- **Rover to clients, besides telemetry** (none has `mode`; a client tells
+  each by its key): `{"settings": {...}}`, every setting, to a client as it
+  connects and to every client as they change (at most every
+  `SETTINGS_BROADCAST_MS`, 250 ms); `{"log": text, "seq", "t", "src",
+  "warn"?}`, a line of the `EventLog` (`src` is `USB`, `PAD`, `WIFI` or
+  `ROVER`), every line still held to a client as it connects and each new
+  one to all; and `{"metrics": {...}}` every `METRICS_INTERVAL_MS` (2 s):
+  uptime, loop rate and longest pass, free heap and its low mark, the WiFi
+  signal, clients, and the sonar's pings and silent pings.
+  `test/vectors/stream.json` holds examples that `test_protocol` and the
+  client tests check.
 
 ## The browser control panel
 
@@ -959,14 +1041,30 @@ go. START sends `RESUME_AUTONOMOUS`. Cross sends STOP, driving or not, as
 the panel's Stop does, and a stick held through it waits for centre before
 it drives again; pressed with START, Cross wins.
 
+The pad is the PAD controller: its commands go through `Control`, so one
+ranked below another still driving is refused, and a refused move drives
+nothing and sends no STOP on release; it drives once that hold lapses. The
+rest of its buttons are settings, which take no control: the right stick
+pans the sonar (`AIM`, up to `GAMEPAD_PAN_DEG_PER_S` at full deflection,
+from where it aims), R3 points it ahead (`FRONT`) and Triangle sweeps; the
+D-pad's up and down step the top speed by `GAMEPAD_SPEED_STEP`. Pad control
+is a setting too (`pad`, from any controller): off, the pad drives and
+changes nothing, but Cross still stops the rover, and player LED 4 says so.
+Turned off or on, whatever the pad drove stops and a held stick waits for
+centre. A PS3 pad connects to the host MAC stored in it, which the rover
+takes as its own (`PS3_HOST_MAC` in `Features.h`). SixaxisPairTool or
+sixpair is needed again only when that changes: the pad paired with
+another host (plugged into a PS3, say), or `PS3_HOST_MAC` edited.
+
 **Control schemes.** The rover holds one scheme for every controller
-(`main.cpp` owns it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`),
+(`Settings` holds it; the default is `DEFAULT_CONTROL_SCHEME` in `Features.h`,
+and the setting in flash wins over it),
 so the pad and the panel always drive the same way. NORMAL is the above.
 ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
 quadrant pick a pivot, holding R1 a pivot sideways; the panel gives the
 pivots a second stick, with the same choice as a selector over it. SELECT
 toggles the scheme, the panel's toggle on the rover target
-sends the `scheme` message, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
+sends the scheme as a setting, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
 rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
 a Bluetooth send from the loop task, and any client can flip the scheme as
 fast as it sends.

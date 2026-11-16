@@ -218,6 +218,18 @@ On the stand:
   `PIVOT_LEFT_FORWARD` and turns only the right-hand wheels, forward. The
   stick's quadrant picks the pivot ([mecanum.md](mecanum.md)), so a push
   straight up can show either. SELECT again goes back to NORMAL.
+- **D-pad up** and **down** step the top speed by 25: the stick fully
+  pushed drives faster, then slower. The log says each new top speed.
+- The **right stick** pans the sonar, left and right, faster the further it
+  is pushed; telemetry's `sonar` shows `AIM` and `aim` the angle, and the
+  servo follows. **R3** (the right stick pressed) points it straight ahead
+  (`FRONT`), **Triangle** sets it sweeping (`SWEEP`). None of them takes
+  control or stops an exploring rover.
+- Turn **pad control** off from the panel's Options: player LED 4 lights,
+  the sticks, triggers and the other buttons do nothing, and **Cross**
+  still stops the rover. A stick held as it goes off stops the wheels at
+  once. On again, LED 1 or 2 shows the scheme, and the stick drives once
+  it has been let go.
 
 If the stick drives backward while `w` in `drive.py` drives forward, or L2 and
 R2 are swapped, the fault is in `kinematics::translateGamepad`
@@ -237,7 +249,8 @@ With the rover on the stand, running and connected:
    still. Any reset other than a power-on (OTA, crash, watchdog, brownout)
    starts in manual.
 2. Press EN or power-cycle: the mode is `MANUAL` and the wheels stay still;
-   the sonar sweeps once, then holds straight ahead. A USB flash resets the
+   the sonar sweeps once, then does what its setting says (Front, the
+   default, holds it straight ahead). A USB flash resets the
    board through EN too, and comes up the same way.
    Press EN while the wheels turn: they keep turning while you hold it and
    for about half a second after, because the shield's PWM chip is not reset
@@ -320,7 +333,7 @@ password typed in:
    - start one from a second tab while the first runs: the second is
      refused with "Another update is under way.".
    After each, the rover runs the firmware it had: Options shows the same
-   build as before, and after EN too (EN starts it exploring: on the stand).
+   build as before, and after EN too.
 5. **The password.** Update with no password typed stops with "This rover
    has an OTA password: type it in, then press Update again.", and with a
    wrong one with "Wrong OTA password."; either way the old firmware stays.
@@ -332,7 +345,7 @@ password typed in:
    saying it is still trying out new firmware, until it has run half a
    minute on WiFi. Then build a copy whose WiFi settings name a network that
    is not there, and send it from the panel. It restarts and never comes
-   back on the link. Press EN (on the stand: EN starts it exploring). The
+   back on the link. Press EN (on the stand). The
    board must come back on the previous firmware, on WiFi, and Options must
    show the build it ran before. Any reset within half a minute of an
    update, a brownout as the motors start or the serial monitor opening
@@ -342,3 +355,39 @@ password typed in:
    panel from a file, and `client/drive.py`, still connect. A page can still
    get in from a sandboxed frame, whose origin reads like a file's, which is
    why updates need the password.
+
+## 11. Controllers, settings and the log
+
+On the stand, running and connected from the panel, with Options open on
+the log. A serial monitor on the USB cable is a controller too: opening it
+resets the board through EN on most boards, which comes up in manual.
+
+1. **The serial console.** Open it at 115200 baud
+   (`~/.platformio/penv/bin/pio device monitor -e car_wire`): every line of
+   the rover's log prints there, after whose it is. Type
+   `{"move": 1, "speed": 120, "duration": 1000}` and Enter: the wheels turn
+   forward for a second and stop. Type `{"move": 0}`: a stop. Type
+   `{"settings": {"sonar": "SWEEP"}}`: the sonar sweeps, and the panel's
+   Options shows Sweep. A line that is not JSON is logged as ignored.
+2. **The priority.** With the default order (USB, the pad, WiFi), hold a
+   drive on the panel's stick and send a move from the serial console: the
+   console takes over at once, and the log says USB has control. Within a
+   second of the console's last move, the panel's stick is refused, once,
+   in the log ("Refused ...: USB has control"), and its Stop still stops the
+   wheels. A second later the panel drives again. With a pad, the same
+   between the pad and the panel. Change the order in Options and try again.
+3. **Settings last.** Change the sonar, the aim, the order and the checks
+   at boot in Options. Wait three seconds with the wheels still: the log
+   says "Settings: saved". Press EN: the log says "Settings: from flash",
+   and Options shows what you set. The mode is still `MANUAL`: starting
+   mode is no setting.
+4. **The checks.** Run checks from Options, on the stand: the panel asks
+   first. The log reports the shield, each bearing's echoes, then each wheel
+   alone and each move. Any drive, Stop or Autonomous ends them at once.
+   Turn the checks at boot on and press EN: the log reports the shield and
+   the sonar, and no wheel turns.
+5. **Keeping it.** On a computer on the same network,
+   `python3 client/ws.py --db rover.db --prometheus 9101` records the
+   stream and serves `http://127.0.0.1:9101/metrics`; after a minute,
+   `sqlite3 rover.db "SELECT src, text FROM log ORDER BY at"` lists the
+   log with whose each line is.
