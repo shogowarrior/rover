@@ -1180,14 +1180,40 @@ bool pingedAt(const std::vector<int>& angles, int servo) {
   return false;
 }
 
+// The one sweep every mode starts with, done; returns the pings so far.
+size_t sweptOnce(Harness& h) {
+  survey(h, 2000, Explorer::SONAR_SWEEP, 0);
+  TEST_ASSERT_TRUE(h.explorer.hasScan());
+  return h.scanner.pingAngles.size();
+}
+
+// A rover at rest does not swing its servo back and forth: whatever the
+// mode, one sweep so every bearing has a reading, then the held look.
+void test_every_mode_sweeps_once_before_it_holds(void) {
+  const Explorer::SonarMode modes[] = {Explorer::SONAR_FRONT, Explorer::SONAR_AIM};
+  for (Explorer::SonarMode mode : modes) {
+    Harness h;
+    survey(h, 3000, mode, 30);
+    TEST_ASSERT_TRUE(h.explorer.hasScan());
+    const std::vector<int> first = pingsFrom(h, 0);
+    TEST_ASSERT_TRUE(first.size() > 10);
+    const std::vector<int> sweep(first.begin(), first.begin() + Explorer::BEARING_COUNT);
+    const int bearings[] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG};
+    for (int servo : bearings) TEST_ASSERT_TRUE(pingedAt(sweep, servo));
+    const int held = mode == Explorer::SONAR_FRONT ? FRONT_DEG : servoFor(30);
+    for (size_t i = Explorer::BEARING_COUNT; i < first.size(); i++) TEST_ASSERT_EQUAL_INT(held, first[i]);
+  }
+}
+
 // FRONT ignores the aim it is handed: it is always straight ahead.
 void test_front_holds_the_sonar_straight_ahead(void) {
   Harness h;
+  const size_t before = sweptOnce(h);
   survey(h, 2000, Explorer::SONAR_FRONT, 45);
-  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 10);
-  for (int angle : h.scanner.pingAngles) TEST_ASSERT_EQUAL_INT(FRONT_DEG, angle);
+  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() - before >= 10);
+  for (int angle : pingsFrom(h, before)) TEST_ASSERT_EQUAL_INT(FRONT_DEG, angle);
   // Spaced as a sweep's pings are, for the echo to die away.
-  for (size_t i = 1; i < h.scanner.pingTimes.size(); i++) {
+  for (size_t i = before + 1; i < h.scanner.pingTimes.size(); i++) {
     TEST_ASSERT_TRUE(h.scanner.pingTimes[i] - h.scanner.pingTimes[i - 1] >=
                      static_cast<uint32_t>(ExploreParams().pingIntervalMs));
   }
@@ -1195,10 +1221,11 @@ void test_front_holds_the_sonar_straight_ahead(void) {
 
 void test_aim_points_the_sonar_where_asked(void) {
   Harness h;
+  const size_t before = sweptOnce(h);
   h.scanner.setArc(servoFor(30), servoFor(30), 42.0f);
   survey(h, 1000, Explorer::SONAR_AIM, 30);
-  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 5);
-  for (int angle : h.scanner.pingAngles) TEST_ASSERT_EQUAL_INT(servoFor(30), angle);
+  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() - before >= 5);
+  for (int angle : pingsFrom(h, before)) TEST_ASSERT_EQUAL_INT(servoFor(30), angle);
   const Explorer::Look& look = h.explorer.lastLook();
   TEST_ASSERT_TRUE(look.valid);
   TEST_ASSERT_EQUAL_INT(30, look.angleDeg);
@@ -1209,6 +1236,7 @@ void test_aim_points_the_sonar_where_asked(void) {
 // the old angle after the change, and none before the servo could get there.
 void test_a_new_aim_moves_the_sonar_before_its_next_ping(void) {
   Harness h;
+  sweptOnce(h);
   survey(h, 600, Explorer::SONAR_AIM, 30);
   const size_t before = h.scanner.pingAngles.size();
   const uint32_t changedAt = h.now;
@@ -1243,6 +1271,7 @@ void test_a_look_along_a_bearing_keeps_its_reading_live(void) {
 
 void test_sweep_after_a_look_measures_every_bearing_again(void) {
   Harness h;
+  sweptOnce(h);
   survey(h, 500, Explorer::SONAR_FRONT, 0);
   const size_t before = h.scanner.pingAngles.size();
   survey(h, 2000, Explorer::SONAR_SWEEP, 0);
@@ -1278,9 +1307,9 @@ void test_exploring_after_a_look_sweeps_before_it_moves(void) {
 
 void test_pings_and_silent_pings_are_counted(void) {
   Harness h;
-  h.scanner.setArc(FRONT_DEG, FRONT_DEG, -1.0f);
-  survey(h, 1000, Explorer::SONAR_FRONT, 0);
-  TEST_ASSERT_TRUE(h.scanner.pings > 0);
+  h.scanner.setAll(-1.0f);
+  survey(h, 3000, Explorer::SONAR_FRONT, 0);
+  TEST_ASSERT_TRUE(h.scanner.pings > Explorer::BEARING_COUNT);
   TEST_ASSERT_EQUAL_UINT32(h.scanner.pings, h.explorer.pingCount());
   TEST_ASSERT_EQUAL_UINT32(h.scanner.pings, h.explorer.silentPingCount());
   const uint32_t silent = h.explorer.silentPingCount();
@@ -1419,6 +1448,7 @@ int main(int, char**) {
   RUN_TEST(test_echo_after_silence_resumes_exploring);
   RUN_TEST(test_a_sweep_that_hears_an_echo_resets_the_silent_count);
   // manual mode's sonar
+  RUN_TEST(test_every_mode_sweeps_once_before_it_holds);
   RUN_TEST(test_front_holds_the_sonar_straight_ahead);
   RUN_TEST(test_aim_points_the_sonar_where_asked);
   RUN_TEST(test_a_new_aim_moves_the_sonar_before_its_next_ping);

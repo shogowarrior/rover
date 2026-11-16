@@ -602,11 +602,11 @@ void test_pad_control_off_leaves_only_cross(void) {
   now = hold(rightStick(127, 0), now, 500);
   session->update(with(PAD_SELECT, pad(0, 0, 0, 0, now)), now);
   session->update(with(PAD_UP, pad(0, 0, 0, 0, now + 10)), now + 10);
-  session->update(with(PAD_R3, pad(0, 0, 0, 0, now + 20)), now + 20);
+  session->update(with(PAD_TRIANGLE, pad(0, 0, 0, 0, now + 20)), now + 20);
   session->update(with(PAD_START, pad(0, 0, 0, 0, now + 30)), now + 30);
   TEST_ASSERT_EQUAL_INT(drives, motors->driveCalls);
   TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);
-  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, rover->status().sonar);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   // One STOP when it was turned off, and no stream of them since.
   TEST_ASSERT_TRUE(motors->releaseCalls - releases <= 3);

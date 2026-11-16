@@ -515,17 +515,22 @@ std::vector<int> pingsFrom(size_t from) {
 
 void test_manual_mode_points_the_sonar_as_set(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);  // the default
+  rover->setSonar(Explorer::SONAR_SWEEP, 0, 0);
+  runFor(0, 4000);
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, rover->status().sonar);
-  rover->setSonar(Explorer::SONAR_FRONT, 0, 0);
-  runFor(0, 2000);
-  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);
-  TEST_ASSERT_TRUE(scanner->pingAngles.size() >= 10);
-  for (int angle : scanner->pingAngles) TEST_ASSERT_EQUAL_INT(FRONT_SERVO, angle);
+  const std::vector<int> swept = pingsFrom(0);
+  const int bearings[] = {20, 55, 90, 125, 160};
+  for (int servo : bearings) {
+    int times = 0;
+    for (int angle : swept) times += angle == servo;
+    TEST_ASSERT_TRUE(times >= 2);  // over and over, not once
+  }
 
   scanner->setArc(FRONT_SERVO - 30, FRONT_SERVO - 30, 42.0f);
-  rover->setSonar(Explorer::SONAR_AIM, 30, 2000);
+  rover->setSonar(Explorer::SONAR_AIM, 30, 4000);
   const size_t before = scanner->pingAngles.size();
-  runFor(2000, 1000);
+  runFor(4000, 1000);
   for (int angle : pingsFrom(before)) TEST_ASSERT_EQUAL_INT(FRONT_SERVO - 30, angle);
   const Rover::Status status = rover->status();
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_AIM, status.sonar);
@@ -543,8 +548,10 @@ void test_the_aim_is_clamped(void) {
   TEST_ASSERT_EQUAL_INT(tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
   rover->setSonar(Explorer::SONAR_AIM, -200, 0);
   TEST_ASSERT_EQUAL_INT(-tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
-  runFor(0, 1000);
-  for (int angle : scanner->pingAngles) TEST_ASSERT_EQUAL_INT(FRONT_SERVO + tuning::SONAR_AIM_MAX_DEG, angle);
+  runFor(0, 3000);  // the one sweep, then the held aim
+  const std::vector<int> held = pingsFrom(Explorer::BEARING_COUNT);
+  TEST_ASSERT_TRUE(held.size() >= 5);
+  for (int angle : held) TEST_ASSERT_EQUAL_INT(FRONT_SERVO + tuning::SONAR_AIM_MAX_DEG, angle);
 }
 
 // A setting, not a command: an exploring rover explores on, and sweeps its
@@ -754,13 +761,13 @@ void test_mode_changes_and_stand_downs_are_logged(void) {
   TEST_ASSERT_TRUE(logged("Stood down: WiFi lost", EventLog::WARN));
   rover->command(99, 100, 300, 40);
   TEST_ASSERT_TRUE(logged("Unknown move code 99: stopped", EventLog::WARN));
-  rover->setSonar(Explorer::SONAR_FRONT, 0, 50);
-  TEST_ASSERT_TRUE(logged("The sonar looks ahead in manual mode"));
+  rover->setSonar(Explorer::SONAR_SWEEP, 0, 50);
+  TEST_ASSERT_TRUE(logged("The sonar sweeps in manual mode"));
   // A repeated command is not a mode change: one line, not one per command.
   const uint32_t lines = events->nextSeq();
   rover->command(MOVE_FORWARD, 100, 300, 60);
   rover->command(MOVE_FORWARD, 100, 300, 70);
-  rover->setSonar(Explorer::SONAR_FRONT, 0, 80);
+  rover->setSonar(Explorer::SONAR_SWEEP, 0, 80);
   TEST_ASSERT_EQUAL_UINT32(lines, events->nextSeq());
 }
 
