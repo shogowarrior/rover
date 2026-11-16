@@ -53,8 +53,9 @@ class Rover {
   // A command from any external source, straight off the wire: `move` is the
   // raw integer and is validated here. Switches to MODE_MANUAL, except for
   // RESUME_AUTONOMOUS, which switches back -- or, already exploring, restarts
-  // a halted explorer. RUN_CHECKS starts the checks (SelfTest.h), in manual;
-  // any command ends them. An unknown code stops the rover.
+  // a halted explorer. RUN_CHECKS starts the checks (SelfTest.h), in manual,
+  // and re-sent holds them; any other command ends them. An unknown code
+  // stops the rover.
   void command(int move, int speed, int durationMs, uint32_t now);
 
   // Release the motors, keeping the mode, and end the checks: the client

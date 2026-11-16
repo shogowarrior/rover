@@ -62,7 +62,20 @@ void SelfTest::start(uint32_t now, bool motorsReady, bool wheels) {
   next(now);
 }
 
+bool SelfTest::press(uint32_t now, bool motorsReady) {
+  if (pressed && timing::since(now, pressedAt) < tuning::CHECK_HOLD_MS) {
+    pressedAt = now;  // held: the run goes on, or has ended and stays ended
+    return false;
+  }
+  cancel(now, "started again");
+  pressed = true;
+  pressedAt = now;
+  start(now, motorsReady, true);
+  return true;
+}
+
 void SelfTest::cancel(uint32_t now, const char* why) {
+  pressed = false;
   if (!running()) return;
   step = -1;
   log.add(now, EventLog::INFO, "Checks stopped: %s", why);
@@ -117,6 +130,14 @@ SelfTest::Action SelfTest::stepDrive(uint32_t now, bool motorsIdle) {
   const DriveStep& drive = DRIVE_STEPS[step - SONAR_STEP_COUNT];
   Action action;
   if (!sent) {
+    // Every wheel stands still here: no step turns one unless held.
+    if (!pressed || timing::since(now, pressedAt) >= tuning::CHECK_HOLD_MS) {
+      step = -1;
+      pressed = false;
+      log.add(now, EventLog::WARN, "Checks stopped: no RUN_CHECKS for %u ms, so no wheel turns",
+              static_cast<unsigned>(tuning::CHECK_HOLD_MS));
+      return action;
+    }
     sent = true;
     log.add(now, EventLog::INFO, "%s", drive.say);
     action.drive = drive.move == STOP ? &wheelAlone(drive.wheel) : findMovePattern(drive.move);

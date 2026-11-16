@@ -81,6 +81,8 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 //     would turn the diagonal under this operator's thumb into a pivot.
 //   * The D-pad's up and down step the top speed, which the stick reaches at
 //     full deflection and a trigger at a full pull, by GAMEPAD_SPEED_STEP.
+//     It goes back to GAMEPAD_MAX_SPEED when the pad goes silent or is
+//     turned off or on, so a pad picked up again never starts fast.
 //   * The sonar's buttons are configuration, like the panel's (Settings::
 //     setSonar()): they take no control. The right stick pans the sonar,
 //     faster the further it is pushed, from where it is aimed (straight ahead
@@ -125,6 +127,8 @@ class GamepadSession {
   // Stop what the pad is driving, if anything, and forget it.
   void stopDriving(uint32_t now);
   void notePresence(bool present, uint32_t now);
+  // Back to GAMEPAD_MAX_SPEED: the pad gone, or turned off or on.
+  void resetTopSpeed(uint32_t now);
   void stepTopSpeed(const GamepadReport& report, uint32_t now);
   void aimSonar(const GamepadReport& report, bool fresh, uint32_t now);
 

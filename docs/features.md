@@ -129,6 +129,38 @@ check how stupid the UI looks with a pane in b/w squzzed? please put smore work 
 like why does the normal/advanced be disabled in drive mode. Rover or simulator should be the first option an. can we squuse all this in 2 cells at the top instead of whtever this is
 ```
 
+On 2026-11-16 the owner had flashed the rover and found it scanning, trying
+to move, stopping and starting over by itself. Their words, in order, the
+first of them in full:
+
+```text
+the start should always be in default manual mode. it can scan the ultrasonar but the car doesnt have to move. also add a toggle for ultrasoner auto, alway front or manual (some sort of angle controller)? check if it. can fit the joystic part to control the sonar. for now. it scans, trys to move and keeps scanning, stops and then repeats the procss. I have no idea how to capture the logs. is it possible to capture the logs and metrics ? I believe i had added this feature but never tested it. take it completion. we should be able to see the logs in the UI. i think you support this already. i had also added support for ps3 controller but not sure if you have taken care of it tooo. i ha the buttons mapped for both analog sticks and turning at the top. i had other buttons mapped too but not sure. please used the other buttons and figure out a scheme. a toggle to control using ps3 should also be there. i forgot if the sixpairaccess tool is still needed but i never changed its setting so should work. with so many toggle, i am wondering if some/all can move into settings popup. will make the UI cleaner except for the ones needed in the main UI. Work on all 3 and figure oyut the UI thing i mentioned for all 3
+```
+
+```text
+whatever it is doing feels like diagnostics and if so , we shpuld add an option to run diganostics checks
+```
+
+```text
+think of this UI as controlling and managing, the rover. like a robot right> we are doing good so far
+```
+
+```text
+check if we can introduce the concept of time series data which can help with graphs and other thigns than just sqlite for stuff. like prometheus ow whatever is popular for arduino here
+```
+
+```text
+yeah use dbs insteae of jsonl file i mean better anbd faster right? we dont have to scan the whole files to get to what we need
+```
+
+```text
+can you please flash to stop the rover from moving the ultrasonar and other stuffpl ease. its connected and still moving. There should also be a way to send command to it over serial/this usb along with ps3 bluetooth, wifi. As for how to handle multiple requests. there can be a queue which can be used? but then what it means is whatever was quesed for say 1 minute and the rover will not be in realtime, find a way to address this. The log should also let filter by client used to control and which control was accepted , just liek in case of multiple requests at the same time. we need to find a priority which might be helpful.  lets put this in settings which the rover can use. also this settings can be cionfiguration (json. ini, yaml whatever) which can be saved from restart to restart and are global. Like run diagnostics boolean can also be part of the global config. we expose it as UI but behind the scense, it can be a config file saved on the rover in any case, the format of command from any source should be in same format if you havent done already. This will ensure optiomnal resuable code. keep that ibn mind do the immideate flash first as i said to stop moving and keep working on these and intergrate with your existing plan as it makes sense
+```
+
+```text
+i have disconnected the rover for now so flashing can be done later
+```
+
 ## Coverage
 
 | The owner's words | Where |
@@ -188,6 +220,21 @@ like why does the normal/advanced be disabled in drive mode. Rover or simulator 
 | like why does the normal/advanced be disabled in drive mode. | Done: [F8](#f8-two-cells-at-the-top-two-panes-below), never greyed for want of a link |
 | Rover or simulator should be the first option an. | Done: [F8](#f8-two-cells-at-the-top-two-panes-below) |
 | can we squuse all this in 2 cells at the top instead of whtever this is | Done: [F8](#f8-two-cells-at-the-top-two-panes-below) |
+| the start should always be in default manual mode. it can scan the ultrasonar but the car doesnt have to move. | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
+| a toggle for ultrasoner auto, alway front or manual (some sort of angle controller)? ... fit the joystic part to control the sonar | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), the sonar setting and its aim |
+| is it possible to capture the logs and metrics ? ... we should be able to see the logs in the UI | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
+| please used the other buttons and figure out a scheme. a toggle to control using ps3 should also be there. | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
+| i forgot if the sixpairaccess tool is still needed | Answered: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
+| with so many toggle, i am wondering if some/all can move into settings popup | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), in Options |
+| we shpuld add an option to run diganostics checks | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), the checks |
+| introduce the concept of time series data ... like prometheus | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), `client/ws.py --prometheus` |
+| use dbs insteae of jsonl file | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), SQLite (`client/ws.py --db`) |
+| can you please flash to stop the rover from moving | Built and merged (PR #12) for the owner's own flash: an agent never flashes |
+| a way to send command to it over serial/this usb along with ps3 bluetooth, wifi | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), the serial console |
+| how to handle multiple requests ... the rover will not be in realtime, find a way to address this ... we need to find a priority | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), a priority and no queue |
+| The log should also let filter by client used to control and which control was accepted | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
+| this settings can be cionfiguration ... saved from restart to restart and are global. Like run diagnostics boolean | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers), in flash |
+| the format of command from any source should be in same format | Done: [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers) |
 
 ## Order of work
 
@@ -221,6 +268,9 @@ darker looks and a Dark | Light toggle, came on 2026-11-05, beside the
 layout work the owner asked for the same day.
 [F8](#f8-two-cells-at-the-top-two-panes-below), the two cells at the top
 and two panes below, came on 2026-11-14 and replaced that layout.
+[F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers),
+the rover as a robot to manage, came on 2026-11-16: manual at boot first
+(PR #12), then the rest.
 
 After each step: the panel tests, `tools/check_protocol.py`, layout measured
 at 375, 1024 x 768, 1180 x 820, 1280 and about 1600 px (see the handoff for
@@ -2126,6 +2176,93 @@ the simulator's speed hidden with its move under 70 px. Panel tests
 - on an iPhone, a tap into the address or the OTA password: their words
   are 13 px, and Safari zooms the page into a field whose text is under
   16 px, which no headless check shows.
+
+## F9. A rover to manage: manual at boot, settings, logs, and three controllers
+
+**Asked.** The owner's words are under
+[The request, verbatim](#the-request-verbatim), 2026-11-16. In short: every
+boot in manual, the sonar looking but the wheels still; a choice of sonar
+(sweep, ahead, or aimed, with something to aim it); the rover's logs and
+metrics, kept and shown in the panel; the PS3 pad's spare buttons put to
+use, and a way to turn the pad off; checks on demand; graphs over time;
+commands over the USB cable too, in the same format as WiFi and the pad;
+a priority, not a queue, when several controllers send at once, and a log
+that says whose command was taken; settings kept on the rover from boot to
+boot; and the toggles in Options, all but those driving needs.
+
+**Before.** A boot from the EN button, which a USB flash and opening the
+serial monitor both press, started exploring (`AUTONOMOUS_AT_POWER_ON`):
+the "scans, tries to move, stops, repeats" the owner saw. In manual mode
+the sonar kept sweeping. The rover kept no log a client could see, and no
+metrics. The pad used its sticks, triggers, L1, R1, START, SELECT and
+Cross. Any client's command took control at once, the scheme was the only
+setting, and it was lost at every boot.
+
+**Done.** AGENTS.md says how each part works; this says what changed and
+why.
+
+- **Manual at every boot** (PR #12, built for the owner to flash):
+  `AUTONOMOUS_AT_POWER_ON` is off, so every boot waits, stopped, until
+  Autonomous (or the pad's START). It is not a setting, on purpose: any
+  WiFi client can change a setting, and none may send the next power-on
+  exploring.
+- **The sonar in manual mode** is a setting: Front (the default: one sweep,
+  so every bearing has a reading, then held straight ahead), Sweep, or Aim
+  at an angle up to 80 degrees either side. The panel aims it from Options;
+  the pad's right stick pans it, R3 points it ahead and Triangle sweeps.
+  Exploring always sweeps and weaves, whatever the setting.
+- **Three controllers, one format.** The USB serial console takes the same
+  JSON messages as a WebSocket client, one to a line, and the pad's presses
+  become the same commands; all three go through `Control`. There is no
+  queue, since a queue would leave the rover acting on what someone asked a
+  minute ago. A command is acted on at once or refused: a controller that
+  drove holds control for 1 s after its last command, one ranked above it
+  takes over at once, one below is refused, and Stop is never refused. The
+  default order is USB, the pad, then WiFi: the cable is someone at the
+  bench, and the pad is in someone's hands, while any client on the network
+  can send.
+- **Settings on the rover**, kept in flash (NVS) as the same JSON they are
+  sent in, written once they have been still for 3 s with the rover at
+  rest: the scheme, the sonar and its aim, pad control, the priority, and
+  whether to run the checks at boot. Any controller may change any of
+  them; each change is a line in the log with whose it was. A copy that
+  does not read leaves the defaults.
+- **The log**: the rover's own lines (the boot and why, sweeps, decisions,
+  mode changes, the shield, the links), each with whose it is (USB, PAD,
+  WIFI or ROVER): who took control, whose command was refused and why,
+  who changed a setting. The last 32 lines go to a client as it connects,
+  each new one as it is added, and every line is echoed on the serial
+  console.
+- **Metrics** every 2 s: uptime, loop rate and its longest pass, free heap
+  and its low mark, WiFi signal, clients, and the sonar's pings and silent
+  pings.
+- **The checks**: Run checks (`RUN_CHECKS`, code 20) checks the shield, pings
+  each bearing three times, turns each wheel alone and then the moves, each
+  result a line in the log; the panel asks first, since the moves drive the
+  rover forward and sideways. They are held like a move: the panel re-sends
+  `RUN_CHECKS` while they run, and once a client stops (a closed panel, a
+  script that died) no other wheel turns. A single `RUN_CHECKS` typed into
+  the serial console checks the shield and the sonar, then stops. The
+  checks at boot, a setting, do only the shield and the sonar.
+- **The pad**: D-pad up and down step its top speed (back to 50 when the pad
+  goes silent or is turned off), the right stick, R3 and
+  Triangle the sonar, and pad control off leaves only Cross, as Stop;
+  player LED 4 says it is off. The SixaxisPairTool (or sixpair) is needed
+  again only if the pad has been paired with another host since, or
+  `PS3_HOST_MAC` changes.
+- **Keeping it on the computer**: `client/ws.py --db rover.db` records
+  telemetry, the log (by controller), metrics and settings in SQLite,
+  indexed by time, so a question is a query rather than a read of a whole
+  file; `--prometheus 9101` serves the latest values for Prometheus to
+  scrape and Grafana to graph. `--import` loads a recording the panel saved.
+  `client/drive.py` prints the log between its telemetry rows.
+- **The panel**: the sonar, pad control, the priority and the checks at boot
+  in Options; Run checks there too; the log, filtered by controller and
+  level, and graphs of the metrics.
+
+**Left for the bench** (docs/bench-checklist.md): the serial console's
+commands, the priority with the pad and the panel at once, the settings
+lasting through a reset, and the pad's new buttons.
 
 ## Menu or explicit: every control
 

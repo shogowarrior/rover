@@ -526,6 +526,32 @@ void test_the_d_pad_steps_the_top_speed(void) {
   TEST_ASSERT_TRUE(motors->lastSpeed <= tuning::GAMEPAD_SPEED_STEP / 2 + 1);
 }
 
+// A faster top speed lasts only while the pad does: gone silent, or turned
+// off and on, it starts again from the boot's.
+void test_the_top_speed_resets_when_the_pad_goes(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  for (int i = 0; i < 4; i++) session->update(with(PAD_UP, pad(0, 0, 0, 0, i)), i);
+  uint32_t now = hold(pad(0, -127, 0, 0, 0), 10, 300);
+  TEST_ASSERT_EQUAL_UINT8(tuning::GAMEPAD_MAX_SPEED + 4 * tuning::GAMEPAD_SPEED_STEP, motors->lastSpeed);
+
+  // Silent, then back.
+  now += tuning::GAMEPAD_SILENCE_MS + 100;
+  session->update(pad(0, 0, 0, 0, now - tuning::GAMEPAD_SILENCE_MS - 100), now);
+  TEST_ASSERT_TRUE(logged("Pad: top speed back to 50"));
+  now = hold(pad(0, 0, 0, 0, 0), now + 10, 300);  // centred: it drives again from centre
+  now = hold(pad(0, -127, 0, 0, 0), now, 300);
+  TEST_ASSERT_EQUAL_UINT8(tuning::GAMEPAD_MAX_SPEED, motors->lastSpeed);
+
+  // Faster again, then off and on.
+  session->update(with(PAD_UP, pad(0, 0, 0, 0, now)), now);
+  setPad(false, now + 5);
+  now = hold(pad(0, 0, 0, 0, 0), now + 10, 100);
+  setPad(true, now);
+  now = hold(pad(0, 0, 0, 0, 0), now + 10, 100);
+  now = hold(pad(0, -127, 0, 0, 0), now, 300);
+  TEST_ASSERT_EQUAL_UINT8(tuning::GAMEPAD_MAX_SPEED, motors->lastSpeed);
+}
+
 // The right stick pans the sonar, faster the further it is pushed, and right
 // is to the right: negative angles.
 void test_the_right_stick_pans_the_sonar(void) {
@@ -727,6 +753,7 @@ int main(int, char**) {
   RUN_TEST(test_led_writes_are_rate_limited_and_catch_up);
   RUN_TEST(test_led_is_rewritten_for_a_pad_that_reappears);
   RUN_TEST(test_the_d_pad_steps_the_top_speed);
+  RUN_TEST(test_the_top_speed_resets_when_the_pad_goes);
   RUN_TEST(test_the_right_stick_pans_the_sonar);
   RUN_TEST(test_a_pan_starts_from_the_current_aim);
   RUN_TEST(test_r3_looks_ahead_and_triangle_sweeps);

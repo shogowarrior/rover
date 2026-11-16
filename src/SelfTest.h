@@ -23,10 +23,20 @@
 //   4. all four forward at the explore speed, which may be too weak to turn
 //      them, then at tuning::CHECK_SPEED, then a strafe right and a rotation
 //      clockwise, to compare with docs/mecanum.md.
-// 3 and 4 turn the wheels, so the rover belongs on its stand: the panel asks
-// first, and they are skipped when the shield did not answer. Every drive is
-// short, through Rover::drive's clamp like any other, and the checks end at
-// once on any command, a stand-down, or the driver's disconnect (Rover).
+// 3 and 4 turn the wheels, and the moves drive the rover forward and
+// sideways, so it belongs on its stand: the panel asks first, and they are
+// skipped when the shield did not answer. Every drive is short, through
+// Rover::drive's clamp like any other, and the checks end at once on any
+// other command, a stand-down, or the driver's disconnect (Rover).
+//
+// RUN_CHECKS is held like a move, so the 1.5 s deadman's rule holds here
+// too: a controller that stops sending stops the wheels. The first
+// RUN_CHECKS of a stream starts the checks; each one within
+// tuning::CHECK_HOLD_MS of the one before holds them and never starts
+// another run, so re-sends that cross the run's end are harmless. The sonar
+// steps run either way, but a wheel step starts only while the checks are
+// held: otherwise they stop there, saying why. A single RUN_CHECKS typed into
+// the serial console checks the shield and the sonar, then stops.
 class SelfTest {
  public:
   // What this pass of the checks wants of Rover.
@@ -42,7 +52,12 @@ class SelfTest {
 
   // `wheels` false runs steps 1 and 2 alone: nothing turns but the servo.
   void start(uint32_t now, bool motorsReady, bool wheels);
-  // End the checks early, saying why. Does nothing when none are running.
+  // A RUN_CHECKS: starts the checks with their wheels' steps, or holds them
+  // when it comes within CHECK_HOLD_MS of the one before. Returns whether it
+  // started a run.
+  bool press(uint32_t now, bool motorsReady);
+  // End the checks early, saying why, and end the hold: the next RUN_CHECKS
+  // starts a run. Says nothing when none are running.
   void cancel(uint32_t now, const char* why);
   bool running() const { return step >= 0; }
   // The step under way, in a few words, for telemetry's "check"; nullptr
@@ -68,6 +83,9 @@ class SelfTest {
   int step = -1;  // -1 while no checks run
   bool motorsReady = false;
   bool wheels = false;
+  // RUN_CHECKS: whether a stream of them is under way, and the latest.
+  bool pressed = false;
+  uint32_t pressedAt = 0;
   // The sonar step: pings counted at its bearing, and those that heard.
   bool primed = false;  // seenPings holds Explorer's count from this step
   uint32_t seenPings = 0;

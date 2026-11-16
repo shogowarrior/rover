@@ -12,12 +12,14 @@ listen while the panel, drive.py or the pad drives. It keeps trying to
 reconnect whenever the link goes (the rover rebooting, WiFi dropping) until
 Ctrl-C.
 
---db records telemetry, the rover's log and its metrics in a SQLite
-database (client/recorder.py has its tables), each row stamped with when it
-arrived. For example, the warnings of the last hour:
+--db records telemetry, the rover's log, its metrics and its settings in a
+SQLite database (client/recorder.py has its tables), each row stamped with
+when it arrived. For example, the warnings of the last hour, and what the
+pad was refused or did:
 
-    sqlite3 rover.db "SELECT datetime(at, 'unixepoch', 'localtime'), text
+    sqlite3 rover.db "SELECT datetime(at, 'unixepoch', 'localtime'), src, text
                       FROM log WHERE warn AND at > unixepoch() - 3600"
+    sqlite3 rover.db "SELECT text FROM log WHERE src = 'PAD' ORDER BY at"
 
 --prometheus [HOST:]PORT serves the latest values for Prometheus to scrape
 at http://HOST:PORT/metrics (HOST is 127.0.0.1 unless given), so Prometheus
@@ -44,12 +46,14 @@ RETRY_S = 2.0
 
 
 def describe(frame, raw: str) -> str:
-    """One line for the terminal: a log line readably, anything else as sent."""
+    """One line for the terminal: a log line readably, with whose line it is
+    (USB, PAD, WIFI or ROVER), anything else as sent."""
     if kind_of(frame) == "log":
         t = frame.get("t")
         seconds = f"{t / 1000:10.3f}s" if isinstance(t, (int, float)) else "          -"
+        source = frame.get("src") if isinstance(frame.get("src"), str) else "-"
         level = "WARN " if frame.get("warn") is True else ""
-        return f"log {seconds}  {level}{frame['log']}"
+        return f"log {seconds}  {source:<5}  {level}{frame['log']}"
     return raw
 
 

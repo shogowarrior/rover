@@ -53,6 +53,13 @@ constexpr int EXPLORE_SPEED = 64;
 constexpr int CHECK_SPEED = 120;
 constexpr int CHECK_DRIVE_MS = 600;
 constexpr uint32_t CHECK_REST_MS = 400;
+// The checks are held like a move: each wheel step starts only if a
+// RUN_CHECKS came in this long before, so a client that stops sending (a
+// panel closed, a script that died, the cable's console, which has no
+// disconnect) turns no more wheels, and the one turning stops at its own
+// deadline. Longer than the clients' re-send (REPEAT_MS, 200 ms).
+// CHECK_HOLD_MS in extras/joystick/js/protocol.js is the panel's copy.
+constexpr uint32_t CHECK_HOLD_MS = 1000;
 
 // --- The sonar in manual mode ------------------------------------------------
 

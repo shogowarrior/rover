@@ -35,9 +35,10 @@ struct Message;
 //   * Exploring, the checks and the rover's own stand-downs are no
 //     controller's: any accepted command takes over from them, as before.
 //   * Settings are not commands, and are never refused (Settings.h).
-// Control passing to another controller, a command refused (once a
-// controller, until control passes), and a STOP from below the holder go in
-// the EventLog, each as its controller's.
+// Control passing to another controller, a command refused, and a STOP from
+// below the holder go in the EventLog, each as its controller's: a refusal
+// and a STOP from below once a controller each hold, until control passes or
+// a hold lapses, however many arrive.
 class Control {
  public:
   // What became of a message (apply()).
@@ -76,7 +77,9 @@ class Control {
   uint32_t heldAt = 0;               // ...and when it last sent a command
   Source driver = SOURCE_ROVER;      // whose command the rover acted on last
   Source lastHolder = SOURCE_ROVER;  // for the log: control passing on
+  // Said in the log once each hold: a refusal, and a STOP from below.
   bool refusalNoted[CONTROLLER_COUNT] = {false, false, false};
+  bool stopNoted[CONTROLLER_COUNT] = {false, false, false};
 };
 
 #endif

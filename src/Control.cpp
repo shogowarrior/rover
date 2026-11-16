@@ -39,7 +39,12 @@ bool Control::command(Source from, int move, int speed, int durationMs, uint32_t
     if (move == STOP) {
       // Stop is one press from every controller, but it hands the holder's
       // control to no one: the holder's next command moves the rover again.
-      log.add(now, EventLog::WARN, from, "STOP, though %s has control and may drive on", sourceName(holding));
+      // Said once a hold, like a refusal: a client sending STOP after STOP
+      // must not fill the log, nor the serial console it is echoed on.
+      if (!stopNoted[from]) {
+        stopNoted[from] = true;
+        log.add(now, EventLog::WARN, from, "STOP, though %s has control and may drive on", sourceName(holding));
+      }
       rover.command(STOP, 0, 0, now);
       return true;
     }
@@ -50,10 +55,14 @@ bool Control::command(Source from, int move, int speed, int durationMs, uint32_t
     return false;
   }
 
+  // A fresh hold, or control passing on: a refusal or a STOP from below is
+  // news again.
+  if (holding == SOURCE_ROVER || from != lastHolder) {
+    for (int i = 0; i < CONTROLLER_COUNT; i++) refusalNoted[i] = stopNoted[i] = false;
+  }
   if (from != lastHolder) {
     log.add(now, EventLog::INFO, from, "%s has control: %s", sourceName(from), commandName(move));
     lastHolder = from;
-    for (bool& noted : refusalNoted) noted = false;
   }
   held = from;
   heldAt = now;
