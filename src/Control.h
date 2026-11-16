@@ -72,6 +72,11 @@ class Control {
   // has since taken over from, stops nothing.
   void lost(Source from, uint32_t now);
 
+  // The controller whose command the rover acted on last as its holder's
+  // (not a STOP from below), until its link goes (lost()), or SOURCE_ROVER.
+  // Unlike holder(), it never lapses.
+  Source lastDriver() const { return driver; }
+
   // The controller holding control now, or SOURCE_ROVER when none does.
   // `now` may be earlier than the hold's last command, stamped later in the
   // same pass: that is a hold just taken.

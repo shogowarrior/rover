@@ -125,8 +125,9 @@ class RemoteControl {
   // coming and going does not. A STOP from WiFi under another controller's
   // hold (Control::STOPPED) makes no client the driver.
   int driver = NO_CLIENT;
-  // A change of driver the log has yet to say (said once WiFi still has
-  // control a CONTROL_HOLD_MS after the last), and when it last said one.
+  // A change of driver the log has yet to say (said a CONTROL_HOLD_MS after
+  // the last, while Control::lastDriver() is WiFi), and when it last said
+  // one.
   bool driverUnsaid = false;
   uint32_t driverSaidAt = 0;
 };

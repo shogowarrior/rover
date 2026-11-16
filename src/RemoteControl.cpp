@@ -71,10 +71,12 @@ void RemoteControl::update(uint32_t now) {
   if (pass > longestPassMs) longestPassMs = pass;
   passes++;
   lastUpdateMs = now;
-  // Only while WiFi still has control: said after the pad or the console
-  // took over, it named a client that drove nothing.
+  // Only while WiFi's command is still the one the rover acted on last: said
+  // after the pad or the console took over, it named a client that drove
+  // nothing. Not holder(): WiFi's hold can lapse within the pass that the
+  // line comes due in, and the change went unsaid.
   if (driverUnsaid && timing::since(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS &&
-      control.holder(now) == SOURCE_WIFI) {
+      control.lastDriver() == SOURCE_WIFI) {
     sayDriver(now);
   }
 
@@ -203,8 +205,9 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
 // At most once a CONTROL_HOLD_MS: two clients holding moves at once take
 // the drive from each other with every re-send, and a line for each, ten a
 // second, pushed everything else out of the log. A change not said yet is
-// said once that time has passed, if WiFi still has control, so the log
-// ends on the client driving. since(), not ageOf(): driverSaidAt is never
+// said once that time has passed, while WiFi's is still the command the
+// rover acted on last (or once it is again), so the log ends on the client
+// driving. since(), not ageOf(): driverSaidAt is never
 // later than the clock it is compared with (update()'s check runs before
 // server.loop(), and onCommand() reads millis()), and an ageOf() stamp
 // would have to be forgotten.

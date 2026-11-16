@@ -179,6 +179,21 @@ void test_the_age_of_a_stamp(void) {
                            timing::ageOf(0, timing::STAMP_AHEAD_MAX_MS + 1));
 }
 
+// The controller whose command the rover acted on last: not one whose STOP
+// came from below the holder, and no one once its link goes. It never
+// lapses, as a hold does.
+void test_the_last_driver(void) {
+  TEST_ASSERT_EQUAL_INT(SOURCE_ROVER, control->lastDriver());
+  control->command(SOURCE_WIFI, MOVE_FORWARD, 100, 400, 0);
+  control->update(5 * HOLD);
+  TEST_ASSERT_EQUAL_INT(SOURCE_WIFI, control->lastDriver());
+  control->command(SOURCE_PAD, MOVE_LEFT, 100, 400, 5 * HOLD);
+  control->command(SOURCE_WIFI, STOP, 0, 0, 5 * HOLD + 10);  // from below
+  TEST_ASSERT_EQUAL_INT(SOURCE_PAD, control->lastDriver());
+  control->lost(SOURCE_PAD, 5 * HOLD + 20);
+  TEST_ASSERT_EQUAL_INT(SOURCE_ROVER, control->lastDriver());
+}
+
 // A hold stamped later in the pass than the `now` it is read with (the pad's
 // clock, millis() in the WebSocket server) is a hold just taken: read as
 // ~49.7 days old, it let a controller ranked below drive under it.
@@ -434,6 +449,7 @@ int main(int, char**) {
   RUN_TEST(test_stop_from_anyone_is_always_acted_on);
   RUN_TEST(test_refusals_and_stops_from_below_are_said_once_a_hold);
   RUN_TEST(test_the_age_of_a_stamp);
+  RUN_TEST(test_the_last_driver);
   RUN_TEST(test_a_hold_stamped_later_in_the_pass_holds);
   RUN_TEST(test_a_lapsed_hold_is_forgotten);
   RUN_TEST(test_stop_takes_over_from_exploring);
