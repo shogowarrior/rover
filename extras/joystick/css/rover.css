@@ -166,7 +166,8 @@
 /* Where the rover aims its sonar: a ray in the operator's own blue, a mark
    across it where its reading falls, and the reading, haloed in the
    card's colour so a wedge under it never hides it. A drag's aim is the
-   same ray dashed, until the rover reports it. */
+   same ray dashed, while the drag lasts; then the aim the rover reports
+   is drawn. */
 .aimRay,
 .aimWish {
   fill: none;

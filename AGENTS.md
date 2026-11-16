@@ -40,7 +40,7 @@ the bench yet: [docs/bench-checklist.md](docs/bench-checklist.md) is how.
 ~/.platformio/penv/bin/pio test -e native              # host-side unit tests, no board needed
 python3 tools/check_protocol.py                        # the clients' copies of the protocol match src/
 node --test extras/joystick/test/                      # the browser panel against a fake DOM, no rover needed
-python3 -m unittest discover -s client -p 'test_*.py'  # client/ws.py's recorder and exporter, no rover needed
+python3 -m unittest discover -s client -p 'test_*.py'  # client/ws.py's recorder, exporter and usage, no rover needed
 ```
 
 Building a board environment needs `src/config.h`. In a fresh clone the
@@ -102,10 +102,10 @@ that turns that on would start exploring. It also never exits on its own.
 | `test/fakes/` | Fake `Motors`, `RangeScanner` and `FirmwareSlot` for the host tests |
 | `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does, `Vectors.h` reads `test/vectors/` |
 | `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames; log lines, metrics and settings (`stream.json`), which the client tests read too |
-| `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/` |
+| `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/`, and every frame key `client/recorder.py` and `client/ws.py` read against what the firmware writes |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Listener only: prints what the rover sends, records it in SQLite (`--db`), serves it to Prometheus (`--prometheus`) |
-| `client/recorder.py` | `ws.py`'s SQLite store and Prometheus exporter; standard library only. `client/test_recorder.py` tests it against `test/vectors/` |
+| `client/recorder.py` | `ws.py`'s SQLite store and Prometheus exporter; standard library only. `client/test_recorder.py` tests it against `test/vectors/`, and `client/test_ws.py` runs `ws.py`'s usage examples that need no rover |
 | `client/rover.ipynb` | Notebook experiments over the same link |
 | `extras/joystick/` | Browser control panel: open `joystick.html` from disk (see below). Two cells at the top hold every control but the open tab's; under them the view (the rover's scan, or a simulator in the rover's place) beside a Drive tab of sticks or a Program tab of block programs. `js/` holds its classes, `app.js` wires them, `test/` runs them in Node |
 | `platformio.ini` | Environments `car_wire`, `car_ota`, `car_wire_gamepad`, `native`; pinned versions |
@@ -681,13 +681,13 @@ would otherwise be cut short (a bare "STOP" read like a button), each cell
 titled with its caption. After a link goes, and while it is quiet, the
 fan's readings, its 25 and 40 cm rings and the readouts' values dim
 together, the values faded too. Where the rover holds its sonar still in
-manual mode (telemetry's `sonar` FRONT or AIM), only the bearing it points
-at is measured again, so the fan dims the others' wedges and readings
-(`data-held`) as last seen; while it aims (in manual mode, with no check
-under way: exploring and the checks point the sonar their own ways), a ray
-in the operator's blue
-runs from the rover at the aim, a mark across it where `aimCm` falls and
-the reading by it, haloed ("…" before one is in, "no echo"). On the rover
+manual mode (telemetry's `sonar` FRONT or AIM) with no check under way,
+only the bearing it points at is measured again, so the fan dims the
+others' wedges and readings (`data-held`) as last seen; while it aims, a
+ray in the operator's blue runs from the rover at the aim, a mark across it where `aimCm` falls and
+the reading by it, haloed ("…" before one is in, "no echo"). While the
+rover explores or runs its checks, which point the sonar their own ways,
+every bearing is drawn live and no aim ray is drawn. On the rover
 target with a live link and the rover's settings in, a drag on the fan
 aims the sonar where it points (`ScanView.onAim`), as the Aim slider in
 Options does: a setting, never a command, sent at most every 100 ms with
@@ -716,11 +716,14 @@ held stick.
 
 At the view's top on the rover target, a line (`#heldBy`, `js/heldby.js`)
 says "The pad has control" (or "The USB console has control"), amber on
-the amber tint, while telemetry's `control` names one of them and this
-panel drives (a held control, a program, the checks) or drove or pressed
-within `CONTROL_HOLD_MS`: the rover refuses WiFi's moves while a
-controller ranked above it drives, and a stick that moved nothing read as
-broken. It says what that means and that Stop still stops, in two lines at
+the amber tint, while telemetry's `control` names one of them, the
+rover's reported priority ranks it above WiFi (before a settings frame,
+the default USB, PAD, WIFI), and this panel drives (a held control, a
+program, the checks) or drove or pressed within `CONTROL_HOLD_MS`: the
+rover refuses WiFi's moves while a controller ranked above it drives, and
+a stick that moved nothing read as broken. One ranked below WiFi gets no
+line: the panel's next move takes control from it. The priority is read
+again with each telemetry frame. It says what that means and that Stop still stops, in two lines at
 most, and takes its height from the scan's card.
 
 **The log and the graphs.** Log, at the readouts' far end, opens a drawer
@@ -740,7 +743,8 @@ its foot while scrolled there. The bar filters by whose (All, USB, Pad,
 WiFi, Rover) and to the warnings alone, Clear empties it, and Save
 downloads a `.jsonl` of every line and sample by when it arrived, one
 `{"at": <ms since 1970>, "frame": <as received>}` a line, which
-`client/recorder.py`'s `import_lines()` reads (`ws.py --db ... --import`).
+`client/recorder.py`'s `import_lines()` reads
+(`ws.py --db ... --import FILE --no-listen`).
 `RoverGraphs` (`js/graphs.js`) draws the loop rate, the free heap and the
 WiFi signal from the metrics, and the chip's temperature and the front
 distance from telemetry, each a row of inline SVG with its latest value
@@ -1050,7 +1054,12 @@ Off: the shield and the sonar, no wheel), then Run checks. It shows only
 what the rover's settings frame reports, never what was asked: a press
 sends `{"settings": {<that one setting>}}` straight over the Link, marked
 pending (dashed) until a frame reports it or 1.5 s pass, and a press on
-what the rover reports, or on what is pending, sends nothing. It is
+what the rover reports, or on what is pending, sends nothing. Two
+exceptions, so that a control never jumps under the hand: while a
+priority change is pending its rows show the order asked for, dashed, so
+each arrow moves the controller it names; and while an aim waits for its
+send (at most every 100 ms), the Aim slider stays under the thumb and its
+words say that aim, marked pending. It is
 configuration, never a command: it neither takes control nor stops an
 exploring rover, and it goes while another controller drives. The section
 is off, its status line and every control's title saying why, with no

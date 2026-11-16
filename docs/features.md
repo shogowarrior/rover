@@ -2256,7 +2256,8 @@ why.
   telemetry, the log (by controller), metrics and settings in SQLite,
   indexed by time, so a question is a query rather than a read of a whole
   file; `--prometheus 9101` serves the latest values for Prometheus to
-  scrape and Grafana to graph. `--import` loads a recording the panel saved.
+  scrape and Grafana to graph. `--import FILE --no-listen` loads a
+  recording the panel saved, with no rover.
   `client/drive.py` prints the log between its telemetry rows.
 - **The panel**, a console for the robot (AGENTS.md, "The browser control
   panel", has the details):

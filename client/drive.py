@@ -6,8 +6,8 @@
     python3 client/drive.py --listen        # telemetry only, no control
 
 Every boot starts in manual: the rover waits, stopped, its sonar held ahead
-after one sweep; losing WiFi, or the start of an OTA flash, drops it to
-manual too.
+after one sweep (or sweeping, or aimed, as its sonar setting says); losing
+WiFi, or the start of an OTA flash, drops it to manual too.
 Any command takes control, a stop included. Press `t` to hand control back and
 let the rover explore; if exploration has halted (boxed in, sensor silent),
 `t` makes it look again. While a controller ranked above WiFi in the rover's

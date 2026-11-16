@@ -20,8 +20,8 @@ constexpr int SOURCE_COUNT = 4;
 
 // "USB", "PAD", "WIFI" or "ROVER", as the wire says them: a log line's "src",
 // telemetry's "control" and the priority setting. SOURCES in
-// extras/joystick/js/protocol.js copies them, and tools/check_protocol.py
-// checks.
+// extras/joystick/js/protocol.js and in client/recorder.py copy them, and
+// tools/check_protocol.py checks.
 inline const char* sourceName(Source source) {
   switch (source) {
     case SOURCE_USB:

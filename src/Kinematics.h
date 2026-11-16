@@ -28,8 +28,8 @@ constexpr int MOTOR_SPEED_MAX = 255;
 // missing echo is read as "nothing within range", so it normalises to "far",
 // safe only because Explorer never drives on a sweep that heard nothing
 // (AGENTS.md, Invariants). Telemetry sends it as is: FAR_CM in
-// extras/joystick/js/protocol.js and DISTANCE_FAR_CM in client/drive.py are
-// copies, and tools/check_protocol.py checks them.
+// extras/joystick/js/protocol.js and DISTANCE_FAR_CM in client/drive.py and
+// client/recorder.py are copies, and tools/check_protocol.py checks them.
 constexpr float DISTANCE_FAR_CM = 999.0f;
 
 // `value`, limited to lo..hi.
