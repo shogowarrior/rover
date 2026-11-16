@@ -138,6 +138,12 @@ MIRRORS = [
      "the rover clamps the sonar's aim to this, so the panel would draw an aim the sonar never takes"),
     (PANEL_PROTOCOL_JS, "CONTROL_HOLD_MS", "==", TUNING_H, "CONTROL_HOLD_MS",
      "the panel says how long another controller keeps control after its last command"),
+    (PANEL_PROTOCOL_JS, "CHECK_HOLD_MS", "==", TUNING_H, "CHECK_HOLD_MS",
+     "the rover starts a wheel's step of its checks only with a RUN_CHECKS this recent, which the "
+     "panel's re-sends must keep inside"),
+    (PANEL_PROTOCOL_JS, "REPEAT_MS", "<=half", PANEL_PROTOCOL_JS, "CHECK_HOLD_MS",
+     "the panel holds the checks by re-sending RUN_CHECKS, with room for one frame to arrive late; "
+     "otherwise the checks stop before a wheel's step"),
 ]
 
 # The names a settings message and the frames carry, which src/ returns as

@@ -25,7 +25,7 @@ pad was refused or did:
 at http://HOST:PORT/metrics (HOST is 127.0.0.1 unless given), so Prometheus
 keeps the history and Grafana graphs it.
 
---import loads a recording the panel saved (Options, Log, Save) into --db,
+--import loads a recording the panel saved (Log, under its scan, then Save) into --db,
 and then listens on as usual unless --no-listen.
 
 For anything interactive use client/drive.py, which can also send commands.

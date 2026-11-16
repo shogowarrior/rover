@@ -813,7 +813,12 @@ test("telemetry: the page shows every frame in test/vectors/telemetry.json", () 
     const exploring = frame.mode === "AUTONOMOUS";
     check(page.$("mode").textContent === frame.mode && page.$("auto").getAttribute("aria-pressed") === String(exploring),
       `${name}: mode ${page.$("mode").textContent}, Autonomous pressed ${page.$("auto").getAttribute("aria-pressed")}`);
-    check(page.$("phaseCell").hidden === !exploring, `${name}: the phase shown only while exploring`);
+    // The checks run in manual mode, and say which is under way in the
+    // phase's place.
+    const checking = "check" in frame;
+    check(page.$("phaseCell").hidden === !(exploring || checking), `${name}: the phase shown only while exploring, or the check while checking`);
+    check(page.$("phaseLabel").textContent === (checking ? "Check" : "Phase"), `${name}: captioned ${page.$("phaseLabel").textContent}`);
+    if (checking) check(page.$("phase").textContent === frame.check && page.$("phase").dataset.tone === "", `${name}: the check ${page.$("phase").textContent}`);
     if ("phase" in frame) {
       const phase = page.$("phase");
       check(phase.textContent === (frame.halt ? `Halted: ${frame.halt}` : frame.phase), `${name}: phase '${phase.textContent}'`);
@@ -1304,7 +1309,9 @@ test("scan geometry: rings from constants, convex wedges, labels clear of wedges
   // In either layout, text boxes (worst-case strings, at the size each
   // label is drawn in units at that scale) must stay inside the view, off
   // every wedge's largest possible sector, and off each other.
-  const texts = fan.filter((n) => n.tagName === "TEXT");
+  // The aim's reading goes where the aim is, haloed over any wedge: not a
+  // label of the fan's layout.
+  const texts = fan.filter((n) => n.tagName === "TEXT" && n.getAttribute("class") !== "aimReading");
   const sector = (b) => {
     let hits = 0;
     for (let x = b.x0; x <= b.x1; x += 0.5) {
@@ -5380,7 +5387,8 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   const shell = page.$("driveTab").parentNode;
   check(view.parentNode === shell && page.$("programTab").parentNode === shell, "a sibling of both tabs, a cell of the shell's grid");
   const kids = view.children.filter((n) => n.tagName && n.tagName !== "#TEXT").map((n) => n.id || (n.getAttribute("class") || "").split(" ")[0]);
-  check(kids.join() === "scan,roverAway,simSlot,readouts", `the scan, the line saying the rover explores, the simulator's slot and the readouts: ${kids}`);
+  check(kids.join() === "heldBy,scan,roverAway,simSlot,readouts,roverLog",
+    `the line saying who has control, the scan, the line saying the rover explores, the simulator's slot, the readouts and the log's drawer: ${kids}`);
   check(page.$("motorsFault").parentNode === page.$("scan").parentNode, "the fault in the scan's card");
   for (const canvas of [page.canvas, page.pivotCanvas]) {
     for (let n = canvas.parentNode; n; n = n.parentNode) check(n !== view, "not an ancestor of a stick");
@@ -5454,8 +5462,9 @@ test("the view: one pane beside both tabs, its content picked by the target, nev
   check(/height:\s*var\(--readouts-h\);/.test(line) && /white-space:\s*nowrap;/.test(line) && /overflow:\s*hidden;/.test(line) && /flex:\s*none;/.test(line) && !/flex-wrap:\s*wrap/.test(line), `one line: ${line}`);
   const value = rule(base, ".cell output");
   check(/overflow:\s*hidden;/.test(value) && /text-overflow:\s*ellipsis;/.test(value), `a value cut short: ${value}`);
-  const cells = page.$("move").parentNode.parentNode.children.filter((n) => n.tagName && n.tagName !== "#TEXT");
-  check(cells[cells.length - 1] === page.$("phaseCell"), "the phase last");
+  const inLine = page.$("move").parentNode.parentNode.children.filter((n) => n.tagName && n.tagName !== "#TEXT");
+  const cells = inLine.filter((n) => n.getAttribute("class") === "cell");
+  check(cells[cells.length - 1] === page.$("phaseCell") && inLine[inLine.length - 1] === page.$("logToggle"), "the phase the last cell, and the log's toggle after it, at the line's end");
   check(!cssRules(css).some((r) => /#phaseCell\[hidden\]/.test(r.selector)) && /display:\s*none;/.test(rule(base, ".cell[hidden]")), "a hidden phase takes no room on the line");
   const baseKeys = new Set(base.map((r) => `${r.selector}{${r.body}`));
   const inMedia = cssRules(css).filter((r) => !baseKeys.has(`${r.selector}{${r.body}`));

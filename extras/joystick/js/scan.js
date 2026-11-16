@@ -5,10 +5,29 @@
  *   new ScanView(svg)   lays the fan out in the empty <svg>, with nothing
  *                       to draw yet, and fits it to the svg's box whenever
  *                       that changes (a ResizeObserver, where there is one).
- *   show(data)          draws a telemetry object's distances.
+ *   show(data)          draws a telemetry object's distances, and the
+ *                       sonar's aim while the rover aims it.
  *   clear()             draws none: no frame has come over the link yet.
  *   fit(width, height)  lays the fan out for a box that size, in CSS
  *                       pixels; the observer calls it.
+ *   aimable(on)         whether a drag on the fan aims the sonar: only while
+ *                       the rover's settings can be changed (app.js asks
+ *                       RoverSettings). svg[data-aim] says so (panel CSS
+ *                       keeps the page from scrolling under the drag).
+ *   onAim(fn)           fn(deg) as a drag on the fan points, deg the bearing
+ *                       from straight ahead, positive left, rounded and
+ *                       within AIM_MAX_DEG either side: where to aim the
+ *                       sonar. A setting, never a command (roversettings.js
+ *                       sends it); the fan draws a dashed ray there until the
+ *                       drag ends, and the rover's own aim as it reports it.
+ *
+ * Where the rover holds its sonar still in manual mode (telemetry's sonar
+ * FRONT or AIM), only the bearing it points at is measured again: the
+ * others keep their last reading, which the fan draws dimmed
+ * (data-held="yes" on their wedges and readings), as what was last seen.
+ * While it aims, a ray from the rover to full reach shows where it points,
+ * with a mark where its reading (telemetry's aimCm) falls and the reading
+ * by it: "…" until one is in, "no echo" for none.
  *
  * svg[data-empty] is "yes" from clear(), and as built, until the next
  * show(): the page's empty state keys on it (panel.css). A frame without
@@ -117,13 +136,19 @@ class ScanView {
   }
 
   #svg;
-  #views; // per bearing: { key, screen, wedge, reading, label }
+  #views; // per bearing: { key, bearing, screen, wedge, reading, label }
+  #aim; // the rover's aim: { group, ray, hit, reading }, and the drag's: wish
+  #aimable = false;
+  #dragging = null; // the pointerId aiming, or null
+  #aimListeners = new Listeners();
 
   constructor(svg) {
     this.#svg = svg;
     this.#build();
     this.#lay("wide", 1);
     this.clear();
+    this.aimable(false);
+    this.#listenForAim();
     if (typeof ResizeObserver === "function") {
       new ResizeObserver(() => {
         const { width, height } = svg.getBoundingClientRect();
@@ -146,8 +171,31 @@ class ScanView {
   }
 
   show(data) {
-    for (const view of this.#views) this.#showDistance(view, data[view.key]);
+    // The one bearing the sonar is held at, in manual mode with it held
+    // still: undefined while it sweeps, and null where it is held between
+    // bearings, so that none is measured.
+    const held = data.mode === MODE_MANUAL && (data.sonar === "FRONT" || (data.sonar === "AIM" && typeof data.aim === "number"));
+    const at = held ? (data.sonar === "FRONT" ? 0 : data.aim) : undefined;
+    for (const view of this.#views) {
+      this.#showDistance(view, data[view.key]);
+      const kept = held && view.bearing !== at;
+      for (const node of [view.wedge, view.reading]) {
+        if (kept) node.setAttribute("data-held", "yes");
+        else node.removeAttribute("data-held");
+      }
+    }
+    this.#showAim(data.sonar === "AIM" && typeof data.aim === "number" ? data.aim : null, data.aimCm);
     this.#svg.dataset.empty = "no";
+  }
+
+  aimable(on) {
+    this.#aimable = Boolean(on);
+    this.#svg.dataset.aim = this.#aimable ? "yes" : "no";
+    if (!this.#aimable) this.#endDrag();
+  }
+
+  onAim(fn) {
+    return this.#aimListeners.add(fn);
   }
 
   clear() {
@@ -201,9 +249,21 @@ class ScanView {
 
     this.#views = BEARINGS.map((b) => ({
       key: b.key,
+      bearing: b.bearing,
       screen: 90 + b.bearing,
       wedge: dom.svg("path", { class: "wedge", d: "" }, this.#svg),
     }));
+
+    // The sonar's aim, over the wedges and under the readings: the rover's
+    // as it reports it, and a drag's, dashed, until the drag ends.
+    const group = dom.svg("g", { class: "aim", display: "none" }, this.#svg);
+    this.#aim = {
+      group,
+      ray: dom.svg("path", { class: "aimRay", d: "" }, group),
+      hit: dom.svg("path", { class: "aimHit", d: "" }, group),
+      reading: dom.svg("text", { class: "aimReading", "text-anchor": "middle" }, group, ""),
+      wish: dom.svg("path", { class: "aimWish", d: "", display: "none" }, this.#svg),
+    };
 
     // Each reading, with its bearing's name over it, where #lay puts it.
     BEARINGS.forEach((b, i) => {
@@ -300,6 +360,108 @@ class ScanView {
     });
     this.#svg.style.setProperty("--scan-k", k.toFixed(3));
     this.#svg.dataset.labels = labels;
+  }
+
+  // The ray from the rover to full reach at the aim, and where its reading
+  // falls: a short arc across the ray, as a wedge's end is drawn, and the
+  // reading by it, nearer the rover, haloed in the card's colour so a wedge
+  // under it never hides it.
+  #showAim(deg, cm) {
+    const aim = this.#aim;
+    if (deg === null) {
+      aim.group.setAttribute("display", "none");
+      return;
+    }
+    const { R_MAX } = ScanView;
+    const screen = 90 + clamp(deg, -AIM_MAX_DEG, AIM_MAX_DEG);
+    const xy = ScanView.#xy;
+    aim.group.removeAttribute("display");
+    aim.ray.setAttribute("d", `M${xy(ScanView.#polar(screen, ScanView.R_MIN / 2))} L${xy(ScanView.#polar(screen, R_MAX))}`);
+    const measured = typeof cm === "number" && Number.isFinite(cm);
+    const noEcho = measured && cm >= FAR_CM;
+    const r = !measured || noEcho ? R_MAX : ScanView.radiusFor(cm);
+    if (measured && !noEcho) {
+      const R = r.toFixed(1);
+      aim.hit.setAttribute("d", `M${xy(ScanView.#polar(screen - 6, r))} A${R} ${R} 0 0 0 ${xy(ScanView.#polar(screen + 6, r))}`);
+      aim.hit.setAttribute("data-zone", ScanView.zoneFor(cm));
+    } else {
+      aim.hit.setAttribute("d", "");
+      aim.hit.removeAttribute("data-zone");
+    }
+    const [x, y] = ScanView.#polar(screen, Math.max(ScanView.R_MIN + 14, r - 16));
+    aim.reading.setAttribute("x", x.toFixed(1));
+    aim.reading.setAttribute("y", (y + 5).toFixed(1));
+    aim.reading.textContent = !measured ? "…" : noEcho ? "no echo" : `${Math.round(cm)}cm`;
+    aim.group.setAttribute("data-deg", String(deg));
+  }
+
+  // A drag on the fan aims the sonar where it points, while the fan is
+  // aimable: each point is turned into a bearing from the rover and handed
+  // on (onAim), and drawn as a dashed ray until the drag ends. A press on
+  // the rover itself points nowhere, and is not a drag.
+  #listenForAim() {
+    const svg = this.#svg;
+    svg.addEventListener("pointerdown", (event) => {
+      if (!this.#aimable || this.#dragging !== null || !isPrimaryPress(event)) return;
+      const deg = this.#bearingAt(event, true);
+      if (deg === null) return;
+      event.preventDefault();
+      this.#dragging = event.pointerId;
+      if (typeof svg.setPointerCapture === "function") {
+        try {
+          svg.setPointerCapture(event.pointerId);
+        } catch {
+          // A pointer the browser has let go of already: the drag ends on
+          // its pointerup all the same.
+        }
+      }
+      this.#aimTo(deg);
+    });
+    svg.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== this.#dragging) return;
+      const deg = this.#bearingAt(event, false);
+      if (deg !== null) this.#aimTo(deg);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      svg.addEventListener(type, (event) => {
+        if (event.pointerId === this.#dragging) this.#endDrag();
+      });
+    }
+  }
+
+  #aimTo(deg) {
+    const xy = ScanView.#xy;
+    const screen = 90 + deg;
+    this.#aim.wish.setAttribute("d", `M${xy(ScanView.#polar(screen, ScanView.R_MIN / 2))} L${xy(ScanView.#polar(screen, ScanView.R_MAX))}`);
+    this.#aim.wish.removeAttribute("display");
+    this.#aimListeners.emit(deg);
+  }
+
+  #endDrag() {
+    this.#dragging = null;
+    this.#aim.wish.setAttribute("display", "none");
+  }
+
+  // The bearing of a pointer from the rover, in degrees, positive left,
+  // rounded and clamped to the aim's reach; null for a press within the
+  // rover's dot (pressing: a move may pass through it). The svg's box holds
+  // its viewBox scaled to fit and centred (preserveAspectRatio
+  // xMidYMid meet, #build()).
+  #bearingAt(event, pressing) {
+    const box = this.#svg.getBoundingClientRect();
+    const view = (this.#svg.getAttribute("viewBox") || "").split(/\s+/).map(Number);
+    if (view.length !== 4 || !(box.width > 0 && box.height > 0)) return null;
+    const [vx, vy, vw, vh] = view;
+    const k = Math.min(box.width / vw, box.height / vh);
+    const ux = vx + (event.clientX - box.left - (box.width - vw * k) / 2) / k;
+    const uy = vy + (event.clientY - box.top - (box.height - vh * k) / 2) / k;
+    const dx = ux - ScanView.CX;
+    const dy = ScanView.CY - uy;
+    if (pressing && Math.hypot(dx, dy) < ScanView.R_MIN / 2) return null;
+    // From straight ahead, in (-180, 180]: behind the rover, the nearer end
+    // of the aim's reach.
+    const bearing = ((degrees(Math.atan2(dy, dx)) - 90 + 540) % 360) - 180;
+    return Math.round(clamp(bearing, -AIM_MAX_DEG, AIM_MAX_DEG));
   }
 
   #showDistance(view, cm) {

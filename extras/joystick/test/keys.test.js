@@ -315,7 +315,9 @@ test("keys: a keydown is not the panel's where the focus has keys of its own", (
 
   // Options and the File menu, open.
   page.fire(page.$("options"), "click");
-  const look = all(page.$("optionsPanel")).find((n) => n.tagName === "INPUT" || n.tagName === "BUTTON");
+  // Dark | Light: the Rover section's controls before it are off with no
+  // link, and a disabled control takes no focus.
+  const look = all(page.$("flavourChoice")).find((n) => n.tagName === "BUTTON");
   check(look && focus(page, look), "a look took the focus");
   tryAll("Options");
   page.fire(page.$("options"), "click");

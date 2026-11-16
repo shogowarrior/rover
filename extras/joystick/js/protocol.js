@@ -41,7 +41,8 @@ const ROTATE_COUNTERCLOCKWISE = 18;
 const RESUME_AUTONOMOUS = 19;
 // Runs the rover's checks (SelfTest.h): the sonar at each bearing, then each
 // wheel alone and four moves, so the rover belongs on its stand. A command
-// like any other: anything sent after it ends the checks.
+// like any other: anything sent after it ends the checks. Held as a move
+// is: re-sent within CHECK_HOLD_MS (below), or no wheel's step starts.
 const RUN_CHECKS = 20;
 
 // The control schemes, as protocol::schemeName() in src/Protocol.cpp spells
@@ -79,6 +80,12 @@ const AIM_MAX_DEG = 80;
 // tuning::CONTROL_HOLD_MS in src/Tuning.h: a controller keeps control this
 // long after its last command, against those ranked below it.
 const CONTROL_HOLD_MS = 1000;
+// tuning::CHECK_HOLD_MS in src/Tuning.h: the rover starts a wheel's step of
+// its checks only with a RUN_CHECKS this recent, and one this soon after the
+// last starts no new run. The panel re-sends it every REPEAT_MS while it
+// holds the checks (Driver.runChecks()), which must stay well inside this:
+// check_protocol.py holds it to half.
+const CHECK_HOLD_MS = 1000;
 
 // kinematics::MOTOR_SPEED_MAX in src/Kinematics.h: the motor driver takes a
 // byte, so no command asks for more.
@@ -158,7 +165,7 @@ if (typeof module !== "undefined") {
     PIVOT_SIDEWAYS_FORWARD_RIGHT, PIVOT_SIDEWAYS_FORWARD_LEFT,
     PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT,
     ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS, RUN_CHECKS,
-    SONAR_MODES, PAD_STATES, SOURCES, AIM_MAX_DEG, CONTROL_HOLD_MS,
+    SONAR_MODES, PAD_STATES, SOURCES, AIM_MAX_DEG, CONTROL_HOLD_MS, CHECK_HOLD_MS,
     SCHEME_NORMAL, SCHEME_ADVANCED, MODE_AUTONOMOUS, MODE_MANUAL,
     SPEED_MAX, MOTOR_SPEED_LIMIT, PORT, TELEMETRY_MS, STOP_CM, GO_CM, FAR_CM,
     MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,

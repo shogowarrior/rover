@@ -1,0 +1,492 @@
+/* What the rover says and holds beyond its scan: its settings and checks in
+   the Options popover (roversettings.js), the sonar's aim on the scan's
+   fan (scan.js), the line saying who has control (heldby.js), and the
+   drawer of its log and graphs under the scan (roverlog.js, graphs.js).
+   Every colour a token of css/looks.css, as in panel.css; the layout
+   tokens are panel.css's. Nothing here is an ancestor of a stick. */
+
+/* --- the rover's settings, first in Options ----------------------------------- */
+
+/* Its own section, under a rule, before the page's look: the rover's
+   settings are the rover's, and the look is the page's. */
+#optionsPanel #lookLabel {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+}
+
+@media (max-height: 760px) {
+  #optionsPanel #lookLabel { padding-top: var(--s-2); }
+}
+
+.roverSettings { gap: var(--s-2); }
+
+/* A setting a row: its caption, then its control; what a row adds (the
+   pad's state) on a line of its own under the control. */
+.roverSettings .setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+}
+
+.roverSettings .setting > .label {
+  flex: 0 0 4.75rem;
+  line-height: var(--lh-tight);
+}
+
+/* A menu's groups stack (panel.css): a segmented control's segments stay
+   in a row, as wide as their words. */
+.roverSettings .segmented { flex-direction: row; }
+
+.roverSettings[data-state="stale"] .segmented,
+.roverSettings[data-state="stale"] .priority { opacity: 0.55; }
+
+#optionsPanel #roverStatus {
+  margin: 0;
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
+  color: var(--dim);
+}
+
+#optionsPanel #roverStatus:empty { display: none; }
+
+/* The aim: the slider from the rover's left to its right, and the angle in
+   words, outlined while it is asked of the rover and not yet reported. */
+.aimSetting input[type="range"] {
+  flex: 1 1 6rem;
+  width: auto;
+  min-width: 0;
+  height: var(--ctl);
+}
+
+.aimSetting[hidden] { display: none; }
+
+#optionsPanel #aimOut {
+  flex: none;
+  min-width: 4.5em;
+  padding: 0 var(--s-1);
+  font-family: var(--gauge);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  border-radius: var(--r-xs);
+}
+
+.aimSetting[data-pending="yes"] #aimOut { outline: 1px dashed var(--live); }
+
+.padState {
+  flex: 1 0 100%;
+  padding-left: calc(4.75rem + var(--s-3));
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
+  color: var(--dim);
+}
+
+.padState:empty { display: none; }
+
+/* The priority: the three controllers, first first, each with its arrows. */
+.priority {
+  display: grid;
+  flex: 1 1 8rem;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-sm);
+}
+
+.priority[data-pending="yes"] {
+  outline: 1px dashed var(--live);
+  outline-offset: 2px;
+}
+
+.priority li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.priority .rank {
+  flex: none;
+  width: 1.25em;
+  font-family: var(--gauge);
+  font-size: var(--t-sm);
+  color: var(--dim);
+}
+
+.priority .who {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-ctl);
+  font-weight: var(--fw-semi);
+}
+
+.priority button {
+  position: relative;
+  flex: none;
+  min-height: 0;
+  width: var(--seg);
+  height: var(--seg);
+  padding: 0;
+  border-radius: var(--r-full);
+}
+
+.priority button .icon {
+  width: var(--glyph);
+  height: var(--glyph);
+}
+
+.priority button:disabled { opacity: 0.4; }
+
+/* Run checks: the top's 32 px control, its touch target the full tap. */
+#optionsPanel #runChecks {
+  position: relative;
+  align-self: flex-start;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-4);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
+
+#optionsPanel #runChecks::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--ctl) - var(--tap)) / 2) 0;
+}
+
+#optionsPanel #runChecks:disabled {
+  color: var(--dim);
+  background: var(--raised);
+  opacity: 0.5;
+}
+
+/* --- the sonar's aim, on the scan's fan --------------------------------------- */
+
+/* Where the rover aims its sonar: a ray in the operator's own blue, a mark
+   across it where its reading falls, and the reading, haloed in the
+   card's colour so a wedge under it never hides it. A drag's aim is the
+   same ray dashed, until the rover reports it. */
+.aimRay,
+.aimWish {
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.aimWish { stroke-dasharray: 4 5; }
+
+.aimHit {
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.aimReading {
+  font-family: var(--gauge);
+  font-size: max(calc(12px / var(--scan-k, 1)), min(var(--scan-reading), calc(28px / var(--scan-k, 1))));
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  fill: var(--readout);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+#scan[data-labels="none"] .aimReading { display: none; }
+
+/* A drag on the fan aims it, while the rover's settings can be changed:
+   the page does not scroll under the drag. */
+#scan[data-aim="yes"] {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* The bearings the sonar no longer measures, held still in manual mode:
+   their last reading, dimmed, as a link that went leaves the scan. */
+#scan .wedge[data-held="yes"] { opacity: 0.45; }
+
+#scan .reading[data-held="yes"] { fill: var(--dim); }
+
+body:not([data-link="up"]) :is(.aimRay, .aimHit) { stroke: var(--dim); }
+
+/* --- who has control ------------------------------------------------------------ */
+
+/* While the pad or the USB console has control and this panel presses,
+   one line at the view's top, as the line over the simulator says the
+   rover explores: it takes its height from the scan's card, inside the
+   size-contained view, so nothing outside the view moves. Two lines at
+   most, never cut. */
+.heldBy {
+  flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  margin: 0 0 var(--s-1);
+  padding: 2px var(--s-2);
+  overflow: hidden;
+  font-size: var(--t-sm);
+  line-height: var(--lh-tight);
+  color: var(--readout);
+  overflow-wrap: anywhere;
+  background: var(--warn-soft);
+  border-radius: var(--r-md);
+}
+
+.heldBy strong { color: var(--warn); }
+
+.heldBy[hidden] { display: none; }
+
+/* --- the log and the graphs ----------------------------------------------------- */
+
+/* Log, at the readouts' far end: quiet, on the line's own ground, its
+   count of new warnings amber on the amber tint. */
+.readouts .logToggle {
+  position: relative;
+  flex: none;
+  gap: var(--s-1);
+  min-height: 0;
+  height: calc(var(--readouts-h) - 6px);
+  margin-left: auto;
+  padding: 0 var(--s-3);
+  font-size: var(--t-sm);
+  background: none;
+  border-radius: var(--r-full);
+}
+
+.readouts .logToggle[aria-expanded="true"] { border-color: var(--readout); }
+
+.logBadge {
+  min-width: 1.5em;
+  padding: 0 var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-bold);
+  line-height: 16px;
+  text-align: center;
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--r-full);
+}
+
+.logBadge[hidden] { display: none; }
+
+/* The drawer: a card under the scan's, sharing the view's height with it,
+   the larger part to the log. The view is size-contained, so it opening
+   moves nothing outside the view, only the fan, which thins out as it
+   shrinks (panel.css). The rover's alone: on the simulator target it goes
+   with the scan. */
+.roverLog {
+  container: roverlog / inline-size;
+  flex: 1.4 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: var(--s-2);
+  overflow: hidden;
+  background: var(--panel);
+  border-radius: var(--r-lg);
+}
+
+.roverLog[hidden],
+body[data-target="simulator"] .view > :is(.roverLog, .heldBy) { display: none; }
+
+/* Its bar: Log | Graphs where the drawer is narrow, the filter, Warnings,
+   Clear and Save. It wraps rather than run past the drawer. */
+.logBar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.logBar .logButton {
+  position: relative;
+  min-height: 0;
+  height: var(--ctl);
+  padding: 0 var(--s-3);
+  font-size: var(--t-ctl);
+  border-radius: var(--r-full);
+}
+
+.logBar .logButton:disabled { opacity: 0.5; }
+
+.logBar #logWarnings[aria-pressed="true"] {
+  color: var(--on-chosen);
+  background: var(--chosen);
+  border-color: transparent;
+}
+
+.logBody {
+  flex: 1 1 0;
+  display: flex;
+  min-height: 0;
+}
+
+.logList {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A line: when on the rover's clock, whose, and what, in the mono face so
+   its times line up; a warning on the amber tint, its word in amber. The
+   lines can be selected and copied. */
+.logLines {
+  flex: 1 1 0;
+  min-height: 0;
+  margin: 0;
+  padding: var(--s-1) 0;
+  overflow-y: auto;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  scrollbar-width: thin;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.logLines li {
+  display: grid;
+  grid-template-columns: auto 3.5em minmax(0, 1fr);
+  gap: var(--s-2);
+  padding: 1px var(--s-3);
+}
+
+.logLines li[hidden] { display: none; }
+
+.logLines li[data-warn="yes"] { background: var(--warn-soft); }
+
+.logT {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.logSrc { color: var(--dim); }
+
+.logText {
+  color: var(--readout);
+  overflow-wrap: anywhere;
+}
+
+.logWarn {
+  margin-right: var(--s-2);
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--track-label);
+  color: var(--warn);
+}
+
+.logEmpty {
+  margin: 0;
+  padding: var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  color: var(--dim);
+}
+
+.logEmpty[hidden] { display: none; }
+
+/* The graphs: one chart a row, the series' name, its latest value and
+   its range over it, and its line in the operator's blue over a dotted
+   middle. */
+.graphs {
+  display: none;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--s-2) var(--s-3);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.roverLog[data-pane="graphs"] .graphs {
+  display: flex;
+  flex: 1 1 0;
+}
+
+.roverLog[data-pane="graphs"] .logList { display: none; }
+
+.graph {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.graph figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  color: var(--dim);
+}
+
+.graphName {
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--track-label);
+}
+
+.graphNow {
+  font-family: var(--gauge);
+  font-size: var(--t-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--readout);
+}
+
+.graphRange {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graphPlot {
+  display: block;
+  width: 100%;
+  height: 36px;
+  overflow: visible;
+}
+
+.graphLine {
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.graphMid {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+/* Wide enough for both, the lines and the graphs side by side, and no
+   Log | Graphs to pick between them. */
+@container roverlog (min-width: 600px) {
+  .logPane { display: none; }
+
+  .roverLog[data-pane] .logList { display: flex; }
+
+  .roverLog[data-pane] .graphs {
+    display: flex;
+    flex: 0 0 clamp(220px, 36%, 360px);
+    border-left: 1px solid var(--rule);
+  }
+}

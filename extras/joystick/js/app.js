@@ -21,9 +21,13 @@
  *                    speed limits, the port, distances and timing
  *   mecanum.js       the motions, moveForStick() for the stick families, and
  *                    heldMotion() for a program's
- *   link.js          Link: the WebSocket, the link state, telemetry
- *   scan.js          BEARINGS, ScanView: the scan fan
- *   readouts.js      Readouts: mode, move, phase, chip temperature, motor warning
+ *   link.js          Link: the WebSocket, the link state, and the rover's
+ *                    frames by their key: telemetry, its log, its metrics,
+ *                    its settings, a firmware update's replies
+ *   scan.js          BEARINGS, ScanView: the scan fan, the sonar's aim, and
+ *                    a drag on the fan that aims it
+ *   readouts.js      Readouts: mode, move, phase or the check under way, chip
+ *                    temperature, motor warning
  *   drive.js         Driver: the two sticks, rotate buttons, keys and speed, and
  *                    what to send
  *   keys.js          Keyboard: client/drive.py's keys, driving through the Driver
@@ -49,6 +53,17 @@
  *   md5.js           md5: the MD5 of bytes or text, as the rover writes one
  *   firmware.js      FirmwareUpdate: new firmware sent to the rover over the
  *                    link, from the Options popover
+ *   checks.js        Checks: the rover's checks, asked for and held through
+ *                    the Driver, and when they are over
+ *   roversettings.js RoverSettings: the rover's settings in the Options
+ *                    popover, and Run checks
+ *   heldby.js        HeldBy: the line that says the pad or the USB console
+ *                    has control, while this panel's presses are refused
+ *   history.js       RoverHistory: the rover's log lines and samples, kept in
+ *                    memory, and Save's file
+ *   graphs.js        RoverGraphs: the rover's graphs over the last 10 minutes
+ *   roverlog.js      RoverLog: the drawer under the scan that shows the log
+ *                    and the graphs
  *   app.js           this file, last
  *
  * Every part's on...(fn) returns a function that unsubscribes fn
@@ -121,6 +136,7 @@ const readouts = new Readouts({
   mode: byId("mode"),
   move: byId("move"),
   phaseCell: byId("phaseCell"),
+  phaseLabel: byId("phaseLabel"),
   phase: byId("phase"),
   temp: byId("temp"),
   motorsFault: byId("motorsFault"),
@@ -755,6 +771,97 @@ link.onState((state) => firmwareUpdate.linkState(state));
 link.onOta((message) => firmwareUpdate.reply(message));
 firmwareUpdate.onStart(() => {
   if (runner.target === targets.rover) runner.abort("the rover's firmware is being updated.");
+});
+
+/* --- the rover's settings and checks -------------------------------------- */
+
+// The rover's settings, in the Options popover's Rover section, as its
+// settings frame reports them: each change is configuration, sent straight
+// over the link, never a command, so it neither takes control nor stops an
+// exploring rover. Nothing is offered on the simulator target, with no
+// live link, or before the rover has reported its settings over this one
+// (firmware from before reads a settings message as a STOP that takes
+// control). Run checks is there too: the checks turn every wheel and drive
+// the rover forward and sideways, so the panel asks first, in the page's
+// one dialog, and the Driver holds them as it holds a move
+// (Driver.runChecks()), so that every way a held move is let go of lets go
+// of them; the rover ends them within a second of the last RUN_CHECKS.
+// They need what the settings need (firmware with the one has the other).
+let roverSettings = null;
+const checks = new Checks({ driver, ask, whyOff: () => (roverSettings ? roverSettings.whyOff() : RoverSettings.WHY_OFF.down) });
+roverSettings = new RoverSettings({
+  link,
+  checks,
+  ui: {
+    section: byId("roverSettings"),
+    sonar: byId("sonarChoice"),
+    aimRow: byId("aimRow"),
+    aim: byId("aim"),
+    aimOut: byId("aimOut"),
+    pad: byId("padChoice"),
+    padState: byId("padState"),
+    priority: byId("priorityList"),
+    bootChecks: byId("bootChecksChoice"),
+    runChecks: byId("runChecks"),
+    status: byId("roverStatus"),
+  },
+});
+link.onSettings((frame) => roverSettings.show(frame));
+link.onTelemetry((data) => {
+  roverSettings.telemetry(data);
+  checks.show(data);
+});
+link.onState((state) => roverSettings.linkState(state));
+// After the target's own listener, above, which lets go of the checks.
+targetSwitch.onChange((kind) => roverSettings.target(kind));
+roverSettings.target(targetSwitch.kind);
+
+// A drag on the scan's fan aims the sonar there, as the Aim slider does:
+// a setting, never a command, and only while the settings can be changed.
+scanView.onAim((deg) => roverSettings.aimAt(deg));
+const aimable = () => scanView.aimable(roverSettings.whyOff() === "");
+roverSettings.onChange(aimable);
+aimable();
+
+/* --- who has control ------------------------------------------------------ */
+
+// While the pad or the USB console holds control and this panel presses a
+// drive control, the rover refuses the panel's moves (Stop aside), and a
+// line at the view's top says why nothing moves.
+const heldBy = new HeldBy({ element: byId("heldBy"), who: byId("heldByWho"), driver });
+link.onTelemetry((data) => heldBy.show(data));
+link.onState((state) => heldBy.linkState(state));
+targetSwitch.onChange((kind) => heldBy.target(kind));
+heldBy.target(targetSwitch.kind);
+
+/* --- the rover's log and graphs ------------------------------------------- */
+
+// What the rover says besides telemetry, and telemetry sampled once a
+// second, kept for the last 10 minutes (its log, its last 500 lines), in
+// a drawer under the scan that Log opens: the lines, filtered by whose they
+// are, and graphs of how the rover runs; Save downloads all of it.
+const roverHistory = new RoverHistory();
+link.onLog((frame) => roverHistory.addLine(frame));
+link.onTelemetry((data) => roverHistory.addTelemetry(data));
+link.onMetrics((frame) => roverHistory.addMetrics(frame));
+link.onSettings((frame) => roverHistory.addSettings(frame));
+const roverGraphs = new RoverGraphs({ history: roverHistory, box: byId("graphs") });
+new RoverLog({
+  history: roverHistory,
+  graphs: roverGraphs,
+  ui: {
+    toggle: byId("logToggle"),
+    badge: byId("logBadge"),
+    drawer: byId("roverLog"),
+    pane: byId("logPane"),
+    filter: byId("logFilter"),
+    warnings: byId("logWarnings"),
+    clear: byId("logClear"),
+    save: byId("logSave"),
+    lines: byId("logLines"),
+    empty: byId("logEmpty"),
+    graphs: byId("graphs"),
+  },
 });
 
 /* --- the top's words, where they fit -------------------------------------- */
