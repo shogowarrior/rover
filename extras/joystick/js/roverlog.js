@@ -169,7 +169,8 @@ class RoverLog {
   #add({ at, frame }) {
     const src = typeof frame.src === "string" ? frame.src : "";
     const warn = frame.warn === true;
-    const li = dom.html("li", { "data-src": src }, this.#ui.lines);
+    const li = dom.html("li", {}, this.#ui.lines);
+    li.dataset.src = src;
     if (warn) li.dataset.warn = "yes";
     const t = typeof frame.t === "number" ? RoverLog.clock(frame.t) : "";
     dom.html("span", { class: "logT" }, li, t);

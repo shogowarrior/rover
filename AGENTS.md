@@ -459,8 +459,9 @@ bearings and telemetry keys (`BEARINGS` in `js/scan.js`), the stick mapping,
 its family names and the move names telemetry reports (`js/mecanum.js`), and
 the simulator's own copies (`js/sim.js`). `joy.js` is a vendored third-party
 joystick: leave it unmodified. `test/` runs the real page in Node against a
-fake DOM, WebSocket and clock (`panel.test.js`, and the keyboard in
-`keys.test.js`), and the runner and blocks (`program.test.js`), the
+fake DOM, WebSocket and clock (`panel.test.js`, the keyboard in
+`keys.test.js`, and the rover's settings, checks, aim, log and graphs in
+`rover.test.js`), and the runner and blocks (`program.test.js`), the
 simulator (`sim.test.js`), the stick mapping (`mecanum.test.js`), the looks'
 tokens and contrast (`looks.test.js`) and a firmware update with its MD5
 (`ota.test.js`) on their own. `test/firmware.js` reads what they check
@@ -496,6 +497,12 @@ scan: with no link a card over the faint fan says the link's state, as the
 chip does, and offers to connect, and after a link goes the scan and the
 readouts keep their last values, dimmed. On the simulator target the view
 is the simulated room.
+
+The Link tells the rover's frames apart by their key (`js/link.js`): a line
+of its log (`"log"`), its metrics and its settings never reach telemetry's
+listeners, where one with no `mode` blanked the scan and the readouts and
+made the mode unknown, and only telemetry, or a firmware update's reply,
+keeps the link from going stale: the others come at their own paces.
 
 **The keyboard** (`js/keys.js`) takes `client/drive.py`'s keys: W S forward
 and back, A D strafe, Q E rotate, - and + the speed by 16, Space Stop, T
@@ -652,7 +659,9 @@ caret beside its words (what to do behind that disclosure); the fan
 (`ScanView`), in whichever of its two shapes, wide or tall, draws it the
 larger; and the readouts on one line at its foot: the move, the chip's
 temperature, and the phase while the rover explores, or "Halted: boxed
-in" (or "sensor silent") in amber, its caption hidden. The fan's bearing
+in" (or "sensor silent") in amber, its caption hidden, or while the rover
+runs its checks the one under way, captioned Check ("Check wheel FL": one
+wheel turning alone reads as a STOP); and Log, at the line's far end. The fan's bearing
 names and readings are never drawn under 12 px: where the fan is too small
 for its names they go, and the left and right readings move under the
 fan's ends; where it is smaller still those two go, and then the rest
@@ -662,7 +671,17 @@ and only then their captions, the phase's before the move's, where a value
 would otherwise be cut short (a bare "STOP" read like a button), each cell
 titled with its caption. After a link goes, and while it is quiet, the
 fan's readings, its 25 and 40 cm rings and the readouts' values dim
-together, the values faded too. On the simulator target the view holds the
+together, the values faded too. Where the rover holds its sonar still in
+manual mode (telemetry's `sonar` FRONT or AIM), only the bearing it points
+at is measured again, so the fan dims the others' wedges and readings
+(`data-held`) as last seen; while it aims, a ray in the operator's blue
+runs from the rover at the aim, a mark across it where `aimCm` falls and
+the reading by it, haloed ("…" before one is in, "no echo"). On the rover
+target with a live link and the rover's settings in, a drag on the fan
+aims the sonar where it points (`ScanView.onAim`), as the Aim slider in
+Options does: a setting, never a command, sent at most every 100 ms with
+the latest last, the drag's ray dashed until the rover reports its aim;
+the fan takes no scroll then (`touch-action: none`). No third stick. On the simulator target the view holds the
 one `SimView`, in `#simSlot`, which is hidden by its attribute on the
 rover target so that an idle view knows it is out of sight and draws
 nothing. Its controls take one row, the same controls in the same order on
@@ -678,9 +697,47 @@ the trail and the colours' key (the wheels' drag is no longer there:
 `releasedDrag` stays in `js/sim.js` as calibration); the room takes the
 rest of the view, and a view too short for the room shows the row alone.
 The view's size is the shell grid's, never its content's (size
-containment): a fault, the connect card, the readouts or a switch of
-target only trade height inside it, so none of them can grow its row and
-move the dock under a held stick.
+containment): a fault, the connect card, the readouts, the line saying who
+has control, the log's drawer or a switch of target only trade height
+inside it, so none of them can grow its row and move the dock under a
+held stick.
+
+At the view's top on the rover target, a line (`#heldBy`, `js/heldby.js`)
+says "The pad has control" (or "The USB console has control"), amber on
+the amber tint, while telemetry's `control` names one of them and this
+panel drives (a held control, a program, the checks) or drove or pressed
+within `CONTROL_HOLD_MS`: the rover refuses WiFi's moves while a
+controller ranked above it drives, and a stick that moved nothing read as
+broken. It says what that means and that Stop still stops, in two lines at
+most, and takes its height from the scan's card.
+
+**The log and the graphs.** Log, at the readouts' far end, opens a drawer
+under the scan's card (`#roverLog`, `js/roverlog.js`), on the rover target
+alone, sharing the view's height with the card, the larger part its own:
+the fan thins out as it shrinks, as on any short view. While the drawer is
+closed Log counts the warnings that came meanwhile. `RoverHistory`
+(`js/history.js`) keeps, in memory only, the rover's last 500 lines of log,
+each once by its `seq` (the rover resends every line it holds as a client
+connects; a Clear is remembered, so a link that comes back does not bring
+the lines back), and for the last 10 minutes telemetry sampled at most once
+a second, every metrics frame and every settings frame (the last one
+whatever its age). Each line says when on the rover's clock, its time
+since boot (`1:01.2`), whose it is (USB, Pad, WiFi or Rover), and what, a
+warning on the amber tint with its word; the list follows the newest at
+its foot while scrolled there. The bar filters by whose (All, USB, Pad,
+WiFi, Rover) and to the warnings alone, Clear empties it, and Save
+downloads a `.jsonl` of every line and sample by when it arrived, one
+`{"at": <ms since 1970>, "frame": <as received>}` a line, which
+`client/recorder.py`'s `import_lines()` reads (`ws.py --db ... --import`).
+`RoverGraphs` (`js/graphs.js`) draws the loop rate, the free heap and the
+WiFi signal from the metrics, and the chip's temperature and the front
+distance from telemetry, each a row of inline SVG with its latest value
+and its range, the line in `--live`, broken where nothing came for 3.5 of
+its intervals or the front heard no echo; drawn as samples arrive, only
+while the drawer is open. Where the drawer is 600 px wide or more (a
+container query) the graphs stand beside the lines; narrower, Log | Graphs
+picks one. Nothing in the drawer is a command, and nothing in it keeps its
+keys: Space stops the rover with the focus on any of its buttons.
 
 **The layouts:**
 
@@ -776,10 +833,11 @@ look changes, in the new look's `--live`, `--stick-rim` and `--stick-ring`
 (`js/drive.js`), letting go of a held stick first. A look picked while the
 Drive tab is hidden is drawn as the tab is shown, before a press can land.
 
-**The look.** The page's colours are `css/looks.css`'s: six looks, three
+**The look.** The page's colours are `css/looks.css`'s (and the rover's
+parts', `css/rover.css`, on the same tokens): six looks, three
 themes (Console, the default, Field and Blueprint) in Dark and Light, worn
 as `<html data-look>`. The gear, at the end of the top's second cell,
-opens Options, where `js/look.js` offers a Dark | Light toggle that keeps
+opens Options (the rover's settings first, below), where `js/look.js` offers a Dark | Light toggle that keeps
 the theme and a tile per theme that keeps the flavour, and remembers the
 look; it loads in `<head>`, so the page is drawn in that look from the
 first paint, and paints the browser's bar (`theme-color`) then too. Every
@@ -966,6 +1024,48 @@ questions (deleting every block, or a variable in use) go through it too
 or renamed), which need a text field, and its note that a name is taken stay
 Blockly's own in-page dialogs. The link's popover, the File menu, the
 simulator's settings and Options share `Popover` (`js/popover.js`).
+
+**The rover's settings** are the first section of Options, Rover
+(`js/roversettings.js`): where manual mode points the sonar (Sweep | Front
+| Aim, and while it aims the Aim slider, the rover's left at its left end,
+its value the aim's negative, the angle in words beside it), the pad (On |
+Off, and what telemetry says of it: connected, waiting, or "This build has
+no pad."), the priority (the three controllers, first first, each with an
+up and a down arrow, which send the whole list), and checks at boot (On |
+Off: the shield and the sonar, no wheel), then Run checks. It shows only
+what the rover's settings frame reports, never what was asked: a press
+sends `{"settings": {<that one setting>}}` straight over the Link, marked
+pending (dashed) until a frame reports it or 1.5 s pass, and a press on
+what the rover reports, or on what is pending, sends nothing. It is
+configuration, never a command: it neither takes control nor stops an
+exploring rover, and it goes while another controller drives. The section
+is off, its status line and every control's title saying why, with no
+live link, before the rover's first settings frame over it (firmware from
+before settings reads one as a STOP that takes control, and a rover whose
+telemetry comes with none is "too old"), and on the simulator target; a
+stale link keeps the last report shown, faded, and offers nothing. The
+settings belong to the link they came over.
+
+**Run checks** asks first, in the page's dialog: the rover belongs on its
+stand, since its checks ping the sonar at five bearings, turn each wheel
+alone, then drive it forward, sideways and round in four short moves, and
+run only while this panel stays open and in front. On a yes, `Checks`
+(`js/checks.js`) has the Driver hold them as it holds a move
+(`Driver.runChecks()`): `RUN_CHECKS` (20) at once and again every
+`REPEAT_MS`, well inside the rover's `CHECK_HOLD_MS` (1 s,
+`tools/check_protocol.py` holds `REPEAT_MS` to half of it), without which
+the rover starts no wheel's step. It is a press: the stand-down's reason
+"checks" stops a program. Every let-go of a held move lets go of them,
+sending nothing more (blur, a hidden or closed page, Stop and Space,
+Autonomous and T, a press of a drive control, a stick pressed but not yet
+pushed among them, a switch of target, the link lost or stale), and so does
+any other command the Driver sends; the rover ends them itself within a
+second. `Checks` lets go too once telemetry shows them over (a frame
+without `check` after one with it) or never started (no frame shows one
+within 1.5 s: another controller had control, or older firmware). Run
+checks is off where the settings are, and while checks run (Stop ends
+them); the status line says which check is under way, and whether this
+panel holds them.
 
 **The simulator** holds no Link and no Driver: it sends nothing, and its
 telemetry never reaches the scan fan or the readouts. It takes the Drive

@@ -1,8 +1,9 @@
 /**
  * Who has control, when it is not this panel and that matters: while
  * telemetry's "control" names the pad or the USB console and this panel is
- * driving the rover or has pressed a drive control within CONTROL_HOLD_MS,
- * a line at the top of the view says so in words. The rover refuses every
+ * driving the rover (a held control, a program, the checks), or drove it or
+ * pressed a drive control within CONTROL_HOLD_MS, a line at the top of the
+ * view says so in words. The rover refuses every
  * WiFi command but Stop while a controller ranked above WiFi drives
  * (src/Control.h), so a stick that moved nothing otherwise read as broken.
  * It names the controller and what that means; Stop still stops, from
@@ -33,7 +34,7 @@ class HeldBy {
   #control = null; // telemetry's "control", or null
   #live = false;
   #target = "rover";
-  #pressedAt = -Infinity;
+  #activeAt = -Infinity; // when this panel last drove or was pressed
   #timer = null;
 
   constructor({ element, who, driver }) {
@@ -41,7 +42,7 @@ class HeldBy {
     this.#who = who;
     this.#driver = driver;
     driver.onManualInput(() => {
-      this.#pressedAt = performance.now();
+      this.#activeAt = performance.now();
       this.#say();
     });
     this.#say();
@@ -71,15 +72,16 @@ class HeldBy {
     clearTimeout(this.#timer);
     this.#timer = null;
     const name = HeldBy.NAMES[this.#control];
-    const since = performance.now() - this.#pressedAt;
-    const pressing = this.#driver.driving !== null || this.#driver.checking || since < CONTROL_HOLD_MS;
-    const on = Boolean(name) && this.#live && this.#target === "rover" && pressing;
+    const now = performance.now();
+    if (this.#driver.driving !== null || this.#driver.checking) this.#activeAt = now;
+    const since = now - this.#activeAt;
+    const on = Boolean(name) && this.#live && this.#target === "rover" && since < CONTROL_HOLD_MS;
     this.#element.hidden = !on;
     if (!on) return;
     this.#who.textContent = `${name} has control`;
     this.#element.title = `${name} has control of the rover, and is ranked above WiFi in the rover's priority (Options, Rover): this panel's moves are refused while it drives. Stop still stops the rover.`;
-    // Again once the press has had its CONTROL_HOLD_MS, unless a frame
-    // comes first.
-    if (since < CONTROL_HOLD_MS) this.#timer = setTimeout(() => this.#say(), CONTROL_HOLD_MS - since);
+    // Again once this panel has been idle CONTROL_HOLD_MS, unless a frame
+    // comes first: still driving, it stays.
+    this.#timer = setTimeout(() => this.#say(), CONTROL_HOLD_MS - since);
   }
 }
