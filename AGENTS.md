@@ -102,7 +102,7 @@ that turns that on would start exploring. It also never exits on its own.
 | `test/fakes/` | Fake `Motors`, `RangeScanner` and `FirmwareSlot` for the host tests |
 | `test/support/` | Helpers the host tests share: `Loop.h` steps time the way `loop()` does, `Vectors.h` reads `test/vectors/` |
 | `test/vectors/` | Cases as JSON: stick to move, shared by the firmware's tests and the panel's; telemetry frames; log lines, metrics and settings (`stream.json`), which the client tests read too |
-| `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/`, and every frame key `client/recorder.py` and `client/ws.py` read against what the firmware writes |
+| `tools/check_protocol.py` | Checks the values the clients copy from the firmware (the move codes above all) against `src/`, and every frame key `client/recorder.py`, `client/ws.py` and `client/drive.py` read (the settings among them) against what the firmware writes |
 | `client/drive.py` | Keyboard control and telemetry, in a terminal |
 | `client/ws.py` | Listener only: prints what the rover sends, records it in SQLite (`--db`), serves it to Prometheus (`--prometheus`) |
 | `client/recorder.py` | `ws.py`'s SQLite store and Prometheus exporter; standard library only. `client/test_recorder.py` tests it against `test/vectors/`, and `client/test_ws.py` runs `ws.py`'s usage examples that need no rover |
