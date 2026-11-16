@@ -26,10 +26,13 @@ constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
 
-// Log lines sent to each client in one pass. A client that has just
-// connected is owed up to EventLog::CAPACITY of them: sent at once, about
-// 5 KB, they could fill the socket's send buffer and hold the loop.
-constexpr int LOG_LINES_PER_PASS = 2;
+// At most one log line to each client this often. A client that has just
+// connected is owed up to EventLog::CAPACITY of them, about 5 KB: sent in a
+// burst, they could fill the socket's send buffer, which telemetry shares,
+// and a client slow to acknowledge would then hold the loop in sendTXT(),
+// move deadlines and STOPs with it. Paced, a full backlog takes 1.6 s, and
+// the rover adds a line or two a second while it explores.
+constexpr uint32_t LOG_LINE_GAP_MS = 50;
 
 }  // namespace
 
@@ -75,7 +78,7 @@ void RemoteControl::update(uint32_t now) {
   send(firmware.update(now));
 
   server.loop();
-  sendLogLines();
+  sendLogLines(now);
 
   if (timing::since(now, lastMetricsMs) >= tuning::METRICS_INTERVAL_MS) broadcastMetrics(now);
   if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
@@ -113,6 +116,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
         // Every line still held, from the oldest: why the rover is as it is.
         connected[client] = true;
         nextLine[client] = log.oldestSeq();
+        lastLineMs[client] = millis() - LOG_LINE_GAP_MS;
         ignoredOnce[client] = false;
       }
       const IPAddress remote = server.remoteIP(client);
@@ -245,17 +249,16 @@ void RemoteControl::broadcastTelemetry() {
   server.broadcastTXT(frame, length);
 }
 
-void RemoteControl::sendLogLines() {
+void RemoteControl::sendLogLines(uint32_t now) {
   for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) {
-    if (!connected[client]) continue;
-    for (int sent = 0; sent < LOG_LINES_PER_PASS; sent++) {
-      const EventLog::Entry* entry = log.from(nextLine[client]);
-      if (entry == nullptr) break;
-      nextLine[client] = entry->seq + 1;
-      char frame[protocol::LOG_LINE_MAX_BYTES];
-      const size_t length = protocol::writeLogLine(*entry, frame, sizeof(frame));
-      if (length > 0) server.sendTXT(client, frame, length);
-    }
+    if (!connected[client] || timing::since(now, lastLineMs[client]) < LOG_LINE_GAP_MS) continue;
+    const EventLog::Entry* entry = log.from(nextLine[client]);
+    if (entry == nullptr) continue;
+    nextLine[client] = entry->seq + 1;
+    lastLineMs[client] = now;
+    char frame[protocol::LOG_LINE_MAX_BYTES];
+    const size_t length = protocol::writeLogLine(*entry, frame, sizeof(frame));
+    if (length > 0) server.sendTXT(client, frame, length);
   }
 }
 

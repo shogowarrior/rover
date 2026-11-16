@@ -55,9 +55,9 @@ class HeartbeatServer : public WebSocketsServer {
 // with the gamepad: a client may change it, and telemetry reports it.
 //
 // Each client is sent every log line, from the oldest still held when it
-// connected, a few a pass so that a backlog never holds the loop; one that
-// falls a whole ring behind loses the lines in between, and sees the gap in
-// their numbers.
+// connected, one at a time and paced so that a backlog never holds the
+// loop; one that falls a whole ring behind loses the lines in between, and
+// sees the gap in their numbers.
 class RemoteControl {
  public:
   RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware, Gamepad& gamepad,
@@ -78,7 +78,7 @@ class RemoteControl {
   void onUpdateRequest(uint8_t client, const protocol::OtaRequest& request);
   void send(const FirmwareUpdate::Reply& reply);
   void broadcastTelemetry();
-  void sendLogLines();
+  void sendLogLines(uint32_t now);
   void broadcastMetrics(uint32_t now);
   // Log that `client` sent something ignored, once per connection, so a
   // client that sends nothing else cannot flood the log.
@@ -93,10 +93,12 @@ class RemoteControl {
   bool started = false;
   uint32_t lastBroadcastMs = 0;
 
-  // Per client slot: connected, the number of the next log line it needs,
-  // and whether something it sent was ignored already this connection.
+  // Per client slot: connected, the number of the next log line it needs
+  // and when it was sent the last, and whether something it sent was
+  // ignored already this connection.
   bool connected[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
   uint32_t nextLine[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  uint32_t lastLineMs[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
   bool ignoredOnce[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
 
   // The loop's timing since the last metrics.

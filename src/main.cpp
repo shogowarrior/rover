@@ -73,12 +73,13 @@ void setup() {
   // Room for a burst of log lines: printing waits once the buffer is full.
   Serial.setTxBufferSize(1024);
   Serial.begin(tuning::SERIAL_BAUD);
+  // First: it releases wheels the shield kept driving through a reset.
+  driveTrain.begin();
   eventLog.echoTo(echoToSerial);
   const esp_reset_reason_t reason = esp_reset_reason();
   const Rover::Mode mode = startupMode(reason);
   eventLog.add(millis(), EventLog::INFO, "Boot after a %s reset, in %s", resetName(reason),
                mode == Rover::MODE_AUTONOMOUS ? "autonomous mode: exploring" : "manual mode");
-  driveTrain.begin();
   if (!driveTrain.ready()) {
     eventLog.add(millis(), EventLog::WARN, "Motor shield: no answer on I2C at 0x60; no wheel will turn");
   }
