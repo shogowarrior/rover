@@ -257,10 +257,11 @@
          a stick, so it may be positioned: on a phone on its side it lies over
          the middle of the Drive tab, between the sticks. -->
     <section class="view" id="view" aria-label="What the controls drive">
-      <!-- While the pad or the USB console has control and this panel
-           presses a drive control, why nothing moves (heldby.js): the rover
-           refuses WiFi's moves while one ranked above it drives. One line
-           at the view's top, which takes its height from the scan's card. -->
+      <!-- While the pad or the USB console has control, ranked above WiFi
+           in the rover's priority, and this panel presses a drive control,
+           why nothing moves (heldby.js): the rover refuses WiFi's moves
+           while one ranked above it drives. One line at the view's top,
+           which takes its height from the scan's card. -->
       <p class="heldBy" id="heldBy" role="status" hidden><strong id="heldByWho">The pad has control</strong><span class="heldMore">: this panel's moves are refused while it drives. Stop still stops.</span></p>
       <!-- The rover perceives the world as five ultrasonic returns, taken
            straight ahead and at 35 and 70 degrees to either side. Drawing

@@ -241,7 +241,7 @@ test("settings: a press asks the rover in a settings message of its own, never a
   click(page, arrows(page, 0).down);
   check(JSON.stringify(settingsSent(ws, from)) === '[{"priority":["PAD","USB","WIFI"]},{"priority":["USB","PAD","WIFI"]}]',
     `the whole list each time: ${JSON.stringify(settingsSent(ws, from))}`);
-  check(page.$("priorityList").dataset.pending === "yes" && priority(page) === "Pad,WiFi,USB", "pending, the reported order shown");
+  check(page.$("priorityList").dataset.pending === "yes" && priority(page) === "USB,Pad,WiFi", `pending, the order asked shown: ${priority(page)}`);
   ws.serverMsg(DEFAULTS);
   check(!page.$("priorityList").dataset.pending && priority(page) === "USB,Pad,WiFi", "settled");
 
@@ -254,6 +254,36 @@ test("settings: a press asks the rover in a settings message of its own, never a
   const n = count(ws);
   click(page, seg(page, "sonarChoice", "AIM"));
   check(count(ws) === n && seg(page, "sonarChoice", "AIM").disabled, "nothing asked over a quiet link");
+});
+
+test("settings: while a priority is pending, its rows show it, so each arrow moves the controller it names", () => {
+  const { page, ws } = connected(); // reported: USB, PAD, WIFI
+  const confirmMs = page.evalIn("RoverSettings.CONFIRM_MS");
+  const named = (label) => all(page.$("priorityList")).find((n) => n.tagName === "BUTTON" && n.getAttribute("aria-label") === label);
+  click(page, named("Move WiFi up"));
+  check(JSON.stringify(settingsSent(ws)) === '[{"priority":["USB","WIFI","PAD"]}]', `WiFi up: ${JSON.stringify(settingsSent(ws))}`);
+  check(page.$("priorityList").dataset.pending === "yes" && priority(page) === "USB,WiFi,Pad", `pending, dashed, in the order asked: ${priority(page)}`);
+  check(arrows(page, 1).up.getAttribute("aria-label") === "Move WiFi up" && /over USB/.test(arrows(page, 1).up.title), `the arrow names what it moves: ${arrows(page, 1).up.title}`);
+  check(/^2: WiFi/.test(page.$("priorityList").children[1].title), `the row titled as shown: ${page.$("priorityList").children[1].title}`);
+
+  // The second press, before any frame, moves WiFi again: it does not move
+  // Pad, which the reported order has where WiFi now shows, or undo the first.
+  click(page, named("Move WiFi up"));
+  check(JSON.stringify(settingsSent(ws, 1)) === '[{"priority":["WIFI","USB","PAD"]}]', `WiFi up again, to first: ${JSON.stringify(settingsSent(ws, 1))}`);
+  check(priority(page) === "WiFi,USB,Pad" && arrows(page, 0).up.disabled && arrows(page, 0).up.getAttribute("aria-label") === "Move WiFi up", "WiFi first, its up arrow off");
+  check(/Asked of the rover: WiFi, USB, Pad/.test(page.$("priorityList").title), `the list's title says what was asked: ${page.$("priorityList").title}`);
+
+  // The reply to the first press settles nothing: the second is still asked.
+  ws.serverMsg({ settings: { ...DEFAULTS.settings, priority: ["USB", "WIFI", "PAD"] } });
+  check(page.$("priorityList").dataset.pending === "yes" && priority(page) === "WiFi,USB,Pad", `still the order asked: ${priority(page)}`);
+  ws.serverMsg({ settings: { ...DEFAULTS.settings, priority: ["WIFI", "USB", "PAD"] } });
+  check(!page.$("priorityList").dataset.pending && priority(page) === "WiFi,USB,Pad", "settled");
+
+  // A request no frame confirms lapses, and the rows show what the rover reports.
+  click(page, named("Move USB up"));
+  check(priority(page) === "USB,WiFi,Pad", `asked: ${priority(page)}`);
+  page.clock.advance(confirmMs + 10);
+  check(!page.$("priorityList").dataset.pending && priority(page) === "WiFi,USB,Pad", `lapsed: ${priority(page)}`);
 });
 
 /* --- the sonar's aim ----------------------------------------------------- */
@@ -304,6 +334,47 @@ test("aim: a drag on the fan and the slider aim the sonar, as a setting, at most
   check(count(ws) === n && !shown(wish), "a drag there aims nothing");
 });
 
+test("aim: the rover's reply to an earlier aim leaves the slider under the thumb while a newer one waits to go", () => {
+  const { page, ws } = connected({ settings: AIMING }); // the rover aims at -80
+  const slider = page.$("aim");
+  const slide = (value) => {
+    slider.value = String(value);
+    page.fire(slider, "input");
+  };
+  check(slider.value === "80", `the slider where the rover aims: ${slider.value}`);
+  slide(10);
+  check(JSON.stringify(settingsSent(ws)) === '[{"sonar":"AIM","aim":-10}]', `sent at once: ${JSON.stringify(settingsSent(ws))}`);
+  page.clock.advance(30);
+  slide(20); // within the 100 ms: waits to go
+  check(settingsSent(ws).length === 1, "the newer aim waits");
+  check(page.$("aimOut").textContent === "20° right" && slider.getAttribute("aria-valuetext") === "20° right",
+    `its words say the aim waiting: ${page.$("aimOut").textContent}, ${slider.getAttribute("aria-valuetext")}`);
+  check(page.$("aimRow").dataset.pending === "yes", "marked pending");
+
+  // The rover reports the first aim, which settles it: the slider stays.
+  ws.serverMsg({ settings: { ...AIMING.settings, aim: -10 } });
+  check(slider.value === "20", `the slider stays under the thumb: ${slider.value}`);
+  check(page.$("aimOut").textContent === "20° right" && slider.getAttribute("aria-valuetext") === "20° right",
+    `and its words: ${page.$("aimOut").textContent}, ${slider.getAttribute("aria-valuetext")}`);
+  check(page.$("aimRow").dataset.pending === "yes", "still pending: the newer aim has yet to go");
+
+  page.clock.advance(100);
+  check(JSON.stringify(settingsSent(ws, 1)) === '[{"sonar":"AIM","aim":-20}]', `the newer aim goes: ${JSON.stringify(settingsSent(ws, 1))}`);
+  check(slider.value === "20" && page.$("aimOut").textContent === "20° right", `pending, where it was asked to go: ${slider.value}`);
+  ws.serverMsg({ settings: { ...AIMING.settings, aim: -20 } });
+  check(slider.value === "20" && !page.$("aimRow").dataset.pending, "settled where the thumb left it");
+
+  // An aim that waits and then asks nothing (the rover reports it already)
+  // still lets the slider follow the rover again.
+  slide(30);
+  slide(20);
+  page.clock.advance(150);
+  check(settingsSent(ws).length === 2 && !page.$("aimRow").dataset.pending && page.$("aimOut").textContent === "20° right",
+    `back to what the rover reports: ${JSON.stringify(settingsSent(ws, 2))} ${page.$("aimOut").textContent}`);
+  ws.serverMsg({ settings: { ...AIMING.settings, aim: 40 } }); // aimed from elsewhere
+  check(slider.value === "-40" && page.$("aimOut").textContent === "40° left", `the slider follows the rover once nothing waits: ${slider.value}`);
+});
+
 test("aim: the fan draws where the rover aims and what it reads there, and dims the bearings it no longer measures", () => {
   const { page, ws } = connected({ frame: FRAMES.aiming });
   const svg = page.$("scan");
@@ -329,6 +400,34 @@ test("aim: the fan draws where the rover aims and what it reads there, and dims 
   check(held().every((h) => !h), "exploring sweeps, whatever the setting");
   ws.serverMsg(MANUAL);
   check(!shown(group) && held().every((h) => !h), "sweeping");
+});
+
+test("aim: the checks and exploring point the sonar their own way: every bearing live, and no aim drawn", () => {
+  const { page, ws } = connected({ frame: FRAMES.aiming, settings: AIMING });
+  const svg = page.$("scan");
+  const part = (name) => all(svg).find((n) => n.getAttribute("class") === name);
+  const group = part("aim");
+  const held = () => all(svg).filter((n) => ["wedge", "reading"].includes(n.getAttribute("class")) && n.getAttribute("data-held") === "yes").length;
+  check(shown(group) && held() === 10, "aiming in manual mode: the aim drawn, the five bearings held");
+
+  // The checks' sonar steps, with the setting at AIM.
+  ws.serverMsg({ ...FRAMES.aiming, check: "sonar FL" });
+  check(held() === 0, `a check measures the bearings: none dimmed (${held()} held)`);
+  check(!shown(group), "and no aim at the setting's angle, where the checks do not point it");
+  // With the setting at FRONT: the bearing a check measures is not dimmed.
+  ws.serverMsg(telemetry({ mode: "MANUAL", sonar: "FRONT", check: "sonar L" }));
+  check(held() === 0, `held ahead by the setting, the checks still point it: ${held()} held`);
+  // A wheel's check, with the setting at AIM: still the checks', not the setting's.
+  ws.serverMsg({ ...FRAMES.checking, sonar: "AIM", aim: -30, aimCm: 42 });
+  check(held() === 0 && !shown(group), "no aim while any check runs");
+
+  // Exploring with the setting at AIM: the explorer sweeps.
+  ws.serverMsg({ ...FRAMES.sweeping, sonar: "AIM", aim: -30 });
+  check(held() === 0 && !shown(group), "no aim while exploring");
+
+  // Back in manual mode with no check: the setting's again.
+  ws.serverMsg(FRAMES.aiming);
+  check(shown(group) && group.getAttribute("data-deg") === "-30" && held() === 10, "the aim again once the checks are over");
 });
 
 /* --- the checks ---------------------------------------------------------- */
@@ -523,6 +622,30 @@ test("control: a line says the pad or the USB console has control, while this pa
   check(line.hidden, "not with no link");
   const css = cssRules(outside(stylesheet("rover.css"), "@container"));
   check(css.some((r) => /body\[data-target="simulator"\] \.view > :is\(\.roverLog, \.heldBy\)/.test(r.selector) && /display:\s*none/.test(r.body)), "hidden on the simulator target by the stylesheet too");
+});
+
+test("control: no line for a controller ranked below WiFi, whose control this panel's next move takes", () => {
+  // Reported: WIFI, USB, PAD. The pad has control, and this panel presses.
+  const { page, ws } = connected({ frame: FRAMES.aiming, settings: AIMING });
+  const line = page.$("heldBy");
+  press(page, page.$("cw"), 1);
+  check(line.hidden, "the pad, below WiFi: no line");
+  ws.serverMsg(FRAMES.checking); // control USB, below WiFi too
+  check(line.hidden, "the USB console, below WiFi: no line");
+
+  // USB moved above WiFi: its control refuses this panel's moves, the pad's still does not.
+  ws.serverMsg({ settings: { ...AIMING.settings, priority: ["USB", "WIFI", "PAD"] } });
+  ws.serverMsg(FRAMES.checking);
+  check(!line.hidden && page.$("heldByWho").textContent === "The USB console has control", `USB above WiFi: ${page.$("heldByWho").textContent}`);
+  check(/ranked above WiFi/.test(line.title), `the title says why: ${line.title}`);
+  ws.serverMsg(FRAMES.aiming);
+  check(line.hidden, "the pad, still below WiFi");
+  lift(page, page.$("cw"), 1);
+
+  // Before any settings frame: the firmware's default, USB, PAD, WIFI, ranks both above WiFi.
+  const fresh = connected({ frame: FRAMES.aiming, settings: null });
+  press(fresh.page, fresh.page.$("cw"), 1);
+  check(!fresh.page.$("heldBy").hidden && fresh.page.$("heldByWho").textContent === "The pad has control", "no settings yet: the default order");
 });
 
 /* --- the log and the graphs ---------------------------------------------- */
