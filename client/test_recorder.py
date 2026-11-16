@@ -13,7 +13,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from recorder import Exporter, Store, kind_of  # noqa: E402
+from recorder import LOG_LINES_REMEMBERED, Exporter, Store, kind_of  # noqa: E402
 
 VECTORS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test", "vectors")
 
@@ -141,13 +141,18 @@ class ExporterTest(unittest.TestCase):
         self.now = 100.0
         self.exporter = Exporter(clock=lambda: self.now)
 
-    def samples(self):
+    @staticmethod
+    def parse(exposition):
+        """{series with its labels: value} from Prometheus's text format."""
         out = {}
-        for line in self.exporter.exposition().splitlines():
+        for line in exposition.splitlines():
             if line and not line.startswith("#"):
                 name, value = line.rsplit(" ", 1)
                 out[name] = value
         return out
+
+    def samples(self):
+        return self.parse(self.exporter.exposition())
 
     def test_fresh_telemetry_and_metrics_are_exported(self):
         self.exporter.set_connected(True)
@@ -201,6 +206,67 @@ class ExporterTest(unittest.TestCase):
         self.exporter.set_connected(False)
         self.assertEqual("0", self.samples()["rover_up"])
 
+    def log_counts(self):
+        return {name: value for name, value in self.samples().items() if name.startswith("rover_log_lines_total{")}
+
+    @staticmethod
+    def expected_log_counts(lines):
+        counts = {}
+        for frame in lines:
+            name = (f'rover_log_lines_total{{level="{"warn" if frame.get("warn") else "info"}",'
+                    f'source="{frame["src"]}"}}')
+            counts[name] = counts.get(name, 0) + 1
+        return counts
+
+    # The rover sends every line it still holds to a client each time it
+    # connects: ws.py reconnecting must not count them again.
+    def test_a_line_sent_again_on_a_reconnect_is_counted_once(self):
+        self.exporter.set_connected(True)
+        for frame in STREAM["log"]:
+            self.exporter.add(frame, 99.0)
+        self.exporter.set_connected(False)
+        self.exporter.set_connected(True)
+        for frame in STREAM["log"]:
+            self.exporter.add(frame, 99.5)
+        counts = self.log_counts()
+        expected = self.expected_log_counts(STREAM["log"])
+        for name, value in counts.items():
+            self.assertEqual(str(expected.get(name, 0)), value, name)
+        self.assertEqual(len(STREAM["log"]), sum(int(value) for value in counts.values()))
+
+    # Another boot can reuse a number: only the same number, time and text
+    # are the same line, as the Store has it.
+    def test_a_line_of_another_boot_with_the_same_number_is_counted(self):
+        line = dict(STREAM["log"][0])
+        self.exporter.add(line, 1.0)
+        line["t"] += 1
+        self.exporter.add(line, 2.0)
+        self.assertEqual("2", self.log_counts()['rover_log_lines_total{level="info",source="ROVER"}'])
+
+    # As the Store keeps none of them.
+    def test_a_line_without_a_number_and_a_time_is_not_counted(self):
+        for broken in ({"log": "no number", "t": 5, "src": "USB"}, {"log": "no time", "seq": 5, "src": "USB"},
+                       {"log": "a text number", "seq": "5", "t": 5, "src": "USB"},
+                       {"log": "a flag for a time", "seq": 5, "t": True, "src": "USB"}):
+            self.exporter.add(broken, 99.0)
+        self.assertEqual({"0"}, set(self.log_counts().values()))
+
+    # What it remembers to count each line once is bounded: a line it has
+    # long forgotten counts again, one still among the latest does not.
+    def test_it_remembers_only_the_latest_lines(self):
+        first = {"log": "the first", "seq": 0, "t": 0, "src": "USB"}
+        self.exporter.add(first, 1.0)
+        for seq in range(1, LOG_LINES_REMEMBERED):
+            self.exporter.add({"log": f"line {seq}", "seq": seq, "t": seq, "src": "PAD"}, 1.0)
+        self.exporter.add(first, 2.0)  # still among the latest
+        info = 'rover_log_lines_total{level="info",source="USB"}'
+        self.assertEqual("1", self.log_counts()[info])
+        self.exporter.add({"log": "one more", "seq": LOG_LINES_REMEMBERED, "t": 0, "src": "PAD"}, 3.0)
+        self.exporter.add(first, 4.0)  # forgotten
+        self.assertEqual("2", self.log_counts()[info])
+        self.assertEqual(LOG_LINES_REMEMBERED, len(self.exporter.counted))
+        self.assertEqual(len(self.exporter.counted), len(self.exporter.counted_order))
+
     def test_every_sample_is_a_number_prometheus_reads(self):
         self.exporter.set_connected(True)
         for frame in list(TELEMETRY.values()) + STREAM["metrics"] + STREAM["log"] + STREAM["settings"]:
@@ -220,6 +286,116 @@ class ExporterTest(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+
+# Where client/recorder.py keeps each key of the rover's frames: the Store's
+# column, and the Exporter's series (None where it exports none), a series
+# being its name, or its name and a label. A label naming the frame's value
+# is said by the series' being 1. tools/check_protocol.py checks that
+# recorder.py reads each key under the name the firmware writes it; this
+# checks that what it reads lands where it is kept.
+TELEMETRY_KEPT = {
+    "mode": ("mode", ("rover_autonomous", None)),
+    "move": ("move", None),
+    "moving": ("moving", ("rover_moving", None)),
+    "temperature": ("temperature", ("rover_temperature_celsius", None)),
+    "motorsReady": ("motors_ready", ("rover_motors_ready", None)),
+    "scheme": ("scheme", None),
+    "firmware": ("firmware", None),
+    "sonar": ("sonar", None),
+    "aim": ("aim", ("rover_sonar_aim_degrees", None)),
+    "aimCm": ("aim_cm", ("rover_sonar_aim_cm", None)),
+    "check": ("check_step", None),
+    "pad": ("pad", None),
+    "control": ("control", ("rover_control", 'source="{value}"')),
+    "phase": ("phase", None),
+    "halt": ("halt", None),
+    "distanceLeft": ("d_left", ("rover_distance_cm", 'bearing="left"')),
+    "distanceFrontLeft": ("d_front_left", ("rover_distance_cm", 'bearing="front_left"')),
+    "distanceFront": ("d_front", ("rover_distance_cm", 'bearing="front"')),
+    "distanceFrontRight": ("d_front_right", ("rover_distance_cm", 'bearing="front_right"')),
+    "distanceRight": ("d_right", ("rover_distance_cm", 'bearing="right"')),
+}
+METRICS_KEPT = {
+    "upS": ("up_s", ("rover_uptime_seconds", None)),
+    "loopHz": ("loop_hz", ("rover_loop_hz", None)),
+    "loopMaxMs": ("loop_max_ms", ("rover_loop_max_seconds", None)),
+    "heap": ("heap", ("rover_heap_free_bytes", None)),
+    "heapMin": ("heap_min", ("rover_heap_min_free_bytes", None)),
+    "rssi": ("rssi", ("rover_wifi_rssi_dbm", None)),
+    "clients": ("clients", ("rover_clients", None)),
+    "pings": ("pings", ("rover_sonar_pings_total", None)),
+    "noEcho": ("no_echo", ("rover_sonar_silent_pings_total", None)),
+}
+SETTINGS_KEPT = {
+    "scheme": ("scheme", ("rover_settings_info", 'scheme="{value}"')),
+    "sonar": ("sonar", ("rover_settings_info", 'sonar="{value}"')),
+    "aim": ("aim", None),
+    "pad": ("pad", ("rover_settings_info", 'pad="{value}"')),
+    "priority": ("priority", ("rover_settings_info", 'priority="{value}"')),
+    "checksAtBoot": ("checks_at_boot", ("rover_checks_at_boot", None)),
+}
+
+
+class KeptTest(unittest.TestCase):
+    """Every key of every frame in test/vectors/, as the firmware writes it,
+    lands in a column that is not NULL, and in its series where the exporter
+    reports one. A key the recorder reads under another name than the
+    firmware's left its column NULL and dropped its series without a word."""
+
+    def frames(self, kind):
+        return {
+            "telemetry": [(name, frame, frame) for name, frame in TELEMETRY.items()],
+            "metrics": [(f"metrics[{i}]", frame, frame["metrics"]) for i, frame in enumerate(STREAM["metrics"])],
+            "settings": [(f"settings[{i}]", frame, frame["settings"]) for i, frame in enumerate(STREAM["settings"])],
+        }[kind]
+
+    def test_each_place_is_for_a_key_the_vectors_hold(self):
+        for kind, kept in (("telemetry", TELEMETRY_KEPT), ("metrics", METRICS_KEPT), ("settings", SETTINGS_KEPT)):
+            held = set().union(*(values for _, _, values in self.frames(kind)))
+            self.assertEqual(sorted(held), sorted(kept), f"{kind}: a key in test/vectors/ with no place in "
+                             f"this table, or a place for a key no frame there holds")
+
+    def test_every_key_lands_in_its_column(self):
+        for kind, kept in (("telemetry", TELEMETRY_KEPT), ("metrics", METRICS_KEPT), ("settings", SETTINGS_KEPT)):
+            for name, frame, values in self.frames(kind):
+                store = Store(":memory:")
+                try:
+                    self.assertTrue(store.add(frame, 1.0), name)
+                    cursor = store.db.execute(f"SELECT * FROM {kind}")
+                    row = dict(zip((column[0] for column in cursor.description), cursor.fetchone()))
+                finally:
+                    store.close()
+                for key in values:
+                    self.assertIn(key, kept, f"{name}: {key} has no place in client/recorder.py")
+                    column = kept[key][0]
+                    self.assertIsNotNone(row[column], f"{name}: {key} left its column {column} NULL")
+
+    def test_every_key_lands_in_its_series(self):
+        for kind, kept in (("telemetry", TELEMETRY_KEPT), ("metrics", METRICS_KEPT), ("settings", SETTINGS_KEPT)):
+            for name, frame, values in self.frames(kind):
+                exporter = Exporter(clock=lambda: 100.0)
+                exporter.set_connected(True)
+                # Nothing but rover_up is reported without fresh telemetry.
+                exporter.add(frame if kind == "telemetry" else TELEMETRY["sweeping"], 99.0)
+                exporter.add(frame, 99.0)
+                samples = ExporterTest.parse(exporter.exposition())
+                for key, value in values.items():
+                    self.assertIn(key, kept, f"{name}: {key} has no place in client/recorder.py")
+                    series = kept[key][1]
+                    if series is None:
+                        continue
+                    metric, label = series
+                    if label is None:
+                        self.assertIn(metric, samples, f"{name}: {key} is not exported as {metric}")
+                        continue
+                    shown = ",".join(value) if isinstance(value, list) else value
+                    wanted = label.format(value=shown)
+                    found = {series_name: sample for series_name, sample in samples.items()
+                             if series_name.startswith(metric + "{") and wanted in series_name}
+                    self.assertTrue(found, f"{name}: {key} is not exported as {metric}{{{wanted}}}")
+                    if "{value}" in label:
+                        self.assertEqual({"1"}, set(found.values()), f"{name}: {metric}{{{wanted}}}")
 
 
 if __name__ == "__main__":

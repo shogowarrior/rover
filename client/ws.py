@@ -4,7 +4,7 @@
     python3 client/ws.py [host [port]]               # print every frame
     python3 client/ws.py --db rover.db               # and record them in SQLite
     python3 client/ws.py --prometheus 9101           # and serve /metrics
-    python3 client/ws.py --db rover.db --import rover-log.jsonl
+    python3 client/ws.py --db rover.db --import rover-log.jsonl --no-listen
                                                      # load a panel recording; no rover
 
 It sends nothing, so it never takes control or stops the rover, and it can
