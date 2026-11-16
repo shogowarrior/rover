@@ -241,6 +241,10 @@ async def receive(ws) -> None:
     out("connection to the rover closed")
 
 
+# tools/check_protocol.py checks every key this file reads off a frame
+# against what src/Protocol.cpp writes, by the name it is read off: `data`
+# for a whole frame of any kind, `settings` for a settings frame's
+# "settings". A key read off any other name fails the check.
 def _frame(message):
     """A telemetry frame as a dict, or None if it is not a JSON object."""
     try:

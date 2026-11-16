@@ -29,6 +29,10 @@ class EventLog {
  public:
   enum Level { INFO, WARN };
 
+  // The lines held, and so resent to each client as it connects.
+  // LOG_LINES_REMEMBERED in client/recorder.py, the lines its exporter
+  // remembers so as to count each once, must be at least this, and
+  // tools/check_protocol.py checks it.
   static constexpr int CAPACITY = 32;
   static constexpr size_t TEXT_MAX = 80;  // the terminator included
 

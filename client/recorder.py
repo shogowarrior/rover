@@ -36,8 +36,9 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Copies of src/'s values and names, which tools/check_protocol.py checks:
-# BEARINGS, DISTANCE_FAR_CM, SOURCES and METRIC_KEYS, and every key read off
-# a frame, by the name it is read off (frame, t, m, metrics, settings).
+# BEARINGS, DISTANCE_FAR_CM, SOURCES and METRIC_KEYS, LOG_LINES_REMEMBERED
+# against the log lines the rover holds, and every key read off a frame, by
+# the name it is read off (frame, t, m, metrics, settings).
 # client/test_recorder.py checks where each key the firmware sends is kept.
 
 # The telemetry keys for the sonar's five bearings, left to right, and the
@@ -68,8 +69,9 @@ SOURCES = ("USB", "PAD", "WIFI", "ROVER")
 METRIC_KEYS = ("upS", "loopHz", "loopMaxMs", "heap", "heapMin", "rssi", "clients", "pings", "noEcho")
 
 # How many of the latest log lines the exporter remembers, to count each
-# once: four times the 32 the rover holds (EventLog::CAPACITY) and sends
-# again to a client each time it connects.
+# once: at least as many as the rover holds (EventLog::CAPACITY in
+# src/EventLog.h) and sends again to a client each time it connects, or a
+# reconnect would count the oldest of them over again. Four times its 32.
 LOG_LINES_REMEMBERED = 128
 
 
