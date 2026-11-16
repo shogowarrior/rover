@@ -166,11 +166,14 @@ void setup() {
 }
 
 // Nothing here may block: that starves the WebSocket server and ArduinoOTA,
-// STOP commands included.
+// STOP commands included. `now` is read once, so the pad's and the WebSocket
+// server's stamps, made with their own clocks later in the pass, can be ahead
+// of it: Control, Settings and SelfTest age them with timing::ageOf().
 void loop() {
   const uint32_t now = millis();
-  rover.update(now);  // move deadlines first, then one step of exploration
-  gamepad.update();   // reads its own clock: a pad report can be newer than `now`
+  rover.update(now);    // move deadlines first, then one step of exploration
+  control.update(now);  // a lapsed hold forgotten
+  gamepad.update();     // reads its own clock: a pad report can be newer than `now`
   serialControl.update(now);
   network.update(now);
   saveSettings(now);

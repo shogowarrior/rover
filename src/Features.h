@@ -40,10 +40,12 @@ constexpr char PS3_HOST_MAC[] = "94:b9:7e:c7:af:12";
 // recovering rover never drives off on its own.
 constexpr bool AUTONOMOUS_AT_POWER_ON = false;
 
-// The control scheme at boot, for the gamepad and the panel alike: NORMAL
-// (eight-way stick and rotate) or ADVANCED (adds the eight pivots; see
-// kinematics::ControlScheme). PS3 SELECT and the panel's toggle change it
-// until the next reset.
+// The control scheme while flash holds no settings, for the gamepad and the
+// panel alike: NORMAL (eight-way stick and rotate) or ADVANCED (adds the
+// eight pivots; see kinematics::ControlScheme). PS3 SELECT and the panel's
+// toggle change it, and the change is saved to flash with the other settings
+// (3 s after the last change, with the rover at rest), so it lasts across
+// resets: the setting in flash wins over this.
 constexpr kinematics::ControlScheme DEFAULT_CONTROL_SCHEME = kinematics::SCHEME_NORMAL;
 
 // Updates over the WebSocket link (the panel's Options, Firmware) need an OTA

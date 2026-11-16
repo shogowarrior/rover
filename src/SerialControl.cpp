@@ -36,6 +36,7 @@ void SerialControl::onLine(uint32_t now) {
   const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
   switch (control.apply(SOURCE_USB, message, now)) {
     case Control::ACCEPTED:  // Control logs control passing to USB
+    case Control::STOPPED:   // a STOP from below the holder
     case Control::REFUSED:   // and a refusal
     case Control::SETTING:   // Settings logs the change
       break;

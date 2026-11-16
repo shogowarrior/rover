@@ -63,7 +63,7 @@ void SelfTest::start(uint32_t now, bool motorsReady, bool wheels) {
 }
 
 bool SelfTest::press(uint32_t now, bool motorsReady) {
-  if (pressed && timing::since(now, pressedAt) < tuning::CHECK_HOLD_MS) {
+  if (held(now)) {
     pressedAt = now;  // held: the run goes on, or has ended and stays ended
     return false;
   }
@@ -74,8 +74,11 @@ bool SelfTest::press(uint32_t now, bool motorsReady) {
   return true;
 }
 
+// The hold stays: a STOP from anyone ends the run, and its controller's
+// re-sends, still coming, must not start it again. They did once, and the
+// panel, which lets go of the checks only when a frame shows them over,
+// mostly missed the 200 ms gap and held the new run: the wheels turned again.
 void SelfTest::cancel(uint32_t now, const char* why) {
-  pressed = false;
   if (!running()) return;
   step = -1;
   log.add(now, EventLog::INFO, "Checks stopped: %s", why);
@@ -86,7 +89,12 @@ const char* SelfTest::stepName() const {
   return step < SONAR_STEP_COUNT ? SONAR_STEPS[step].name : DRIVE_STEPS[step - SONAR_STEP_COUNT].name;
 }
 
+bool SelfTest::held(uint32_t now) const {
+  return pressed && timing::ageOf(now, pressedAt) < tuning::CHECK_HOLD_MS;
+}
+
 SelfTest::Action SelfTest::update(uint32_t now, bool motorsIdle) {
+  if (!held(now)) pressed = false;  // forgotten, so never fresh again ~49.7 days on
   if (!running()) return Action();
   return step < SONAR_STEP_COUNT ? stepSonar(now) : stepDrive(now, motorsIdle);
 }
@@ -131,9 +139,8 @@ SelfTest::Action SelfTest::stepDrive(uint32_t now, bool motorsIdle) {
   Action action;
   if (!sent) {
     // Every wheel stands still here: no step turns one unless held.
-    if (!pressed || timing::since(now, pressedAt) >= tuning::CHECK_HOLD_MS) {
+    if (!held(now)) {
       step = -1;
-      pressed = false;
       log.add(now, EventLog::WARN, "Checks stopped: no RUN_CHECKS for %u ms, so no wheel turns",
               static_cast<unsigned>(tuning::CHECK_HOLD_MS));
       return action;

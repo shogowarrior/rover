@@ -63,8 +63,9 @@ class RemoteControl {
   RemoteControl(Rover& rover, Control& control, Settings& settings, FirmwareUpdate& firmware, Gamepad& gamepad,
                 EventLog& log);
 
-  // Start serving. Safe to call again after a WiFi reconnect.
-  void begin();
+  // Start serving. Safe to call again after a WiFi reconnect. `now` is the
+  // one update() is called with next.
+  void begin(uint32_t now);
 
   // Serve clients; send telemetry, new log lines and metrics; and move a
   // firmware update on, restarting into the new image once it is due. Call
@@ -84,6 +85,8 @@ class RemoteControl {
   // Log that `client` sent something ignored, once per connection, so a
   // client that sends nothing else cannot flood the log.
   void noteIgnored(uint8_t client, const char* what);
+  // Log which client is driving now.
+  void sayDriver(uint32_t now);
 
   Rover& rover;
   Control& control;
@@ -119,8 +122,12 @@ class RemoteControl {
   // The client whose commands the rover acted on last. Losing it is losing
   // control, so Control stops the rover if its motion is still WIFI's; a
   // telemetry-only listener, or a client whose commands were refused,
-  // coming and going does not.
+  // coming and going does not. A STOP from WiFi under another controller's
+  // hold (Control::STOPPED) makes no client the driver.
   int driver = NO_CLIENT;
+  // A change of driver the log has yet to say, and when it last said one.
+  bool driverUnsaid = false;
+  uint32_t driverSaidAt = 0;
 };
 
 #endif

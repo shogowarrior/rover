@@ -17,12 +17,15 @@ void Rover::update(uint32_t now) {
   if (moving && reached(now, moveDeadline)) release(now);
   servicePendingRelease(now);
 
+  // In either mode, so that a lapsed hold on the checks is forgotten. They
+  // run only in manual mode (every way into exploring ends them), so
+  // exploring gets nothing from it.
+  const SelfTest::Action check = selfTest.update(now, !moving);
   if (currentMode == MODE_AUTONOMOUS) {
     const Explorer::Motion motion = explorer.update(now, !moving);
     if (motion.requested) drive(motion.move, tuning::EXPLORE_SPEED, motion.durationMs, now);
     return;
   }
-  const SelfTest::Action check = selfTest.update(now, !moving);
   if (check.look) {
     explorer.survey(now, Explorer::SONAR_AIM, check.lookDeg);
   } else {

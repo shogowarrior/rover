@@ -43,7 +43,8 @@ class Control {
  public:
   // What became of a message (apply()).
   enum Outcome {
-    ACCEPTED,  // a command the rover acted on
+    ACCEPTED,  // a command the rover acted on, its controller now in control
+    STOPPED,   // a STOP from below the holder: acted on, but control stays
     REFUSED,   // a command another controller's hold refused
     SETTING,   // a change of setting, applied
     IGNORED,   // something with a value the rover does not know
@@ -52,8 +53,13 @@ class Control {
 
   Control(Rover& rover, Settings& settings, EventLog& log);
 
+  // Call every loop: forgets a hold once it lapses, so it never reads as
+  // fresh again ~49.7 days on (timing::ageOf()).
+  void update(uint32_t now);
+
   // A command from `from` (USB, PAD or WIFI), straight off the wire: Rover
-  // validates `move`. Returns whether the rover acted on it.
+  // validates `move`. Returns whether the rover acted on it, which a STOP
+  // from below the holder is, though it takes no control.
   bool command(Source from, int move, int speed, int durationMs, uint32_t now);
 
   // A message read off the wire (protocol::readMessage()) from `from`: a
@@ -67,6 +73,8 @@ class Control {
   void lost(Source from, uint32_t now);
 
   // The controller holding control now, or SOURCE_ROVER when none does.
+  // `now` may be earlier than the hold's last command, stamped later in the
+  // same pass: that is a hold just taken.
   Source holder(uint32_t now) const;
 
  private:

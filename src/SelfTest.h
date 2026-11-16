@@ -33,10 +33,12 @@
 // too: a controller that stops sending stops the wheels. The first
 // RUN_CHECKS of a stream starts the checks; each one within
 // tuning::CHECK_HOLD_MS of the one before holds them and never starts
-// another run, so re-sends that cross the run's end are harmless. The sonar
-// steps run either way, but a wheel step starts only while the checks are
-// held: otherwise they stop there, saying why. A single RUN_CHECKS typed into
-// the serial console checks the shield and the sonar, then stops.
+// another run, so re-sends that cross the run's end, or a STOP's, are
+// harmless: a run ended stays ended until the re-sends stop for
+// CHECK_HOLD_MS. The sonar steps run either way, but a wheel step starts
+// only while the checks are held: otherwise they stop there, saying why. A
+// single RUN_CHECKS typed into the serial console checks the shield and the
+// sonar, then stops.
 class SelfTest {
  public:
   // What this pass of the checks wants of Rover.
@@ -56,8 +58,9 @@ class SelfTest {
   // when it comes within CHECK_HOLD_MS of the one before. Returns whether it
   // started a run.
   bool press(uint32_t now, bool motorsReady);
-  // End the checks early, saying why, and end the hold: the next RUN_CHECKS
-  // starts a run. Says nothing when none are running.
+  // End the checks early, saying why. Says nothing when none are running.
+  // The hold stays: a RUN_CHECKS within CHECK_HOLD_MS of the last still
+  // starts nothing.
   void cancel(uint32_t now, const char* why);
   bool running() const { return step >= 0; }
   // The step under way, in a few words, for telemetry's "check"; nullptr
@@ -69,9 +72,14 @@ class SelfTest {
   // One step of the checks. `motorsIdle` is true once the last drive has
   // ended. Reads Explorer's latest ping, which Rover's survey() makes after
   // this, in the same pass, so a ping is seen one pass after it is made.
+  // Call every loop, running or not, in either mode: it forgets a lapsed
+  // hold.
   Action update(uint32_t now, bool motorsIdle);
 
  private:
+  // A RUN_CHECKS came within CHECK_HOLD_MS. `now` may be earlier than it,
+  // in the same pass (timing::ageOf()).
+  bool held(uint32_t now) const;
   Action stepSonar(uint32_t now);
   Action stepDrive(uint32_t now, bool motorsIdle);
   void next(uint32_t now);

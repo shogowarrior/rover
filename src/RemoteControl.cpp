@@ -46,11 +46,13 @@ RemoteControl::RemoteControl(Rover& rover, Control& control, Settings& settings,
       log(log),
       server(tuning::WEBSOCKET_PORT) {}
 
-void RemoteControl::begin() {
+void RemoteControl::begin(uint32_t now) {
   // The loop's timing starts afresh with the link: the time offline is not
-  // a pass.
-  lastUpdateMs = millis();
-  lastMetricsMs = lastUpdateMs;
+  // a pass. From the `now` update() is called with next, in this same pass:
+  // millis() here, later than it, made the pass and the metrics' interval
+  // ~49.7 days, and sent a bogus metrics frame at once.
+  lastUpdateMs = now;
+  lastMetricsMs = now;
   passes = 0;
   longestPassMs = 0;
   if (started) return;
@@ -68,6 +70,7 @@ void RemoteControl::update(uint32_t now) {
   if (pass > longestPassMs) longestPassMs = pass;
   passes++;
   lastUpdateMs = now;
+  if (driverUnsaid && timing::ageOf(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
 
   if (firmware.restartDue(now)) {
     // At rest already: restartDue() waits for it. Standing down as well
@@ -128,19 +131,25 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
       break;
     }
 
-    case WStype_DISCONNECTED:
+    case WStype_DISCONNECTED: {
+      // The library says so for a handshake it refused, too (an Origin
+      // originAllowed() turns down, a plain HTTP request to :81), with no
+      // connect before it: only a client that connected is news.
+      const bool wasConnected = client < WEBSOCKETS_SERVER_CLIENT_MAX && connected[client];
       if (client < WEBSOCKETS_SERVER_CLIENT_MAX) connected[client] = false;
       server.forgetMissedPongs(client);  // the slot's next client starts afresh
       firmware.disconnected(client);
-      log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u disconnected", client);
+      if (wasConnected) log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u disconnected", client);
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
         // stopping leaves the rover driving on its last instruction, unless
         // another controller has taken over since.
         driver = NO_CLIENT;
+        driverUnsaid = false;
         control.lost(SOURCE_WIFI, millis());
       }
       break;
+    }
 
     default:
       break;
@@ -166,9 +175,13 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
   const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
   switch (control.apply(SOURCE_WIFI, message, now)) {
     case Control::ACCEPTED:
-      if (driver != client) log.add(now, EventLog::INFO, SOURCE_WIFI, "Link: client %u is driving", client);
-      driver = client;
+      if (driver != client) {
+        driver = client;
+        driverUnsaid = true;
+        if (timing::ageOf(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
+      }
       break;
+    case Control::STOPPED:  // a STOP from below the holder: WiFi drives nothing
     case Control::REFUSED:  // Control says so in the log
     case Control::SETTING:  // Settings does
       break;
@@ -179,6 +192,17 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
       onUpdateRequest(client, message.ota);  // its strings live in `input`
       break;
   }
+}
+
+// At most once a CONTROL_HOLD_MS: two clients holding moves at once take
+// the drive from each other with every re-send, and a line for each, ten a
+// second, pushed everything else out of the log. A change not said yet is
+// said once that time has passed, so the log ends on the client driving.
+void RemoteControl::sayDriver(uint32_t now) {
+  driverUnsaid = false;
+  if (driver == NO_CLIENT) return;
+  driverSaidAt = now;
+  log.add(now, EventLog::INFO, SOURCE_WIFI, "Link: client %u is driving", driver);
 }
 
 void RemoteControl::noteIgnored(uint8_t client, const char* what) {

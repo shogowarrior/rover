@@ -106,9 +106,11 @@ switching to ADVANCED (below), or saying yes.
 
 The rover holds one control scheme for every controller, so the gamepad and
 the panel always drive the same way. It starts as `DEFAULT_CONTROL_SCHEME` in
-[`src/Features.h`](../src/Features.h); the gamepad's SELECT button and the
-panel's toggle on the Rover target change it until the next reset, and
-telemetry reports it as `scheme`. On the Simulator target the panel's toggle
+[`src/Features.h`](../src/Features.h) until a scheme has been saved; the
+gamepad's SELECT button and the panel's toggle on the Rover target change it,
+the rover saves the change to flash with its other settings, so it lasts
+across resets, and telemetry reports it as `scheme`. A reset does not bring
+NORMAL back: choose it again. On the Simulator target the panel's toggle
 sets only the simulator's own.
 
 | | NORMAL | ADVANCED |

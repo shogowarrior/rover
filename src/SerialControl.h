@@ -17,11 +17,15 @@
 // change its settings as the panel would. What the rover says back is the
 // EventLog, which main.cpp echoes on the same console.
 //
-// A firmware update is the WebSocket link's alone, and a line that is not a
-// message we know is logged and ignored. A line longer than
-// protocol::COMMAND_MAX_BYTES is dropped whole, as the link drops a long
-// frame. The cable has no disconnect to notice, so the 1.5 s duration cap
-// is its deadman: a script repeats a held move, as the panel does.
+// A firmware update is the WebSocket link's alone. A line that is not JSON
+// is logged and ignored, and so is a line longer than
+// protocol::COMMAND_MAX_BYTES, dropped whole, as the link drops a long frame,
+// and a setting with a value the rover does not know. Any other JSON line is
+// a command, as over the link: one that names no move, or misspells it
+// (`{}`, `{"mvoe": 1}`), is a STOP, which takes control as USB's and stops
+// an exploring rover, so a malformed command never moves it. The cable has
+// no disconnect to notice, so the 1.5 s duration cap is its deadman: a
+// script repeats a held move, as the panel does.
 //
 // Non-blocking: update() reads only what has already arrived, and at most
 // READ_MAX_BYTES of it a pass.

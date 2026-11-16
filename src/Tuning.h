@@ -47,8 +47,9 @@ constexpr int EXPLORE_SPEED = 64;
 // --- The checks (SelfTest.h) ------------------------------------------------
 
 // The checks drive each wheel, and the four moves, at this PWM duty: about
-// 5 V on the TT motors from a full pack, inside their rating, and enough to
-// turn them on the stand. One step is CHECK_DRIVE_MS, then CHECK_REST_MS
+// 5.9 V on the TT motors from a full 3S pack (120/255 of 12.6 V), at the top
+// of their 3-6 V rating (bench-checklist section 8), and enough to turn them
+// on the stand. One step is CHECK_DRIVE_MS, then CHECK_REST_MS
 // still, so each wheel is seen to start and stop on its own.
 constexpr int CHECK_SPEED = 120;
 constexpr int CHECK_DRIVE_MS = 600;

@@ -837,9 +837,41 @@ void test_resends_never_start_a_second_run(void) {
   rover->command(RUN_CHECKS, 0, 0, now);
   TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
 
+  // A STOP, from anyone, ends the run, and the re-sends still coming start
+  // nothing: they once started it again, and the panel held the new run.
   rover->command(STOP, 0, 0, now + 5);
   TEST_ASSERT_NULL(rover->status().check);
   rover->command(RUN_CHECKS, 0, 0, now + 10);
+  TEST_ASSERT_NULL(rover->status().check);
+  now += 10;
+  heldAt = now;
+  const int stopped = motors->driveCalls;
+  advance(now, 5000, 5, [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+    TEST_ASSERT_NULL(rover->status().check);
+  });
+  TEST_ASSERT_EQUAL_INT(stopped, motors->driveCalls);
+
+  // Once the re-sends have stopped for CHECK_HOLD_MS, the next starts a run.
+  now = runFor(now, tuning::CHECK_HOLD_MS);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
+// The hold on the checks is forgotten once it lapses, in either mode, so a
+// RUN_CHECKS ~49.7 days after the last starts a run rather than reading as
+// a re-send of it.
+void test_a_hold_on_the_checks_is_forgotten(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  rover->command(STOP, 0, 0, 10);
+  uint32_t now = runFor(10, tuning::CHECK_HOLD_MS);
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
+  now = runFor(now, 100);  // exploring: the lapsed hold is forgotten all the same
+  // 2^32 + 500 ms after the first: millis() has wrapped, and since() reads
+  // the first as 500 ms old.
+  rover->command(RUN_CHECKS, 0, 0, 500);
   TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
 }
 
@@ -922,6 +954,7 @@ int main(int, char**) {
   RUN_TEST(test_unheld_checks_turn_no_wheel);
   RUN_TEST(test_checks_stop_soon_after_the_resends_do);
   RUN_TEST(test_resends_never_start_a_second_run);
+  RUN_TEST(test_a_hold_on_the_checks_is_forgotten);
   RUN_TEST(test_a_run_during_the_boot_checks_starts_the_whole_checks);
   RUN_TEST(test_the_status_names_the_check_under_way);
   RUN_TEST(test_mode_changes_and_stand_downs_are_logged);

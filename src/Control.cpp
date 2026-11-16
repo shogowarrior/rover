@@ -25,9 +25,17 @@ const char* commandName(int move) {
 
 Control::Control(Rover& rover, Settings& settings, EventLog& log) : rover(rover), settings(settings), log(log) {}
 
+// ageOf(), not since(): the pad's and the WebSocket server's commands are
+// stamped later in the pass than the `now` the serial console and telemetry
+// ask with, and since() read such a hold as lapsed, which let the console
+// drive under the pad's hold and left `control` out of telemetry.
 Source Control::holder(uint32_t now) const {
-  if (held == SOURCE_ROVER || timing::since(now, heldAt) >= tuning::CONTROL_HOLD_MS) return SOURCE_ROVER;
+  if (held == SOURCE_ROVER || timing::ageOf(now, heldAt) >= tuning::CONTROL_HOLD_MS) return SOURCE_ROVER;
   return held;
+}
+
+void Control::update(uint32_t now) {
+  if (holder(now) == SOURCE_ROVER) held = SOURCE_ROVER;
 }
 
 bool Control::command(Source from, int move, int speed, int durationMs, uint32_t now) {
@@ -74,8 +82,10 @@ bool Control::command(Source from, int move, int speed, int durationMs, uint32_t
 Control::Outcome Control::apply(Source from, const protocol::Message& message, uint32_t now) {
   switch (message.kind) {
     case protocol::Message::DRIVE:
-      return command(from, message.command.move, message.command.speed, message.command.durationMs, now) ? ACCEPTED
-                                                                                                         : REFUSED;
+      if (!command(from, message.command.move, message.command.speed, message.command.durationMs, now)) {
+        return REFUSED;
+      }
+      return holder(now) == from ? ACCEPTED : STOPPED;
     case protocol::Message::SETTINGS:
       settings.apply(message.settings, from, now);
       return SETTING;

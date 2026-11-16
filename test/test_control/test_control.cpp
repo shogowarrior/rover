@@ -8,6 +8,7 @@
 #include "Control.h"
 #include "Protocol.h"
 #include "Settings.h"
+#include "Timing.h"
 #include "Tuning.h"
 
 // Who may drive when several controllers send at once (Control.h), and the
@@ -166,6 +167,40 @@ void test_refusals_and_stops_from_below_are_said_once_a_hold(void) {
   TEST_ASSERT_EQUAL_INT(1, logged("PAD has control: MOVE_FORWARD", EventLog::INFO, SOURCE_PAD));
 }
 
+// timing::ageOf(): a stamp a little ahead of `now` is age 0, and any other
+// is as old as since() says, across millis()'s wrap too.
+void test_the_age_of_a_stamp(void) {
+  TEST_ASSERT_EQUAL_UINT32(0, timing::ageOf(100000, 100006));
+  TEST_ASSERT_EQUAL_UINT32(0, timing::ageOf(100000, 100000 + timing::STAMP_AHEAD_MAX_MS));
+  TEST_ASSERT_EQUAL_UINT32(250, timing::ageOf(100250, 100000));
+  TEST_ASSERT_EQUAL_UINT32(20, timing::ageOf(10, 0xFFFFFFF6u));
+  TEST_ASSERT_EQUAL_UINT32(0, timing::ageOf(0xFFFFFFF6u, 10));
+  TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFu - timing::STAMP_AHEAD_MAX_MS,
+                           timing::ageOf(0, timing::STAMP_AHEAD_MAX_MS + 1));
+}
+
+// A hold stamped later in the pass than the `now` it is read with (the pad's
+// clock, millis() in the WebSocket server) is a hold just taken: read as
+// ~49.7 days old, it let a controller ranked below drive under it.
+void test_a_hold_stamped_later_in_the_pass_holds(void) {
+  TEST_ASSERT_TRUE(control->command(SOURCE_PAD, MOVE_FORWARD, 100, 400, 100006));
+  control->update(100000);
+  TEST_ASSERT_EQUAL_INT(SOURCE_PAD, control->holder(100000));
+  TEST_ASSERT_FALSE(control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, 100000));
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, driving());
+}
+
+// A lapsed hold is forgotten, so it never reads as fresh again ~49.7 days
+// on: until then, a controller ranked below would be refused for a second.
+void test_a_lapsed_hold_is_forgotten(void) {
+  control->command(SOURCE_PAD, MOVE_FORWARD, 100, 400, 0);
+  control->update(HOLD);
+  // 2^32 + 500 ms after the pad's command: millis() has wrapped.
+  TEST_ASSERT_EQUAL_INT(SOURCE_ROVER, control->holder(500));
+  TEST_ASSERT_TRUE(control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, 500));
+  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, driving());
+}
+
 // STOP takes an exploring rover over, from any controller, as before.
 void test_stop_takes_over_from_exploring(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
@@ -249,9 +284,12 @@ void test_messages_are_routed_by_kind(void) {
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, settings->sonar());
   TEST_ASSERT_EQUAL_INT(Control::IGNORED, control->apply(SOURCE_USB, message("{\"scheme\":\"TURBO\"}"), 30));
   TEST_ASSERT_EQUAL_INT(Control::UPDATE, control->apply(SOURCE_USB, message("{\"ota\":\"cancel\"}"), 40));
-  // A malformed command is a STOP, as ever, and so always acted on.
-  TEST_ASSERT_EQUAL_INT(Control::ACCEPTED, control->apply(SOURCE_WIFI, message("{}"), 50));
+  // A malformed command is a STOP, as ever, and so always acted on: from
+  // below USB's hold it takes no control, which the caller is told.
+  TEST_ASSERT_EQUAL_INT(Control::STOPPED, control->apply(SOURCE_WIFI, message("{}"), 50));
   TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(SOURCE_USB, control->holder(50));
+  TEST_ASSERT_EQUAL_INT(Control::ACCEPTED, control->apply(SOURCE_USB, message("{}"), 60));
 }
 
 // A setting is never refused, and takes no control.
@@ -343,6 +381,16 @@ void test_the_settings_are_saved_when_still_and_at_rest(void) {
   TEST_ASSERT_TRUE(settings->saveDue(still + 100000 + tuning::SETTINGS_SAVE_DELAY_MS, true));
 }
 
+// A change stamped later in the pass than the `now` main.cpp asks with is a
+// change just made: read as ~49.7 days old, the aim the pad pans was written
+// to flash on most passes.
+void test_a_change_stamped_later_in_the_pass_is_not_still(void) {
+  settings->setAim(30, SOURCE_PAD, 100006);
+  TEST_ASSERT_FALSE(settings->saveDue(100000, true));
+  TEST_ASSERT_FALSE(settings->saveDue(100006 + tuning::SETTINGS_SAVE_DELAY_MS - 1, true));
+  TEST_ASSERT_TRUE(settings->saveDue(100006 + tuning::SETTINGS_SAVE_DELAY_MS, true));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   // control
@@ -353,6 +401,9 @@ int main(int, char**) {
   RUN_TEST(test_a_refusal_is_logged_once_until_control_passes);
   RUN_TEST(test_stop_from_anyone_is_always_acted_on);
   RUN_TEST(test_refusals_and_stops_from_below_are_said_once_a_hold);
+  RUN_TEST(test_the_age_of_a_stamp);
+  RUN_TEST(test_a_hold_stamped_later_in_the_pass_holds);
+  RUN_TEST(test_a_lapsed_hold_is_forgotten);
   RUN_TEST(test_stop_takes_over_from_exploring);
   RUN_TEST(test_autonomous_and_checks_wait_for_control_too);
   RUN_TEST(test_exploring_holds_no_control);
@@ -368,5 +419,6 @@ int main(int, char**) {
   RUN_TEST(test_the_aim_is_clamped);
   RUN_TEST(test_a_priority_must_name_each_controller_once);
   RUN_TEST(test_the_settings_are_saved_when_still_and_at_rest);
+  RUN_TEST(test_a_change_stamped_later_in_the_pass_is_not_still);
   return UNITY_END();
 }

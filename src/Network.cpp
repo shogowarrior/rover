@@ -149,7 +149,7 @@ void Network::goOnline(uint32_t now) {
     configureOta();
     otaStarted = true;
   }
-  remote.begin();
+  remote.begin(now);
   online = true;
   log.add(now, EventLog::INFO, "Online at %s: the link and OTA are up", WiFi.localIP().toString().c_str());
 }

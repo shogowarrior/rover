@@ -80,8 +80,13 @@ void Settings::apply(const Change& change, Source from, uint32_t now) {
   if (change.hasChecksAtBoot) setChecksAtBoot(change.checksAtBoot, from, now);
 }
 
+// ageOf(), not since(): a change from the pad or a WebSocket client is
+// stamped later in the pass than the `now` main.cpp asks with, and since()
+// made it ~49.7 days old, so the aim panned on the pad was written to flash
+// on most passes instead of once it had been still for 3 s.
 bool Settings::saveDue(uint32_t now, bool atRest) const {
-  return changes != savedVersion && atRest && timing::since(now, lastChangeMs) >= tuning::SETTINGS_SAVE_DELAY_MS;
+  return changes != savedVersion && atRest &&
+         timing::ageOf(now, lastChangeMs) >= tuning::SETTINGS_SAVE_DELAY_MS;
 }
 
 void Settings::changed(uint32_t now) {
