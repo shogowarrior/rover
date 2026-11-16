@@ -685,13 +685,18 @@ would otherwise be cut short (a bare "STOP" read like a button), each cell
 titled with its caption. After a link goes, and while it is quiet, the
 fan's readings, its 25 and 40 cm rings and the readouts' values dim
 together, the values faded too. Where the rover holds its sonar still in
-manual mode (telemetry's `sonar` FRONT or AIM) with no check under way,
-only the bearing it points at is measured again, so the fan dims the
-others' wedges and readings (`data-held`) as last seen; while it aims, a
+manual mode (telemetry's `sonar` FRONT or AIM), with no check under way
+or during the checks' drive steps (a wheel alone, the four moves), which
+leave the sonar to that setting, only the bearing it points at is
+measured again, so the fan dims the others' wedges and readings
+(`data-held`) as last seen; while it aims, a
 ray in the operator's blue runs from the rover at the aim, a mark across it where `aimCm` falls and
-the reading by it, haloed ("…" before one is in, "no echo"). While the
-rover explores or runs its checks, which point the sonar their own ways,
-every bearing is drawn live and no aim ray is drawn. On the rover
+the reading by it, haloed ("…" before one is in, "no echo"). Only the
+checks' sonar steps (telemetry's `check` "sonar L" to "sonar R") point
+the sonar their own way, at each bearing in turn whatever the setting:
+the fan then holds the step's bearing, the other four dimmed, and draws
+no aim ray. While the rover explores it sweeps: every bearing is drawn
+live and no aim ray is drawn. On the rover
 target with a live link and the rover's settings in, a drag on the fan
 aims the sonar where it points (`ScanView.onAim`), as the Aim slider in
 Options does: a setting, never a command, sent at most every 100 ms with
