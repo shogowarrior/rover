@@ -432,8 +432,10 @@ priority in the settings, with no queue; the settings (scheme, sonar and
 aim, pad control, priority, checks at boot) live in `Settings` and in
 flash; the `EventLog` says whose each line is; the checks run on demand;
 the pad's spare buttons pan and point the sonar and step its top speed;
-`client/ws.py` records to SQLite and serves Prometheus; the panel shows the
-log by controller, graphs and the settings in Options. Nothing of F9 has
+`client/ws.py` records to SQLite and serves Prometheus; the panel has the
+rover's settings and Run checks in Options, a drawer under the scan with
+the log by controller and graphs, aims the sonar from the fan, and says
+when another controller has control. Nothing of F9 has
 run on a board: bench-checklist.md, sections 6 and 11.
 
 ## Current work

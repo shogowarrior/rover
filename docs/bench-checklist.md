@@ -359,8 +359,8 @@ password typed in:
 
 ## 11. Controllers, settings and the log
 
-On the stand, running and connected from the panel, with Options open on
-the log. A serial monitor on the USB cable is a controller too: opening it
+On the stand, running and connected from the panel, with the log open
+(the Log button on the scan's readouts). A serial monitor on the USB cable is a controller too: opening it
 resets the board through EN on most boards, which comes up in manual.
 
 1. **The serial console.** Open it at 115200 baud

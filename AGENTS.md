@@ -1173,7 +1173,8 @@ ADVANCED adds the eight pivots (codes 9 to 16): holding L1 makes the stick's
 quadrant pick a pivot, holding R1 a pivot sideways; the panel gives the
 pivots a second stick, with the same choice as a selector over it. SELECT
 toggles the scheme, the panel's toggle on the rover target
-sends the scheme as a setting, and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
+sends the `scheme` message (which firmware from before settings reads as
+well), and the pad's player LEDs show it (1 NORMAL, 2 ADVANCED),
 rewritten at most every `GAMEPAD_LED_MIN_INTERVAL_MS` (250 ms): each write is
 a Bluetooth send from the loop task, and any client can flip the scheme as
 fast as it sends.

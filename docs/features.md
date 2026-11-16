@@ -2208,8 +2208,10 @@ why.
   exploring.
 - **The sonar in manual mode** is a setting: Front (the default: one sweep,
   so every bearing has a reading, then held straight ahead), Sweep, or Aim
-  at an angle up to 80 degrees either side. The panel aims it from Options;
-  the pad's right stick pans it, R3 points it ahead and Triangle sweeps.
+  at an angle up to 80 degrees either side. The panel aims it by a drag on
+  the scan's fan, or the slider in Options, and the fan draws where it
+  aims; the pad's right stick pans it, R3 points it ahead and Triangle
+  sweeps.
   Exploring always sweeps and weaves, whatever the setting.
 - **Three controllers, one format.** The USB serial console takes the same
   JSON messages as a WebSocket client, one to a line, and the pad's presses
@@ -2256,9 +2258,23 @@ why.
   file; `--prometheus 9101` serves the latest values for Prometheus to
   scrape and Grafana to graph. `--import` loads a recording the panel saved.
   `client/drive.py` prints the log between its telemetry rows.
-- **The panel**: the sonar, pad control, the priority and the checks at boot
-  in Options; Run checks there too; the log, filtered by controller and
-  level, and graphs of the metrics.
+- **The panel**, a console for the robot (AGENTS.md, "The browser control
+  panel", has the details):
+  - Options (the gear) opens on the rover's settings: the sonar and its
+    aim, pad control and the pad's state, the priority as a list to reorder,
+    the checks at boot, and Run checks, which asks first and holds the
+    checks while the panel is open and in front. Each shows only what the
+    rover reports, a press pending until it does. Normal | Advanced stays in
+    the top: the pivot stick depends on it.
+  - A Log button on the scan's readouts opens a drawer under the scan: the
+    last 500 lines, filtered by controller (USB, Pad, WiFi, Rover) and to
+    warnings, with Save (JSON lines, which `client/ws.py --import` reads),
+    and graphs of the last 10 minutes (loop rate, free heap, WiFi, the
+    chip's temperature, the front distance). Closed, the button counts new
+    warnings.
+  - A line at the top of the view says when the pad or the USB console has
+    control and this panel's moves are refused; the readouts name the check
+    under way.
 
 **Left for the bench** (docs/bench-checklist.md): the serial console's
 commands, the priority with the pad and the panel at once, the settings
