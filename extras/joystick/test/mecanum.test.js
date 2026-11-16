@@ -11,8 +11,8 @@ const { vectors, CODES, NAMES } = require("./firmware.js");
 const VECTORS = vectors("stick_moves.json");
 
 // Every test file's CODES comes from this one read of the header.
-test("src/MoveCodes.h reads as twenty codes, 0 to 19", () => {
-  assert.deepEqual(Object.values(CODES).sort((a, b) => a - b), [...Array(20).keys()]);
+test("src/MoveCodes.h reads as twenty-one codes, 0 to 20", () => {
+  assert.deepEqual(Object.values(CODES).sort((a, b) => a - b), [...Array(21).keys()]);
 });
 
 test("the families are named as the vectors name them", () => {

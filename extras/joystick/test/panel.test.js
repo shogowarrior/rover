@@ -2430,7 +2430,10 @@ test("the page runs protocol.js's values as the file writes them", () => {
   const written = Object.entries(require("../js/protocol.js"));
   check(written.length > 0, "protocol.js exports its values");
   const page = loadPage();
-  for (const [name, value] of written) check(page.evalIn(name) === value, `the page's ${name} is ${JSON.stringify(value)}`);
+  // A list of names (SONAR_MODES) is the page's own array, so it is
+  // compared by what it holds.
+  const same = (a, b) => (Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b);
+  for (const [name, value] of written) check(same(page.evalIn(name), value), `the page's ${name} is ${JSON.stringify(value)}`);
 });
 
 /* --- schemes -------------------------------------------------------------- */

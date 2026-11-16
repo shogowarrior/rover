@@ -16,9 +16,9 @@
 // file with its source in src/ and fails CI when one drifts, so keep that
 // exact form.
 
-// Move codes: the wire protocol. Source: src/MoveCodes.h. All twenty are
-// here, the pivots (9 to 16) included, and check_protocol.py fails if one is
-// missing.
+// Move codes: the wire protocol. Source: src/MoveCodes.h. All twenty-one
+// are here, the pivots (9 to 16) included, and check_protocol.py fails if
+// one is missing.
 const STOP = 0;
 const MOVE_FORWARD = 1;
 const MOVE_BACKWARD = 2;
@@ -157,7 +157,8 @@ if (typeof module !== "undefined") {
     PIVOT_RIGHT_FORWARD, PIVOT_RIGHT_BACKWARD, PIVOT_LEFT_FORWARD, PIVOT_LEFT_BACKWARD,
     PIVOT_SIDEWAYS_FORWARD_RIGHT, PIVOT_SIDEWAYS_FORWARD_LEFT,
     PIVOT_SIDEWAYS_BACKWARD_RIGHT, PIVOT_SIDEWAYS_BACKWARD_LEFT,
-    ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS,
+    ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, RESUME_AUTONOMOUS, RUN_CHECKS,
+    SONAR_MODES, PAD_STATES, SOURCES, AIM_MAX_DEG, CONTROL_HOLD_MS,
     SCHEME_NORMAL, SCHEME_ADVANCED, MODE_AUTONOMOUS, MODE_MANUAL,
     SPEED_MAX, MOTOR_SPEED_LIMIT, PORT, TELEMETRY_MS, STOP_CM, GO_CM, FAR_CM,
     MOVE_DURATION_MS, REPEAT_MS, STICK_SEND_MS,
