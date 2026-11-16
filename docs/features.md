@@ -2307,7 +2307,7 @@ lasting through a reset, and the pad's new buttons.
 | View toggle | Program toolbar, its far end | no | shows or hides the view pane on the Program tab; a toggle whose state shows ([F8](#f8-two-cells-at-the-top-two-panes-below)) |
 | Blockly zoom, centre, trash | workspace | no | Blockly's own |
 | Options (gear) | the top's second cell, its far end | yes | opens on the rover's settings, then the look, Dark \| Light and a theme: set once, and nothing in it moves the rover but Run checks, behind a question ([F5](#f5-themes-and-options), [F7](#f7-darker-looks-and-a-dark--light-toggle), [F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
-| Rover settings: sonar, aim, pad, priority, checks at boot | Options, Rover, first | yes | configuration, never a command: set once, takes no control, never stops the rover ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
+| Rover settings: sonar, aim, pad, priority, checks at boot | Options, Rover, first | yes | configuration, never a command: set once, takes no control, never stops an exploring rover; Pad Off or On stops only what the pad was driving ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
 | Run checks | Options, Rover, after the settings | yes | it turns the wheels, so it asks first, and is held only while the panel is open and in front ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
 | Aim, by a drag | the scan's fan | no | where the sonar points is where the drag points; a setting, sent while the drag lasts ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
 | Log and Graphs | Log, at the end of the scan's readouts: a drawer under the scan | no | watched while driving, and it counts the warnings while closed; nothing in it is a command ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)) |
@@ -2334,8 +2334,8 @@ waits for the owner.
   of its own.
 - **Done** ([F9](#f9-a-rover-to-manage-manual-at-boot-settings-logs-and-three-controllers)):
   `client/ws.py` printed a raw traceback when the rover was unreachable. It
-  prints one line now and tries again every 2 s, as `client/drive.py`
-  does.
+  prints one line now, as `client/drive.py` does, and tries again every
+  2 s (drive.py exits instead).
 - No stand-in rover or project verify recipe is committed. The one used to
   verify the last branch was a Python `websockets` server on
   `127.0.0.1:8181` that logged every frame, sent telemetry every 500 ms, and

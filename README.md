@@ -130,12 +130,12 @@ loses WiFi or an OTA flash starts.
 
 The rover keeps a log of what it did and why, a line each with whose it
 was (USB, the pad, WiFi or the rover itself): who took control, what was
-refused, every change of setting, each check's result, why exploring
-stopped. The panel's Log button, at the end of the scan's readouts, opens
-it with filters by whose and for warnings, and Graphs beside it draws the
-loop rate, free memory, the WiFi signal, the chip's temperature and the
-front distance over the last ten minutes; Save downloads all of it. The
-serial console prints the same lines.
+refused, every change of setting but the aim alone, each check's result,
+why exploring stopped. The panel's Log button, at the end of the scan's
+readouts, opens it with filters by whose and for warnings, and Graphs
+beside it draws the loop rate, free memory, the WiFi signal, the chip's
+temperature and the front distance over the last ten minutes; Save
+downloads all of it. The serial console prints the same lines.
 
 To keep more than the panel's ten minutes, record on the computer:
 

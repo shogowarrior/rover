@@ -78,13 +78,15 @@ instead.
    If nothing matches, the board is not plugged in or the CH340/CP210x driver
    is missing. Report that rather than guessing at a port.
 
-   A USB upload ends by resetting the board through its EN pin. Every boot
-   comes up in manual and `DriveTrain::begin()` releases the wheels, but the
-   shield keeps driving them through the reset itself (about half a second,
-   and for good if the new firmware never boots that far), and checks at
-   boot may follow. A build with `AUTONOMOUS_AT_POWER_ON` on would also
-   **start exploring the moment the upload finishes**, since the ESP32
-   reports an EN reset as a power-on. Stop here and
+   A USB upload starts by resetting the board into its bootloader and ends
+   by resetting it through its EN pin. The shield keeps driving the wheels
+   from that first reset until the new firmware's `DriveTrain::begin()`
+   releases them: wheels turning when the upload starts turn for the whole
+   upload, and for good if the new firmware never boots that far. Every
+   boot then comes up in manual (checks at boot turn no wheel), but a build
+   with `AUTONOMOUS_AT_POWER_ON` on would **start exploring the moment the
+   upload finishes**, since the ESP32 reports an EN reset as a power-on.
+   Stop here and
    ask the operator to confirm that the rover is on a stand with its wheels
    clear of the bench, or that the motor supply is switched off. **Do not
    upload until they reply that it is.** Warning them in the same turn as the

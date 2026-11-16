@@ -312,8 +312,12 @@ no more wheels, the one turning stopping at its own deadline. One within
 `CHECK_HOLD_MS` of the last never starts another run, even once a STOP or
 any other command has ended the run: a STOP from anyone ends it for good,
 though its controller's re-sends are still coming, and only after
-`CHECK_HOLD_MS` without one does the next start a run. Any command, STOP
-included, switches to manual; only
+`CHECK_HOLD_MS` without one does the next start a run. That holds for a
+STOP from a controller ranked above the checks' too, whose hold refuses
+the re-sends: a refused `RUN_CHECKS` still renews the hold on checks that
+are not running (`SelfTest::renew()`), so the first re-send accepted once
+that hold lapses starts nothing. Any command, STOP included, switches to
+manual; only
 `RESUME_AUTONOMOUS` (code 19) switches back, restarting exploration from a
 fresh sweep. Sent while already exploring, it restarts an explorer that has
 halted (clearing `boxed in` or `sensor silent`) and otherwise does nothing.

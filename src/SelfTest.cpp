@@ -89,6 +89,14 @@ const char* SelfTest::stepName() const {
   return step < SONAR_STEP_COUNT ? SONAR_STEPS[step].name : DRIVE_STEPS[step - SONAR_STEP_COUNT].name;
 }
 
+// Without this, a STOP from above ended the run, Control refused the
+// re-sends for CONTROL_HOLD_MS, the checks' hold lapsed with it (the same
+// second), and the first re-send accepted after that started the whole run
+// again: the panel, not yet shown a check, was still re-sending.
+void SelfTest::renew(uint32_t now) {
+  if (held(now) && !running()) pressedAt = now;
+}
+
 bool SelfTest::held(uint32_t now) const {
   return pressed && timing::ageOf(now, pressedAt) < tuning::CHECK_HOLD_MS;
 }

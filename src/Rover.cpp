@@ -69,6 +69,8 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   drive(static_cast<MoveCode>(move), speed, durationMs, now);
 }
 
+void Rover::checksRefused(uint32_t now) { selfTest.renew(now); }
+
 void Rover::stop(uint32_t now) {
   selfTest.cancel(now, "the driver disconnected");
   release(now);

@@ -35,7 +35,9 @@
 // tuning::CHECK_HOLD_MS of the one before holds them and never starts
 // another run, so re-sends that cross the run's end, or a STOP's, are
 // harmless: a run ended stays ended until the re-sends stop for
-// CHECK_HOLD_MS. The sonar steps run either way, but a wheel step starts
+// CHECK_HOLD_MS. That holds for a STOP from a controller ranked above the
+// one holding the checks too, whose hold then refuses the re-sends: a
+// refused one still renews the hold (renew()). The sonar steps run either way, but a wheel step starts
 // only while the checks are held: otherwise they stop there, saying why. A
 // single RUN_CHECKS typed into the serial console checks the shield and the
 // sonar, then stops.
@@ -62,6 +64,10 @@ class SelfTest {
   // The hold stays: a RUN_CHECKS within CHECK_HOLD_MS of the last still
   // starts nothing.
   void cancel(uint32_t now, const char* why);
+  // A RUN_CHECKS refused by Control, under a controller ranked above the one
+  // re-sending it: it extends a live hold on checks that are not running, so
+  // that a STOP from above ends them for good too, and never holds a run.
+  void renew(uint32_t now);
   bool running() const { return step >= 0; }
   // The step under way, in a few words, for telemetry's "check"; nullptr
   // when none is running. At most STEP_NAME_MAX characters, which

@@ -222,6 +222,38 @@ void test_autonomous_and_checks_wait_for_control_too(void) {
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
 }
 
+// Checks that a STOP from a controller ranked above theirs ended stay
+// ended while their controller re-sends, refused or not: the re-sends once
+// stopped renewing the hold while refused, it lapsed with the stopper's,
+// and the next one accepted started the whole run again.
+void test_a_stop_from_above_ends_the_checks_for_good(void) {
+  uint32_t heldAt = 0;
+  control->command(SOURCE_WIFI, RUN_CHECKS, 0, 0, 0);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+  const int calls = motors->driveCalls;
+  uint32_t now = 0;
+  advance(now, 5000, 5, [&](uint32_t t) {
+    if (t == 100) control->command(SOURCE_PAD, STOP, 0, 0, t);  // Cross
+    if (t - heldAt >= 200) {
+      heldAt = t;
+      control->command(SOURCE_WIFI, RUN_CHECKS, 0, 0, t);
+    }
+    rover->update(t);
+    control->update(t);
+    if (t >= 100) TEST_ASSERT_NULL(rover->status().check);
+  });
+  TEST_ASSERT_EQUAL_INT(calls, motors->driveCalls);
+  TEST_ASSERT_EQUAL_INT(1, logged("Refused RUN_CHECKS: PAD has control", EventLog::WARN, SOURCE_WIFI));
+
+  // Once the re-sends stop for CHECK_HOLD_MS, the next starts a run.
+  advance(now, tuning::CHECK_HOLD_MS, 5, [](uint32_t t) {
+    rover->update(t);
+    control->update(t);
+  });
+  control->command(SOURCE_WIFI, RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
 // The explorer is no controller: exploring holds no control, and any
 // controller's command takes over from it.
 void test_exploring_holds_no_control(void) {
@@ -406,6 +438,7 @@ int main(int, char**) {
   RUN_TEST(test_a_lapsed_hold_is_forgotten);
   RUN_TEST(test_stop_takes_over_from_exploring);
   RUN_TEST(test_autonomous_and_checks_wait_for_control_too);
+  RUN_TEST(test_a_stop_from_above_ends_the_checks_for_good);
   RUN_TEST(test_exploring_holds_no_control);
   RUN_TEST(test_the_priority_setting_reorders_the_controllers);
   RUN_TEST(test_losing_the_driver_stops_only_its_own_motion);

@@ -53,6 +53,7 @@ void RemoteControl::begin(uint32_t now) {
   // ~49.7 days, and sent a bogus metrics frame at once.
   lastUpdateMs = now;
   lastMetricsMs = now;
+  driverUnsaid = false;  // whoever drove before the link went is not news
   passes = 0;
   longestPassMs = 0;
   if (started) return;
@@ -70,7 +71,12 @@ void RemoteControl::update(uint32_t now) {
   if (pass > longestPassMs) longestPassMs = pass;
   passes++;
   lastUpdateMs = now;
-  if (driverUnsaid && timing::ageOf(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
+  // Only while WiFi still has control: said after the pad or the console
+  // took over, it named a client that drove nothing.
+  if (driverUnsaid && timing::since(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS &&
+      control.holder(now) == SOURCE_WIFI) {
+    sayDriver(now);
+  }
 
   if (firmware.restartDue(now)) {
     // At rest already: restartDue() waits for it. Standing down as well
@@ -178,7 +184,7 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
       if (driver != client) {
         driver = client;
         driverUnsaid = true;
-        if (timing::ageOf(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
+        if (timing::since(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
       }
       break;
     case Control::STOPPED:  // a STOP from below the holder: WiFi drives nothing
@@ -197,7 +203,11 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
 // At most once a CONTROL_HOLD_MS: two clients holding moves at once take
 // the drive from each other with every re-send, and a line for each, ten a
 // second, pushed everything else out of the log. A change not said yet is
-// said once that time has passed, so the log ends on the client driving.
+// said once that time has passed, if WiFi still has control, so the log
+// ends on the client driving. since(), not ageOf(): driverSaidAt is never
+// later than the clock it is compared with (update()'s check runs before
+// server.loop(), and onCommand() reads millis()), and an ageOf() stamp
+// would have to be forgotten.
 void RemoteControl::sayDriver(uint32_t now) {
   driverUnsaid = false;
   if (driver == NO_CLIENT) return;

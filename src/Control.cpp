@@ -60,6 +60,8 @@ bool Control::command(Source from, int move, int speed, int durationMs, uint32_t
       refusalNoted[from] = true;
       log.add(now, EventLog::WARN, from, "Refused %s: %s has control", commandName(move), sourceName(holding));
     }
+    // Refused, but still re-sent: checks a command ended stay ended.
+    if (move == RUN_CHECKS) rover.checksRefused(now);
     return false;
   }
 

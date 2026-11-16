@@ -58,6 +58,11 @@ class Rover {
   // stops the rover.
   void command(int move, int speed, int durationMs, uint32_t now);
 
+  // A RUN_CHECKS that Control refused: moves nothing, but keeps checks that
+  // a command ended from starting over while their controller still re-sends
+  // (SelfTest::renew()).
+  void checksRefused(uint32_t now);
+
   // Release the motors, keeping the mode, and end the checks: the client
   // driving the rover disconnected. In autonomous mode exploration carries on.
   void stop(uint32_t now);

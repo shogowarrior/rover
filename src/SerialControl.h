@@ -22,8 +22,9 @@
 // protocol::COMMAND_MAX_BYTES, dropped whole, as the link drops a long frame,
 // and a setting with a value the rover does not know. Any other JSON line is
 // a command, as over the link: one that names no move, or misspells it
-// (`{}`, `{"mvoe": 1}`), is a STOP, which takes control as USB's and stops
-// an exploring rover, so a malformed command never moves it. The cable has
+// (`{}`, `{"mvoe": 1}`), is a STOP, which stops the rover (an exploring one
+// too) and takes control as USB's, unless a controller ranked above USB
+// holds it (Control::STOPPED), so a malformed command never moves it. The cable has
 // no disconnect to notice, so the 1.5 s duration cap is its deadman: a
 // script repeats a held move, as the panel does.
 //
