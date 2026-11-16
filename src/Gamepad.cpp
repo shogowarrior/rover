@@ -4,7 +4,8 @@
 
 #include "Features.h"
 
-Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme) : session(rover, scheme) {}
+Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme, EventLog& log)
+    : session(rover, scheme, log), log(log) {}
 
 #if ROVER_ENABLE_GAMEPAD
 #include <Ps3Controller.h>
@@ -30,21 +31,29 @@ void onReport() {
   mailbox.controls.r2 = Ps3.data.analog.button.r2;
   mailbox.controls.l1 = Ps3.data.button.l1;
   mailbox.controls.r1 = Ps3.data.button.r1;
-  if (Ps3.event.button_down.start) mailbox.startPressed = true;
-  if (Ps3.event.button_down.select) mailbox.selectPressed = true;
-  if (Ps3.event.button_down.cross) mailbox.crossPressed = true;
+  mailbox.rx = Ps3.data.analog.stick.rx;
+  const ps3_button_t& down = Ps3.event.button_down;
+  uint8_t pressed = 0;
+  if (down.start) pressed |= PAD_START;
+  if (down.select) pressed |= PAD_SELECT;
+  if (down.cross) pressed |= PAD_CROSS;
+  if (down.triangle) pressed |= PAD_TRIANGLE;
+  if (down.r3) pressed |= PAD_R3;
+  if (down.up) pressed |= PAD_UP;
+  if (down.down) pressed |= PAD_DOWN;
+  mailbox.pressed |= pressed;
   mailbox.lastReportMs = now;
   mailbox.hasReport = true;
   portEXIT_CRITICAL(&mailboxLock);
 }
 
-void onConnect() { Serial.println("PS3 controller connected."); }
-
 }  // namespace
 
+// The pad's connecting is logged by GamepadSession, on the loop task, from
+// its first report: the library's connect callback runs on the Bluetooth
+// task, which must touch nothing but the mailbox.
 void Gamepad::begin(const char* hostMac) {
   Ps3.attach(onReport);
-  Ps3.attachOnConnect(onConnect);
   Ps3.begin(hostMac);
   started = true;
 }
@@ -72,10 +81,20 @@ void Gamepad::update() {
   if (led != 0) Ps3.setPlayer(led);
 }
 
+void Gamepad::setEnabled(bool on, uint32_t now) { session.setEnabled(on, now); }
+
+PadState Gamepad::state() const { return started ? session.state() : PAD_ABSENT; }
+
 #else  // gamepad support not compiled in
 
 void Gamepad::begin(const char*) {}
 
 void Gamepad::update() {}
+
+void Gamepad::setEnabled(bool, uint32_t now) {
+  log.add(now, EventLog::WARN, "Pad: this build has no gamepad (Features.h)");
+}
+
+PadState Gamepad::state() const { return PAD_ABSENT; }
 
 #endif

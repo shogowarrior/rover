@@ -8,7 +8,8 @@
 using timing::elapsed;
 using timing::reached;
 
-Rover::Rover(Motors& motors, RangeScanner& scanner) : motors(motors), explorer(scanner) {}
+Rover::Rover(Motors& motors, RangeScanner& scanner, EventLog& log)
+    : motors(motors), log(log), explorer(scanner, log), selfTest(explorer, log) {}
 
 void Rover::begin(Mode initialMode, uint32_t now) { restart(initialMode, now); }
 
@@ -19,40 +20,67 @@ void Rover::update(uint32_t now) {
   if (currentMode == MODE_AUTONOMOUS) {
     const Explorer::Motion motion = explorer.update(now, !moving);
     if (motion.requested) drive(motion.move, tuning::EXPLORE_SPEED, motion.durationMs, now);
-  } else if (!explorer.hasScan()) {
-    explorer.survey(now);  // one sweep, so every bearing has a reading
-  } else {
-    explorer.lookAhead(now);  // then the servo rests, the front kept live
+    return;
   }
+  const SelfTest::Action check = selfTest.update(now, !moving);
+  if (check.look) {
+    explorer.survey(now, Explorer::SONAR_AIM, check.lookDeg);
+  } else {
+    explorer.survey(now, sonarMode, aimDeg);
+  }
+  if (check.drive != nullptr) drive(*check.drive, check.speed, check.durationMs, now);
 }
 
 void Rover::command(int move, int speed, int durationMs, uint32_t now) {
+  // Any command ends the checks: STOP above all.
+  selfTest.cancel(now, "a command took control");
   // The one command that gives control back. On a halted explorer it starts
   // over: the operator is saying the way is open now.
   if (move == RESUME_AUTONOMOUS) {
     if (currentMode == MODE_AUTONOMOUS) {
-      if (explorer.phase() == Explorer::HALTED) restart(MODE_AUTONOMOUS, now);
+      if (explorer.phase() == Explorer::HALTED) {
+        log.add(now, EventLog::INFO, "Exploring again, from a fresh sweep");
+        restart(MODE_AUTONOMOUS, now);
+      }
       return;
     }
-    setMode(MODE_AUTONOMOUS, now);
+    setMode(MODE_AUTONOMOUS, now, "Autonomous: exploring from a fresh sweep");
     return;
   }
 
-  setMode(MODE_MANUAL, now);
+  setMode(MODE_MANUAL, now, "Manual: a command took control");
   if (!isMoveCode(move)) {
     // An instruction we cannot read, from a client we do not control.
     // Stopping is the only safe interpretation.
+    log.add(now, EventLog::WARN, "Unknown move code %d: stopped", move);
     release(now);
+    return;
+  }
+  if (move == RUN_CHECKS) {
+    release(now);
+    selfTest.start(now, motors.ready());
     return;
   }
   drive(static_cast<MoveCode>(move), speed, durationMs, now);
 }
 
-void Rover::stop(uint32_t now) { release(now); }
-
-void Rover::standDown(uint32_t now) {
+void Rover::stop(uint32_t now) {
+  selfTest.cancel(now, "the driver disconnected");
   release(now);
-  setMode(MODE_MANUAL, now);
+}
+
+void Rover::standDown(uint32_t now, const char* why) {
+  log.add(now, EventLog::WARN, "Stood down: %s", why);
+  selfTest.cancel(now, why);
+  release(now);
+  setMode(MODE_MANUAL, now, nullptr);
+}
+
+void Rover::setSonar(Explorer::SonarMode mode, int aimDeg, uint32_t now) {
+  static const char* const NAMES[] = {"sweeps", "looks ahead", "aims"};
+  if (mode != sonarMode) log.add(now, EventLog::INFO, "The sonar %s in manual mode", NAMES[mode]);
+  sonarMode = mode;
+  this->aimDeg = kinematics::clampInt(aimDeg, -tuning::SONAR_AIM_MAX_DEG, tuning::SONAR_AIM_MAX_DEG);
 }
 
 void Rover::servicePendingRelease(uint32_t now) {
@@ -65,7 +93,7 @@ Rover::Status Rover::status() const {
   Status status;
   const bool exploring = currentMode == MODE_AUTONOMOUS;
   status.mode = currentMode;
-  status.move = moving ? currentMove : STOP;
+  status.move = moving ? currentPattern->move : STOP;
   status.moving = moving;
   status.phase = exploring ? explorer.phaseName() : nullptr;
   status.haltReason = exploring ? explorer.haltReason() : nullptr;
@@ -74,6 +102,16 @@ Rover::Status Rover::status() const {
     status.scanCm[i] = explorer.distanceCm(static_cast<Explorer::Bearing>(i));
   }
   status.motorsReady = motors.ready();
+  status.sonar = sonarMode;
+  status.aimDeg = aimDeg;
+  const Explorer::Look& look = explorer.lastLook();
+  // Only while it aims there: a sweep, exploring's or manual's, also
+  // passes through whatever angle aimDeg holds.
+  status.hasAimCm = !exploring && sonarMode == Explorer::SONAR_AIM && look.valid && look.angleDeg == aimDeg;
+  status.aimCm = look.cm;
+  status.check = selfTest.stepName();
+  status.pings = explorer.pingCount();
+  status.silentPings = explorer.silentPingCount();
   return status;
 }
 
@@ -83,17 +121,27 @@ void Rover::restart(Mode mode, uint32_t now) {
   explorer.reset(now);
 }
 
-void Rover::setMode(Mode mode, uint32_t now) {
-  if (mode != currentMode) restart(mode, now);
+void Rover::setMode(Mode mode, uint32_t now, const char* why) {
+  if (mode == currentMode) return;
+  if (why != nullptr) log.add(now, EventLog::INFO, "%s", why);
+  restart(mode, now);
 }
 
-// Every source reaches the motors here, so every input is clamped here.
 void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
+  const MovePattern* pattern = findMovePattern(move);
+  if (pattern == nullptr || move == STOP) {
+    release(now);
+    return;
+  }
+  drive(*pattern, speed, durationMs, now);
+}
+
+// Every source reaches the motors here, so every input is clamped here: a
+// command's move, exploration's, and the checks' wheels.
+void Rover::drive(const MovePattern& pattern, int speed, int durationMs, uint32_t now) {
   speed = kinematics::clampSpeed(speed);
   durationMs = kinematics::clampDuration(durationMs);
-
-  const MovePattern* pattern = findMovePattern(move);
-  if (pattern == nullptr || move == STOP || speed == 0 || durationMs == 0) {
+  if (speed == 0 || durationMs == 0) {
     release(now);
     return;
   }
@@ -104,14 +152,14 @@ void Rover::drive(MoveCode move, int speed, int durationMs, uint32_t now) {
   // Every MOTOR_REFRESH_MS the pattern is written again anyway, so a write the
   // bus lost -- the library does not report one -- is repaired while the
   // rover moves.
-  const bool alreadyDoingIt = moving && move == currentMove && speed == currentSpeed &&
+  const bool alreadyDoingIt = moving && &pattern == currentPattern && speed == currentSpeed &&
                               !elapsed(now, lastMotorWriteAt, tuning::MOTOR_REFRESH_MS);
   if (!alreadyDoingIt) {
-    motors.drive(*pattern, static_cast<uint8_t>(speed));
+    motors.drive(pattern, static_cast<uint8_t>(speed));
     lastMotorWriteAt = now;
   }
 
-  currentMove = move;
+  currentPattern = &pattern;
   currentSpeed = speed;
   moving = true;
   // The wheels are driving again: a stop's second write still pending would
@@ -134,5 +182,4 @@ void Rover::release(uint32_t now) {
     releasedAt = now;
   }
   moving = false;
-  currentMove = STOP;
 }

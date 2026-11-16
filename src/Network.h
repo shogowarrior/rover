@@ -3,16 +3,19 @@
 
 #include <stdint.h>
 
+#include "EventLog.h"
 #include "FirmwareUpdate.h"
 #include "RemoteControl.h"
 #include "Rover.h"
 
 // The WiFi station link and ArduinoOTA, and the failsafe for losing them.
 // Starts RemoteControl once the link is up, and hands both update paths,
-// ArduinoOTA and `firmware`, the one OTA password.
+// ArduinoOTA and `firmware`, the one OTA password. The link coming and
+// going, and ArduinoOTA's uploads, go in the EventLog; the network's name
+// and password never do, nor anywhere a client can read.
 class Network {
  public:
-  Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware);
+  Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware, EventLog& log);
 
   // setup() only: waits up to ~10 s for WiFi, then carries on offline.
   void begin();
@@ -30,6 +33,7 @@ class Network {
   Rover& rover;
   RemoteControl& remote;
   FirmwareUpdate& firmware;
+  EventLog& log;
   bool online = false;
   bool otaStarted = false;
   uint32_t lastReconnectMs = 0;

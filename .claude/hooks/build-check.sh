@@ -78,8 +78,8 @@ esac
 # out, and the headers it reads; Timing.h too, for the pad's timing rules.
 gamepad=no
 case "$file" in
-  src/Gamepad.* | src/GamepadSession.h | src/Features.h | src/Kinematics.h | \
-    src/Tuning.h | src/Timing.h | platformio.ini)
+  src/Gamepad.* | src/GamepadSession.h | src/EventLog.h | src/Features.h | \
+    src/Kinematics.h | src/Tuning.h | src/Timing.h | platformio.ini)
     gamepad=yes
     ;;
 esac
@@ -88,8 +88,9 @@ esac
 # the tests themselves.
 tests=no
 case "$file" in
-  src/Kinematics.* | src/MovePatterns.* | src/Explorer.* | src/Rover.* | \
-    src/GamepadSession.* | src/Protocol.* | src/FirmwareUpdate.* | \
+  src/Kinematics.* | src/MovePatterns.* | src/EventLog.* | src/Explorer.* | \
+    src/SelfTest.* | src/Rover.* | src/GamepadSession.* | src/Protocol.* | \
+    src/FirmwareUpdate.* | \
     src/MoveCodes.h | src/Tuning.h | src/Timing.h | src/Hardware.h | test/* | \
     platformio.ini)
     tests=yes

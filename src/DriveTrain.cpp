@@ -36,8 +36,6 @@ void DriveTrain::begin() {
     motors[i] = shield.getMotor(pins::MOTOR_TERMINAL[i]);
   }
   release();
-
-  if (!shieldReady) Serial.println("Motor shield not found on I2C (0x60); motors disabled.");
 }
 
 void DriveTrain::drive(const MovePattern& pattern, uint8_t speed) {

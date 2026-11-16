@@ -32,6 +32,11 @@ enum MoveCode {
   // pins the rover in manual mode until it is power-cycled.
   RESUME_AUTONOMOUS = 19,
 
+  // Not a motion either. Takes control, as any command does, and runs the
+  // rover's checks (SelfTest.h), which turn the wheels: on the stand. Any
+  // other command ends them.
+  RUN_CHECKS = 20,
+
   MOVE_CODE_COUNT  // not a code: one past the last valid value
 };
 

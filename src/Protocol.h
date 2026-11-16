@@ -4,7 +4,9 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 
+#include "EventLog.h"
 #include "FirmwareUpdate.h"
+#include "GamepadSession.h"
 #include "Kinematics.h"
 #include "Rover.h"
 
@@ -16,14 +18,20 @@
 //
 //   client -> rover   {"move": <MoveCode>, "speed": 0..255, "duration": ms}
 //                     {"scheme": "NORMAL" | "ADVANCED"}
+//                     {"sonar": "SWEEP" | "FRONT" | "AIM", "aim"?: degrees}
+//                     {"pad": "ON" | "OFF"}
 //                     {"ota": "begin", "size": bytes, "md5": hex}
 //                     {"ota": "auth", "cnonce": hex, "response": hex}
 //                     {"ota": "cancel"}
 //                     binary frames: the image, from the offset "next" names
 //   rover -> clients  {"mode", "move", "moving", "temperature", "motorsReady",
-//                      "scheme", "firmware", "phase"?, "halt"?,
+//                      "scheme", "firmware", "sonar", "aim"?, "aimCm"?,
+//                      "check"?, "pad"?, "phase"?, "halt"?,
 //                      "distanceLeft"?, "distanceFrontLeft"?, "distanceFront"?,
 //                      "distanceFrontRight"?, "distanceRight"?}
+//                     {"log": text, "seq", "t", "warn"?}, one EventLog line
+//                     {"metrics": {"upS", "loopHz", "loopMaxMs", "heap",
+//                      "heapMin", "rssi", "clients", "pings", "noEcho"}}
 //   rover -> the client updating it
 //                     {"ota": "auth", "nonce"}, {"ota": "next", "offset"},
 //                     {"ota": "done"} or {"ota": "failed", "reason"}
@@ -36,6 +44,19 @@
 // "firmware" is the running image's MD5. It also says the rover takes
 // updates over the link: older firmware reads an "ota" message as a STOP
 // that takes control, so a client sends none without it.
+//
+// "sonar" is where manual mode points the sonar (Rover::setSonar()), with
+// "aim" while that is AIM, and "aimCm" in manual mode once a reading at that
+// angle is in. "check" names the check under way (SelfTest.h). "pad" is the
+// gamepad, "OFF", "WAITING" or "CONNECTED", sent only by a build with one.
+// Like "sonar", "pad" from an older rover is simply absent.
+//
+// A frame with "log" is a line of the rover's EventLog, not telemetry: "seq"
+// numbers it (a client drops a number it already holds), "t" is the rover's
+// clock in ms, and "warn" is true for a warning. A client that has just
+// connected is sent every line still held first. A frame with "metrics"
+// says how the rover itself is doing, every tuning::METRICS_INTERVAL_MS.
+// Neither has "mode", and a client tells them from telemetry by their key.
 namespace protocol {
 
 struct Command {
@@ -61,24 +82,34 @@ struct Message {
   enum Kind {
     DRIVE,       // a drive command: `command`
     SET_SCHEME,  // choose the control scheme: `scheme`
-    IGNORE,      // a scheme message naming no scheme we know
+    SET_SONAR,   // where manual mode points the sonar: `sonar`, and `aimDeg` if `hasAim`
+    SET_PAD,     // gamepad control on or off: `padOn`
+    IGNORE,      // a configuration message naming a value we do not know
     OTA,         // part of a firmware update: `ota`
   };
   Kind kind;
   Command command;
   kinematics::ControlScheme scheme;
+  Explorer::SonarMode sonar;
+  bool hasAim;
+  int aimDeg;
+  bool padOn;
   OtaRequest ota;
 };
 
 // Read any client message. One carrying a string "ota" (and no "move") is
-// part of a firmware update, and one carrying "scheme" (and no "move") sets
-// the control scheme: neither takes control or stops the rover by itself,
-// and an unknown action or scheme name changes nothing. Everything else is a
-// drive command, defaults and all.
+// part of a firmware update; one carrying a string "scheme", "sonar" or
+// "pad" (and no "move") is configuration. None of those takes control or
+// stops the rover by itself, and an unknown action or value changes
+// nothing. Everything else is a drive command, defaults and all.
 Message readMessage(JsonVariantConst json);
 
 // "NORMAL" or "ADVANCED".
 const char* schemeName(kinematics::ControlScheme scheme);
+// "SWEEP", "FRONT" or "AIM".
+const char* sonarName(Explorer::SonarMode mode);
+// "OFF", "WAITING" or "CONNECTED"; nullptr for PAD_ABSENT, which is not sent.
+const char* padName(PadState state);
 
 // Whether a browser page from `origin`, the Origin header of its WebSocket
 // handshake, may connect: a page opened from a file ("null", or "file://"
@@ -130,14 +161,54 @@ size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capac
 // RemoteControl's buffer for one telemetry frame, terminator included. A frame
 // that does not fit is not sent at all, so telemetry would freeze in exactly
 // the states that outgrow it. test_longest_telemetry_fits checks the worst
-// case against this, about 360 bytes today: a new key must keep it inside.
-constexpr size_t TELEMETRY_MAX_BYTES = 384;
+// case against this, about 430 bytes today: a new key must keep it inside.
+// It is on the loop task's stack while a frame is written, as are the
+// lines and metrics below, one at a time.
+constexpr size_t TELEMETRY_MAX_BYTES = 512;
 
-// Serialise telemetry into `out`, `firmware` being the running image's MD5.
-// Returns the length written, or 0 if it did not fit (never a truncated,
-// invalid document).
-size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,
-                      float temperatureC, const char* firmware, char* out, size_t capacity);
+// Everything a telemetry frame reports.
+struct Report {
+  Rover::Status status;
+  kinematics::ControlScheme scheme;
+  PadState pad;
+  float temperatureC;
+  const char* firmware;  // the running image's MD5
+};
+
+// Serialise telemetry into `out`. Returns the length written, or 0 if it did
+// not fit (never a truncated, invalid document).
+size_t writeTelemetry(const Report& report, char* out, size_t capacity);
+
+// RemoteControl's buffer for one log line's frame, terminator included. An
+// EventLog line is at most EventLog::TEXT_MAX - 1 ASCII characters, which
+// JSON escapes to at most twice that, quotes and backslashes being the only
+// ones that need it; test_longest_log_line_fits checks the worst case.
+constexpr size_t LOG_LINE_MAX_BYTES = 256;
+
+// Serialise one EventLog line into `out`. Returns the length written, or 0
+// if it did not fit.
+size_t writeLogLine(const EventLog::Entry& entry, char* out, size_t capacity);
+
+// How the rover itself is doing, for a client to watch over time.
+struct Metrics {
+  uint32_t uptimeS;
+  uint32_t loopHz;       // passes of loop() a second, over the last interval
+  uint32_t loopMaxMs;    // the longest gap between two passes in it
+  uint32_t heapFree;     // bytes
+  uint32_t heapMinFree;  // the least free since boot
+  int rssi;              // the WiFi signal, dBm
+  int clients;           // connected WebSocket clients
+  uint32_t pings;        // sonar pings since boot...
+  uint32_t silentPings;  // ...and those that heard no echo
+};
+
+// RemoteControl's buffer for one metrics frame, terminator included;
+// test_longest_metrics_fit checks the worst case.
+constexpr size_t METRICS_MAX_BYTES = 256;
+
+// Serialise metrics into `out`. Returns the length written, or 0 if it did
+// not fit.
+size_t writeMetrics(const Metrics& metrics, char* out, size_t capacity);
 
 }  // namespace protocol
 

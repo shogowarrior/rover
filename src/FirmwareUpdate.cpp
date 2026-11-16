@@ -75,7 +75,7 @@ FirmwareUpdate::Reply FirmwareUpdate::begin(uint8_t client, uint32_t size, const
   // Nothing may move while the flash is written. Standing down rather than
   // stopping leaves an exploring rover still, whether the update succeeds or
   // not.
-  rover.standDown(now);
+  rover.standDown(now, "a firmware update began");
   owner = client;
   imageSize = size;
   copyLowercase(md5, imageMd5);

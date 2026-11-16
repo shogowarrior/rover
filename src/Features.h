@@ -28,14 +28,16 @@ constexpr bool GAMEPAD = ROVER_ENABLE_GAMEPAD != 0;
 constexpr char PS3_HOST_MAC[] = "94:b9:7e:c7:af:12";
 
 // Whether to start exploring as soon as the rover is switched on. Off, as the
-// owner asked: every boot comes up in manual mode, the wheels still and the
-// sonar, after one sweep, held straight ahead, until a client's Autonomous
-// (or the pad's START) sends it exploring. On, a power-on explores, and the
-// ESP32 reports an EN reset -- the button, a USB upload, often the serial
-// monitor opening -- as a power-on, so those would explore too. Any other
-// reset -- an OTA flash, a crash, the watchdog, a brownout -- comes up in
-// manual mode either way, so an OTA-flashed or recovering rover never drives
-// off on its own.
+// owner asked (docs/features.md, F9): every boot comes up in manual mode, the
+// wheels still and the sonar as its setting says (Front by default: one
+// sweep, then held straight ahead), until a client's Autonomous (or the pad's
+// START) sends it exploring. Exploring at power-on looked like a rover that
+// "scans, tries to move, stops, repeats" before anyone had asked it to move.
+// On, a power-on explores, and the ESP32 reports an EN reset -- the button, a
+// USB upload, often the serial monitor opening -- as a power-on, so those
+// would explore too. Any other reset -- an OTA flash, a crash, the watchdog,
+// a brownout -- comes up in manual mode either way, so an OTA-flashed or
+// recovering rover never drives off on its own.
 constexpr bool AUTONOMOUS_AT_POWER_ON = false;
 
 // The control scheme at boot, for the gamepad and the panel alike: NORMAL

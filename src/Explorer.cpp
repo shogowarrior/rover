@@ -1,6 +1,7 @@
 #include "Explorer.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "Kinematics.h"
@@ -36,8 +37,8 @@ Explorer::Motion noMotion() { return Explorer::Motion(); }
 
 }  // namespace
 
-Explorer::Explorer(RangeScanner& scanner, const ExploreParams& params)
-    : scanner(scanner), params(params) {
+Explorer::Explorer(RangeScanner& scanner, EventLog& log, const ExploreParams& params)
+    : scanner(scanner), log(log), params(params) {
   for (int i = 0; i < BEARING_COUNT; i++) {
     scan.cm[i] = kinematics::DISTANCE_FAR_CM;
     scan.measured[i] = false;
@@ -63,30 +64,26 @@ Explorer::Motion Explorer::update(uint32_t now, bool motorsIdle) {
       if (episode.backingOut) return startSweep(now);
       const int steps = episode.escapeSteps;  // used up by this one turn
       episode.escapeSteps = 0;
-      return startTurn(now, episode.committedDirection, steps, true);
+      return startTurn(now, episode.committedDirection, steps, true, "after backing off");
     }
     case SIDESTEP:
       return motionDone(now, motorsIdle) ? startSweep(now) : noMotion();
     case HALTED:
       return reached(now, phaseUntil) ? retryAfterHalt(now) : noMotion();
-    case LOOK:
-      // Its readings are the front's alone: decide nothing on them.
+    case LOOK:  // manual mode's; reset() leaves it before exploring
       return startSweep(now);
   }
   return noMotion();
 }
 
-void Explorer::survey(uint32_t now) {
+void Explorer::survey(uint32_t now, SonarMode mode, int aimDeg) {
+  if (mode != SONAR_SWEEP && hasScan()) {
+    lookAt(now, mode == SONAR_FRONT ? 0 : aimDeg);
+    return;
+  }
+  // From a held look too: its ping was not at the sweep's next bearing.
   if (currentPhase != SWEEP) startSweep(now);
   stepSweep(now, false);
-}
-
-void Explorer::lookAhead(uint32_t now) {
-  if (currentPhase != LOOK) {
-    currentPhase = LOOK;
-    aim(now, 0);
-  }
-  if (readyToPing(now)) record(FRONT, ping(now));
 }
 
 const char* Explorer::phaseName() const {
@@ -142,7 +139,7 @@ Explorer::Motion Explorer::stepSweep(uint32_t now, bool decideWhenDone) {
 }
 
 Explorer::Motion Explorer::decide(uint32_t now) {
-  if (episode.sidestep.pending) checkSidestepWentAway();
+  if (episode.sidestep.pending) checkSidestepWentAway(now);
 
   // How the last cruise ended is good for this one decision, whichever way
   // it goes. Left set past a turn, it described a heading the rover no
@@ -152,6 +149,7 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   const bool cappedCruise = episode.cruiseEndedByCap;
   episode.sideStopDeg = 0;
   episode.cruiseEndedByCap = false;
+  logSweep(now);
 
   // A working sonar hears something in a room -- a wall, a chair, the floor
   // at an angle. Hearing nothing sweep after sweep is what a disconnected or
@@ -167,8 +165,9 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // would be motion justified by an absent echo alone. So it stands and
   // looks again, still backing out; the count above halts a dead sensor.
   if (!scan.heardEcho) {
+    log.add(now, EventLog::WARN, "No echo at any bearing (%d sweeps in a row)", episode.silentSweeps);
     if (episode.backingOut) return startSweep(now);
-    return startTurn(now, wanderDirection(), params.wanderSteps, false);
+    return startTurn(now, wanderDirection(), params.wanderSteps, false, "to look again");
   }
 
   // Still backing out of a dead end (the blocked path, below). This comes
@@ -176,9 +175,9 @@ Explorer::Motion Explorer::decide(uint32_t now) {
   // clear again, and driving back in would shuttle the rover in and out of
   // the dead end for ever.
   if (episode.backingOut) {
-    if (!roomToRotate() && episode.reverseBudgetMs > 0) return startBackoff(now);
+    if (!roomToRotate() && episode.reverseBudgetMs > 0) return startBackoff(now, "backing out of a dead end");
     episode.backingOut = false;
-    return turnOrSidestep(now, commitTurnDirection(), 0, true);
+    return turnOrSidestep(now, commitTurnDirection(), 0, true, "out of the dead end");
   }
 
   if (!pathBlocked(params.goCm)) {
@@ -190,16 +189,16 @@ Explorer::Motion Explorer::decide(uint32_t now) {
         // The last cruise ended on something the weave saw off to one side,
         // at an angle this sweep does not measure. Turn one step away from it
         // rather than drive straight back into it.
-        return turnOrSidestep(now, sideStop > 0 ? -1 : +1, 1, false);
+        return turnOrSidestep(now, sideStop > 0 ? -1 : +1, 1, false, "away from what ended the cruise");
       }
       if (cappedCruise && params.wanderSteps > 0) {
         // Nothing stopped the last cruise. Turn a little anyway: it spreads
         // coverage, and bounds how long the rover can push against something
         // the sonar cannot see.
-        return turnOrSidestep(now, wanderDirection(), params.wanderSteps, false);
+        return turnOrSidestep(now, wanderDirection(), params.wanderSteps, false, "to wander");
       }
       const int veer = veerDirection();
-      if (veer != 0) return turnOrSidestep(now, veer, 1, false);
+      if (veer != 0) return turnOrSidestep(now, veer, 1, false, "away from a near flank");
     }
     episode.sidesteps = 0;
     return startCruise(now);
@@ -217,12 +216,14 @@ Explorer::Motion Explorer::decide(uint32_t now) {
     // This comes before the too-close backoff below, which reverses only once
     // and then turns.
     episode.backingOut = true;
-    return startBackoff(now);
+    return startBackoff(now, "a dead end too narrow to turn in");
   }
   // Committed before the backoff: the turn after it reads the direction.
   const int direction = commitTurnDirection();
-  if (scan.cm[FRONT] < params.minTurnClearCm && episode.reverseBudgetMs > 0) return startBackoff(now);
-  return turnOrSidestep(now, direction, 0, true);
+  if (scan.cm[FRONT] < params.minTurnClearCm && episode.reverseBudgetMs > 0) {
+    return startBackoff(now, "too close to turn");
+  }
+  return turnOrSidestep(now, direction, 0, true, "the path is blocked");
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +231,7 @@ Explorer::Motion Explorer::decide(uint32_t now) {
 // ---------------------------------------------------------------------------
 
 Explorer::Motion Explorer::startCruise(uint32_t now) {
+  log.add(now, EventLog::INFO, "Cruise: the path is clear");
   currentPhase = CRUISE;
   cruise = Cruise();
   cruise.start = now;
@@ -246,6 +248,7 @@ Explorer::Motion Explorer::startCruise(uint32_t now) {
 Explorer::Motion Explorer::stepCruise(uint32_t now) {
   if (elapsed(now, cruise.start, params.cruiseMaxMs)) {
     episode.cruiseEndedByCap = true;
+    log.add(now, EventLog::INFO, "Cruise ended: its %d ms are up", params.cruiseMaxMs);
     return endCruise(now);
   }
   if (!readyToPing(now)) return noMotion();
@@ -257,13 +260,19 @@ Explorer::Motion Explorer::stepCruise(uint32_t now) {
   // that dies mid-cruise stops the rover within one weave, and the silent
   // sweeps that follow halt it.
   cruise.silentLooks = isEcho(cm) ? 0 : cruise.silentLooks + 1;
-  if (cruise.silentLooks >= params.silentCruiseLooks) return endCruise(now);
+  if (cruise.silentLooks >= params.silentCruiseLooks) {
+    log.add(now, EventLog::WARN, "Cruise ended: %d looks in a row heard no echo", cruise.silentLooks);
+    return endCruise(now);
+  }
 
   if (angle == 0) {
     scan.cm[FRONT] = cm;
     // An obstacle does not vanish as the rover closes on it. A near echo
     // that turns into silence was deflected away, not left behind.
-    if (!isEcho(cm) && echoVanished(now)) return endCruise(now);
+    if (!isEcho(cm) && echoVanished(now)) {
+      log.add(now, EventLog::INFO, "Cruise ended: the near echo ahead vanished (deflected)");
+      return endCruise(now);
+    }
     if (isEcho(cm)) {
       if (notChanging(cm, now)) return escapeStuck(now);
       cruise.sawFront(cm, now);
@@ -272,6 +281,7 @@ Explorer::Motion Explorer::stepCruise(uint32_t now) {
 
   if (inPath(angle, cm, params.stopCm)) {
     episode.sideStopDeg = angle;
+    log.add(now, EventLog::INFO, "Cruise ended: %.0f cm in the path at %d deg", cm, angle);
     return endCruise(now);
   }
 
@@ -302,11 +312,13 @@ Explorer::Motion Explorer::escapeStuck(uint32_t now) {
   // not open floor, so it must not release the turn direction or reset the
   // counts -- that made the rover ping-pong at a wide low obstacle. Only the
   // driving before the stuck window counts as ground to reverse over.
+  log.add(now, EventLog::WARN, "Stuck: the front echo has not changed by %.0f cm in %d ms",
+          params.stuckProgressCm, params.stuckWindowMs);
   episode.reverseBudgetMs += static_cast<int32_t>(since(cruise.stuckReferenceAt, cruise.start));
   if (episode.consecutiveStucks < params.maxStuckMultiplier) episode.consecutiveStucks++;
   episode.escapeSteps = params.stuckTurnSteps * episode.consecutiveStucks;
   if (episode.committedDirection == 0) episode.committedDirection = alternateDirection();
-  return startBackoff(now);
+  return startBackoff(now, "stuck");
 }
 
 // ---------------------------------------------------------------------------
@@ -314,13 +326,20 @@ Explorer::Motion Explorer::escapeStuck(uint32_t now) {
 // ---------------------------------------------------------------------------
 
 Explorer::Motion Explorer::turnOrSidestep(uint32_t now, int direction, int minSteps,
-                                          bool untilClear) {
+                                          bool untilClear, const char* why) {
   const int away = sidestepDirection();
   if (away != 0) return startSidestep(now, away);
-  return startTurn(now, direction, minSteps, untilClear);
+  return startTurn(now, direction, minSteps, untilClear, why);
 }
 
-Explorer::Motion Explorer::startTurn(uint32_t now, int direction, int minSteps, bool untilClear) {
+Explorer::Motion Explorer::startTurn(uint32_t now, int direction, int minSteps, bool untilClear,
+                                     const char* why) {
+  const char* side = direction > 0 ? "left" : "right";
+  if (untilClear) {
+    log.add(now, EventLog::INFO, "Turn %s until the front is clear: %s", side, why);
+  } else {
+    log.add(now, EventLog::INFO, "Turn %s %d step%s: %s", side, minSteps, minSteps == 1 ? "" : "s", why);
+  }
   currentPhase = TURN;
   turn = Turn();
   turn.direction = direction;
@@ -373,12 +392,17 @@ bool Explorer::motionDone(uint32_t now, bool motorsIdle) const {
   return motorsIdle && reached(now, phaseUntil);
 }
 
-Explorer::Motion Explorer::startBackoff(uint32_t now) {
+Explorer::Motion Explorer::startBackoff(uint32_t now, const char* why) {
   // Nothing watches behind the rover, so it only ever reverses over ground it
   // has just driven forward across, and never far.
   const int32_t budget = episode.reverseBudgetMs;
   const int32_t ms = budget < params.backoffMaxMs ? budget : params.backoffMaxMs;
   episode.reverseBudgetMs -= ms;
+  if (ms > 0) {
+    log.add(now, EventLog::INFO, "Reverse %ld ms: %s", static_cast<long>(ms), why);
+  } else {
+    log.add(now, EventLog::INFO, "No ground behind to reverse over: %s", why);
+  }
   currentPhase = BACKOFF;
   phaseUntil = now + static_cast<uint32_t>(ms);
   return ms > 0 ? motion(MOVE_BACKWARD, static_cast<int>(ms)) : stopMotion();
@@ -392,6 +416,8 @@ Explorer::Motion Explorer::startSidestep(uint32_t now, int direction) {
 
   SidestepCheck& check = episode.sidestep;
   check.from = direction > 0 ? RIGHT : LEFT;
+  log.add(now, EventLog::INFO, "Sidestep away from the %s flank: too close to turn beside",
+          check.from == RIGHT ? "right" : "left");
   check.fromBefore = lateralCm(check.from);
   check.otherBefore = lateralCm(check.from == LEFT ? RIGHT : LEFT);
   check.pending = true;
@@ -399,7 +425,7 @@ Explorer::Motion Explorer::startSidestep(uint32_t now, int direction) {
   return motion(direction * strafeSign > 0 ? MOVE_LEFT : MOVE_RIGHT, params.sidestepMs);
 }
 
-void Explorer::checkSidestepWentAway() {
+void Explorer::checkSidestepWentAway(uint32_t now) {
   SidestepCheck& check = episode.sidestep;
   check.pending = false;
   const Bearing other = check.from == LEFT ? RIGHT : LEFT;
@@ -411,11 +437,17 @@ void Explorer::checkSidestepWentAway() {
   // Both flanks moved the wrong way. A rover pinned against the wall moves
   // neither, so being stuck is never mistaken for a mirrored mapping.
   if (fromChange < -1.0f && otherChange > 1.0f) {
-    if (++strafeContradictions == 1) strafeSign = -strafeSign;
+    if (++strafeContradictions == 1) {
+      strafeSign = -strafeSign;
+      log.add(now, EventLog::WARN, "The sidestep went the wrong way: strafing the other way from now");
+    } else if (strafeContradictions == 2) {
+      log.add(now, EventLog::WARN, "The sidestep went the wrong way again: no more sidesteps");
+    }
   }
 }
 
 Explorer::Motion Explorer::halt(uint32_t now, const char* reason) {
+  log.add(now, EventLog::WARN, "Halted: %s; trying again in %d s", reason, params.haltRetryMs / 1000);
   currentPhase = HALTED;
   episode.haltWhy = reason;
   phaseUntil = now + params.haltRetryMs;
@@ -424,6 +456,7 @@ Explorer::Motion Explorer::halt(uint32_t now, const char* reason) {
 }
 
 Explorer::Motion Explorer::retryAfterHalt(uint32_t now) {
+  log.add(now, EventLog::INFO, "Trying again after the halt");
   episode.committedDirection = 0;
   episode.turnStepsCommitted = 0;
   return startSweep(now);
@@ -448,6 +481,19 @@ void Explorer::aim(uint32_t now, int angleDeg) {
   sonar.lookDeg = angleDeg;
 }
 
+// survey()'s Front and Aim: the sonar held at one angle, pinging as often as
+// it may. Moved, it settles first, as for any aim.
+void Explorer::lookAt(uint32_t now, int angleDeg) {
+  if (currentPhase != LOOK || sonar.lookDeg != angleDeg) {
+    currentPhase = LOOK;
+    aim(now, angleDeg);
+  }
+  if (!readyToPing(now)) return;
+  const float raw = ping(now);
+  Bearing bearing;
+  if (bearingAt(angleDeg, bearing)) record(bearing, raw);
+}
+
 bool Explorer::readyToPing(uint32_t now) const {
   if (!reached(now, sonar.readyAt)) return false;
   return !sonar.hasPinged || elapsed(now, sonar.lastPingAt, params.pingIntervalMs);
@@ -457,6 +503,11 @@ float Explorer::ping(uint32_t now) {
   const float raw = scanner.measureCm();
   sonar.lastPingAt = now;
   sonar.hasPinged = true;
+  look.valid = true;
+  look.angleDeg = sonar.lookDeg;
+  look.cm = kinematics::normalizeDistance(raw);
+  pings++;
+  if (raw < 0.0f) silentPings++;
   return raw;
 }
 
@@ -470,7 +521,6 @@ Explorer::Bearing Explorer::sweepBearing(int step) const {
   return static_cast<Bearing>(scan.leftToRight ? step : BEARING_COUNT - 1 - step);
 }
 
-// The rover-frame angle each sweep bearing measures, degrees, positive left.
 int Explorer::angleOf(Bearing bearing) const {
   switch (bearing) {
     case LEFT: return params.sweepOuterDeg;
@@ -481,6 +531,29 @@ int Explorer::angleOf(Bearing bearing) const {
     case BEARING_COUNT: break;
   }
   return 0;
+}
+
+bool Explorer::bearingAt(int angleDeg, Bearing& bearing) const {
+  for (int i = 0; i < BEARING_COUNT; i++) {
+    if (angleOf(static_cast<Bearing>(i)) != angleDeg) continue;
+    bearing = static_cast<Bearing>(i);
+    return true;
+  }
+  return false;
+}
+
+// The readings a decision is made on, left to right: "-" for no echo.
+void Explorer::logSweep(uint32_t now) {
+  char cm[BEARING_COUNT][8];
+  for (int i = 0; i < BEARING_COUNT; i++) {
+    if (isEcho(scan.cm[i])) {
+      snprintf(cm[i], sizeof(cm[i]), "%.0f", scan.cm[i]);
+    } else {
+      snprintf(cm[i], sizeof(cm[i]), "-");
+    }
+  }
+  log.add(now, EventLog::INFO, "Sweep (cm): L %s, FL %s, F %s, FR %s, R %s", cm[LEFT], cm[FRONT_LEFT],
+          cm[FRONT], cm[FRONT_RIGHT], cm[RIGHT]);
 }
 
 // ---------------------------------------------------------------------------

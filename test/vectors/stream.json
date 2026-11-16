@@ -1,0 +1,13 @@
+{
+  "about": "The rover's other frames, exactly as src/Protocol.cpp writes them: lines of its EventLog (writeLogLine()) and its metrics (writeMetrics()). test/test_protocol writes each from the values it holds and checks the frame comes back key for key; the panel's tests feed them to the page. A line's \"seq\" numbers it from a random start each boot, and \"t\" is the rover's clock in ms.",
+  "log": [
+    {"log": "Boot after a power-on or EN reset, in manual mode", "seq": 4294967294, "t": 312},
+    {"log": "Motor shield: no answer on I2C at 0x60; no wheel will turn", "seq": 4294967295, "t": 330, "warn": true},
+    {"log": "Sweep (cm): L 120, FL 80, F -, FR 60, R 150", "seq": 0, "t": 61234},
+    {"log": "Link: ignored a message that is not JSON from client 2 \"quoted\" \\ back", "seq": 1, "t": 4294967295, "warn": true}
+  ],
+  "metrics": [
+    {"metrics": {"upS": 61, "loopHz": 412, "loopMaxMs": 38, "heap": 201344, "heapMin": 187220, "rssi": -58, "clients": 1, "pings": 870, "noEcho": 12}},
+    {"metrics": {"upS": 4294967, "loopHz": 0, "loopMaxMs": 4294967295, "heap": 4294967295, "heapMin": 0, "rssi": -128, "clients": 5, "pings": 4294967295, "noEcho": 4294967295}}
+  ]
+}

@@ -65,6 +65,22 @@ kinematics::ControlScheme schemeNamed(const char* name) {
   return kinematics::SCHEME_NORMAL;
 }
 
+Explorer::SonarMode sonarNamed(const char* name) {
+  if (strcmp(name, "FRONT") == 0) return Explorer::SONAR_FRONT;
+  if (strcmp(name, "AIM") == 0) return Explorer::SONAR_AIM;
+  TEST_ASSERT_EQUAL_STRING("SWEEP", name);
+  return Explorer::SONAR_SWEEP;
+}
+
+// No "pad" is a build without one.
+PadState padNamed(const char* name) {
+  if (name == nullptr) return PAD_ABSENT;
+  if (strcmp(name, "OFF") == 0) return PAD_OFF;
+  if (strcmp(name, "WAITING") == 0) return PAD_WAITING;
+  TEST_ASSERT_EQUAL_STRING("CONNECTED", name);
+  return PAD_CONNECTED;
+}
+
 // The status a vector frame reports, which writeTelemetry() must turn back
 // into that frame.
 Rover::Status statusOf(JsonObjectConst frame) {
@@ -77,15 +93,32 @@ Rover::Status statusOf(JsonObjectConst frame) {
   status.hasScan = frame[DISTANCE_KEYS[0]].is<float>();
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) status.scanCm[i] = frame[DISTANCE_KEYS[i]] | 0.0f;
   status.motorsReady = frame["motorsReady"];
+  status.sonar = sonarNamed(frame["sonar"]);
+  status.aimDeg = frame["aim"] | 0;
+  status.hasAimCm = frame["aimCm"].is<float>();
+  status.aimCm = frame["aimCm"] | 0.0f;
+  status.check = frame["check"];
+  status.pings = 0;
+  status.silentPings = 0;
   return status;
 }
 
-// writeTelemetry()'s frame for `status`, parsed. Fails the test when nothing
+// Everything a vector frame reports.
+protocol::Report reportOf(JsonObjectConst frame) {
+  protocol::Report report;
+  report.status = statusOf(frame);
+  report.scheme = schemeNamed(frame["scheme"]);
+  report.pad = padNamed(frame["pad"]);
+  report.temperatureC = frame["temperature"];
+  report.firmware = frame["firmware"];
+  return report;
+}
+
+// writeTelemetry()'s frame for `report`, parsed. Fails the test when nothing
 // was written.
-JsonDocument written(const Rover::Status& status, kinematics::ControlScheme scheme, float temperatureC,
-                     const char* firmware) {
+JsonDocument written(const protocol::Report& report) {
   char out[protocol::TELEMETRY_MAX_BYTES];
-  const size_t length = protocol::writeTelemetry(status, scheme, temperatureC, firmware, out, sizeof(out));
+  const size_t length = protocol::writeTelemetry(report, out, sizeof(out));
   TEST_ASSERT_TRUE(length > 0);
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
@@ -98,6 +131,16 @@ std::string jsonText(JsonVariantConst value) {
   std::string text;
   serializeJson(value, text);
   return text;
+}
+
+// Every key of `expected`, and no other, in `actual`, each as JSON text.
+void assertSameFrame(JsonObjectConst expected, JsonObjectConst actual, const char* name) {
+  TEST_ASSERT_EQUAL_INT_MESSAGE(expected.size(), actual.size(), name);
+  for (JsonPairConst key : expected) {
+    char label[96];
+    snprintf(label, sizeof(label), "%s: %s", name, key.key().c_str());
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(jsonText(key.value()).c_str(), jsonText(actual[key.key()]).c_str(), label);
+  }
 }
 
 FirmwareUpdate::Reply replyOf(FirmwareUpdate::Reply::Kind kind) {
@@ -164,14 +207,9 @@ void test_telemetry_frames_match_the_vectors(void) {
   for (JsonPairConst named : vectors["frames"].as<JsonObjectConst>()) {
     const JsonObjectConst frame = named.value();
     TEST_ASSERT_TRUE_MESSAGE(frame["firmware"].is<const char*>(), named.key().c_str());
-    const JsonDocument out =
-        written(statusOf(frame), schemeNamed(frame["scheme"]), frame["temperature"], frame["firmware"]);
-    TEST_ASSERT_EQUAL_INT_MESSAGE(frame.size(), out.size(), named.key().c_str());
-    for (JsonPairConst key : frame) {
-      char label[64];
-      snprintf(label, sizeof(label), "%s: %s", named.key().c_str(), key.key().c_str());
-      TEST_ASSERT_EQUAL_STRING_MESSAGE(jsonText(key.value()).c_str(), jsonText(out[key.key()]).c_str(), label);
-    }
+    TEST_ASSERT_TRUE_MESSAGE(frame["sonar"].is<const char*>(), named.key().c_str());
+    const JsonDocument out = written(reportOf(frame));
+    assertSameFrame(frame, out.as<JsonObjectConst>(), named.key().c_str());
   }
 }
 
@@ -179,7 +217,10 @@ void test_telemetry_frames_match_the_vectors(void) {
 // stops in exactly those states. Every field at its longest, whether or not
 // the states can occur together: the longest move name, the longest phase and
 // halt reason, "false" for both flags, a negative temperature, distances
-// with seven significant digits, and the running image's MD5.
+// with seven significant digits, the running image's MD5, the sonar aiming
+// as far right as it goes with a reading, the longest a check's name may be
+// (SelfTest::STEP_NAME_MAX, which test_rover holds the checks to), and the
+// pad's longest state.
 void test_longest_telemetry_fits(void) {
   Rover::Status status;
   status.mode = Rover::MODE_AUTONOMOUS;
@@ -194,10 +235,26 @@ void test_longest_telemetry_fits(void) {
   status.hasScan = true;
   for (int i = 0; i < Explorer::BEARING_COUNT; i++) status.scanCm[i] = 399.9999f;
   status.motorsReady = false;
+  status.sonar = Explorer::SONAR_AIM;
+  status.aimDeg = -tuning::SONAR_AIM_MAX_DEG;
+  status.hasAimCm = true;
+  status.aimCm = 399.9999f;
+  const std::string check(SelfTest::STEP_NAME_MAX, 'x');
+  status.check = check.c_str();
+  status.pings = 0;
+  status.silentPings = 0;
 
-  const JsonDocument doc = written(status, kinematics::SCHEME_ADVANCED, -12.34568f, HEX32);
+  protocol::Report report;
+  report.status = status;
+  report.scheme = kinematics::SCHEME_ADVANCED;
+  report.pad = PAD_CONNECTED;
+  report.temperatureC = -12.34568f;
+  report.firmware = HEX32;
+  const JsonDocument doc = written(report);
   TEST_ASSERT_EQUAL_STRING(moveName(status.move), doc["move"]);
   TEST_ASSERT_EQUAL_STRING(HEX32, doc["firmware"]);
+  TEST_ASSERT_EQUAL_STRING(check.c_str(), doc["check"]);
+  TEST_ASSERT_EQUAL_STRING("CONNECTED", doc["pad"]);
 }
 
 void test_scheme_message_sets_the_scheme(void) {
@@ -233,8 +290,149 @@ void test_a_move_with_a_scheme_still_drives(void) {
 void test_too_small_a_buffer_writes_nothing(void) {
   const JsonDocument vectors = loadVectors("telemetry.json");
   char out[16];
-  TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(statusOf(vectors["frames"]["cruising"]), kinematics::SCHEME_NORMAL,
-                                                     40.0f, HEX32, out, sizeof(out)));
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(reportOf(vectors["frames"]["cruising"]), out, sizeof(out)));
+  const EventLog::Entry entry = {7, 100, EventLog::INFO, "a line"};
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeLogLine(entry, out, sizeof(out)));
+  const protocol::Metrics metrics = {};
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeMetrics(metrics, out, sizeof(out)));
+}
+
+// --- settings: the sonar and the pad ----------------------------------------
+
+void test_sonar_messages_are_read(void) {
+  protocol::Message m = message("{\"sonar\":\"FRONT\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, m.sonar);
+  TEST_ASSERT_FALSE(m.hasAim);
+  m = message("{\"sonar\":\"AIM\",\"aim\":-30}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_AIM, m.sonar);
+  TEST_ASSERT_TRUE(m.hasAim);
+  TEST_ASSERT_EQUAL_INT(-30, m.aimDeg);
+  m = message("{\"sonar\":\"SWEEP\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, m.sonar);
+  // An aim that is not a whole number is no aim: Rover keeps the one it has.
+  const char* const noAim[] = {"{\"sonar\":\"AIM\",\"aim\":\"30\"}", "{\"sonar\":\"AIM\",\"aim\":12.5}",
+                               "{\"sonar\":\"AIM\",\"aim\":null}", "{\"sonar\":\"AIM\"}"};
+  for (const char* json : noAim) {
+    m = message(json);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::SET_SONAR, m.kind, json);
+    TEST_ASSERT_FALSE_MESSAGE(m.hasAim, json);
+  }
+}
+
+void test_pad_messages_are_read(void) {
+  protocol::Message m = message("{\"pad\":\"OFF\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_PAD, m.kind);
+  TEST_ASSERT_FALSE(m.padOn);
+  m = message("{\"pad\":\"ON\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_PAD, m.kind);
+  TEST_ASSERT_TRUE(m.padOn);
+}
+
+// A setting naming a value the rover does not know changes nothing, and is
+// not the STOP a malformed command is: it would take control.
+void test_unknown_settings_are_ignored(void) {
+  const char* const unknown[] = {"{\"sonar\":\"LEFT\"}", "{\"sonar\":\"front\"}", "{\"pad\":\"on\"}",
+                                 "{\"pad\":\"\"}"};
+  for (const char* json : unknown) TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::IGNORE, message(json).kind, json);
+}
+
+// As with the scheme: a setting only as a string and without "move";
+// otherwise the message drives, defaults and all.
+void test_settings_need_a_string_and_no_move(void) {
+  assertDefaultsToStop("{\"sonar\":1}");
+  assertDefaultsToStop("{\"pad\":false}");
+  const protocol::Message m = message("{\"move\":0,\"speed\":0,\"duration\":0,\"sonar\":\"FRONT\",\"pad\":\"OFF\"}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
+  TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
+}
+
+// The names the wire uses, which the panel and drive.py copy.
+void test_setting_names(void) {
+  TEST_ASSERT_EQUAL_STRING("SWEEP", protocol::sonarName(Explorer::SONAR_SWEEP));
+  TEST_ASSERT_EQUAL_STRING("FRONT", protocol::sonarName(Explorer::SONAR_FRONT));
+  TEST_ASSERT_EQUAL_STRING("AIM", protocol::sonarName(Explorer::SONAR_AIM));
+  TEST_ASSERT_NULL(protocol::padName(PAD_ABSENT));
+  TEST_ASSERT_EQUAL_STRING("OFF", protocol::padName(PAD_OFF));
+  TEST_ASSERT_EQUAL_STRING("WAITING", protocol::padName(PAD_WAITING));
+  TEST_ASSERT_EQUAL_STRING("CONNECTED", protocol::padName(PAD_CONNECTED));
+}
+
+void test_longest_setting_fits(void) {
+  char longest[protocol::COMMAND_MAX_BYTES + 1];
+  const int length = snprintf(longest, sizeof(longest), "{\"sonar\": \"SWEEP\", \"aim\": %d}", -2147483647 - 1);
+  TEST_ASSERT_TRUE(length > 0 && static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, message(longest).kind);
+}
+
+// --- the log and the metrics --------------------------------------------------
+
+// Each frame in test/vectors/stream.json, written from the values it holds.
+void test_log_lines_match_the_vectors(void) {
+  const JsonDocument vectors = loadVectors("stream.json");
+  for (JsonObjectConst frame : vectors["log"].as<JsonArrayConst>()) {
+    EventLog::Entry entry;
+    entry.seq = frame["seq"];
+    entry.atMs = frame["t"];
+    entry.level = frame["warn"] | false ? EventLog::WARN : EventLog::INFO;
+    snprintf(entry.text, sizeof(entry.text), "%s", frame["log"].as<const char*>());
+    char out[protocol::LOG_LINE_MAX_BYTES];
+    const size_t length = protocol::writeLogLine(entry, out, sizeof(out));
+    TEST_ASSERT_TRUE(length > 0);
+    JsonDocument doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+    assertSameFrame(frame, doc.as<JsonObjectConst>(), entry.text);
+  }
+}
+
+void test_metrics_match_the_vectors(void) {
+  const JsonDocument vectors = loadVectors("stream.json");
+  for (JsonObjectConst frame : vectors["metrics"].as<JsonArrayConst>()) {
+    const JsonObjectConst values = frame["metrics"];
+    protocol::Metrics metrics;
+    metrics.uptimeS = values["upS"];
+    metrics.loopHz = values["loopHz"];
+    metrics.loopMaxMs = values["loopMaxMs"];
+    metrics.heapFree = values["heap"];
+    metrics.heapMinFree = values["heapMin"];
+    metrics.rssi = values["rssi"];
+    metrics.clients = values["clients"];
+    metrics.pings = values["pings"];
+    metrics.silentPings = values["noEcho"];
+    char out[protocol::METRICS_MAX_BYTES];
+    const size_t length = protocol::writeMetrics(metrics, out, sizeof(out));
+    TEST_ASSERT_TRUE(length > 0);
+    JsonDocument doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+    TEST_ASSERT_EQUAL_INT(1, doc.size());
+    assertSameFrame(values, doc["metrics"].as<JsonObjectConst>(), "metrics");
+  }
+}
+
+// The longest line, every character one JSON escapes, at the largest
+// numbers and a warning, fits RemoteControl's buffer: a line that did not
+// would never reach a client.
+void test_longest_log_line_fits(void) {
+  EventLog::Entry entry;
+  entry.seq = 4294967295u;
+  entry.atMs = 4294967295u;
+  entry.level = EventLog::WARN;
+  memset(entry.text, '"', sizeof(entry.text) - 1);
+  entry.text[sizeof(entry.text) - 1] = '\0';
+  char out[protocol::LOG_LINE_MAX_BYTES];
+  TEST_ASSERT_TRUE(protocol::writeLogLine(entry, out, sizeof(out)) > 0);
+}
+
+void test_longest_metrics_fit(void) {
+  protocol::Metrics metrics;
+  metrics.uptimeS = metrics.loopHz = metrics.loopMaxMs = metrics.heapFree = metrics.heapMinFree = 4294967295u;
+  metrics.pings = metrics.silentPings = 4294967295u;
+  metrics.rssi = -2147483647 - 1;
+  metrics.clients = -2147483647 - 1;
+  char out[protocol::METRICS_MAX_BYTES];
+  TEST_ASSERT_TRUE(protocol::writeMetrics(metrics, out, sizeof(out)) > 0);
 }
 
 // An update's messages, each field as the client wrote it. None is a drive
@@ -381,6 +579,16 @@ int main(int, char**) {
   RUN_TEST(test_unknown_scheme_is_ignored);
   RUN_TEST(test_other_messages_drive);
   RUN_TEST(test_a_move_with_a_scheme_still_drives);
+  RUN_TEST(test_sonar_messages_are_read);
+  RUN_TEST(test_pad_messages_are_read);
+  RUN_TEST(test_unknown_settings_are_ignored);
+  RUN_TEST(test_settings_need_a_string_and_no_move);
+  RUN_TEST(test_setting_names);
+  RUN_TEST(test_longest_setting_fits);
+  RUN_TEST(test_log_lines_match_the_vectors);
+  RUN_TEST(test_metrics_match_the_vectors);
+  RUN_TEST(test_longest_log_line_fits);
+  RUN_TEST(test_longest_metrics_fit);
   RUN_TEST(test_update_messages_are_read);
   RUN_TEST(test_update_fields_default_to_refusals);
   RUN_TEST(test_unknown_update_actions_change_nothing);

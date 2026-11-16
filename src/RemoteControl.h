@@ -4,7 +4,9 @@
 #include <WebSocketsServer.h>
 #include <stdint.h>
 
+#include "EventLog.h"
 #include "FirmwareUpdate.h"
+#include "Gamepad.h"
 #include "Kinematics.h"
 #include "Protocol.h"
 #include "Rover.h"
@@ -46,20 +48,28 @@ class HeartbeatServer : public WebSocketsServer {
   }
 };
 
-// The WebSocket link: drive commands in, telemetry out, and firmware updates
+// The WebSocket link: drive commands and settings in; telemetry, the
+// EventLog's lines and the rover's metrics out; and firmware updates
 // (Protocol.h has the format). Network starts it once WiFi is up and calls
 // update() every loop. `scheme` is the rover's one control scheme, shared
 // with the gamepad: a client may change it, and telemetry reports it.
+//
+// Each client is sent every log line, from the oldest still held when it
+// connected, a few a pass so that a backlog never holds the loop; one that
+// falls a whole ring behind loses the lines in between, and sees the gap in
+// their numbers.
 class RemoteControl {
  public:
-  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware);
+  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware, Gamepad& gamepad,
+                EventLog& log);
 
   // Start serving. Safe to call again after a WiFi reconnect.
   void begin();
 
-  // Serve clients and broadcast telemetry, and move a firmware update on,
-  // restarting into the new image once it is due. Call every loop while
-  // online.
+  // Serve clients; send telemetry, new log lines and metrics; and move a
+  // firmware update on, restarting into the new image once it is due. Call
+  // every loop while online, with loop()'s `now`: the gaps between calls
+  // are the loop's timing, for the metrics.
   void update(uint32_t now);
 
  private:
@@ -68,13 +78,32 @@ class RemoteControl {
   void onUpdateRequest(uint8_t client, const protocol::OtaRequest& request);
   void send(const FirmwareUpdate::Reply& reply);
   void broadcastTelemetry();
+  void sendLogLines();
+  void broadcastMetrics(uint32_t now);
+  // Log that `client` sent something ignored, once per connection, so a
+  // client that sends nothing else cannot flood the log.
+  void noteIgnored(uint8_t client, const char* what);
 
   Rover& rover;
   kinematics::ControlScheme& scheme;
   FirmwareUpdate& firmware;
+  Gamepad& gamepad;
+  EventLog& log;
   HeartbeatServer server;
   bool started = false;
   uint32_t lastBroadcastMs = 0;
+
+  // Per client slot: connected, the number of the next log line it needs,
+  // and whether something it sent was ignored already this connection.
+  bool connected[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  uint32_t nextLine[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  bool ignoredOnce[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+
+  // The loop's timing since the last metrics.
+  uint32_t lastUpdateMs = 0;
+  uint32_t passes = 0;
+  uint32_t longestPassMs = 0;
+  uint32_t lastMetricsMs = 0;
 
   static constexpr int NO_CLIENT = -1;
 

@@ -44,6 +44,24 @@ constexpr int DEFAULT_MOVE_DURATION_MS = 750;
 // PWM duty autonomous exploration drives at.
 constexpr int EXPLORE_SPEED = 64;
 
+// --- The checks (SelfTest.h) ------------------------------------------------
+
+// The checks drive each wheel, and the four moves, at this PWM duty: about
+// 5 V on the TT motors from a full pack, inside their rating, and enough to
+// turn them on the stand. One step is CHECK_DRIVE_MS, then CHECK_REST_MS
+// still, so each wheel is seen to start and stop on its own.
+constexpr int CHECK_SPEED = 120;
+constexpr int CHECK_DRIVE_MS = 600;
+constexpr uint32_t CHECK_REST_MS = 400;
+
+// --- The sonar in manual mode ------------------------------------------------
+
+// The furthest either side of straight ahead a client or the pad may aim the
+// sonar (Explorer::SONAR_AIM), in degrees: servo 10 to 170, clear of the
+// servo's end stops, where a cheap servo strains and buzzes. AIM_MAX_DEG in
+// extras/joystick/js/protocol.js is the panel's copy.
+constexpr int SONAR_AIM_MAX_DEG = 80;
+
 // --- Autonomy thresholds a client displays ---------------------------------
 
 // Exploration stops a cruise when something in the rover's path is this close
@@ -55,7 +73,14 @@ constexpr float EXPLORE_GO_CM = 40.0f;
 
 // --- Gamepad ---------------------------------------------------------------
 
-constexpr int GAMEPAD_MAX_SPEED = 50;  // stick fully deflected; a full trigger pull gets half
+// The pad's top speed at boot: the stick fully deflected; a full trigger
+// pull gets half. The D-pad steps it by GAMEPAD_SPEED_STEP, between one step
+// and MOTOR_SPEED_LIMIT.
+constexpr int GAMEPAD_MAX_SPEED = 50;
+constexpr int GAMEPAD_SPEED_STEP = 25;
+// The right stick pans the sonar this many degrees a second at full
+// deflection, slower nearer the centre.
+constexpr int GAMEPAD_PAN_DEG_PER_S = 90;
 // Of the stick's +-127. The triggers' 0..255 share it: 8% of a pull.
 constexpr int GAMEPAD_DEADZONE = 20;
 // A held stick is re-sent this often, well inside DEFAULT_MOVE_DURATION_MS,
@@ -79,6 +104,8 @@ constexpr uint32_t GAMEPAD_LED_MIN_INTERVAL_MS = 250;
 constexpr uint32_t SERIAL_BAUD = 115200;
 constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in the panel's js/protocol.js, DEFAULT_PORT in drive.py
 constexpr uint32_t TELEMETRY_INTERVAL_MS = 500;  // TELEMETRY_MS in the panel's js/protocol.js
+// The rover's metrics (protocol::writeMetrics) go out this often.
+constexpr uint32_t METRICS_INTERVAL_MS = 2000;
 constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup() only
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;
 constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 10000;

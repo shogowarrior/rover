@@ -1,10 +1,14 @@
 #include <unity.h>
 
+#include <string.h>
+
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "../fakes/FakeHardware.h"
 #include "../support/Loop.h"
+#include "EventLog.h"
 #include "Explorer.h"
 #include "Timing.h"
 
@@ -33,6 +37,7 @@ bool isRotation(MoveCode move) { return move == ROTATE_CLOCKWISE || move == ROTA
 // motion as a deadline, so `motorsIdle` goes true when the motion ends.
 struct Harness {
   FakeScanner scanner;
+  EventLog log;
   Explorer explorer;
   uint32_t now = 0;
   bool moving = false;
@@ -53,7 +58,7 @@ struct Harness {
   uint32_t forwardRunMs = 0;  // how long the current forward run has lasted
   MoveCode lastMove = STOP;
 
-  explicit Harness(const ExploreParams& params = ExploreParams()) : explorer(scanner, params) {
+  explicit Harness(const ExploreParams& params = ExploreParams()) : explorer(scanner, log, params) {
     scanner.clock = &now;
     explorer.reset(now);
   }
@@ -250,7 +255,7 @@ void test_first_sweep_measures_every_bearing_before_moving(void) {
 // the end of one sweep and the start of the next.
 void test_consecutive_sweeps_alternate_direction(void) {
   Harness h;
-  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
+  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now, Explorer::SONAR_SWEEP, 0); });
   TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 10);
   const int expected[10] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG,
                             RIGHT_DEG, FRONT_RIGHT_DEG, FRONT_DEG, FRONT_LEFT_DEG, LEFT_DEG};
@@ -1154,32 +1159,105 @@ void test_a_sweep_that_hears_an_echo_resets_the_silent_count(void) {
   TEST_ASSERT_FALSE(everHalted);
 }
 
-// --- manual mode ---------------------------------------------------------------
+// --- manual mode's sonar -----------------------------------------------------
 
-// Held straight ahead, still, measuring the front alone.
-void test_look_ahead_holds_the_sonar_straight_ahead(void) {
+// The servo angle the fake sees for a rover-frame angle (positive left).
+int servoFor(int deg) { return FRONT_DEG - deg; }
+
+void survey(Harness& h, uint32_t ms, Explorer::SonarMode mode, int aimDeg) {
+  advance(h.now, ms, 5, [&h, mode, aimDeg](uint32_t now) { h.explorer.survey(now, mode, aimDeg); });
+}
+
+// The angles pinged from the `from`th ping on.
+std::vector<int> pingsFrom(const Harness& h, size_t from) {
+  return std::vector<int>(h.scanner.pingAngles.begin() + static_cast<long>(from), h.scanner.pingAngles.end());
+}
+
+bool pingedAt(const std::vector<int>& angles, int servo) {
+  for (int angle : angles) {
+    if (angle == servo) return true;
+  }
+  return false;
+}
+
+// FRONT ignores the aim it is handed: it is always straight ahead.
+void test_front_holds_the_sonar_straight_ahead(void) {
   Harness h;
-  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
-  TEST_ASSERT_TRUE(h.explorer.hasScan());
-  const size_t pings = h.scanner.pingAngles.size();
-  const size_t aims = h.scanner.aims.size();
-  h.scanner.setArc(FRONT_DEG, FRONT_DEG, 44.0f);
-  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.lookAhead(now); });
-  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() - pings >= 10);
-  for (size_t i = pings; i < h.scanner.pingAngles.size(); i++) TEST_ASSERT_EQUAL_INT(FRONT_DEG, h.scanner.pingAngles[i]);
-  TEST_ASSERT_TRUE(h.scanner.aims.size() - aims <= 1);
-  TEST_ASSERT_EQUAL_FLOAT(44.0f, h.explorer.distanceCm(Explorer::FRONT));
+  survey(h, 2000, Explorer::SONAR_FRONT, 45);
+  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 10);
+  for (int angle : h.scanner.pingAngles) TEST_ASSERT_EQUAL_INT(FRONT_DEG, angle);
+  // Spaced as a sweep's pings are, for the echo to die away.
   for (size_t i = 1; i < h.scanner.pingTimes.size(); i++) {
     TEST_ASSERT_TRUE(h.scanner.pingTimes[i] - h.scanner.pingTimes[i - 1] >=
                      static_cast<uint32_t>(ExploreParams().pingIntervalMs));
   }
 }
 
-// update() after a look starts with a whole sweep before any motion.
+void test_aim_points_the_sonar_where_asked(void) {
+  Harness h;
+  h.scanner.setArc(servoFor(30), servoFor(30), 42.0f);
+  survey(h, 1000, Explorer::SONAR_AIM, 30);
+  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() >= 5);
+  for (int angle : h.scanner.pingAngles) TEST_ASSERT_EQUAL_INT(servoFor(30), angle);
+  const Explorer::Look& look = h.explorer.lastLook();
+  TEST_ASSERT_TRUE(look.valid);
+  TEST_ASSERT_EQUAL_INT(30, look.angleDeg);
+  TEST_ASSERT_EQUAL_FLOAT(42.0f, look.cm);
+}
+
+// A new aim turns the servo at once and waits for it to settle: no ping at
+// the old angle after the change, and none before the servo could get there.
+void test_a_new_aim_moves_the_sonar_before_its_next_ping(void) {
+  Harness h;
+  survey(h, 600, Explorer::SONAR_AIM, 30);
+  const size_t before = h.scanner.pingAngles.size();
+  const uint32_t changedAt = h.now;
+  survey(h, 600, Explorer::SONAR_AIM, -30);
+  const std::vector<int> after = pingsFrom(h, before);
+  TEST_ASSERT_TRUE(after.size() >= 2);
+  for (int angle : after) TEST_ASSERT_EQUAL_INT(servoFor(-30), angle);
+  TEST_ASSERT_EQUAL_INT(servoFor(-30), h.scanner.aims.back());
+  TEST_ASSERT_TRUE(h.scanner.pingTimes[before] - changedAt >= 60);
+}
+
+// The scan's bearings stay as last measured, but a look along one of them
+// keeps that one live: FRONT keeps the front's reading, as a sweep would.
+void test_a_look_along_a_bearing_keeps_its_reading_live(void) {
+  Harness h;
+  survey(h, 2000, Explorer::SONAR_SWEEP, 0);
+  TEST_ASSERT_TRUE(h.explorer.hasScan());
+  h.scanner.setArc(FRONT_DEG, FRONT_DEG, 33.0f);
+  h.scanner.setArc(servoFor(20), servoFor(20), 12.0f);
+  survey(h, 500, Explorer::SONAR_FRONT, 0);
+  TEST_ASSERT_EQUAL_FLOAT(33.0f, h.explorer.distanceCm(Explorer::FRONT));
+  // A look between bearings is no bearing's reading.
+  survey(h, 500, Explorer::SONAR_AIM, 20);
+  TEST_ASSERT_EQUAL_FLOAT(12.0f, h.explorer.lastLook().cm);
+  TEST_ASSERT_EQUAL_FLOAT(200.0f, h.explorer.distanceCm(Explorer::FRONT_LEFT));
+  TEST_ASSERT_EQUAL_FLOAT(33.0f, h.explorer.distanceCm(Explorer::FRONT));
+  // A look along the front-left bearing is its reading.
+  h.scanner.setArc(FRONT_LEFT_DEG, FRONT_LEFT_DEG, 21.0f);
+  survey(h, 500, Explorer::SONAR_AIM, h.explorer.angleOf(Explorer::FRONT_LEFT));
+  TEST_ASSERT_EQUAL_FLOAT(21.0f, h.explorer.distanceCm(Explorer::FRONT_LEFT));
+}
+
+void test_sweep_after_a_look_measures_every_bearing_again(void) {
+  Harness h;
+  survey(h, 500, Explorer::SONAR_FRONT, 0);
+  const size_t before = h.scanner.pingAngles.size();
+  survey(h, 2000, Explorer::SONAR_SWEEP, 0);
+  const std::vector<int> after = pingsFrom(h, before);
+  const int bearings[] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG};
+  for (int servo : bearings) TEST_ASSERT_TRUE(pingedAt(after, servo));
+  TEST_ASSERT_TRUE(h.explorer.hasScan());
+}
+
+// update() after a held look starts with a whole sweep: a decision must
+// never rest on bearings measured before the look.
 void test_exploring_after_a_look_sweeps_before_it_moves(void) {
   Harness h;
-  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
-  advance(h.now, 500, 5, [&h](uint32_t now) { h.explorer.lookAhead(now); });
+  survey(h, 2000, Explorer::SONAR_SWEEP, 0);
+  survey(h, 500, Explorer::SONAR_FRONT, 0);
   const size_t before = h.scanner.pingAngles.size();
   h.run(3000);
   size_t firstMove = h.motions.size();
@@ -1190,12 +1268,87 @@ void test_exploring_after_a_look_sweeps_before_it_moves(void) {
     }
   }
   TEST_ASSERT_TRUE(firstMove < h.motions.size());
-  bool seen[181] = {false};
+  std::vector<int> beforeMoving;
   for (size_t i = before; i < h.scanner.pingAngles.size(); i++) {
-    if (h.scanner.pingTimes[i] <= h.motionTimes[firstMove]) seen[h.scanner.pingAngles[i]] = true;
+    if (h.scanner.pingTimes[i] <= h.motionTimes[firstMove]) beforeMoving.push_back(h.scanner.pingAngles[i]);
   }
   const int bearings[] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG};
-  for (int servo : bearings) TEST_ASSERT_TRUE(seen[servo]);
+  for (int servo : bearings) TEST_ASSERT_TRUE(pingedAt(beforeMoving, servo));
+}
+
+void test_pings_and_silent_pings_are_counted(void) {
+  Harness h;
+  h.scanner.setArc(FRONT_DEG, FRONT_DEG, -1.0f);
+  survey(h, 1000, Explorer::SONAR_FRONT, 0);
+  TEST_ASSERT_TRUE(h.scanner.pings > 0);
+  TEST_ASSERT_EQUAL_UINT32(h.scanner.pings, h.explorer.pingCount());
+  TEST_ASSERT_EQUAL_UINT32(h.scanner.pings, h.explorer.silentPingCount());
+  const uint32_t silent = h.explorer.silentPingCount();
+  h.scanner.setAll(200.0f);
+  survey(h, 1000, Explorer::SONAR_FRONT, 0);
+  TEST_ASSERT_EQUAL_UINT32(h.scanner.pings, h.explorer.pingCount());
+  TEST_ASSERT_EQUAL_UINT32(silent, h.explorer.silentPingCount());
+}
+
+// --- the log -----------------------------------------------------------------
+
+// Every line the log still holds, oldest first.
+std::vector<std::string> lines(const EventLog& log, EventLog::Level* only = nullptr) {
+  std::vector<std::string> out;
+  for (uint32_t seq = log.oldestSeq(); seq != log.nextSeq(); seq++) {
+    const EventLog::Entry* entry = log.from(seq);
+    if (only == nullptr || entry->level == *only) out.push_back(entry->text);
+  }
+  return out;
+}
+
+bool logged(const EventLog& log, const char* text) {
+  for (const std::string& line : lines(log)) {
+    if (line.find(text) != std::string::npos) return true;
+  }
+  return false;
+}
+
+void test_each_decision_is_logged_with_what_it_rests_on(void) {
+  Harness h;
+  h.scanner.setArc(LEFT_DEG, LEFT_DEG, -1.0f);
+  h.run(1500);
+  TEST_ASSERT_TRUE(logged(h.log, "Sweep (cm): L -, FL 200, F 200, FR 200, R 200"));
+  TEST_ASSERT_TRUE(logged(h.log, "Cruise: the path is clear"));
+}
+
+void test_a_blocked_path_logs_the_turn_and_why(void) {
+  Harness h;
+  h.scanner.setArc(60, 120, 20.0f);
+  h.scanner.setArc(0, 59, 150.0f);
+  h.scanner.setArc(121, 180, 100.0f);
+  h.run(3000);
+  TEST_ASSERT_TRUE(logged(h.log, "Turn left"));
+  TEST_ASSERT_TRUE(logged(h.log, "the path is blocked"));
+  TEST_ASSERT_FALSE(logged(h.log, "Cruise: the path is clear"));
+}
+
+void test_a_silent_sensor_halts_with_a_warning(void) {
+  Harness h;
+  h.scanner.setAll(-1.0f);
+  h.run(20000);
+  EventLog::Level warn = EventLog::WARN;
+  bool halted = false;
+  for (const std::string& line : lines(h.log, &warn)) {
+    if (line.find("Halted: sensor silent") == 0) halted = true;
+  }
+  TEST_ASSERT_TRUE(halted);
+  TEST_ASSERT_TRUE(logged(h.log, "No echo at any bearing"));
+}
+
+// Manual mode's sonar decides nothing, so it says nothing: a sweep a second
+// would push every line worth reading out of the ring.
+void test_surveying_logs_nothing(void) {
+  Harness h;
+  survey(h, 5000, Explorer::SONAR_SWEEP, 0);
+  survey(h, 1000, Explorer::SONAR_FRONT, 0);
+  survey(h, 1000, Explorer::SONAR_AIM, -40);
+  TEST_ASSERT_EQUAL_UINT32(h.log.oldestSeq(), h.log.nextSeq());
 }
 
 // --- telemetry ---------------------------------------------------------------
@@ -1265,9 +1418,19 @@ int main(int, char**) {
   RUN_TEST(test_silent_sensor_halts_without_ever_driving_forward);
   RUN_TEST(test_echo_after_silence_resumes_exploring);
   RUN_TEST(test_a_sweep_that_hears_an_echo_resets_the_silent_count);
-  // manual mode
-  RUN_TEST(test_look_ahead_holds_the_sonar_straight_ahead);
+  // manual mode's sonar
+  RUN_TEST(test_front_holds_the_sonar_straight_ahead);
+  RUN_TEST(test_aim_points_the_sonar_where_asked);
+  RUN_TEST(test_a_new_aim_moves_the_sonar_before_its_next_ping);
+  RUN_TEST(test_a_look_along_a_bearing_keeps_its_reading_live);
+  RUN_TEST(test_sweep_after_a_look_measures_every_bearing_again);
   RUN_TEST(test_exploring_after_a_look_sweeps_before_it_moves);
+  RUN_TEST(test_pings_and_silent_pings_are_counted);
+  // the log
+  RUN_TEST(test_each_decision_is_logged_with_what_it_rests_on);
+  RUN_TEST(test_a_blocked_path_logs_the_turn_and_why);
+  RUN_TEST(test_a_silent_sensor_halts_with_a_warning);
+  RUN_TEST(test_surveying_logs_nothing);
   // telemetry
   RUN_TEST(test_phase_names);
   return UNITY_END();

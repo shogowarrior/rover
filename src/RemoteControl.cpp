@@ -1,5 +1,7 @@
 #include "RemoteControl.h"
 
+#include <WiFi.h>
+
 #include "Timing.h"
 #include "Tuning.h"
 
@@ -24,12 +26,29 @@ constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
 
+// Log lines sent to each client in one pass. A client that has just
+// connected is owed up to EventLog::CAPACITY of them: sent at once, about
+// 5 KB, they could fill the socket's send buffer and hold the loop.
+constexpr int LOG_LINES_PER_PASS = 2;
+
 }  // namespace
 
-RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware)
-    : rover(rover), scheme(scheme), firmware(firmware), server(tuning::WEBSOCKET_PORT) {}
+RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware,
+                             Gamepad& gamepad, EventLog& log)
+    : rover(rover),
+      scheme(scheme),
+      firmware(firmware),
+      gamepad(gamepad),
+      log(log),
+      server(tuning::WEBSOCKET_PORT) {}
 
 void RemoteControl::begin() {
+  // The loop's timing starts afresh with the link: the time offline is not
+  // a pass.
+  lastUpdateMs = millis();
+  lastMetricsMs = lastUpdateMs;
+  passes = 0;
+  longestPassMs = 0;
   if (started) return;
   server.begin();
   server.onEvent([this](uint8_t client, WStype_t type, uint8_t* payload, size_t length) {
@@ -41,18 +60,24 @@ void RemoteControl::begin() {
 }
 
 void RemoteControl::update(uint32_t now) {
+  const uint32_t pass = timing::since(now, lastUpdateMs);
+  if (pass > longestPassMs) longestPassMs = pass;
+  passes++;
+  lastUpdateMs = now;
+
   if (firmware.restartDue(now)) {
     // At rest already: restartDue() waits for it. Standing down as well
     // writes the release once more on the way into the reset, as an
     // ArduinoOTA upload's start does.
-    rover.standDown(now);
-    Serial.println("Restarting into the new firmware.");
+    rover.standDown(now, "restarting into the new firmware");
     ESP.restart();
   }
   send(firmware.update(now));
 
   server.loop();
+  sendLogLines();
 
+  if (timing::since(now, lastMetricsMs) >= tuning::METRICS_INTERVAL_MS) broadcastMetrics(now);
   if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
   lastBroadcastMs = now;
   if (server.connectedClients() > 0) broadcastTelemetry();
@@ -84,21 +109,30 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
       // which can count a miss after the disconnect cleared them, for the
       // slot's next client.
       server.forgetMissedPongs(client);
+      if (client < WEBSOCKETS_SERVER_CLIENT_MAX) {
+        // Every line still held, from the oldest: why the rover is as it is.
+        connected[client] = true;
+        nextLine[client] = log.oldestSeq();
+        ignoredOnce[client] = false;
+      }
       const IPAddress remote = server.remoteIP(client);
-      Serial.printf("[%u] Connected from %d.%d.%d.%d\n", client, remote[0], remote[1],
-                    remote[2], remote[3]);
+      log.add(millis(), EventLog::INFO, "Link: client %u connected from %d.%d.%d.%d", client, remote[0],
+              remote[1], remote[2], remote[3]);
       break;
     }
 
     case WStype_DISCONNECTED:
-      Serial.printf("[%u] Disconnected\n", client);
+      if (client < WEBSOCKETS_SERVER_CLIENT_MAX) connected[client] = false;
       server.forgetMissedPongs(client);  // the slot's next client starts afresh
       firmware.disconnected(client);
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
         // stopping leaves the rover driving on its last instruction.
         driver = NO_CLIENT;
+        log.add(millis(), EventLog::WARN, "Link: client %u, the driver, disconnected: stopped", client);
         rover.stop(millis());
+      } else {
+        log.add(millis(), EventLog::INFO, "Link: client %u disconnected", client);
       }
       break;
 
@@ -109,7 +143,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
 
 void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t length) {
   if (length > protocol::COMMAND_MAX_BYTES) {
-    Serial.printf("[%u] Ignored a %u-byte message\n", client, static_cast<unsigned>(length));
+    noteIgnored(client, "a message too long to read");
     return;
   }
 
@@ -118,28 +152,46 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
   // on the payload happening to be NUL-terminated.
   const DeserializationError error = deserializeJson(input, payload, length);
   if (error) {
-    Serial.printf("[%u] Bad JSON: %s\n", client, error.c_str());
+    noteIgnored(client, "a message that is not JSON");
     return;
   }
 
+  const uint32_t now = millis();
   const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
   switch (message.kind) {
     case protocol::Message::DRIVE:
+      if (driver != client) log.add(now, EventLog::INFO, "Link: client %u took control", client);
       driver = client;
-      rover.command(message.command.move, message.command.speed, message.command.durationMs,
-                    millis());
+      rover.command(message.command.move, message.command.speed, message.command.durationMs, now);
       break;
+    // Settings take no control: an exploring rover explores on.
     case protocol::Message::SET_SCHEME:
-      scheme = message.scheme;  // takes no control: an exploring rover explores on
-      Serial.printf("[%u] Control scheme %s\n", client, protocol::schemeName(scheme));
+      if (scheme != message.scheme) {
+        log.add(now, EventLog::INFO, "Scheme %s, from client %u", protocol::schemeName(message.scheme), client);
+      }
+      scheme = message.scheme;
+      break;
+    case protocol::Message::SET_SONAR:
+      rover.setSonar(message.sonar, message.hasAim ? message.aimDeg : rover.status().aimDeg, now);
+      break;
+    case protocol::Message::SET_PAD:
+      gamepad.setEnabled(message.padOn, now);
       break;
     case protocol::Message::IGNORE:
-      Serial.printf("[%u] Ignored an unknown control scheme\n", client);
+      noteIgnored(client, "a setting with a value it does not know");
       break;
     case protocol::Message::OTA:
       onUpdateRequest(client, message.ota);  // its strings live in `input`
       break;
   }
+}
+
+void RemoteControl::noteIgnored(uint8_t client, const char* what) {
+  if (client < WEBSOCKETS_SERVER_CLIENT_MAX) {
+    if (ignoredOnce[client]) return;
+    ignoredOnce[client] = true;
+  }
+  log.add(millis(), EventLog::WARN, "Link: ignored %s from client %u", what, client);
 }
 
 void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& request) {
@@ -155,7 +207,7 @@ void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& 
       send(firmware.cancel(client));
       break;
     case protocol::OtaRequest::UNKNOWN:
-      Serial.printf("[%u] Ignored an unknown update message\n", client);
+      noteIgnored(client, "an update message it does not know");
       break;
   }
 }
@@ -166,22 +218,65 @@ void RemoteControl::send(const FirmwareUpdate::Reply& reply) {
   const size_t length = protocol::writeOtaReply(reply, frame, sizeof(frame));
   if (length == 0) return;  // nothing to say
   if (reply.kind == FirmwareUpdate::Reply::FAILED) {
-    Serial.printf("[%u] Firmware update failed: %s\n", reply.client, reply.reason);
+    log.add(millis(), EventLog::WARN, "Update failed: %s", reply.reason);
+  } else if (reply.kind == FirmwareUpdate::Reply::DONE) {
+    log.add(millis(), EventLog::INFO, "Update: the new firmware is written; restarting once still");
   }
   server.sendTXT(reply.client, frame, length);
 }
 
 void RemoteControl::broadcastTelemetry() {
+  protocol::Report report;
+  report.status = rover.status();
+  report.scheme = scheme;
+  report.pad = gamepad.state();
+  report.temperatureC = temperatureRead();
+  report.firmware = firmware.running();
   char frame[protocol::TELEMETRY_MAX_BYTES];
-  const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), firmware.running(),
-                                                 frame, sizeof(frame));
+  const size_t length = protocol::writeTelemetry(report, frame, sizeof(frame));
   if (length == 0) {
     // Clients would only see telemetry freeze. Say why once, not every
     // TELEMETRY_INTERVAL_MS.
     static bool reported = false;
-    if (!reported) Serial.println("Telemetry outgrew protocol::TELEMETRY_MAX_BYTES: frames that do not fit are not sent.");
+    if (!reported) log.add(millis(), EventLog::WARN, "Telemetry outgrew TELEMETRY_MAX_BYTES: not sent");
     reported = true;
     return;
   }
   server.broadcastTXT(frame, length);
+}
+
+void RemoteControl::sendLogLines() {
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) {
+    if (!connected[client]) continue;
+    for (int sent = 0; sent < LOG_LINES_PER_PASS; sent++) {
+      const EventLog::Entry* entry = log.from(nextLine[client]);
+      if (entry == nullptr) break;
+      nextLine[client] = entry->seq + 1;
+      char frame[protocol::LOG_LINE_MAX_BYTES];
+      const size_t length = protocol::writeLogLine(*entry, frame, sizeof(frame));
+      if (length > 0) server.sendTXT(client, frame, length);
+    }
+  }
+}
+
+void RemoteControl::broadcastMetrics(uint32_t now) {
+  const uint32_t interval = timing::since(now, lastMetricsMs);
+  const Rover::Status status = rover.status();
+  protocol::Metrics metrics;
+  metrics.uptimeS = now / 1000;
+  metrics.loopHz = interval > 0 ? static_cast<uint32_t>(static_cast<uint64_t>(passes) * 1000 / interval) : 0;
+  metrics.loopMaxMs = longestPassMs;
+  metrics.heapFree = ESP.getFreeHeap();
+  metrics.heapMinFree = ESP.getMinFreeHeap();
+  metrics.rssi = WiFi.RSSI();
+  metrics.clients = server.connectedClients();
+  metrics.pings = status.pings;
+  metrics.silentPings = status.silentPings;
+  lastMetricsMs = now;
+  passes = 0;
+  longestPassMs = 0;
+  if (metrics.clients == 0) return;
+  char frame[protocol::METRICS_MAX_BYTES];
+  const size_t length = protocol::writeMetrics(metrics, frame, sizeof(frame));
+  if (length > 0) server.broadcastTXT(frame, length);
 }

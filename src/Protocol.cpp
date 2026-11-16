@@ -57,6 +57,26 @@ bool readOtaRequest(JsonVariantConst json, OtaRequest& request) {
   return json["ota"].is<const char*>() && json["move"].isNull();
 }
 
+// Whether `json` is a configuration message keyed `key`: a string there and
+// no "move", so a client that only changes a setting never takes control
+// from an exploring rover.
+bool isSetting(JsonVariantConst json, const char* key) {
+  return json[key].is<const char*>() && json["move"].isNull();
+}
+
+// The value of `count` choices whose name `name()` gives is `text`, or false.
+template <typename T>
+bool readName(const char* text, T& value, int count, const char* (*name)(T)) {
+  for (int i = 0; i < count; i++) {
+    const T candidate = static_cast<T>(i);
+    if (strcmp(text, name(candidate)) == 0) {
+      value = candidate;
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 Message readMessage(JsonVariantConst json) {
@@ -64,21 +84,33 @@ Message readMessage(JsonVariantConst json) {
   message.kind = Message::DRIVE;
   message.command = readCommand(json);
   message.scheme = kinematics::SCHEME_NORMAL;
+  message.sonar = Explorer::SONAR_SWEEP;
+  message.hasAim = false;
+  message.aimDeg = 0;
+  message.padOn = true;
   if (readOtaRequest(json, message.ota)) {
     message.kind = Message::OTA;
     return message;
   }
 
-  // A scheme message is configuration, not a command: a client that only
-  // switches layouts must not take control from an exploring rover.
-  if (json["scheme"].is<const char*>() && json["move"].isNull()) {
-    const char* name = json["scheme"];
-    if (strcmp(name, schemeName(kinematics::SCHEME_NORMAL)) == 0) {
-      message.kind = Message::SET_SCHEME;
-      message.scheme = kinematics::SCHEME_NORMAL;
-    } else if (strcmp(name, schemeName(kinematics::SCHEME_ADVANCED)) == 0) {
-      message.kind = Message::SET_SCHEME;
-      message.scheme = kinematics::SCHEME_ADVANCED;
+  if (isSetting(json, "scheme")) {
+    message.kind = readName<kinematics::ControlScheme>(json["scheme"], message.scheme, 2, schemeName)
+                       ? Message::SET_SCHEME
+                       : Message::IGNORE;
+  } else if (isSetting(json, "sonar")) {
+    message.kind = readName<Explorer::SonarMode>(json["sonar"], message.sonar, 3, sonarName)
+                       ? Message::SET_SONAR
+                       : Message::IGNORE;
+    // A number only; Rover::setSonar() clamps it.
+    message.hasAim = json["aim"].is<int>();
+    message.aimDeg = json["aim"] | 0;
+  } else if (isSetting(json, "pad")) {
+    const char* name = json["pad"];
+    message.kind = Message::SET_PAD;
+    if (strcmp(name, "ON") == 0) {
+      message.padOn = true;
+    } else if (strcmp(name, "OFF") == 0) {
+      message.padOn = false;
     } else {
       message.kind = Message::IGNORE;
     }
@@ -90,6 +122,36 @@ Message readMessage(JsonVariantConst json) {
 // these names, and tools/check_protocol.py checks them.
 const char* schemeName(kinematics::ControlScheme scheme) {
   return scheme == kinematics::SCHEME_ADVANCED ? "ADVANCED" : "NORMAL";
+}
+
+// SONAR_MODES in extras/joystick/js/protocol.js copies these names, and
+// tools/check_protocol.py checks them.
+const char* sonarName(Explorer::SonarMode mode) {
+  switch (mode) {
+    case Explorer::SONAR_FRONT:
+      return "FRONT";
+    case Explorer::SONAR_AIM:
+      return "AIM";
+    case Explorer::SONAR_SWEEP:
+    default:
+      return "SWEEP";
+  }
+}
+
+// PAD_STATES in extras/joystick/js/protocol.js copies these names, and
+// tools/check_protocol.py checks them.
+const char* padName(PadState state) {
+  switch (state) {
+    case PAD_OFF:
+      return "OFF";
+    case PAD_WAITING:
+      return "WAITING";
+    case PAD_CONNECTED:
+      return "CONNECTED";
+    case PAD_ABSENT:
+    default:
+      return nullptr;
+  }
 }
 
 bool originAllowed(const char* origin) {
@@ -145,8 +207,8 @@ size_t writeOtaReply(const FirmwareUpdate::Reply& reply, char* out, size_t capac
   return serializeJson(doc, out, capacity);
 }
 
-size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme scheme,
-                      float temperatureC, const char* firmware, char* out, size_t capacity) {
+size_t writeTelemetry(const Report& report, char* out, size_t capacity) {
+  const Rover::Status& status = report.status;
   // Built fresh each time from typed state: a long-lived JsonDocument used as
   // a state store is what let stale distances and move names leak into
   // telemetry before.
@@ -157,10 +219,15 @@ size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme sch
   doc["mode"] = status.mode == Rover::MODE_AUTONOMOUS ? "AUTONOMOUS" : "MANUAL";
   doc["move"] = moveName(status.move);
   doc["moving"] = status.moving;
-  doc["temperature"] = temperatureC;
+  doc["temperature"] = report.temperatureC;
   doc["motorsReady"] = status.motorsReady;
-  doc["scheme"] = schemeName(scheme);
-  doc["firmware"] = firmware;
+  doc["scheme"] = schemeName(report.scheme);
+  doc["firmware"] = report.firmware;
+  doc["sonar"] = sonarName(status.sonar);
+  if (status.sonar == Explorer::SONAR_AIM) doc["aim"] = status.aimDeg;
+  if (status.hasAimCm) doc["aimCm"] = status.aimCm;
+  if (status.check != nullptr) doc["check"] = status.check;
+  if (padName(report.pad) != nullptr) doc["pad"] = padName(report.pad);
   if (status.phase != nullptr) doc["phase"] = status.phase;
   if (status.haltReason != nullptr) doc["halt"] = status.haltReason;
 
@@ -172,6 +239,34 @@ size_t writeTelemetry(const Rover::Status& status, kinematics::ControlScheme sch
     doc["distanceRight"] = status.scanCm[Explorer::RIGHT];
   }
 
+  if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
+  return serializeJson(doc, out, capacity);
+}
+
+size_t writeLogLine(const EventLog::Entry& entry, char* out, size_t capacity) {
+  JsonDocument doc;
+  // As a pointer: as an array, ArduinoJson would take the whole buffer to be
+  // a string literal's.
+  doc["log"] = static_cast<const char*>(entry.text);
+  doc["seq"] = entry.seq;
+  doc["t"] = entry.atMs;
+  if (entry.level == EventLog::WARN) doc["warn"] = true;
+  if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
+  return serializeJson(doc, out, capacity);
+}
+
+size_t writeMetrics(const Metrics& metrics, char* out, size_t capacity) {
+  JsonDocument doc;
+  JsonObject values = doc["metrics"].to<JsonObject>();
+  values["upS"] = metrics.uptimeS;
+  values["loopHz"] = metrics.loopHz;
+  values["loopMaxMs"] = metrics.loopMaxMs;
+  values["heap"] = metrics.heapFree;
+  values["heapMin"] = metrics.heapMinFree;
+  values["rssi"] = metrics.rssi;
+  values["clients"] = metrics.clients;
+  values["pings"] = metrics.pings;
+  values["noEcho"] = metrics.silentPings;
   if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
   return serializeJson(doc, out, capacity);
 }

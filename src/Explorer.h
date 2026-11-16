@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "EventLog.h"
 #include "Hardware.h"
 #include "MoveCodes.h"
 #include "Tuning.h"
@@ -11,7 +12,8 @@
 // Pure core (AGENTS.md, Architecture): the sonar is reached through
 // RangeScanner, and motion leaves as a request that Rover carries out.
 // Host-tested in test/test_explorer. AGENTS.md "How autonomy works" describes
-// each phase; ExploreParams below holds every threshold.
+// each phase; ExploreParams below holds every threshold. Each reading it
+// decides on, and each decision with its reason, goes in the EventLog.
 
 struct ExploreParams {
   // Distances are measured from the sensor. Hysteresis on the rover's path:
@@ -73,10 +75,17 @@ struct ExploreParams {
 
 class Explorer {
  public:
-  // LOOK is manual mode's alone: the sonar held straight ahead
-  // (lookAhead()). Telemetry names the phase only while exploring, so it is
-  // never reported.
+  // LOOK is manual mode's alone: the sonar held at one angle (survey()).
+  // Telemetry names the phase only while exploring, so it is never reported.
   enum Phase { SWEEP, CRUISE, TURN, BACKOFF, SIDESTEP, HALTED, LOOK };
+
+  // Where manual mode points the sonar (survey()). Exploring always sweeps
+  // its own way. Protocol.cpp names them for the wire.
+  enum SonarMode {
+    SONAR_SWEEP,  // back and forth over the five bearings, as exploring does
+    SONAR_FRONT,  // straight ahead, all the time
+    SONAR_AIM,    // at an angle a client or the pad chose
+  };
 
   // The five sweep bearings, left to right.
   enum Bearing { LEFT, FRONT_LEFT, FRONT, FRONT_RIGHT, RIGHT, BEARING_COUNT };
@@ -88,7 +97,15 @@ class Explorer {
     int durationMs = 0;
   };
 
-  explicit Explorer(RangeScanner& scanner, const ExploreParams& params = ExploreParams());
+  // The latest ping: where the sonar pointed (degrees, positive left) and
+  // what it heard, normalised (no echo = DISTANCE_FAR_CM).
+  struct Look {
+    bool valid = false;  // false until the first ping
+    int angleDeg = 0;
+    float cm = 0;
+  };
+
+  Explorer(RangeScanner& scanner, EventLog& log, const ExploreParams& params = ExploreParams());
 
   // Start over from a fresh sweep, forgetting everything this stretch of
   // exploring had learned (turn commitments, counters, a halt).
@@ -98,15 +115,16 @@ class Explorer {
   // requested motion has ended.
   Motion update(uint32_t now, bool motorsIdle);
 
-  // Keep sweeping and measuring without ever asking to move.
-  void survey(uint32_t now);
-
-  // Hold the sonar straight ahead, still, and keep measuring the front,
-  // without ever asking to move. Manual mode runs this once every bearing
-  // has been measured (survey() until then), so the front's reading stays
-  // live while a person drives, and the servo does not sweep back and forth
-  // on a rover at rest. update() starts from a fresh sweep after it.
-  void lookAhead(uint32_t now);
+  // Keep measuring without ever asking to move. Manual mode runs this so
+  // the telemetry stays live while a person drives. Until every bearing has
+  // been measured it sweeps, whatever `mode` says, so the scan is whole;
+  // then as `mode` says: sweeping the five bearings, or holding the sonar
+  // still, straight ahead or at `aimDeg` (rover frame, positive left), so
+  // the servo does not swing back and forth on a rover at rest. A held look
+  // at one of the sweep's bearings keeps that bearing's reading live too:
+  // Front keeps the front's. update() starts from a fresh sweep after it.
+  // Logs nothing: the log is for what the rover decides.
+  void survey(uint32_t now, SonarMode mode, int aimDeg);
 
   Phase phase() const { return currentPhase; }
   const char* phaseName() const;
@@ -116,6 +134,15 @@ class Explorer {
   bool hasScan() const;
   // Latest distance at a bearing, normalised (no echo = DISTANCE_FAR_CM).
   float distanceCm(Bearing bearing) const { return scan.cm[bearing]; }
+
+  // The rover-frame angle a sweep bearing measures: degrees, positive left.
+  int angleOf(Bearing bearing) const;
+
+  const Look& lastLook() const { return look; }
+  // Every ping since boot, and those that heard no echo: a dead or
+  // unplugged sensor hears none (the panel's metrics).
+  uint32_t pingCount() const { return pings; }
+  uint32_t silentPingCount() const { return silentPings; }
 
  private:
   enum TurnStage { ROTATING, SETTLING, LOOKING };
@@ -204,10 +231,11 @@ class Explorer {
   Motion decide(uint32_t now);
   Motion startCruise(uint32_t now);
   // `direction` is +1 (left, counter-clockwise) or -1 (right), never 0.
-  Motion startTurn(uint32_t now, int direction, int minSteps, bool untilClear);
-  Motion turnOrSidestep(uint32_t now, int direction, int minSteps, bool untilClear);
+  // `why` finishes the log's line about it.
+  Motion startTurn(uint32_t now, int direction, int minSteps, bool untilClear, const char* why);
+  Motion turnOrSidestep(uint32_t now, int direction, int minSteps, bool untilClear, const char* why);
   Motion startSidestep(uint32_t now, int direction);
-  Motion startBackoff(uint32_t now);
+  Motion startBackoff(uint32_t now, const char* why);
   Motion escapeStuck(uint32_t now);
   Motion halt(uint32_t now, const char* reason);
   Motion retryAfterHalt(uint32_t now);
@@ -223,12 +251,15 @@ class Explorer {
   bool motionDone(uint32_t now, bool motorsIdle) const;
 
   // Looking and measuring.
+  void lookAt(uint32_t now, int angleDeg);
   void aim(uint32_t now, int angleDeg);
   bool readyToPing(uint32_t now) const;
   float ping(uint32_t now);
   void record(Bearing bearing, float rawCm);
   Bearing sweepBearing(int step) const;
-  int angleOf(Bearing bearing) const;
+  // The sweep bearing at `angleDeg`, if one is: false between them.
+  bool bearingAt(int angleDeg, Bearing& bearing) const;
+  void logSweep(uint32_t now);
 
   // Reading the scan.
   bool inPath(int angleDeg, float cm, float limitCm) const;
@@ -239,19 +270,23 @@ class Explorer {
   int chooseTurnDirection();
   int veerDirection() const;
   int sidestepDirection() const;
-  void checkSidestepWentAway();
+  void checkSidestepWentAway(uint32_t now);
   bool echoVanished(uint32_t now) const;
   bool notChanging(float frontCm, uint32_t now);
   int alternateDirection();
   int wanderDirection();
 
   RangeScanner& scanner;
+  EventLog& log;
   const ExploreParams params;
 
   Phase currentPhase = SWEEP;
   uint32_t phaseUntil = 0;
 
   Sonar sonar;
+  Look look;
+  uint32_t pings = 0;
+  uint32_t silentPings = 0;
   Scan scan;
   Episode episode;
   Cruise cruise;

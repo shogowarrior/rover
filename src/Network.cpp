@@ -71,8 +71,8 @@ bool runningImageOnTrial() {
 // An image flashed over USB is never on trial.
 extern "C" bool verifyRollbackLater() { return true; }
 
-Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware)
-    : rover(rover), remote(remote), firmware(firmware) {}
+Network::Network(Rover& rover, RemoteControl& remote, FirmwareUpdate& firmware, EventLog& log)
+    : rover(rover), remote(remote), firmware(firmware), log(log) {}
 
 void Network::begin() {
   onTrial = runningImageOnTrial();
@@ -93,8 +93,7 @@ void Network::update(uint32_t now) {
     // STOP -- so it must not carry on with the last one, or keep exploring
     // where nobody can stop it.
     online = false;
-    Serial.println("WiFi lost.");
-    rover.standDown(now);
+    rover.standDown(now, "WiFi lost");
   }
 
   if (timing::since(now, lastReconnectMs) < tuning::WIFI_RECONNECT_INTERVAL_MS) return;
@@ -111,11 +110,13 @@ void Network::update(uint32_t now) {
 // over the air either. Without WiFi the rover carries on offline: it explores
 // if it powered on in autonomous mode.
 bool Network::connect() {
-  if (!WiFi.setHostname(WIFI_HOSTNAME)) Serial.println("Failed to set hostname");
+  if (!WiFi.setHostname(WIFI_HOSTNAME)) log.add(millis(), EventLog::WARN, "WiFi: could not set the host name");
   if (WIFI_IS_STATIC_IP &&
       !WiFi.config(STATIC_IP, GATEWAY, SUBNET, PRIMARY_DNS, SECONDARY_DNS)) {
-    Serial.println("STA Failed to configure");
+    log.add(millis(), EventLog::WARN, "WiFi: could not set the static address");
   }
+  // On the serial console only: the EventLog goes to every client, and the
+  // network's name is config.h's.
   Serial.printf("Connecting to %s\n", WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -127,15 +128,16 @@ bool Network::connect() {
 
   for (int attempt = 0; attempt < tuning::WIFI_CONNECT_ATTEMPTS; attempt++) {
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.printf("\nWireless connected: %s (%s)\n", WiFi.localIP().toString().c_str(),
-                    WiFi.getHostname());
+      Serial.println();
       return true;
     }
     delay(tuning::WIFI_RETRY_DELAY_MS);
     Serial.print(".");
   }
 
-  Serial.println("\nWiFi unavailable; continuing offline.");
+  Serial.println();
+  log.add(millis(), EventLog::WARN, "WiFi: not connected; carrying on offline, retrying every %lu s",
+          static_cast<unsigned long>(tuning::WIFI_RECONNECT_INTERVAL_MS / 1000));
   return false;
 }
 
@@ -149,7 +151,7 @@ void Network::goOnline(uint32_t now) {
   }
   remote.begin();
   online = true;
-  Serial.println("OTA and WebSocket services up.");
+  log.add(now, EventLog::INFO, "Online at %s: the link and OTA are up", WiFi.localIP().toString().c_str());
 }
 
 // Both update paths overwrite the other slot, the image this one goes back
@@ -167,10 +169,11 @@ bool Network::updatesOpen(uint32_t now) {
       // reset goes back to: none until that reset. Not retried: each try
       // writes flash, from the loop.
       keepFailed = true;
-      Serial.println("Could not keep the new firmware: no updates until a reset.");
+      log.add(now, EventLog::WARN, "Firmware: could not keep the new image; no updates until a reset");
       return false;
     }
-    Serial.println("Keeping the new firmware.");
+    log.add(now, EventLog::INFO, "Firmware: the new image ran %lu s online; kept",
+            static_cast<unsigned long>(tuning::IMAGE_TRIAL_MS / 1000));
     // espota's invitations sent during the trial wait in ArduinoOTA's socket.
     // Answered now, a stale one would stand the rover down and hold the loop
     // on a connection back to a computer that gave up. Restarting it drops
@@ -196,9 +199,8 @@ void Network::configureOta() {
         // for the whole upload, so keep the loop watchdog fed. Standing down
         // (manual, stopped) rather than just stopping means a failed upload
         // leaves the rover still, as a successful one's reboot does.
-        rover.standDown(millis());
+        rover.standDown(millis(), "an OTA upload started");
         feedLoopWDT();
-        Serial.println("Starting Flash upgrade...");
       })
       .onProgress([this](unsigned int progress, unsigned int total) {
         feedLoopWDT();
@@ -210,7 +212,9 @@ void Network::configureOta() {
         if (total == 0) return;
         Serial.printf("Progress: %u%%\n", static_cast<unsigned>(static_cast<uint64_t>(progress) * 100 / total));
       })
-      .onEnd([]() { Serial.println("completed."); })
-      .onError([](ota_error_t error) { Serial.printf("OTA error %u\n", error); });
+      .onEnd([this]() { log.add(millis(), EventLog::INFO, "OTA upload complete: restarting"); })
+      .onError([this](ota_error_t error) {
+        log.add(millis(), EventLog::WARN, "OTA upload failed: error %u", static_cast<unsigned>(error));
+      });
   ArduinoOTA.begin();
 }

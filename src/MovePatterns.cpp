@@ -51,12 +51,19 @@ const MovePattern PATTERNS[] = {
     PATTERN(ROTATE_COUNTERCLOCKWISE, BACK, FWD, FWD, BACK),
 };
 
+const MovePattern WHEELS_ALONE[WHEEL_COUNT] = {
+    {STOP, "FRONT_LEFT_WHEEL", {FWD, FREE, FREE, FREE}},
+    {STOP, "FRONT_RIGHT_WHEEL", {FREE, FWD, FREE, FREE}},
+    {STOP, "REAR_RIGHT_WHEEL", {FREE, FREE, FWD, FREE}},
+    {STOP, "REAR_LEFT_WHEEL", {FREE, FREE, FREE, FWD}},
+};
+
 #undef PATTERN
 
-// Every code except RESUME_AUTONOMOUS is a motion and needs a row. Appending a
-// motion code without one fails the build here; test_move_patterns checks the
-// rows name the right codes.
-static_assert(sizeof(PATTERNS) / sizeof(PATTERNS[0]) == MOVE_CODE_COUNT - 1,
+// Every code but RESUME_AUTONOMOUS and RUN_CHECKS is a motion and needs a
+// row. Appending a motion code without one fails the build here;
+// test_move_patterns checks the rows name the right codes.
+static_assert(sizeof(PATTERNS) / sizeof(PATTERNS[0]) == MOVE_CODE_COUNT - 2,
               "every motion code needs exactly one row in PATTERNS");
 
 }  // namespace
@@ -72,3 +79,5 @@ const char* moveName(MoveCode move) {
   const MovePattern* pattern = findMovePattern(move);
   return pattern == nullptr ? "UNKNOWN" : pattern->name;
 }
+
+const MovePattern& wheelAlone(Wheel wheel) { return WHEELS_ALONE[wheel]; }

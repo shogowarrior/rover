@@ -21,8 +21,13 @@ struct MovePattern {
 };
 
 // The pattern for a motion, or nullptr for anything that is not one
-// (RESUME_AUTONOMOUS, or a value outside the protocol).
+// (RESUME_AUTONOMOUS, RUN_CHECKS, or a value outside the protocol).
 const MovePattern* findMovePattern(MoveCode move);
+
+// `wheel` alone, forward: the checks' (SelfTest), so the operator sees which
+// wheel each motor terminal drives, and which way. Not a motion of the wire
+// protocol: its `move` is STOP, and telemetry names it under "check".
+const MovePattern& wheelAlone(Wheel wheel);
 
 // The telemetry name of a motion, e.g. "MOVE_FORWARD"; "UNKNOWN" otherwise.
 const char* moveName(MoveCode move);
