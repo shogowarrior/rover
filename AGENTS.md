@@ -1058,9 +1058,10 @@ the rover starts no wheel's step. It is a press: the stand-down's reason
 "checks" stops a program. Every let-go of a held move lets go of them,
 sending nothing more (blur, a hidden or closed page, Stop and Space,
 Autonomous and T, a press of a drive control, a stick pressed but not yet
-pushed among them, a switch of target, the link lost or stale), and so does
-any other command the Driver sends; the rover ends them itself within a
-second. `Checks` lets go too once telemetry shows them over (a frame
+pushed among them, a switch of target, the link lost or stale), and so do
+any other command the Driver sends and a firmware update that begins
+(each `RUN_CHECKS` is a command, which would end the update); the rover
+ends them itself within a second. `Checks` lets go too once telemetry shows them over (a frame
 without `check` after one with it) or never started (no frame shows one
 within 1.5 s: another controller had control, or older firmware). Run
 checks is off where the settings are, and while checks run (Stop ends

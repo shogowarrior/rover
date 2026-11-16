@@ -424,6 +424,33 @@ test("checks: every let-go of a held move lets go of them, sending nothing more"
   check(commands(ws).every((c) => c === "RUN_CHECKS"), `nothing but the re-sends before: ${commands(ws)}`);
 });
 
+// Every RUN_CHECKS is a command, and the rover ends an update on any
+// motion: an update that begins lets go of the checks, sending nothing more
+// of them.
+test("checks: a firmware update that begins lets go of them", async () => {
+  const { page, ws } = await startChecks();
+  page.clock.advance(page.evalIn("REPEAT_MS"));
+  ws.serverMsg(FRAMES.checking);
+  const bytes = new Uint8Array(4321);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 151 + 7) & 0xff;
+  bytes[0] = 0xe9;
+  bytes[12] = 0;
+  bytes[13] = 0;
+  bytes.set([0x32, 0x54, 0xcd, 0xab], 32); // an ESP32 app image, as ota.test.js builds one
+  page.fire(page.$("firmwareChoose"), "click");
+  page.$("firmwareFile").files = [{ name: "firmware.bin", size: bytes.length, arrayBuffer: async () => bytes.slice().buffer }];
+  page.fire(page.$("firmwareFile"), "change");
+  await flush();
+  page.$("firmwarePassword").value = "secret";
+  check(!page.$("firmwareStart").disabled, `Update on: ${page.$("firmwareStatus").textContent}`);
+  const n = count(ws);
+  click(page, page.$("firmwareStart"));
+  await flush();
+  page.clock.advance(1000);
+  check(!page.evalIn("driver.checking"), "let go");
+  check(sent(ws, n).every((m) => !("move" in m)) && sent(ws, n).some((m) => m.ota === "begin"), `the update's begin, and no command: ${JSON.stringify(sent(ws, n))}`);
+});
+
 test("checks: off on the simulator, with no link, before the rover's settings and while they run; a yes looks again", async () => {
   // The simulator target.
   {

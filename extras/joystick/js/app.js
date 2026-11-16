@@ -772,6 +772,9 @@ link.onOta((message) => firmwareUpdate.reply(message));
 firmwareUpdate.onStart(() => {
   if (runner.target === targets.rover) runner.abort("the rover's firmware is being updated.");
 });
+// So would the rover's checks, held (Driver.runChecks()): every RUN_CHECKS
+// is a command. The rover's stand-down as the update begins ends them.
+firmwareUpdate.onStart(() => driver.endChecks());
 
 /* --- the rover's settings and checks -------------------------------------- */
 
