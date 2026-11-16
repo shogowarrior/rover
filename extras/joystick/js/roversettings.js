@@ -14,6 +14,12 @@
  * over the Link, takes no control and stops nothing, so it may go while
  * the rover explores, or while another controller drives.
  *
+ * The priority is the one exception: while a change of it is pending, its
+ * rows show the order asked for, dashed, because its arrows move a row
+ * from the order a second press goes on from. Rows that showed the
+ * reported order meanwhile named one controller and moved another, or
+ * undid the first press.
+ *
  * Nothing is sent, and the section is off, saying why in its status line
  * and in each control's title, with no live link, before the rover's
  * first settings frame over it (firmware from before settings reads one as
@@ -25,7 +31,11 @@
  * every AIM_SEND_MS, the latest always last, each time with the sonar set
  * to Aim: aiming is asking it to aim. The slider runs from the rover's
  * left at its left end to its right at its right end: its value is the
- * aim's negative, since the aim is positive to the left.
+ * aim's negative, since the aim is positive to the left. While an aim
+ * waits for its send, the slider stays where the thumb put it and its
+ * words say that aim, marked pending: the rover's reply to an earlier
+ * send, written back into it, snapped it back under the thumb about every
+ * AIM_SEND_MS.
  *
  *   new RoverSettings({ link, checks, ui })
  *     link    the Link: its state, and send(obj);
@@ -201,10 +211,16 @@ class RoverSettings {
   aimAt(deg) {
     if (this.whyOff() || !Number.isFinite(deg)) return false;
     this.#aimWanted = Math.round(clamp(deg, -AIM_MAX_DEG, AIM_MAX_DEG));
-    if (this.#aimTimer !== null) return true; // the next send takes the latest
-    const wait = RoverSettings.AIM_SEND_MS - (performance.now() - this.#aimSentAt);
-    if (wait <= 0) this.#sendAim();
-    else this.#aimTimer = setTimeout(() => this.#sendAim(), wait);
+    if (this.#aimTimer === null) {
+      const wait = RoverSettings.AIM_SEND_MS - (performance.now() - this.#aimSentAt);
+      if (wait <= 0) {
+        this.#sendAim();
+        return true;
+      }
+      this.#aimTimer = setTimeout(() => this.#sendAim(), wait);
+    }
+    // The next send takes the latest; meanwhile the aim's words say it.
+    this.#render();
     return true;
   }
 
@@ -229,7 +245,7 @@ class RoverSettings {
 
   // The whole list, the row at `rank` moved by `step`: from the order last
   // asked for while one is pending, as a second press of the scheme goes
-  // on from the first.
+  // on from the first, and as the rows show it then (#render).
   #move(rank, step) {
     const from = this.#pending.priority ? this.#pending.priority.value : this.#reported && this.#reported.priority;
     if (this.whyOff() || !from || rank + step < 0 || rank + step >= from.length) return;
@@ -238,17 +254,24 @@ class RoverSettings {
     if (this.#link.send({ settings: { priority } })) this.#asked("priority", priority);
   }
 
+  // It renders whether it sends or not: the slider, left alone while the
+  // aim waited, then shows the aim now pending, or the rover's.
   #sendAim() {
     this.#aimTimer = null;
     const aim = this.#aimWanted;
     this.#aimWanted = null;
     if (aim === null || this.whyOff()) return;
     const reported = this.#reported;
-    if (!this.#pending.aim && !this.#pending.sonar && reported.sonar === "AIM" && reported.aim === aim) return;
-    if (!this.#link.send({ settings: { sonar: "AIM", aim } })) return;
+    const asks = this.#pending.aim || this.#pending.sonar || reported.sonar !== "AIM" || reported.aim !== aim;
+    if (!asks || !this.#link.send({ settings: { sonar: "AIM", aim } })) {
+      this.#render();
+      return;
+    }
     this.#aimSentAt = performance.now();
-    this.#asked("sonar", "AIM");
+    // The aim first: each renders, and with no aim pending yet the slider
+    // took the rover's aim, under the thumb.
     this.#asked("aim", aim);
+    this.#asked("sonar", "AIM");
   }
 
   // Whether a press of `value` asks for anything: not while the section is
@@ -334,25 +357,29 @@ class RoverSettings {
 
     // The aim, while the sonar aims or is asked to: the slider where the
     // rover reports it, or where it was asked to go while that is pending,
-    // marked so.
+    // marked so. While an aim waits to go, the slider is left where the
+    // thumb has it, and its words say that aim.
     const aimPending = this.#pending.aim;
+    const waiting = this.#aimWanted !== null || this.#aimTimer !== null;
     const aiming = Boolean(shown) && (shown.sonar === "AIM" || (this.#pending.sonar && this.#pending.sonar.value === "AIM"));
     ui.aimRow.hidden = !aiming;
-    const aim = aimPending ? aimPending.value : shown ? shown.aim : 0;
-    if (!aimPending) ui.aim.value = String(-aim);
+    const aim = this.#aimWanted !== null ? this.#aimWanted : aimPending ? aimPending.value : shown ? shown.aim : 0;
+    if (!aimPending && !waiting) ui.aim.value = String(-aim);
     ui.aim.disabled = off;
     ui.aim.setAttribute("aria-valuetext", RoverSettings.aimWords(aim));
     ui.aim.title = off ? `The sonar's aim. ${why}` : "The sonar's aim in manual mode: left to right. Dragging on the scan aims it too.";
     ui.aimOut.textContent = RoverSettings.aimWords(aim);
-    if (aimPending) ui.aimRow.dataset.pending = "yes";
+    if (aimPending || waiting) ui.aimRow.dataset.pending = "yes";
     else delete ui.aimRow.dataset.pending;
 
     ui.padState.textContent = this.#pad === undefined
       ? RoverSettings.PAD_SAYS.ABSENT
       : this.#pad === null ? "" : RoverSettings.PAD_SAYS[this.#pad] || "";
 
+    // The order asked for while it is pending, dashed: an arrow moves a row
+    // from that order (#move), so it names what it moves.
     const asked = this.#pending.priority;
-    const order = shown ? shown.priority : [];
+    const order = asked ? asked.value : shown ? shown.priority : [];
     this.#rows.forEach(({ li, name, up, down }, rank) => {
       const who = order[rank];
       name.textContent = who ? RoverSettings.NAMES[who] : "—";
@@ -367,7 +394,7 @@ class RoverSettings {
     });
     if (asked) {
       ui.priority.dataset.pending = "yes";
-      ui.priority.title = `Asked of the rover: ${asked.value.map((who) => RoverSettings.NAMES[who]).join(", ")}. Shown once it reports it.`;
+      ui.priority.title = `Asked of the rover: ${asked.value.map((who) => RoverSettings.NAMES[who]).join(", ")}. Dashed until it reports it.`;
     } else {
       delete ui.priority.dataset.pending;
       ui.priority.title = "Who drives when two controllers drive at once: the higher takes control, the lower is refused until the higher has been quiet for a second. Stop from anyone always stops.";

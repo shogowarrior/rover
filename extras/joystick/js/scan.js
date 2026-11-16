@@ -27,7 +27,9 @@
  * (data-held="yes" on their wedges and readings), as what was last seen.
  * While it aims, a ray from the rover to full reach shows where it points,
  * with a mark where its reading (telemetry's aimCm) falls and the reading
- * by it: "…" until one is in, "no echo" for none.
+ * by it: "…" until one is in, "no echo" for none. Neither holds while the
+ * rover explores or runs its checks (telemetry's check): those point the
+ * sonar their own way, so every bearing is drawn live and no aim.
  *
  * svg[data-empty] is "yes" from clear(), and as built, until the next
  * show(): the page's empty state keys on it (panel.css). A frame without
@@ -171,10 +173,16 @@ class ScanView {
   }
 
   show(data) {
+    // The setting points the sonar only in manual mode with no check
+    // running: exploring sweeps, and the checks' sonar steps point it at
+    // each bearing in turn, whatever the setting says. Read from the
+    // setting during the checks, the fan dimmed the bearing being measured
+    // and drew the aim where the sonar was not.
+    const bySetting = data.mode === MODE_MANUAL && typeof data.check !== "string";
     // The one bearing the sonar is held at, in manual mode with it held
     // still: undefined while it sweeps, and null where it is held between
     // bearings, so that none is measured.
-    const held = data.mode === MODE_MANUAL && (data.sonar === "FRONT" || (data.sonar === "AIM" && typeof data.aim === "number"));
+    const held = bySetting && (data.sonar === "FRONT" || (data.sonar === "AIM" && typeof data.aim === "number"));
     const at = held ? (data.sonar === "FRONT" ? 0 : data.aim) : undefined;
     for (const view of this.#views) {
       this.#showDistance(view, data[view.key]);
@@ -184,7 +192,7 @@ class ScanView {
         else node.removeAttribute("data-held");
       }
     }
-    this.#showAim(data.sonar === "AIM" && typeof data.aim === "number" ? data.aim : null, data.aimCm);
+    this.#showAim(bySetting && data.sonar === "AIM" && typeof data.aim === "number" ? data.aim : null, data.aimCm);
     this.#svg.dataset.empty = "no";
   }
 

@@ -57,8 +57,9 @@
  *                    the Driver, and when they are over
  *   roversettings.js RoverSettings: the rover's settings in the Options
  *                    popover, and Run checks
- *   heldby.js        HeldBy: the line that says the pad or the USB console
- *                    has control, while this panel's presses are refused
+ *   heldby.js        HeldBy: the line that says the pad or the USB console,
+ *                    ranked above WiFi, has control, while this panel's
+ *                    presses are refused
  *   history.js       RoverHistory: the rover's log lines and samples, kept in
  *                    memory, and Save's file
  *   graphs.js        RoverGraphs: the rover's graphs over the last 10 minutes
@@ -828,10 +829,19 @@ aimable();
 
 /* --- who has control ------------------------------------------------------ */
 
-// While the pad or the USB console holds control and this panel presses a
-// drive control, the rover refuses the panel's moves (Stop aside), and a
-// line at the view's top says why nothing moves.
-const heldBy = new HeldBy({ element: byId("heldBy"), who: byId("heldByWho"), driver });
+// While the pad or the USB console holds control, ranked above WiFi in the
+// priority the rover reports, and this panel presses a drive control, the
+// rover refuses the panel's moves (Stop aside), and a line at the view's
+// top says why nothing moves.
+const heldBy = new HeldBy({
+  element: byId("heldBy"),
+  who: byId("heldByWho"),
+  driver,
+  priority: () => {
+    const reported = roverSettings.settings;
+    return reported && reported.priority;
+  },
+});
 link.onTelemetry((data) => heldBy.show(data));
 link.onState((state) => heldBy.linkState(state));
 targetSwitch.onChange((kind) => heldBy.target(kind));
