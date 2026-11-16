@@ -27,12 +27,18 @@ The panel's Save writes the same frames as JSON lines, each
 Store.import_lines() reads back.
 """
 
+import collections
 import json
 import math
 import sqlite3
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# Copies of src/'s values and names, which tools/check_protocol.py checks:
+# BEARINGS, DISTANCE_FAR_CM, SOURCES and METRIC_KEYS, and every key read off
+# a frame, by the name it is read off (frame, t, m, metrics, settings).
+# client/test_recorder.py checks where each key the firmware sends is kept.
 
 # The telemetry keys for the sonar's five bearings, left to right, and the
 # label each has in the exporter.
@@ -53,8 +59,18 @@ DISTANCE_FAR_CM = 999
 STALE_S = 5.0
 
 
-# Who may drive the rover, and who else writes its log (src/Source.h).
+# Who may drive the rover, and who else writes its log (sourceName() in
+# src/Source.h): the three controllers first, then the rover itself.
 SOURCES = ("USB", "PAD", "WIFI", "ROVER")
+
+# The keys of a metrics frame's "metrics" (writeMetrics() in
+# src/Protocol.cpp), in the order of the metrics table's columns.
+METRIC_KEYS = ("upS", "loopHz", "loopMaxMs", "heap", "heapMin", "rssi", "clients", "pings", "noEcho")
+
+# How many of the latest log lines the exporter remembers, to count each
+# once: four times the 32 the rover holds (EventLog::CAPACITY) and sends
+# again to a client each time it connects.
+LOG_LINES_REMEMBERED = 128
 
 
 def kind_of(frame):
@@ -85,6 +101,13 @@ def _flag(value):
 
 def _text(value):
     return value if isinstance(value, str) else None
+
+
+def _line_key(frame):
+    """A log line's number and its time on the rover's clock, each None
+    unless a number. With its text they tell it from every other line: the
+    rover numbers its lines from a random start each boot."""
+    return _number(frame.get("seq")), _number(frame.get("t"))
 
 
 SCHEMA = """
@@ -173,37 +196,32 @@ class Store:
                 ),
             )
         elif kind == "metrics":
-            values = frame["metrics"]
+            # Each part of a frame is read through a name that says which it
+            # is (metrics, settings), as tools/check_protocol.py expects.
+            metrics = frame["metrics"]
             self.db.execute(
                 "INSERT INTO metrics VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    at,
-                    *(
-                        _number(values.get(key))
-                        for key in ("upS", "loopHz", "loopMaxMs", "heap", "heapMin", "rssi", "clients", "pings", "noEcho")
-                    ),
-                    whole,
-                ),
+                (at, *(_number(metrics.get(key)) for key in METRIC_KEYS), whole),
             )
         elif kind == "settings":
-            values = frame["settings"]
-            priority = values.get("priority")
+            settings = frame["settings"]
+            priority = settings.get("priority")
             names = priority if isinstance(priority, list) and all(isinstance(n, str) for n in priority) else None
             self.db.execute(
                 "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?)",
                 (
                     at,
-                    _text(values.get("scheme")),
-                    _text(values.get("sonar")),
-                    _number(values.get("aim")),
-                    _text(values.get("pad")),
+                    _text(settings.get("scheme")),
+                    _text(settings.get("sonar")),
+                    _number(settings.get("aim")),
+                    _text(settings.get("pad")),
                     ",".join(names) if names is not None else None,
-                    _flag(values.get("checksAtBoot")),
+                    _flag(settings.get("checksAtBoot")),
                     whole,
                 ),
             )
         else:
-            seq, t_ms = _number(frame.get("seq")), _number(frame.get("t"))
+            seq, t_ms = _line_key(frame)
             if seq is None or t_ms is None:
                 return False
             self.db.execute(
@@ -244,8 +262,12 @@ class Exporter:
     Gauges for what telemetry and the metrics last said, counters for the
     sonar's pings (which restart from 0 when the rover does, as Prometheus
     expects of a counter) and for the log lines seen since this started, by
-    level and by whose line it is. rover_up says whether the link is up and
-    telemetry fresh; while it is 0 nothing else about the rover is
+    level and by whose line it is. The rover sends every line it still
+    holds each time a client connects, so a line is counted once, as the
+    Store keeps it once: by its number, its time and its text, among the
+    last LOG_LINES_REMEMBERED. A line without a number and a time is not
+    counted, as the Store does not keep it. rover_up says whether the link
+    is up and telemetry fresh; while it is 0 nothing else about the rover is
     reported."""
 
     def __init__(self, clock=time.time):
@@ -257,6 +279,10 @@ class Exporter:
         self.metrics = None
         self.settings = None
         self.lines = {}  # (level, source): lines seen
+        # The latest lines counted, by (seq, t, text): the set to look one
+        # up, the deque to forget the oldest.
+        self.counted = set()
+        self.counted_order = collections.deque(maxlen=LOG_LINES_REMEMBERED)
 
     def set_connected(self, connected):
         with self.lock:
@@ -272,9 +298,23 @@ class Exporter:
             elif kind == "settings":
                 self.settings = frame["settings"]
             elif kind == "log":
-                source = frame.get("src")
-                key = ("warn" if frame.get("warn") is True else "info", source if source in SOURCES else "ROVER")
-                self.lines[key] = self.lines.get(key, 0) + 1
+                self._count_line(frame)
+
+    def _count_line(self, frame):
+        # Under the lock.
+        seq, t_ms = _line_key(frame)
+        if seq is None or t_ms is None:
+            return
+        line = (seq, t_ms, frame["log"])
+        if line in self.counted:
+            return  # sent again as this client connected
+        if len(self.counted_order) == self.counted_order.maxlen:
+            self.counted.discard(self.counted_order[0])  # the append drops it
+        self.counted_order.append(line)
+        self.counted.add(line)
+        source = frame.get("src")
+        key = ("warn" if frame.get("warn") is True else "info", source if source in SOURCES else "ROVER")
+        self.lines[key] = self.lines.get(key, 0) + 1
 
     def exposition(self):
         """The text Prometheus scrapes."""
@@ -293,7 +333,8 @@ class Exporter:
                 out.append(f"{name}{labels} {_sample(value)}")
 
         metric("rover_up", "gauge", "1 while the link to the rover is up and its telemetry fresh.", [("", int(fresh))])
-        metric("rover_log_lines_total", "counter", "Lines of the rover's log seen since this exporter started.",
+        metric("rover_log_lines_total", "counter",
+               "Lines of the rover's log seen since this exporter started, each once however often it is sent.",
                [(f'{{level="{level}",source="{source}"}}', lines.get((level, source), 0))
                 for level in ("info", "warn") for source in SOURCES])
         if not fresh:

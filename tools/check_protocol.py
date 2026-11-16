@@ -4,10 +4,12 @@
 The firmware defines the protocol once, in src/, but the Python clients and
 the browser panel each carry copies of parts of it: move codes, the port,
 thresholds, sentinels and command timing (MIRRORS below), scan angles,
-telemetry keys and command fields, the control-scheme names and message,
-the mode names telemetry reports, the settings message and the names in it
-(sonar modes, pad states, the controllers), and a firmware update's names
-and piece size.
+telemetry keys and command fields, the keys of every frame the rover sends
+(telemetry, log lines, metrics, settings) that client/recorder.py and
+client/ws.py read, the control-scheme names and message, the mode names and
+pad states telemetry reports, the controllers' names, the settings message
+and the names in it (sonar modes, the controllers), and a firmware update's
+names and piece size.
 Each Checker method says what it compares and why; main() runs them all.
 The panel's copies this script compares are in
 extras/joystick/js/protocol.js, except the bearings (BEARINGS, in
@@ -27,8 +29,11 @@ fails when something it looks for is missing, so that renaming one cannot
 quietly switch its check off: if a client renames a constant, update the
 tables below to match.
 
-Not covered: client/ws.py and client/rover.ipynb, which import their numbers
-from drive.py; the default host address, which is per-network
+Not covered: client/rover.ipynb, which imports its numbers from drive.py, as
+client/ws.py does its port; where client/recorder.py keeps each key it
+reads (its database's columns, its exporter's series), which
+client/test_recorder.py checks against the frames in test/vectors/; the
+default host address, which is per-network
 configuration every client lets the operator override; the panel's stick
 mapping and the move names telemetry reports, in
 extras/joystick/js/mecanum.js, which extras/joystick/test/mecanum.test.js
@@ -60,6 +65,8 @@ EXPLORER_H = "src/Explorer.h"
 SOURCE_H = "src/Source.h"
 EXPLORER_CPP = "src/Explorer.cpp"
 DRIVE_PY = "client/drive.py"
+RECORDER_PY = "client/recorder.py"
+WS_PY = "client/ws.py"
 PANEL_PROTOCOL_JS = "extras/joystick/js/protocol.js"
 PANEL_SCRIPTS = "extras/joystick/js/*.js"  # a glob: every panel script but joy.js
 
@@ -109,6 +116,9 @@ MIRRORS = [
      "telemetry sends this value for a bearing with no echo"),
     (DRIVE_PY, "DISTANCE_FAR_CM", "==", KINEMATICS_H, "DISTANCE_FAR_CM",
      "telemetry sends this value for a bearing with no echo"),
+    (RECORDER_PY, "DISTANCE_FAR_CM", "==", KINEMATICS_H, "DISTANCE_FAR_CM",
+     "telemetry sends this value for a bearing with no echo, which the exporter reports as NaN, not as a "
+     "distance a graph would plot"),
     (PANEL_PROTOCOL_JS, "PORT", "==", TUNING_H, "WEBSOCKET_PORT",
      "the client would connect to a port nothing listens on"),
     (DRIVE_PY, "DEFAULT_PORT", "==", TUNING_H, "WEBSOCKET_PORT",
@@ -147,20 +157,68 @@ MIRRORS = [
 ]
 
 # The names a settings message and the frames carry, which src/ returns as
-# string literals from one function each and the panel copies as an array of
+# string literals from one function each and the clients copy as a list of
 # strings, in any order:
-#   (what they are, the file, the function, the panel's array, why it matters)
+#   (what they are, the file, the function, the clients' copies)
+# and each copy is
+#   (its file, the list's name, why it matters)
 NAME_LISTS = [
-    ("sonar modes", PROTOCOL_CPP, "sonarName", "SONAR_MODES",
-     "the rover ignores a sonar mode it does not know, so the panel's choice would do nothing"),
-    ("pad states", PROTOCOL_CPP, "padName", "PAD_STATES",
-     "the panel would never show the pad in that state"),
-    ("sources", SOURCE_H, "sourceName", "SOURCES",
-     "the log's filter and the priority would name a controller the rover does not know: the rover "
-     "ignores that priority whole"),
+    ("sonar modes", PROTOCOL_CPP, "sonarName", [
+        (PANEL_PROTOCOL_JS, "SONAR_MODES",
+         "the rover ignores a sonar mode it does not know, so the panel's choice would do nothing"),
+    ]),
+    ("pad states", PROTOCOL_CPP, "padName", [
+        (PANEL_PROTOCOL_JS, "PAD_STATES", "the panel would never show the pad in that state"),
+    ]),
+    ("sources", SOURCE_H, "sourceName", [
+        (PANEL_PROTOCOL_JS, "SOURCES",
+         "the log's filter and the priority would name a controller the rover does not know: the rover "
+         "ignores that priority whole"),
+        (RECORDER_PY, "SOURCES",
+         "the exporter would count that controller's log lines as the rover's own, and never report it "
+         "holding control"),
+    ]),
 ]
-# How the panel writes such an array.
-NAME_LIST_JS = r'^\s*const\s+NAME\s*=\s*\[([^\]]*)\]\s*;'
+# How each client language writes such a list: a JavaScript array, a Python
+# tuple.
+NAME_LIST = {
+    ".js": (r'^\s*const\s+NAME\s*=\s*\[([^\]]*)\]\s*;', 'const {name} = ["...", ...];'),
+    ".py": (r'^NAME\s*=\s*\(([^)]*)\)', '{name} = ("...", ...)'),
+}
+
+# Where client/recorder.py and client/ws.py read a key off one of the
+# rover's frames: `name.get("key")` or `name["key"]`, once their comments are
+# removed. The name says which frame, or which part of one, it holds, and so
+# which keys src/Protocol.cpp writes there:
+#   any        a whole frame of any kind (telemetry, a log line, metrics,
+#              settings), so any key at the top of one
+#   telemetry  a telemetry frame
+#   metrics    a metrics frame's "metrics" object
+#   settings   a settings frame's "settings" object
+#   None       not the rover's: a line of the panel's recording, {"at", "frame"}
+# A key read off any other name fails, so a new reader cannot slip past the
+# check: name what it reads off as these are, or add the name here.
+FRAME_READERS = (RECORDER_PY, WS_PY)
+FRAME_NAMES = {
+    "frame": "any",
+    "t": "telemetry",
+    "metrics": "metrics",
+    "m": "metrics",
+    "settings": "settings",
+    "entry": None,
+}
+FRAME_READS = (
+    re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\.get\(\s*[\"'](\w+)[\"']"),
+    re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\[\s*[\"'](\w+)[\"']\s*\]"),
+)
+# client/recorder.py's tuples of keys, at the start of a line, that it reads
+# through a variable: (the tuple's name, which keys they are, a key in it).
+# "scan" is telemetry's distances, all of which BEARINGS must hold.
+RECORDER_TABLES = (
+    ("BEARINGS", "scan", re.compile(r"\(\s*[\"'][^\"']*[\"']\s*,\s*[\"'](\w+)[\"']\s*\)")),
+    ("METRIC_KEYS", "metrics", re.compile(r"[\"'](\w+)[\"']")),
+)
+RECORDER_TABLE = r"^NAME\s*=\s*\(((?:[^()]|\([^()]*\))*)\)"
 
 # The field that marks a settings message; readSettings() in
 # src/Protocol.cpp reads the fields inside it.
@@ -255,6 +313,16 @@ def enum_body(text: str, name: str) -> str | None:
     return match.group(1) if match else None
 
 
+def top_level(body: str) -> str:
+    """The body of an object literal with every nested {...} in it removed,
+    so that only its own fields are left, on both sides of a nested object:
+    { settings: { aim }, move } holds settings and move."""
+    previous = None
+    while previous != body:
+        previous, body = body, re.sub(r"\{[^{}]*\}", "", body)
+    return body
+
+
 def function_body(text: str, name: str, const: bool = False) -> str | None:
     """The body of the C++ function definition `name(...) { ... }` in text,
     which ends at the first `}` that starts a line; or None."""
@@ -328,10 +396,12 @@ class Checker:
         for relpath in self.files(client):
             code = self.code(relpath)
             if code is not None:
-                # Up to the first nested object: {settings: {...}} sends the
-                # one field "settings", whose own fields settings_wire() checks.
+                # Only the object's own fields, on either side of a nested
+                # one: {settings: {...}} sends the one field "settings", whose
+                # own fields settings_wire() checks, and {settings: {...},
+                # move} sends move too.
                 found[relpath] = ({key for pattern in where["reads"] for key in pattern.findall(code)},
-                                  [set(field.findall(body.split("{")[0])) for body in literal.findall(code)])
+                                  [set(field.findall(top_level(body))) for body in literal.findall(code)])
         return found
 
     def bearing_table(self, client: str) -> tuple[str, str] | None:
@@ -468,7 +538,7 @@ class Checker:
         if text is None:
             return set(), {}, set()
         telemetry = function_body(text, "writeTelemetry") or ""
-        sent = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', telemetry))
+        sent = self.telemetry_keys()
         for writer in ("writeLogLine", "writeMetrics", "writeSettings"):
             body = function_body(text, writer) or ""
             keys = set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]', body))
@@ -484,6 +554,98 @@ class Checker:
         if not read:
             self.unreadable(PROTOCOL_CPP, 'the command fields readCommand() reads (json["field"])')
         return sent, scan, read
+
+    def telemetry_keys(self) -> set[str]:
+        """The keys writeTelemetry() in src/Protocol.cpp sets; firmware_keys()
+        reports none."""
+        text = self.text(PROTOCOL_CPP)
+        if text is None:
+            return set()
+        return set(re.findall(r'\bdoc\[\s*"(\w+)"\s*\]\s*=', function_body(text, "writeTelemetry") or ""))
+
+    def inner_keys(self) -> dict[str, set[str]]:
+        """The keys inside the frames whose one key holds an object, by that
+        key: writeMetrics()'s "metrics" and writeSettings()'s "settings",
+        written as `JsonObject values = doc["key"].to<JsonObject>();` and
+        then `values["inner"] = ...`. Either missing is reported."""
+        text = self.text(PROTOCOL_CPP)
+        if text is None:
+            return {}
+        found = {}
+        for writer in ("writeMetrics", "writeSettings"):
+            body = function_body(text, writer) or ""
+            head = re.search(r'\bJsonObject\s+(\w+)\s*=\s*doc\[\s*"(\w+)"\s*\]\s*\.\s*to\s*<\s*JsonObject\s*>', body)
+            keys = set(re.findall(r"\b" + re.escape(head.group(1)) + r'\[\s*"(\w+)"\s*\]', body)) if head else set()
+            if keys:
+                found[head.group(2)] = keys
+            else:
+                self.unreadable(PROTOCOL_CPP, f'the keys {writer}() writes inside its frame '
+                                f'(JsonObject values = doc["key"].to<JsonObject>(); values["inner"] = ...)')
+        return found
+
+    def frame_reads(self) -> int:
+        """Every key client/recorder.py and client/ws.py read off one of the
+        rover's frames is one src/Protocol.cpp writes there, and
+        recorder.py's BEARINGS holds every scan key telemetry sends.
+
+        These clients only listen, and a renamed key fails as quietly there
+        as in the panel: the recorder keeps a column of NULLs, its exporter
+        drops a series from every graph, ws.py prints a dash. Which frame a
+        read is off goes by FRAME_NAMES. Returns how many keys it checked.
+        """
+        sent, scan, _ = self.firmware_keys()
+        inner = self.inner_keys()
+        writes = {
+            "any": sent,
+            "telemetry": self.telemetry_keys(),
+            "scan": set(scan),
+            "metrics": inner.get("metrics", set()),
+            "settings": inner.get("settings", set()),
+        }
+        if not all(writes.values()):
+            return 0  # reported
+        where = {
+            "any": "at the top of any frame",
+            "telemetry": "in telemetry",
+            "scan": "as a scan distance in telemetry",
+            "metrics": 'inside a metrics frame\'s "metrics"',
+            "settings": 'inside a settings frame\'s "settings"',
+        }
+        read: dict[str, set[str]] = {kind: set() for kind in writes}
+
+        def check(relpath: str, kind: str, key: str, how: str) -> None:
+            read[kind].add(key)
+            if key not in writes[kind]:
+                self.problem(f'{relpath}: {how} "{key}", which {PROTOCOL_CPP} never writes {where[kind]}; '
+                             f"what it keeps or shows of it would stay empty without a word")
+
+        for relpath in FRAME_READERS:
+            code = self.code(relpath)
+            if code is None:
+                continue
+            for pattern in FRAME_READS:
+                for name, key in pattern.findall(code):
+                    if name not in FRAME_NAMES:
+                        self.problem(f'{relpath}: reads "{key}" off `{name}`, which is not a name FRAME_NAMES in '
+                                     f"tools/check_protocol.py knows a frame by; name it as those are, or add it")
+                    elif FRAME_NAMES[name] is not None:
+                        check(relpath, FRAME_NAMES[name], key, f"reads `{name}`'s key")
+
+        code = self.code(RECORDER_PY)
+        for table, kind, item in RECORDER_TABLES:
+            match = re.search(RECORDER_TABLE.replace("NAME", table), code or "", re.M)
+            keys = item.findall(match.group(1)) if match else []
+            if not keys:
+                self.unreadable(RECORDER_PY, f'{table} (a tuple of the keys it reads, {table} = (..., "key", ...))')
+                continue
+            for key in keys:
+                check(RECORDER_PY, kind, key, f"{table} holds")
+        for key in sorted(writes["scan"] - read["scan"]):
+            self.problem(f'{RECORDER_PY}: BEARINGS has no "{key}", which telemetry sends as a scan distance; '
+                         f"neither the database nor the exporter would keep it")
+        for kind in sorted(kind for kind in writes if not read[kind]):
+            self.unreadable(f"{', '.join(FRAME_READERS)}", f"any key read {where[kind]}")
+        return sum(len(keys) for keys in read.values())
 
     def keys(self) -> int:
         """Every telemetry key a client reads is one the firmware sends, and
@@ -672,12 +834,17 @@ class Checker:
                          f"{PROTOCOL_CPP} sends the scheme under; the panel's scheme toggle would stay disabled")
 
     def settings_wire(self) -> None:
-        """The panel's settings messages hold only fields readSettings() reads.
+        """The panel sends settings as readMessage() expects: alone, never
+        beside a move, and holding only fields readSettings() reads.
 
-        A field the rover does not read is dropped without a word, so a
-        renamed one would leave the panel's control doing nothing. A message
-        with "settings" is never a command: the rover ignores it whole when
-        nothing in it reads.
+        readMessage() reads a message with a move as a drive command before
+        it looks for "settings", so a settings message with a move beside it
+        arrives as a STOP (or a move) that takes control of an exploring
+        rover -- the one thing a setting must never do. Without a move, a
+        message with "settings" is never a command: the rover ignores it
+        whole when nothing in it reads. A field the rover does not read is
+        dropped without a word, so a renamed one would leave the panel's
+        control doing nothing.
         """
         protocol = self.text(PROTOCOL_CPP)
         if protocol is None:
@@ -687,35 +854,61 @@ class Checker:
         if not fields:
             self.unreadable(PROTOCOL_CPP, 'the fields readSettings() reads (object["field"])')
             return
+        # The fields whose presence readMessage() takes for a drive command
+        # before it looks for settings: if (!json["move"].isNull()) return
+        message = function_body(protocol, "readMessage") or ""
+        moves = set(re.findall(r'!\s*json\[\s*"(\w+)"\s*\]\s*\.\s*isNull\s*\(\s*\)\s*\)\s*return\b', message))
+        if not moves:
+            self.unreadable(PROTOCOL_CPP, 'the field that makes readMessage() read a message as a drive command '
+                            '(if (!json["move"].isNull()) return ...)')
+            return
+
         literal = re.compile(r"\b" + SETTINGS_FIELD + r"\s*:\s*\{([^{}]*)\}")
         _, field = KEY_READERS[PANEL_SCRIPTS]["command"]
+        found = 0
         for relpath in self.files(PANEL_SCRIPTS):
             code = self.code(relpath) or ""
             for body in literal.findall(code):
+                found += 1
                 for name in sorted(set(field.findall(body)) - fields):
                     self.problem(f'{relpath}: sends setting "{name}", which readSettings() in {PROTOCOL_CPP} '
                                  f"never reads; the rover drops it")
+        if not found:
+            self.unreadable(PANEL_SCRIPTS, f"a settings message (send({{ {SETTINGS_FIELD}: {{ ... }} }}))")
+
+        for relpath, (_, commands) in self.usage(PANEL_SCRIPTS).items():
+            for sent in commands:
+                if SETTINGS_FIELD in sent and sent & moves:
+                    self.problem(
+                        f'{relpath}: sends "{SETTINGS_FIELD}" with {", ".join(sorted(sent & moves))} in one message; '
+                        f"readMessage() in {PROTOCOL_CPP} reads that as a drive command, which takes control and "
+                        f"stops an exploring rover, and never reads the settings"
+                    )
 
     def name_lists(self) -> int:
-        """The panel's copies of the names in NAME_LISTS are the names src/
+        """The clients' copies of the names in NAME_LISTS are the names src/
         uses, no more and no fewer."""
-        panel = self.text(PANEL_PROTOCOL_JS)
-        if panel is None:
-            return 0
-        for what, source, function, constant, why in NAME_LISTS:
+        for what, source, function, copies in NAME_LISTS:
             text = self.text(source)
             if text is None:
                 continue
             ours = set(re.findall(r'\breturn\s+"([^"]*)"\s*;', function_body(text, function) or ""))
-            match = re.search(NAME_LIST_JS.replace("NAME", constant), panel, re.M)
             if not ours:
                 self.unreadable(source, f'the {what} {function}() returns (return "NAME";)')
-            elif not match:
-                self.unreadable(PANEL_PROTOCOL_JS, f'{constant} (const {constant} = ["...", ...];)')
-            else:
-                theirs = set(re.findall(r'"([^"]*)"', match.group(1)))
+                continue
+            for client, constant, why in copies:
+                copy = self.text(client)
+                if copy is None:
+                    continue
+                pattern, spelling = NAME_LIST[Path(client).suffix]
+                match = re.search(pattern.replace("NAME", constant), copy, re.M)
+                if not match:
+                    self.unreadable(client, f"{constant} ({spelling.format(name=constant)})")
+                    continue
+                theirs = set(re.findall(r'"([^"]*)"|\'([^\']*)\'', match.group(1)))
+                theirs = {double or single for double, single in theirs}
                 if theirs != ours:
-                    self.problem(f"{PANEL_PROTOCOL_JS}: {constant} is {sorted(theirs)}, but {function}() in "
+                    self.problem(f"{client}: {constant} is {sorted(theirs)}, but {function}() in "
                                  f"{source} names {sorted(ours)} -- {why}")
         return len(NAME_LISTS)
 
@@ -758,6 +951,7 @@ def main() -> int:
     code_count = checker.move_codes()
     checker.mirrors()
     key_count = checker.keys()
+    read_count = checker.frame_reads()
     checker.bearings()
     name_counts = [f"{checker.wire_names(*row)} {what}" for what, *row in WIRE_NAMES]
     checker.scheme_wire()
@@ -774,8 +968,9 @@ def main() -> int:
     print(
         f"check_protocol: OK -- {code_count} move codes, {len(MIRRORS)} mirrored constants, the scan angles, "
         f"{', '.join(name_counts)}, the scheme and settings messages, {list_count} lists of names, "
-        f"{ota_count} firmware update names, and the names of "
-        f"{key_count} telemetry keys and the command fields agree across {DRIVE_PY} and {PANEL_SCRIPTS}"
+        f"{ota_count} firmware update names, the names of "
+        f"{key_count} telemetry keys and the command fields across {DRIVE_PY} and {PANEL_SCRIPTS}, and "
+        f"{read_count} frame keys {RECORDER_PY} and {WS_PY} read agree"
     )
     return 0
 
