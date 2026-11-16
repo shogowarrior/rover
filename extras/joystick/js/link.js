@@ -1,8 +1,12 @@
 /**
  * The WebSocket link to the rover: connecting and disconnecting, knowing
  * whether telemetry still arrives, remembering the address, showing the link
- * state, and turning frames into telemetry objects and the rover's word about
- * a firmware update.
+ * state, and telling the rover's frames apart by their key: telemetry, a
+ * line of its log, its metrics, its settings, and its word about a firmware
+ * update. Only telemetry says the link is live: the other frames come at
+ * other paces (the log's lines in a burst as the link opens, the metrics
+ * every 2 s, the settings as they change), and a rover that sent them but
+ * no telemetry would have kept a dead scan looking fresh.
  *
  *   new Link({ body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost, storageKey })
  *     body        gets data-link = the state, which the page's CSS keys on;
@@ -54,10 +58,25 @@
  *                      nothing, when no socket is open.
  *   onTelemetry(fn)    fn(data) once per telemetry frame: always a plain
  *                      object; a frame that is not one is dropped here.
+ *                      Telemetry is any object that is none of the frames
+ *                      below; only it (and an update's reply) keeps the
+ *                      link from going stale.
  *   onOta(fn)          fn(message) for each message about a firmware update
  *                      (firmware.js): an object whose "ota" is a string. It
  *                      never reaches onTelemetry, where one blanked the scan,
  *                      hid the motor warning and forgot the scheme.
+ *   onLog(fn)          fn(frame) for each line of the rover's event log:
+ *                      an object whose "log" is a string, with "seq", "t",
+ *                      "src" and "warn" (src/Protocol.h). A link that opens
+ *                      is sent every line the rover still holds first.
+ *   onMetrics(fn)      fn(frame) for each of the rover's metrics frames: an
+ *                      object whose "metrics" is an object.
+ *   onSettings(fn)     fn(frame) for each of the rover's settings frames: an
+ *                      object whose "settings" is an object, holding every
+ *                      setting. Sent as a link opens, and as they change.
+ *                      None of these three reaches onTelemetry: a line read
+ *                      as telemetry blanked the scan and the readouts and
+ *                      made the mode unknown, since none has "mode".
  *   onSay(fn)          fn(said) whenever the chip is said again: its word
  *                      ("down", "lost", "unreachable", "connecting", "up" or
  *                      "stale", as data-say) or the address it names, which
@@ -175,6 +194,9 @@ class Link {
   #sayListeners = new Listeners();
   #telemetryListeners = new Listeners();
   #otaListeners = new Listeners();
+  #logListeners = new Listeners();
+  #metricsListeners = new Listeners();
+  #settingsListeners = new Listeners();
 
   constructor({ body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost, storageKey }) {
     this.#ui = { body, host, connect, chip, linkState, note, proxy, cardTitle, cardHost };
@@ -232,6 +254,18 @@ class Link {
 
   onOta(fn) {
     return this.#otaListeners.add(fn);
+  }
+
+  onLog(fn) {
+    return this.#logListeners.add(fn);
+  }
+
+  onMetrics(fn) {
+    return this.#metricsListeners.add(fn);
+  }
+
+  onSettings(fn) {
+    return this.#settingsListeners.add(fn);
   }
 
   send(obj) {
@@ -292,8 +326,7 @@ class Link {
 
     ws.addEventListener("message", (event) => {
       if (ws !== this.#socket) return;
-      this.#markFresh(ws);
-      this.#receive(event.data);
+      if (this.#receive(event.data)) this.#markFresh(ws);
     });
 
     // 'error' carries no detail and is always followed by 'close', so only
@@ -408,19 +441,36 @@ class Link {
     }, Link.STALE_MS);
   }
 
+  // Hands a frame to its listeners, by its key. Returns whether it says the
+  // link is live: telemetry, or the rover's answer to an update, which may
+  // be all it sends while it writes flash.
   #receive(raw) {
     let message;
     try {
       message = JSON.parse(raw);
     } catch {
-      return;
+      return false;
     }
     // Telemetry is always a JSON object. An array is an object to typeof, and
     // read as one it blanked every wedge and cleared the motor warning.
-    if (!message || typeof message !== "object" || Array.isArray(message)) return;
-    // The rover's answers to this panel's firmware update, which carry none
-    // of telemetry's keys.
-    if (typeof message.ota === "string") this.#otaListeners.emit(message);
-    else this.#telemetryListeners.emit(message);
+    if (!Link.#isObject(message)) return false;
+    // The rover's answers to this panel's firmware update, its log, its
+    // metrics and its settings, which carry none of telemetry's keys.
+    if (typeof message.ota === "string") {
+      this.#otaListeners.emit(message);
+      return true;
+    }
+    if (typeof message.log === "string") this.#logListeners.emit(message);
+    else if (Link.#isObject(message.metrics)) this.#metricsListeners.emit(message);
+    else if (Link.#isObject(message.settings)) this.#settingsListeners.emit(message);
+    else {
+      this.#telemetryListeners.emit(message);
+      return true;
+    }
+    return false;
+  }
+
+  static #isObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 }

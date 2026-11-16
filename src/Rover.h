@@ -3,15 +3,20 @@
 
 #include <stdint.h>
 
+#include "EventLog.h"
 #include "Explorer.h"
 #include "Hardware.h"
 #include "MoveCodes.h"
+#include "SelfTest.h"
+#include "Settings.h"
 
 // Mode arbitration, move deadlines and the one clamped path to the motors.
 // Pure core (AGENTS.md, Architecture), host-tested in test/test_rover. It
 // enforces four of AGENTS.md's Invariants: release by deadline (a lost stop is
 // written again; see release()), clamping in drive(), the duration cap as the
-// deadman, and autonomous and manual never both driving.
+// deadman, and autonomous and manual never both driving. Mode changes and
+// stand-downs go in the EventLog, with the explorer's decisions and the
+// checks' results.
 class Rover {
  public:
   enum Mode { MODE_AUTONOMOUS, MODE_MANUAL };
@@ -26,9 +31,17 @@ class Rover {
     bool hasScan;            // false until every bearing has been measured
     float scanCm[Explorer::BEARING_COUNT];
     bool motorsReady;        // false when the motor driver did not answer at boot
+    Explorer::SonarMode sonar;  // where manual mode points the sonar (Settings)
+    int aimDeg;                 // SONAR_AIM's angle, positive left
+    bool hasAimCm;              // in manual mode aiming, aimCm is a reading taken at aimDeg
+    float aimCm;
+    const char* check;          // the check under way (SelfTest), else nullptr
+    uint32_t pings;             // sonar pings since boot...
+    uint32_t silentPings;       // ...and those that heard no echo
   };
 
-  Rover(Motors& motors, RangeScanner& scanner);
+  // Manual mode points the sonar as `settings` say.
+  Rover(Motors& motors, RangeScanner& scanner, const Settings& settings, EventLog& log);
 
   void begin(Mode initialMode, uint32_t now);
 
@@ -40,18 +53,30 @@ class Rover {
   // A command from any external source, straight off the wire: `move` is the
   // raw integer and is validated here. Switches to MODE_MANUAL, except for
   // RESUME_AUTONOMOUS, which switches back -- or, already exploring, restarts
-  // a halted explorer. An unknown code stops the rover.
+  // a halted explorer. RUN_CHECKS starts the checks (SelfTest.h), in manual,
+  // and re-sent holds them; any other command ends them. An unknown code
+  // stops the rover.
   void command(int move, int speed, int durationMs, uint32_t now);
 
-  // Release the motors, keeping the mode: the client driving the rover
-  // disconnected. In autonomous mode exploration carries on.
+  // A RUN_CHECKS that Control refused: moves nothing, but keeps checks that
+  // a command ended from starting over while their controller still re-sends
+  // (SelfTest::renew()).
+  void checksRefused(uint32_t now);
+
+  // Release the motors, keeping the mode, and end the checks: the client
+  // driving the rover disconnected. In autonomous mode exploration carries on.
   void stop(uint32_t now);
 
-  // Release the motors and drop to manual: no STOP could reach the rover any
-  // more (the WiFi link dropped), or its firmware is being replaced (an OTA
-  // flash started, which leaves it still whether the upload succeeds or not).
-  // RESUME_AUTONOMOUS restores exploration once a client can reach it again.
-  void standDown(uint32_t now);
+  // Release the motors, end the checks and drop to manual: no STOP could
+  // reach the rover any more (the WiFi link dropped), or its firmware is
+  // being replaced (an OTA flash started, which leaves it still whether the
+  // upload succeeds or not). RESUME_AUTONOMOUS restores exploration once a
+  // client can reach it again. `why` goes in the log.
+  void standDown(uint32_t now, const char* why);
+
+  // Run the checks that turn no wheel (SelfTest.h): main.cpp's, at boot,
+  // when Settings::checksAtBoot() says so. Any command ends them.
+  void checkWithoutWheels(uint32_t now);
 
   // Make a stop's pending second write once it is due (see release()), and
   // nothing else: no exploring, no sonar, no new motion. update() calls it
@@ -71,15 +96,21 @@ class Rover {
   // Start over in `mode`: the wheels released, and exploration from a fresh
   // sweep.
   void restart(Mode mode, uint32_t now);
-  void setMode(Mode mode, uint32_t now);
+  // A change of mode starts over in it (restart()); `why`, if any, goes in
+  // the log.
+  void setMode(Mode mode, uint32_t now, const char* why);
   void drive(MoveCode move, int speed, int durationMs, uint32_t now);
+  void drive(const MovePattern& pattern, int speed, int durationMs, uint32_t now);
   void release(uint32_t now);
 
   Motors& motors;
+  const Settings& settings;
+  EventLog& log;
   Explorer explorer;
+  SelfTest selfTest;
 
   Mode currentMode = MODE_AUTONOMOUS;
-  MoveCode currentMove = STOP;
+  const MovePattern* currentPattern = nullptr;  // meaningful only while moving
   int currentSpeed = 0;
   bool moving = false;
   uint32_t moveDeadline = 0;     // meaningful only while moving

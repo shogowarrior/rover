@@ -62,6 +62,13 @@ case "$file" in
   extras/joystick/* | test/vectors/* | src/*) panel=yes ;;
 esac
 
+# client/ws.py's recorder and exporter against the frames in test/vectors/
+# (under a second).
+clients=no
+case "$file" in
+  client/*.py | test/vectors/*) clients=yes ;;
+esac
+
 # The secrets guard's case table, after an edit to either hook or the table.
 guard=no
 case "$file" in
@@ -78,7 +85,8 @@ esac
 # out, and the headers it reads; Timing.h too, for the pad's timing rules.
 gamepad=no
 case "$file" in
-  src/Gamepad.* | src/GamepadSession.h | src/Features.h | src/Kinematics.h | \
+  src/Gamepad.* | src/GamepadSession.h | src/Control.h | src/Settings.h | \
+    src/Source.h | src/EventLog.h | src/Features.h | src/Kinematics.h | \
     src/Tuning.h | src/Timing.h | platformio.ini)
     gamepad=yes
     ;;
@@ -88,8 +96,9 @@ esac
 # the tests themselves.
 tests=no
 case "$file" in
-  src/Kinematics.* | src/MovePatterns.* | src/Explorer.* | src/Rover.* | \
-    src/GamepadSession.* | src/Protocol.* | src/FirmwareUpdate.* | \
+  src/Kinematics.* | src/MovePatterns.* | src/EventLog.* | src/Explorer.* | \
+    src/SelfTest.* | src/Rover.* | src/GamepadSession.* | src/Protocol.* | \
+    src/FirmwareUpdate.* | src/Settings.* | src/Control.* | src/Source.h | \
     src/MoveCodes.h | src/Tuning.h | src/Timing.h | src/Hardware.h | test/* | \
     platformio.ini)
     tests=yes
@@ -129,6 +138,13 @@ if [ "$panel" = yes ]; then
         grep -vE '^[[:space:]]*(at |generatedMessage:|code:|actual:|expected:|operator:|[-+] |[{}]$)')" \
       '^✖|check\(s\) failed|^    [^ ]|Error|^ℹ (tests|fail) '
   printf '%s\n' "$out" | grep -E 'checks passed|^ℹ (tests|fail) '
+fi
+
+if [ "$clients" = yes ]; then
+  require python3 "Client tests (client/test_*.py)"
+  out=$(python3 -m unittest discover -s client -p 'test_*.py' 2>&1) ||
+    fail "Client tests (client/test_*.py) FAILED" "$out" '^(FAIL|ERROR|AssertionError|Traceback)|Error'
+  printf '%s\n' "$out" | tail -1
 fi
 
 if [ "$guard" = yes ]; then

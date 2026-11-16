@@ -131,10 +131,11 @@ void test_sideways_pivots_swing_the_axle_their_names_say(void) {
 }
 
 // DroneBot's table has no STOP row, so it is pinned here: every wheel coasts.
-void test_every_code_except_resume_is_a_motion(void) {
+// RESUME_AUTONOMOUS and RUN_CHECKS are no motion: Rover acts on them itself.
+void test_every_code_but_resume_and_checks_is_a_motion(void) {
   for (int code = 0; code < MOVE_CODE_COUNT; code++) {
     const MovePattern* pattern = findMovePattern(static_cast<MoveCode>(code));
-    if (code == RESUME_AUTONOMOUS) {
+    if (code == RESUME_AUTONOMOUS || code == RUN_CHECKS) {
       TEST_ASSERT_NULL(pattern);
     } else {
       TEST_ASSERT_NOT_NULL(pattern);
@@ -152,6 +153,19 @@ void test_names_are_the_enum_identifiers(void) {
   TEST_ASSERT_EQUAL_STRING("PIVOT_SIDEWAYS_BACKWARD_LEFT", moveName(PIVOT_SIDEWAYS_BACKWARD_LEFT));
   TEST_ASSERT_EQUAL_STRING("ROTATE_COUNTERCLOCKWISE", moveName(ROTATE_COUNTERCLOCKWISE));
   TEST_ASSERT_EQUAL_STRING("UNKNOWN", moveName(RESUME_AUTONOMOUS));
+  TEST_ASSERT_EQUAL_STRING("UNKNOWN", moveName(RUN_CHECKS));
+}
+
+// The checks' wheels alone (SelfTest): each turns its own wheel forward and
+// no other, and none is a motion of the wire protocol, so none can be sent.
+void test_each_wheel_alone_is_that_wheel_forward(void) {
+  for (int wheel = 0; wheel < WHEEL_COUNT; wheel++) {
+    const MovePattern& pattern = wheelAlone(static_cast<Wheel>(wheel));
+    TEST_ASSERT_EQUAL_INT(STOP, pattern.move);
+    for (int other = 0; other < WHEEL_COUNT; other++) {
+      TEST_ASSERT_EQUAL_INT(other == wheel ? WHEEL_FORWARD : WHEEL_FREE, pattern.wheels[other]);
+    }
+  }
 }
 
 // Reversing a motion must reverse every wheel. A typo in one row breaks this.
@@ -170,6 +184,7 @@ void test_opposite_motions_mirror_every_wheel(void) {
 void test_move_code_validation(void) {
   TEST_ASSERT_TRUE(isMoveCode(STOP));
   TEST_ASSERT_TRUE(isMoveCode(RESUME_AUTONOMOUS));
+  TEST_ASSERT_TRUE(isMoveCode(RUN_CHECKS));
   TEST_ASSERT_FALSE(isMoveCode(-1));
   TEST_ASSERT_FALSE(isMoveCode(MOVE_CODE_COUNT));
   TEST_ASSERT_FALSE(isMoveCode(257));  // would wrap to MOVE_FORWARD through a uint8_t
@@ -180,7 +195,8 @@ int main(int, char**) {
   RUN_TEST(test_every_motion_matches_dronebot_workshop);
   RUN_TEST(test_pivots_drive_the_way_their_names_say);
   RUN_TEST(test_sideways_pivots_swing_the_axle_their_names_say);
-  RUN_TEST(test_every_code_except_resume_is_a_motion);
+  RUN_TEST(test_every_code_but_resume_and_checks_is_a_motion);
+  RUN_TEST(test_each_wheel_alone_is_that_wheel_forward);
   RUN_TEST(test_names_are_the_enum_identifiers);
   RUN_TEST(test_opposite_motions_mirror_every_wheel);
   RUN_TEST(test_move_code_validation);

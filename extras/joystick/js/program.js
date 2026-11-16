@@ -520,6 +520,7 @@ class RoverTarget {
     stale: "telemetry stopped arriving.",
     stop: "Stop was pressed.",
     autonomous: "Autonomous was pressed.",
+    checks: "the rover's checks were started.",
   });
 
   static NOT_READY = Object.freeze({

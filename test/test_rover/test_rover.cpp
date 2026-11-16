@@ -1,8 +1,13 @@
 #include <stdint.h>
+#include <string.h>
 #include <unity.h>
+
+#include <string>
+#include <vector>
 
 #include "../fakes/FakeHardware.h"
 #include "../support/Loop.h"
+#include "EventLog.h"
 #include "Rover.h"
 #include "Tuning.h"
 
@@ -14,6 +19,8 @@ namespace {
 
 FakeMotors* motors;
 FakeScanner* scanner;
+EventLog* events;
+Settings* settings;
 Rover* rover;
 uint32_t clockNow = 0;  // stamps the scanner's aims and pings
 
@@ -56,11 +63,15 @@ void setUp(void) {
   scanner = new FakeScanner();
   clockNow = 0;
   scanner->clock = &clockNow;
-  rover = new Rover(*motors, *scanner);
+  events = new EventLog();
+  settings = new Settings(*events, kinematics::SCHEME_NORMAL);
+  rover = new Rover(*motors, *scanner, *settings, *events);
 }
 
 void tearDown(void) {
   delete rover;
+  delete settings;
+  delete events;
   delete scanner;
   delete motors;
 }
@@ -308,7 +319,7 @@ void test_stop_keeps_the_mode(void) {
 void test_losing_the_link_stops_exploration(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   const uint32_t now = runUntilCruising(0);
-  rover->standDown(now);
+  rover->standDown(now, "WiFi lost");
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   assertStaysStopped(now);
@@ -344,7 +355,7 @@ void test_status_has_no_scan_until_every_bearing_is_measured(void) {
 void test_losing_the_link_while_driven_releases_at_once(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(MOVE_FORWARD, 100, 1500, 0);
-  rover->standDown(10);
+  rover->standDown(10, "WiFi lost");
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
 }
@@ -392,7 +403,7 @@ void test_a_lost_stop_is_written_again(void) {
       [](uint32_t now) { rover->command(MOVE_CODE_COUNT, 100, 500, now); },
       [](uint32_t now) { rover->update(now); },  // the deadline, and so the deadman
       [](uint32_t now) { rover->stop(now); },
-      [](uint32_t now) { rover->standDown(now); },
+      [](uint32_t now) { rover->standDown(now, "WiFi lost"); },
   };
   for (StopAt stopAt : ways) {
     rover->begin(Rover::MODE_MANUAL, 0);
@@ -433,7 +444,7 @@ void test_a_lost_stop_is_written_again_without_the_loop(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   rover->command(MOVE_FORWARD, 100, 500, 0);
   motors->releasesToLose = 1;
-  rover->standDown(100);
+  rover->standDown(100, "an OTA upload started");
   TEST_ASSERT_TRUE(motors->driving);  // lost on the bus
   const int pings = scanner->pings;
   const size_t aims = scanner->aims.size();
@@ -496,6 +507,407 @@ void test_status_reports_a_missing_motor_driver(void) {
   TEST_ASSERT_FALSE(rover->status().motorsReady);
 }
 
+// --- the sonar in manual mode -------------------------------------------------
+
+const int FRONT_SERVO = 90;
+
+// Every servo angle pinged from the `from`th ping on.
+std::vector<int> pingsFrom(size_t from) {
+  return std::vector<int>(scanner->pingAngles.begin() + static_cast<long>(from), scanner->pingAngles.end());
+}
+
+void test_manual_mode_points_the_sonar_as_set(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);  // the default
+  settings->setSonar(Explorer::SONAR_SWEEP, SOURCE_WIFI, 0);
+  runFor(0, 4000);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, rover->status().sonar);
+  const std::vector<int> swept = pingsFrom(0);
+  const int bearings[] = {20, 55, 90, 125, 160};
+  for (int servo : bearings) {
+    int times = 0;
+    for (int angle : swept) times += angle == servo;
+    TEST_ASSERT_TRUE(times >= 2);  // over and over, not once
+  }
+
+  scanner->setArc(FRONT_SERVO - 30, FRONT_SERVO - 30, 42.0f);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 4000);
+  settings->setAim(30, SOURCE_WIFI, 4000);
+  const size_t before = scanner->pingAngles.size();
+  runFor(4000, 1000);
+  for (int angle : pingsFrom(before)) TEST_ASSERT_EQUAL_INT(FRONT_SERVO - 30, angle);
+  const Rover::Status status = rover->status();
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_AIM, status.sonar);
+  TEST_ASSERT_EQUAL_INT(30, status.aimDeg);
+  TEST_ASSERT_TRUE(status.hasAimCm);
+  TEST_ASSERT_EQUAL_FLOAT(42.0f, status.aimCm);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
+}
+
+// Past the servo's end stops, where a cheap servo strains and buzzes.
+void test_the_aim_is_clamped(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 0);
+  settings->setAim(200, SOURCE_WIFI, 0);
+  TEST_ASSERT_EQUAL_INT(tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
+  settings->setAim(-200, SOURCE_WIFI, 0);
+  TEST_ASSERT_EQUAL_INT(-tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
+  runFor(0, 3000);  // the one sweep, then the held aim
+  const std::vector<int> held = pingsFrom(Explorer::BEARING_COUNT);
+  TEST_ASSERT_TRUE(held.size() >= 5);
+  for (int angle : held) TEST_ASSERT_EQUAL_INT(FRONT_SERVO + tuning::SONAR_AIM_MAX_DEG, angle);
+}
+
+// A setting, not a command: an exploring rover explores on, and sweeps its
+// own way, until a command puts it in manual.
+void test_the_sonar_setting_takes_no_control(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  uint32_t now = runUntilCruising(0);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, now);
+  settings->setAim(50, SOURCE_WIFI, now);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
+  TEST_ASSERT_TRUE(motors->driving);
+  const size_t before = scanner->pingAngles.size();
+  now = runFor(now, 3000);
+  for (int angle : pingsFrom(before)) TEST_ASSERT_NOT_EQUAL(FRONT_SERVO - 50, angle);
+  TEST_ASSERT_FALSE(rover->status().hasAimCm);
+
+  rover->command(STOP, 0, 0, now);
+  const size_t manual = scanner->pingAngles.size();
+  runFor(now, 1000);
+  const std::vector<int> after = pingsFrom(manual);
+  TEST_ASSERT_TRUE(after.size() >= 3);
+  for (int angle : after) TEST_ASSERT_EQUAL_INT(FRONT_SERVO - 50, angle);
+}
+
+// A sweep passes through the aim's angle too; that is no aimed reading.
+void test_an_aimed_reading_is_reported_only_while_aiming(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  runFor(0, 3000);
+  TEST_ASSERT_FALSE(rover->status().hasAimCm);
+}
+
+// --- the checks ----------------------------------------------------------------
+
+// One drive the checks made: the pattern and speed, and when.
+struct Drive {
+  const MovePattern* pattern;
+  int speed;
+  uint32_t at;
+};
+
+// A client holding the checks, as the panel does: RUN_CHECKS again every
+// 200 ms (its REPEAT_MS) since `heldAt`.
+void holdChecks(uint32_t now, uint32_t& heldAt) {
+  if (now - heldAt >= 200) {
+    heldAt = now;
+    rover->command(RUN_CHECKS, 0, 0, now);
+  }
+}
+
+// Runs the checks from `from` until they end, at most 60 s, recording each
+// new drive (a rewrite of the one under way is not one), and holding them
+// unless `hold` is false. Returns the time they ended.
+uint32_t runChecks(uint32_t from, std::vector<Drive>& drives, bool hold = true) {
+  uint32_t now = from;
+  uint32_t heldAt = from;
+  int calls = motors->driveCalls;
+  const MovePattern* last = nullptr;
+  int lastSpeed = -1;
+  const bool ended = advanceUntil(
+      now, 60000, 5,
+      [&](uint32_t t) {
+        if (hold) holdChecks(t, heldAt);
+        clockNow = t;
+        rover->update(t);
+        const char* check = rover->status().check;
+        if (check != nullptr) TEST_ASSERT_TRUE_MESSAGE(strlen(check) <= SelfTest::STEP_NAME_MAX, check);
+        if (motors->driveCalls != calls) {
+          calls = motors->driveCalls;
+          if (motors->lastPattern != last || motors->lastSpeed != lastSpeed) {
+            drives.push_back({motors->lastPattern, motors->lastSpeed, t});
+          }
+          last = motors->lastPattern;
+          lastSpeed = motors->lastSpeed;
+        }
+        if (!motors->driving) last = nullptr;
+      },
+      [] { return rover->status().check == nullptr; });
+  TEST_ASSERT_TRUE_MESSAGE(ended, "the checks never ended");
+  return now;
+}
+
+bool logged(const char* text, EventLog::Level level = EventLog::INFO) {
+  for (uint32_t seq = events->oldestSeq(); seq != events->nextSeq(); seq++) {
+    const EventLog::Entry* entry = events->from(seq);
+    if (entry->level == level && std::string(entry->text).find(text) != std::string::npos) return true;
+  }
+  return false;
+}
+
+// The sonar at each bearing, then each wheel alone, then the four moves, in
+// that order, each at its speed, each ended by its own deadline.
+void test_the_checks_run_every_step_in_order(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  scanner->setAll(150.0f);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+  std::vector<Drive> drives;
+  const uint32_t end = runChecks(0, drives);
+
+  // Three pings at each of the five bearings came before any wheel turned.
+  int bearingPings[181] = {0};
+  for (size_t i = 0; i < scanner->pingAngles.size(); i++) {
+    if (!drives.empty() && scanner->pingTimes[i] >= drives[0].at) break;
+    bearingPings[scanner->pingAngles[i]]++;
+  }
+  const int bearings[] = {20, 55, 90, 125, 160};
+  for (int servo : bearings) TEST_ASSERT_TRUE(bearingPings[servo] >= 3);
+
+  const MovePattern* expected[] = {
+      &wheelAlone(WHEEL_FRONT_LEFT), &wheelAlone(WHEEL_FRONT_RIGHT), &wheelAlone(WHEEL_REAR_RIGHT),
+      &wheelAlone(WHEEL_REAR_LEFT),  findMovePattern(MOVE_FORWARD),  findMovePattern(MOVE_FORWARD),
+      findMovePattern(MOVE_RIGHT),   findMovePattern(ROTATE_CLOCKWISE)};
+  const int speeds[] = {tuning::CHECK_SPEED, tuning::CHECK_SPEED, tuning::CHECK_SPEED, tuning::CHECK_SPEED,
+                        tuning::EXPLORE_SPEED, tuning::CHECK_SPEED, tuning::CHECK_SPEED, tuning::CHECK_SPEED};
+  TEST_ASSERT_EQUAL_size_t(8, drives.size());
+  for (size_t i = 0; i < drives.size(); i++) {
+    TEST_ASSERT_TRUE(drives[i].pattern == expected[i]);
+    TEST_ASSERT_EQUAL_INT(speeds[i], drives[i].speed);
+    // Each drive ended, and the wheels rested, before the next began.
+    if (i > 0) {
+      TEST_ASSERT_TRUE(drives[i].at - drives[i - 1].at >=
+                       static_cast<uint32_t>(tuning::CHECK_DRIVE_MS) + tuning::CHECK_REST_MS);
+    }
+  }
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_TRUE(logged("Checks done: motor shield answered; the sonar heard 15 of 15 pings"));
+  TEST_ASSERT_TRUE(logged("Sonar ahead: 3 of 3 pings heard an echo, the nearest 150 cm"));
+  TEST_ASSERT_TRUE(logged("Front-left wheel alone, forward"));
+  // In manual mode, and the sonar back to the operator's sweep.
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+  assertStaysStopped(end);
+}
+
+void test_checks_without_a_shield_turn_no_wheel(void) {
+  motors->isReady = false;
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  runChecks(0, drives);
+  TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
+  TEST_ASSERT_TRUE(logged("Motor shield: did not answer at boot", EventLog::WARN));
+  TEST_ASSERT_TRUE(logged("Wheels not checked", EventLog::WARN));
+  TEST_ASSERT_TRUE(logged("Checks done: motor shield missing", EventLog::WARN));
+}
+
+// A dead sensor hears nothing anywhere: said as a warning, never as open
+// space.
+void test_checks_with_a_silent_sonar_warn(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  scanner->setAll(-1.0f);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  runChecks(0, drives);
+  TEST_ASSERT_TRUE(logged("Sonar left: none of 3 pings heard an echo", EventLog::WARN));
+  TEST_ASSERT_TRUE(logged("Checks done: motor shield answered; the sonar heard 0 of 15 pings", EventLog::WARN));
+}
+
+// The checks turn the wheels, so every way of losing control, and any
+// command, ends them with the wheels released, and they never resume.
+void test_anything_that_takes_control_ends_the_checks(void) {
+  typedef void (*EndAt)(uint32_t now);
+  const EndAt ways[] = {
+      [](uint32_t now) { rover->command(STOP, 0, 0, now); },
+      [](uint32_t now) { rover->command(MOVE_BACKWARD, 100, 300, now); },
+      [](uint32_t now) { rover->command(RESUME_AUTONOMOUS, 0, 0, now); },
+      [](uint32_t now) { rover->command(MOVE_CODE_COUNT + 5, 0, 0, now); },
+      [](uint32_t now) { rover->stop(now); },
+      [](uint32_t now) { rover->standDown(now, "WiFi lost"); },
+  };
+  for (EndAt endAt : ways) {
+    tearDown();
+    setUp();
+    rover->begin(Rover::MODE_MANUAL, 0);
+    rover->command(RUN_CHECKS, 0, 0, 0);
+    uint32_t now = 0;
+    uint32_t heldAt = 0;
+    const bool wheelTurning = advanceUntil(
+        now, 30000, 5,
+        [&](uint32_t t) {
+          holdChecks(t, heldAt);
+          updateRover(t);
+        },
+        [] { return motors->driving; });
+    TEST_ASSERT_TRUE(wheelTurning);
+    endAt(now);
+    TEST_ASSERT_NULL(rover->status().check);
+    TEST_ASSERT_TRUE(logged("Checks stopped"));
+    // Whatever the command asked for is its own; no check drives again.
+    now = runFor(now, 2000);
+    const int calls = motors->driveCalls;
+    runFor(now, 20000);
+    TEST_ASSERT_TRUE(motors->driveCalls == calls || rover->status().mode == Rover::MODE_AUTONOMOUS);
+    TEST_ASSERT_NULL(rover->status().check);
+  }
+}
+
+void test_the_checks_take_control_from_exploration(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  const uint32_t now = runUntilCruising(0);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
+  TEST_ASSERT_FALSE(motors->driving);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
+void test_the_status_names_the_check_under_way(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  uint32_t now = 0;
+  uint32_t heldAt = 0;
+  const auto held = [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+  };
+  TEST_ASSERT_TRUE(advanceUntil(now, 30000, 5, held, [] { return motors->driving; }));
+  TEST_ASSERT_EQUAL_STRING("wheel FL", rover->status().check);
+  TEST_ASSERT_TRUE(advanceUntil(now, 60000, 5, held, [] {
+    return rover->status().check != nullptr && std::string(rover->status().check) == "rotate cw";
+  }));
+}
+
+// The deadman's rule: one RUN_CHECKS, from a client that then goes quiet
+// (a script that died, a single line typed into the serial console), checks
+// the shield and the sonar and turns no wheel.
+void test_unheld_checks_turn_no_wheel(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  scanner->setAll(150.0f);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  const uint32_t end = runChecks(0, drives, false);
+  TEST_ASSERT_EQUAL_size_t(0, drives.size());
+  TEST_ASSERT_TRUE(logged("Sonar right: 3 of 3 pings heard an echo"));
+  TEST_ASSERT_TRUE(logged("Checks stopped: no RUN_CHECKS for 1000 ms, so no wheel turns", EventLog::WARN));
+  assertStaysStopped(end);
+}
+
+// Re-sends stop mid-run: the wheel turning stops at its own deadline, and
+// no other turns.
+void test_checks_stop_soon_after_the_resends_do(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  uint32_t now = 0;
+  uint32_t heldAt = 0;
+  TEST_ASSERT_TRUE(advanceUntil(
+      now, 60000, 5,
+      [&](uint32_t t) {
+        holdChecks(t, heldAt);
+        updateRover(t);
+      },
+      [] { return rover->status().check != nullptr && std::string(rover->status().check) == "wheel RR"; }));
+  // The last re-send was at heldAt: by then and a step's drive later, still.
+  const uint32_t stillBy = heldAt + tuning::CHECK_HOLD_MS + tuning::CHECK_DRIVE_MS;
+  TEST_ASSERT_TRUE(advanceUntil(now, stillBy - now + 5, 5, updateRover,
+                                [] { return !motors->driving && rover->status().check == nullptr; }));
+  TEST_ASSERT_TRUE(logged("Checks stopped: no RUN_CHECKS", EventLog::WARN));
+  assertStaysStopped(now);
+}
+
+// Re-sends that cross the run's end, before the client sees it ended, never
+// start a second run; a fresh RUN_CHECKS after a pause, or after any other
+// command, does.
+void test_resends_never_start_a_second_run(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  std::vector<Drive> drives;
+  uint32_t now = runChecks(0, drives);
+  TEST_ASSERT_EQUAL_size_t(8, drives.size());
+  uint32_t heldAt = now;
+  const int calls = motors->driveCalls;
+  advance(now, 3000, 5, [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+    TEST_ASSERT_NULL(rover->status().check);
+  });
+  TEST_ASSERT_EQUAL_INT(calls, motors->driveCalls);
+
+  now = runFor(now, tuning::CHECK_HOLD_MS + 100);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+
+  // A STOP, from anyone, ends the run, and the re-sends still coming start
+  // nothing: they once started it again, and the panel held the new run.
+  rover->command(STOP, 0, 0, now + 5);
+  TEST_ASSERT_NULL(rover->status().check);
+  rover->command(RUN_CHECKS, 0, 0, now + 10);
+  TEST_ASSERT_NULL(rover->status().check);
+  now += 10;
+  heldAt = now;
+  const int stopped = motors->driveCalls;
+  advance(now, 5000, 5, [&](uint32_t t) {
+    holdChecks(t, heldAt);
+    updateRover(t);
+    TEST_ASSERT_NULL(rover->status().check);
+  });
+  TEST_ASSERT_EQUAL_INT(stopped, motors->driveCalls);
+
+  // Once the re-sends have stopped for CHECK_HOLD_MS, the next starts a run.
+  now = runFor(now, tuning::CHECK_HOLD_MS);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
+// The hold on the checks is forgotten once it lapses, in either mode, so a
+// RUN_CHECKS ~49.7 days after the last starts a run rather than reading as
+// a re-send of it.
+void test_a_hold_on_the_checks_is_forgotten(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->command(RUN_CHECKS, 0, 0, 0);
+  rover->command(STOP, 0, 0, 10);
+  uint32_t now = runFor(10, tuning::CHECK_HOLD_MS);
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
+  now = runFor(now, 100);  // exploring: the lapsed hold is forgotten all the same
+  // 2^32 + 500 ms after the first: millis() has wrapped, and since() reads
+  // the first as 500 ms old.
+  rover->command(RUN_CHECKS, 0, 0, 500);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+}
+
+// The checks at boot turn no wheel, and a RUN_CHECKS during them starts the
+// whole checks.
+void test_a_run_during_the_boot_checks_starts_the_whole_checks(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  rover->checkWithoutWheels(0);
+  TEST_ASSERT_EQUAL_STRING("sonar L", rover->status().check);
+  uint32_t now = runFor(0, 300);
+  rover->command(RUN_CHECKS, 0, 0, now);
+  TEST_ASSERT_TRUE(logged("Checks stopped: started again"));
+  std::vector<Drive> drives;
+  runChecks(now, drives);
+  TEST_ASSERT_EQUAL_size_t(8, drives.size());
+}
+
+// --- the log ------------------------------------------------------------------
+
+void test_mode_changes_and_stand_downs_are_logged(void) {
+  rover->begin(Rover::MODE_AUTONOMOUS, 0);
+  rover->command(MOVE_FORWARD, 100, 300, 10);
+  TEST_ASSERT_TRUE(logged("Manual: a command took control"));
+  rover->command(RESUME_AUTONOMOUS, 0, 0, 20);
+  TEST_ASSERT_TRUE(logged("Autonomous: exploring from a fresh sweep"));
+  rover->standDown(30, "WiFi lost");
+  TEST_ASSERT_TRUE(logged("Stood down: WiFi lost", EventLog::WARN));
+  rover->command(99, 100, 300, 40);
+  TEST_ASSERT_TRUE(logged("Unknown move code 99: stopped", EventLog::WARN));
+  // A repeated command is not a mode change: one line, not one per command.
+  const uint32_t lines = events->nextSeq();
+  rover->command(MOVE_FORWARD, 100, 300, 60);
+  rover->command(MOVE_FORWARD, 100, 300, 70);
+  TEST_ASSERT_EQUAL_UINT32(lines, events->nextSeq());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_command_drives_until_its_deadline);
@@ -530,5 +942,21 @@ int main(int, char**) {
   RUN_TEST(test_status_reports_a_missing_motor_driver);
   RUN_TEST(test_status_reports_what_the_wheels_are_doing);
   RUN_TEST(test_status_has_no_scan_until_every_bearing_is_measured);
+  RUN_TEST(test_manual_mode_points_the_sonar_as_set);
+  RUN_TEST(test_the_aim_is_clamped);
+  RUN_TEST(test_the_sonar_setting_takes_no_control);
+  RUN_TEST(test_an_aimed_reading_is_reported_only_while_aiming);
+  RUN_TEST(test_the_checks_run_every_step_in_order);
+  RUN_TEST(test_checks_without_a_shield_turn_no_wheel);
+  RUN_TEST(test_checks_with_a_silent_sonar_warn);
+  RUN_TEST(test_anything_that_takes_control_ends_the_checks);
+  RUN_TEST(test_the_checks_take_control_from_exploration);
+  RUN_TEST(test_unheld_checks_turn_no_wheel);
+  RUN_TEST(test_checks_stop_soon_after_the_resends_do);
+  RUN_TEST(test_resends_never_start_a_second_run);
+  RUN_TEST(test_a_hold_on_the_checks_is_forgotten);
+  RUN_TEST(test_a_run_during_the_boot_checks_starts_the_whole_checks);
+  RUN_TEST(test_the_status_names_the_check_under_way);
+  RUN_TEST(test_mode_changes_and_stand_downs_are_logged);
   return UNITY_END();
 }

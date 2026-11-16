@@ -18,19 +18,25 @@ guard blocks every call, and the build check says what it skipped.
   - a `.cpp`, `.h` or `.ino` file outside `test/`, or `platformio.ini`: build
     `car_wire` (about 8 s warm);
   - the gamepad adapter, a header its Bluetooth-only code reads
-    (`Features.h`, `GamepadSession.h`, `Kinematics.h`, `Tuning.h`),
-    `Timing.h`, or `platformio.ini`: also build `car_wire_gamepad`, because
-    `car_wire` compiles that code out;
-  - a host-tested module (`Kinematics`, `MovePatterns`, `Explorer`, `Rover`,
-    `GamepadSession`, `Protocol`, `FirmwareUpdate`), `MoveCodes.h`, `Tuning.h`, `Timing.h`,
-    `Hardware.h`, anything under `test/`, or `platformio.ini`: also
-    `pio test -e native`;
+    (`Features.h`, `GamepadSession.h`, `Control.h`, `Settings.h`,
+    `Source.h`, `EventLog.h`, `Kinematics.h`, `Tuning.h`), `Timing.h`, or
+    `platformio.ini`: also build `car_wire_gamepad`, because `car_wire`
+    compiles that code out;
+  - a host-tested module (`Kinematics`, `MovePatterns`, `EventLog`,
+    `Explorer`, `SelfTest`, `Rover`, `GamepadSession`, `Protocol`,
+    `FirmwareUpdate`, `Settings`, `Control`), `Source.h`, `MoveCodes.h`,
+    `Tuning.h`, `Timing.h`, `Hardware.h`, anything under `test/`, or
+    `platformio.ini`: also `pio test -e native`;
   - anything in `src/` or `client/`, any `.js` file under
     `extras/joystick/` at any depth, or the checker itself:
     `tools/check_protocol.py` (a fifth of a second);
   - anything in `src/`, `extras/joystick/` (the panel's page, styles, scripts
     and tests) or `test/vectors/` (the cases the panel's tests share with the
     host tests): `node --test extras/joystick/test/` (about two seconds);
+  - a `.py` file in `client/`, or anything in `test/vectors/`:
+    `python3 -m unittest discover -s client -p 'test_*.py'`, the recorder
+    and exporter against the firmware's frames, and `ws.py`'s usage (under
+    a second);
   - anything under `.claude/hooks/`: `python3 .claude/hooks/test_guard.py`,
     the secrets guard's cases (a few seconds).
 
@@ -39,10 +45,10 @@ guard blocks every call, and the build check says what it skipped.
   does. A failure is handed back so the break is fixed at once; this project
   has no other feedback loop. It fires only for the Edit and Write tools:
   change firmware, test and client files with those, or run the build, the
-  host tests, the protocol check and the panel tests, and after a change
-  under `.claude/hooks/` `python3 .claude/hooks/test_guard.py`, yourself
-  after any change made through Bash (sed, a heredoc, a script, the `mv`
-  that puts a proven guard in place). To run exactly what an edit would,
+  host tests, the protocol check, the panel tests and the client tests, and
+  after a change under `.claude/hooks/` `python3 .claude/hooks/test_guard.py`,
+  yourself after any change made through Bash (sed, a heredoc, a script, the
+  `mv` that puts a proven guard in place). To run exactly what an edit would,
   against the template where the checkout has no `src/config.h` (a
   worktree, where a bare `pio run` stops at the `#error` in
   `src/Network.cpp`), hand the hook the file you changed, from the

@@ -1329,8 +1329,12 @@ class SimTarget {
   }
 
   // The keys src/Protocol.cpp writes, with these exceptions: no
-  // "temperature", since there is no chip to measure, and no "phase" or
-  // "halt", since exploring is not simulated. "scheme" is whatever
+  // "temperature", since there is no chip to measure, no "phase" or
+  // "halt", since exploring is not simulated, and none of the keys the
+  // firmware sends only now and then: no "aim" or "aimCm" (the simulated
+  // sonar only sweeps, so "sonar" is always SWEEP), no "check" (it runs no
+  // checks), no "pad" (it has none) and no "control" (the page is its one
+  // controller). "scheme" is whatever
   // setScheme() last took: the rover's, passed on by app.js while the rover
   // is the target, or the header toggle's choice while the simulator is
   // (SchemeToggle.bind).
@@ -1344,6 +1348,7 @@ class SimTarget {
       moving: sim.moving,
       motorsReady: true,
       scheme: this.#scheme,
+      sonar: "SWEEP",
     };
     const distances = this.#sonar.distances();
     if (distances) Object.assign(frame, distances);

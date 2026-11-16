@@ -4,10 +4,13 @@
 #include <WebSocketsServer.h>
 #include <stdint.h>
 
+#include "Control.h"
+#include "EventLog.h"
 #include "FirmwareUpdate.h"
-#include "Kinematics.h"
+#include "Gamepad.h"
 #include "Protocol.h"
 #include "Rover.h"
+#include "Settings.h"
 
 // WebSocketsServer 2.6.1 never clears a client slot's count of missed pongs
 // when the slot is reused: newClient() resets the ping timer but not
@@ -46,20 +49,28 @@ class HeartbeatServer : public WebSocketsServer {
   }
 };
 
-// The WebSocket link: drive commands in, telemetry out, and firmware updates
-// (Protocol.h has the format). Network starts it once WiFi is up and calls
-// update() every loop. `scheme` is the rover's one control scheme, shared
-// with the gamepad: a client may change it, and telemetry reports it.
+// The WebSocket link: drive commands and settings in, through Control as
+// the WIFI controller's; telemetry, the settings, the EventLog's lines and
+// the rover's metrics out; and firmware updates (Protocol.h has the format).
+// Network starts it once WiFi is up and calls update() every loop.
+//
+// Each client is sent every log line, from the oldest still held when it
+// connected, one at a time and paced so that a backlog never holds the
+// loop; one that falls a whole ring behind loses the lines in between, and
+// sees the gap in their numbers.
 class RemoteControl {
  public:
-  RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware);
+  RemoteControl(Rover& rover, Control& control, Settings& settings, FirmwareUpdate& firmware, Gamepad& gamepad,
+                EventLog& log);
 
-  // Start serving. Safe to call again after a WiFi reconnect.
-  void begin();
+  // Start serving. Safe to call again after a WiFi reconnect. `now` is the
+  // one update() is called with next.
+  void begin(uint32_t now);
 
-  // Serve clients and broadcast telemetry, and move a firmware update on,
-  // restarting into the new image once it is due. Call every loop while
-  // online.
+  // Serve clients; send telemetry, new log lines and metrics; and move a
+  // firmware update on, restarting into the new image once it is due. Call
+  // every loop while online, with loop()'s `now`: the gaps between calls
+  // are the loop's timing, for the metrics.
   void update(uint32_t now);
 
  private:
@@ -67,20 +78,58 @@ class RemoteControl {
   void onCommand(uint8_t client, const uint8_t* payload, size_t length);
   void onUpdateRequest(uint8_t client, const protocol::OtaRequest& request);
   void send(const FirmwareUpdate::Reply& reply);
-  void broadcastTelemetry();
+  void broadcastTelemetry(uint32_t now);
+  void sendSettings(uint32_t now);
+  void sendLogLines(uint32_t now);
+  void broadcastMetrics(uint32_t now);
+  // Log that `client` sent something ignored, once per connection, so a
+  // client that sends nothing else cannot flood the log.
+  void noteIgnored(uint8_t client, const char* what);
+  // Log which client is driving now.
+  void sayDriver(uint32_t now);
 
   Rover& rover;
-  kinematics::ControlScheme& scheme;
+  Control& control;
+  Settings& settings;
   FirmwareUpdate& firmware;
+  Gamepad& gamepad;
+  EventLog& log;
   HeartbeatServer server;
   bool started = false;
   uint32_t lastBroadcastMs = 0;
 
+  // Per client slot: connected, the number of the next log line it needs
+  // and when it was sent the last, and whether something it sent was
+  // ignored already this connection.
+  bool connected[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  uint32_t nextLine[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  uint32_t lastLineMs[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  bool ignoredOnce[WEBSOCKETS_SERVER_CLIENT_MAX] = {};
+  bool settingsOwed[WEBSOCKETS_SERVER_CLIENT_MAX] = {};  // connected since the last settings frame
+
+  // The settings as last sent to every client, and when.
+  uint32_t sentSettingsVersion = 0;
+  uint32_t lastSettingsMs = 0;
+
+  // The loop's timing since the last metrics.
+  uint32_t lastUpdateMs = 0;
+  uint32_t passes = 0;
+  uint32_t longestPassMs = 0;
+  uint32_t lastMetricsMs = 0;
+
   static constexpr int NO_CLIENT = -1;
 
-  // The client whose commands are driving. Losing it is losing control, so
-  // it stops the rover; a telemetry-only listener coming and going does not.
+  // The client whose commands the rover acted on last. Losing it is losing
+  // control, so Control stops the rover if its motion is still WIFI's; a
+  // telemetry-only listener, or a client whose commands were refused,
+  // coming and going does not. A STOP from WiFi under another controller's
+  // hold (Control::STOPPED) makes no client the driver.
   int driver = NO_CLIENT;
+  // A change of driver the log has yet to say (said a CONTROL_HOLD_MS after
+  // the last, while Control::lastDriver() is WiFi), and when it last said
+  // one.
+  bool driverUnsaid = false;
+  uint32_t driverSaidAt = 0;
 };
 
 #endif

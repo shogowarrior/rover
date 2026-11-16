@@ -124,6 +124,25 @@
  *       What the Autonomous toggle does turned on: forget every held input,
  *       stop repeating, and send RESUME_AUTONOMOUS.
  *
+ *   runChecks()
+ *   endChecks()
+ *   checking
+ *       What Run checks does (checks.js), once the operator has said the
+ *       rover is on its stand: forget every held input, stop repeating,
+ *       and hold the rover's checks, which turn its wheels. They are held
+ *       as a move is: RUN_CHECKS goes out at once and again every
+ *       REPEAT_MS, within the rover's CHECK_HOLD_MS, and the rover starts
+ *       no wheel's step without a fresh one, so a panel that stops sending
+ *       stops the wheels within a second. A press, as the Autonomous
+ *       toggle's is: both events below are raised, the stand-down's reason
+ *       "checks", so a program stops. Every way a held move is let go of
+ *       lets go of the checks, sending nothing more: every stand-down and
+ *       Stop, Autonomous, a press of any drive control (a stick pressed
+ *       but not yet pushed among them), and linkStale(); so does any other
+ *       command this Driver sends. endChecks() lets go of them too, sending
+ *       nothing, for checks that ended or never started (checks.js reads
+ *       telemetry). checking says whether RUN_CHECKS is being re-sent.
+ *
  *   stopRover({ byProgram, reason })
  *       What the Stop button does: forget every held input and send STOP,
  *       whether or not this panel was driving. It is how to stop an
@@ -162,9 +181,10 @@
  *       fn(reason) after the driver stands down or halts, whether or not
  *       anything was held: "blur", "hidden", "pagehide", "target" and
  *       "tab" (from app.js), "disconnect" and "linkLost" (the link went down),
- *       "stale" (linkStale), "stop" (stopRover) and "autonomous"
- *       (resumeAutonomous, or stopRover from the toggle). Not on an ordinary release of a control, nor on
- *       a program's own stop or start exploring.
+ *       "stale" (linkStale), "stop" (stopRover), "autonomous"
+ *       (resumeAutonomous, or stopRover from the toggle) and "checks"
+ *       (runChecks). Not on an ordinary release of a control, nor on a
+ *       program's own stop or start exploring.
  *
  *   driving
  *       A copy of the {move, speed} this panel is sending, or null.
@@ -198,6 +218,7 @@ class Driver {
   #driving = null; // {move, speed} this panel is sending, or null
   #lastSentAt = 0; // performance.now() of the last drive command sent
   #repeatTimer = null;
+  #checksTimer = null; // re-sends RUN_CHECKS while the checks are held
 
   #manualInputListeners = new Listeners();
   #standDownListeners = new Listeners();
@@ -228,6 +249,10 @@ class Driver {
 
   get driving() {
     return this.#driving && { ...this.#driving };
+  }
+
+  get checking() {
+    return this.#checksTimer !== null;
   }
 
   onManualInput(fn) {
@@ -274,6 +299,7 @@ class Driver {
     if (!motionFor(move)) throw new RangeError(`holdKey() takes a motion code, 1 to 18, not ${move}`);
     const held = this.#held;
     if (held.buttons.some((h) => h.key === key)) return;
+    this.#letGoChecks();
     held.buttons.push({ key, move });
     this.#steer();
     this.#manualInputListeners.emit();
@@ -316,6 +342,20 @@ class Driver {
     this.#standDownListeners.emit("autonomous");
   }
 
+  // As resumeAutonomous(): any other command ends the checks, so nothing
+  // held may repeat beside them.
+  runChecks() {
+    this.#releaseInputs();
+    this.#stopRepeating();
+    this.#holdChecks();
+    this.#manualInputListeners.emit();
+    this.#standDownListeners.emit("checks");
+  }
+
+  endChecks() {
+    this.#letGoChecks();
+  }
+
   stopRover({ byProgram = false, reason = "stop" } = {}) {
     this.#releaseInputs();
     this.#halt();
@@ -331,6 +371,7 @@ class Driver {
   }
 
   linkStale() {
+    this.#letGoChecks();
     this.endProgram();
     this.#standDownListeners.emit("stale");
   }
@@ -380,8 +421,22 @@ class Driver {
     this.#repeatTimer = setTimeout(() => this.#transmit(), REPEAT_MS);
   }
 
+  // Any other command ends the rover's checks, so the re-sends stop with it.
   #send(move, speed) {
+    if (move !== RUN_CHECKS) this.#letGoChecks();
     this.#link.send({ move, speed, duration: MOVE_DURATION_MS });
+  }
+
+  // RUN_CHECKS now and every REPEAT_MS, the repeat counting from this send.
+  #holdChecks() {
+    this.#send(RUN_CHECKS, 0);
+    this.#checksTimer = setTimeout(() => this.#holdChecks(), REPEAT_MS);
+  }
+
+  // Nothing is sent: the rover ends the checks itself once the re-sends stop.
+  #letGoChecks() {
+    clearTimeout(this.#checksTimer);
+    this.#checksTimer = null;
   }
 
   #stopRepeating() {
@@ -411,6 +466,7 @@ class Driver {
   // and a program's input goes, or the next #steer() would hand the rover to
   // it.
   #releaseInputs() {
+    this.#letGoChecks();
     const held = this.#held;
     for (const stick of this.#sticks) this.#letGo(stick);
     for (const { button } of held.buttons) if (button) delete button.dataset.held;
@@ -459,6 +515,7 @@ class Driver {
     // words) is part of the layout the thumb pressed into.
     const arm = () => {
       if (stick === this.#pivot && !this.#pivots) return;
+      this.#letGoChecks();
       stick.armed = true;
       stick.pressed = ++this.#presses;
       this.#manualInputListeners.emit(name);
@@ -640,6 +697,7 @@ class Driver {
       event.preventDefault();
       const held = this.#held;
       if (held.buttons.some((h) => h.button === button)) return;
+      this.#letGoChecks();
       button.dataset.held = "yes";
       held.buttons.push({ button, pointerId: event.pointerId, move });
       this.#steer();

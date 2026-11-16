@@ -516,21 +516,24 @@ test("the start pose can be set only where the chassis fits", () => {
 
 /* --- the Target ----------------------------------------------------------- */
 
-test("telemetry carries the keys src/Protocol.cpp writes, bar the chip, exploring and the image", async () => {
+test("telemetry carries the keys src/Protocol.cpp writes, bar the chip, exploring, the image and the keys sent now and then", async () => {
   // writeTelemetry's body only: writeOtaReply sets keys of its own.
   const body = src("Protocol.cpp").match(/\bwriteTelemetry\([^)]*\)\s*\{([\s\S]*?)\n\}/)[1];
   const written = new Set([...body.matchAll(/\bdoc\[\s*"(\w+)"\s*\]\s*=/g)].map((m) => m[1]));
   // No chip to measure, no exploring to report on, and no firmware image: the
-  // simulator takes no updates.
-  const notSimulated = new Set(["temperature", "phase", "halt", "firmware"]);
+  // simulator takes no updates. Nor the keys the firmware sends only now and
+  // then: no aim (its sonar only sweeps), no checks, no pad, and nobody
+  // else to hold control.
+  const notSimulated = new Set(["temperature", "phase", "halt", "firmware", "aim", "aimCm", "check", "pad", "control"]);
   for (const key of notSimulated) assert.ok(written.has(key), `${key} is still one the firmware writes`);
   const target = new SimTarget({ bearings: BEARINGS, room: "living" });
   await run(target, 1500);
   const { data, fresh } = target.telemetry();
   assert.equal(fresh, true);
   assert.deepEqual(Object.keys(data).sort(), [...written].filter((k) => !notSimulated.has(k)).sort());
-  assert.deepEqual([data.mode, data.move, data.moving, data.motorsReady, data.scheme],
-    ["MANUAL", "STOP", false, true, protocol.SCHEME_NORMAL]);
+  assert.deepEqual([data.mode, data.move, data.moving, data.motorsReady, data.scheme, data.sonar],
+    ["MANUAL", "STOP", false, true, protocol.SCHEME_NORMAL, "SWEEP"]);
+  assert.ok(protocol.SONAR_MODES.includes(data.sonar), `a sonar mode the firmware names: ${data.sonar}`);
   for (const b of BEARINGS) assert.equal(typeof data[b.key], "number", b.key);
   target.explore();
   await run(target, 600);

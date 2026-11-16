@@ -17,7 +17,7 @@ const vectors = (name) => JSON.parse(fs.readFileSync(path.join(REPO, "test", "ve
 // Move codes by name, from the enum in src/MoveCodes.h itself rather than
 // through protocol.js: protocol.js is the panel's copy of those codes, which
 // tools/check_protocol.py checks on its own. mecanum.test.js checks that this
-// reads all twenty.
+// reads all twenty-one.
 const CODES = {};
 for (const [, name, value] of src("MoveCodes.h").matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*,/gm)) CODES[name] = Number(value);
 

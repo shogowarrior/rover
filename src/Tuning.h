@@ -44,6 +44,54 @@ constexpr int DEFAULT_MOVE_DURATION_MS = 750;
 // PWM duty autonomous exploration drives at.
 constexpr int EXPLORE_SPEED = 64;
 
+// --- The checks (SelfTest.h) ------------------------------------------------
+
+// The checks drive each wheel, and three of the four moves, at this PWM duty
+// (the first move, "forward slow", runs at EXPLORE_SPEED): about 5.9 V on
+// the TT motors from a full 3S pack (120/255 of 12.6 V), at the top of their
+// 3-6 V rating (bench-checklist section 8), and enough to turn them on the
+// stand. One step is CHECK_DRIVE_MS, then CHECK_REST_MS still, so each wheel
+// is seen to start and stop on its own.
+constexpr int CHECK_SPEED = 120;
+constexpr int CHECK_DRIVE_MS = 600;
+constexpr uint32_t CHECK_REST_MS = 400;
+// The checks are held like a move: each wheel step starts only if a
+// RUN_CHECKS came in this long before, so a client that stops sending (a
+// panel closed, a script that died, the cable's console, which has no
+// disconnect) turns no more wheels, and the one turning stops at its own
+// deadline. Longer than the clients' re-send (REPEAT_MS, 200 ms).
+// CHECK_HOLD_MS in extras/joystick/js/protocol.js is the panel's copy.
+constexpr uint32_t CHECK_HOLD_MS = 1000;
+
+// --- The sonar in manual mode ------------------------------------------------
+
+// The furthest either side of straight ahead a client or the pad may aim the
+// sonar (Explorer::SONAR_AIM), in degrees: servo 10 to 170, clear of the
+// servo's end stops, where a cheap servo strains and buzzes. AIM_MAX_DEG in
+// extras/joystick/js/protocol.js is the panel's copy.
+constexpr int SONAR_AIM_MAX_DEG = 80;
+
+// --- Control and settings (Control.h, Settings.h) ---------------------------
+
+// A controller that drove the rover keeps control this long after its last
+// command: another, ranked below it in the priority, is refused until then,
+// and one ranked above takes over at once. Longer than every client's
+// re-send interval (200 ms: the panel, the pad), so a held stick never loses
+// control between two of its re-sends; short enough that a controller let go
+// hands over within a second. CONTROL_HOLD_MS in extras/joystick/js/protocol.js
+// is the panel's copy.
+constexpr uint32_t CONTROL_HOLD_MS = 1000;
+
+// A change of setting is written to flash once nothing has changed for this
+// long and the rover is at rest: the pad's right stick changes the aim on
+// every pass while it pans, and each write can hold the loop for a flash
+// erase.
+constexpr uint32_t SETTINGS_SAVE_DELAY_MS = 3000;
+
+// The settings go to every client at most this often while they change (the
+// pad panning the sonar), and at once to a client that connects.
+constexpr uint32_t SETTINGS_BROADCAST_MS = 250;
+
 // --- Autonomy thresholds a client displays ---------------------------------
 
 // Exploration stops a cruise when something in the rover's path is this close
@@ -55,7 +103,14 @@ constexpr float EXPLORE_GO_CM = 40.0f;
 
 // --- Gamepad ---------------------------------------------------------------
 
-constexpr int GAMEPAD_MAX_SPEED = 50;  // stick fully deflected; a full trigger pull gets half
+// The pad's top speed at boot: the stick fully deflected; a full trigger
+// pull gets half. The D-pad steps it by GAMEPAD_SPEED_STEP, between one step
+// and MOTOR_SPEED_LIMIT.
+constexpr int GAMEPAD_MAX_SPEED = 50;
+constexpr int GAMEPAD_SPEED_STEP = 25;
+// The right stick pans the sonar this many degrees a second at full
+// deflection, slower nearer the centre.
+constexpr int GAMEPAD_PAN_DEG_PER_S = 90;
 // Of the stick's +-127. The triggers' 0..255 share it: 8% of a pull.
 constexpr int GAMEPAD_DEADZONE = 20;
 // A held stick is re-sent this often, well inside DEFAULT_MOVE_DURATION_MS,
@@ -79,6 +134,8 @@ constexpr uint32_t GAMEPAD_LED_MIN_INTERVAL_MS = 250;
 constexpr uint32_t SERIAL_BAUD = 115200;
 constexpr uint16_t WEBSOCKET_PORT = 81;  // PORT in the panel's js/protocol.js, DEFAULT_PORT in drive.py
 constexpr uint32_t TELEMETRY_INTERVAL_MS = 500;  // TELEMETRY_MS in the panel's js/protocol.js
+// The rover's metrics (protocol::writeMetrics) go out this often.
+constexpr uint32_t METRICS_INTERVAL_MS = 2000;
 constexpr int WIFI_CONNECT_ATTEMPTS = 40;      // x WIFI_RETRY_DELAY_MS, setup() only
 constexpr uint32_t WIFI_RETRY_DELAY_MS = 250;
 constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 10000;

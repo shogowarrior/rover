@@ -421,6 +421,23 @@ move under 70 px. Panel tests 348/348, the protocol check and the guard's
 224/224 pass. The host tests and board builds were not run for this round;
 no firmware changed since they last passed (host tests 192/192).
 
+On 2026-11-16 the owner flashed the rover and found it exploring on its
+own at boot. The thread "Boot in manual, sonar modes, logs, PS3 scheme"
+(branch `claude/project-thread-r8ezpe`) first shipped PR #12, every boot in
+manual and the sonar held still, for the owner to flash (an agent never
+flashes; the owner disconnected the rover, so it waits). Then F9: the
+rover as a robot to manage. Three controllers (the USB serial console, the
+pad and WiFi) send one JSON format through `Control`, which arbitrates by a
+priority in the settings, with no queue; the settings (scheme, sonar and
+aim, pad control, priority, checks at boot) live in `Settings` and in
+flash; the `EventLog` says whose each line is; the checks run on demand;
+the pad's spare buttons pan and point the sonar and step its top speed;
+`client/ws.py` records to SQLite and serves Prometheus; the panel has the
+rover's settings and Run checks in Options, a drawer under the scan with
+the log by controller and graphs, aims the sonar from the fan, and says
+when another controller has control. Nothing of F9 has
+run on a board: bench-checklist.md, sections 6 and 11.
+
 ## Current work
 
 The owner's panel and controls requests of 2026-10-03. [features.md](../features.md)
@@ -449,9 +466,12 @@ F6, firmware updates from the panel, and F7, darker looks with a Dark |
 Light toggle, came later and are done too, and so are F3i, the Drive tab
 split for a larger view, and F3j, the header in one row with Stop beside
 the gear and Autonomous a toggle, from the owner's comments on the try-it
-page. F8, from his comments of 2026-11-14, is done and replaces F3 to
+page. F8, from the owner's comments of 2026-11-14, is done and replaces F3 to
 F3j's layout: every control in two cells at the top, and two panes under
-them, the view beside both tabs and the open tab.
+them, the view beside both tabs and the open tab. F9, from 2026-11-16, is
+done: manual at every boot, the sonar's modes, the log and metrics, the
+checks, the pad's spare buttons, the serial console, the priority, and the
+settings kept on the rover.
 
 **One thread at a time,** each on one item or a few related ones: each item
 builds on the one before, and every thread edits this file and features.md.
@@ -473,9 +493,10 @@ and the next thread's task names that branch.
 
 ## Open, not started
 
-- What F4 deferred, unless the owner asks: the pad's D-pad stepping its top
-  speed, rumble, player LEDs 3 and 4, its right stick (F3h), a battery key in
-  telemetry, and the browser Gamepad API (features.md, F4). The keyboard's
+- What F4 deferred and F9 did not take up, unless the owner asks: rumble,
+  player LED 3, a battery key in telemetry, and the browser Gamepad API
+  (features.md, F4). F9 gave the D-pad the top speed, the right stick, R3
+  and Triangle the sonar, and LED 4 pad control off. The keyboard's
   checks for the owner, which need a real browser and keyboard: holding a key
   and pressing Cmd on a Mac, a non-English layout, and Space with a button
   focused.
@@ -483,6 +504,12 @@ and the next thread's task names that branch.
 - F6's checks for the owner, which need the rover: bench-checklist.md,
   section 10, including the trial boot. Nothing about updates from the
   panel has run on a board yet.
+- F9's checks for the owner, which need the rover: flash the build that
+  merges branch `claude/project-thread-r8ezpe` with F9 (main after its
+  pull request, not PR #12, which held only manual at boot) or later over
+  USB, then bench-checklist.md, sections 6 (the pad's new buttons, pad
+  control off) and 11 (the serial console, the priority, settings lasting
+  through a reset, the checks, recording with `client/ws.py`).
 - F5's and F7's checks for the owner, which need a real screen:
   features.md, F5 and F7, list them, and what each left as it was
   (Blockly's focus colours, its faint zoom and trash icons; Console Dark
@@ -508,9 +535,8 @@ and the next thread's task names that branch.
   show them); and on an iPhone a tap into the address or the OTA password,
   whose 13 px words Safari may zoom the page for (it zooms into a field
   under 16 px).
-- Small panel and client items listed under "Open from earlier work" in
-  [features.md](../features.md): `client/ws.py`'s traceback, and no
-  committed stand-in rover.
+- A small item listed under "Open from earlier work" in
+  [features.md](../features.md): no committed stand-in rover.
 - No owner answers yet to the 22 questions (features.md, "The owner's
   answers"). The work follows the defaults until they come.
 - `/code-review ultra` (once called `/ultrareview`), the multi-agent cloud

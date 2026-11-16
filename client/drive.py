@@ -6,11 +6,14 @@
     python3 client/drive.py --listen        # telemetry only, no control
 
 Every boot starts in manual: the rover waits, stopped, its sonar held ahead
-after one sweep; losing WiFi, or the start of an OTA flash, drops it to
-manual too.
+after one sweep (or sweeping, or aimed, as its sonar setting says); losing
+WiFi, or the start of an OTA flash, drops it to manual too.
 Any command takes control, a stop included. Press `t` to hand control back and
 let the rover explore; if exploration has halted (boxed in, sensor silent),
-`t` makes it look again.
+`t` makes it look again. While a controller ranked above WiFi in the rover's
+settings (the USB console and the pad, by default) has driven in the last
+second, a move from here is refused, and the rover's log says so; a stop
+never is, though the one in control may drive on.
 
 Every command carries a duration and the firmware releases the motors when it
 runs out, so holding a key (and letting the terminal auto-repeat) is what keeps
@@ -149,6 +152,13 @@ HELP = """\
   again), the distance in cm on each bearing from left to right, and the
   board's temperature. NO MOTORS in place of the move means the motor
   shield did not answer at boot, and the wheels cannot move.
+
+  The rover's log comes between the rows, each line after whose it is:
+  USB, PAD, WIFI (this client among them) or ROVER. A command from a
+  controller ranked below the one in control is refused, and the log says
+  so; Stop is never refused. SETTINGS lines show the rover's settings:
+  the scheme, the sonar, pad control, the controllers first to last, and
+  whether it checks its shield and sonar at boot.
 """
 
 
@@ -200,14 +210,23 @@ def out(line: str) -> None:
 
 
 async def receive(ws) -> None:
-    """Print telemetry as a table, a row per frame, until the link closes."""
+    """Print telemetry as a table, a row per frame, until the link closes.
+    The rover's log lines and its settings come between the rows, a line
+    each; its metrics are left to client/ws.py."""
     rows = 0
     warned = False  # NO_MOTORS_WARNING printed since motorsReady last read true
     try:
         async for message in ws:
+            data = _frame(message)
+            aside = describe_aside(data)
+            if aside is not None:
+                if aside:
+                    out(aside)
+                continue
+
             # Every row says NO MOTORS while the shield is missing; this says
             # once what that means and what to do about it.
-            ready = motors_ready(_frame(message))
+            ready = motors_ready(data)
             if ready is False and not warned:
                 out(NO_MOTORS_WARNING)
             if ready is not None:
@@ -222,6 +241,10 @@ async def receive(ws) -> None:
     out("connection to the rover closed")
 
 
+# tools/check_protocol.py checks every key this file reads off a frame
+# against what src/Protocol.cpp writes, by the name it is read off: `data`
+# for a whole frame of any kind, `settings` for a settings frame's
+# "settings". A key read off any other name fails the check.
 def _frame(message):
     """A telemetry frame as a dict, or None if it is not a JSON object."""
     try:
@@ -229,6 +252,37 @@ def _frame(message):
     except ValueError:  # not JSON, or a binary frame that is not even text
         return None
     return data if isinstance(data, dict) else None
+
+
+def describe_aside(data):
+    """A frame that is not telemetry as the line to print for it: a line of
+    the rover's log, with whose it is (USB, PAD, WIFI or ROVER: who sent
+    what it says, or was refused), or the settings, which the rover sends as
+    the link opens and each time anyone changes them. "" for its metrics,
+    which print nothing, and None for telemetry or anything else, which
+    describe() takes."""
+    if data is None:
+        return None
+    if isinstance(data.get("log"), str):
+        source = data.get("src") if isinstance(data.get("src"), str) else "-"
+        level = "WARN " if data.get("warn") is True else ""
+        return f"  {source:<5} {level}{data['log']}"
+    if isinstance(data.get("metrics"), dict):
+        return ""
+    settings = data.get("settings")
+    if isinstance(settings, dict):
+        priority = settings.get("priority")
+        ranks = " > ".join(str(name) for name in priority) if isinstance(priority, list) else "-"
+        sonar = _text(settings.get("sonar"))
+        if sonar == "AIM":
+            sonar += f" {_text(settings.get('aim'))}"
+        checks = {True: "on", False: "off"}.get(settings.get("checksAtBoot"), "-")
+        # Kept under 80 columns, as a row is: the scheme, the sonar (and
+        # where it aims, in degrees, positive left), pad control, the
+        # controllers from first to last, and the checks at boot.
+        return (f"  SETTINGS {_text(settings.get('scheme'))}, sonar {sonar}, pad {_text(settings.get('pad'))},"
+                f" {ranks}, boot checks {checks}")
+    return None
 
 
 def motors_ready(data):

@@ -1,5 +1,7 @@
 #include "RemoteControl.h"
 
+#include <WiFi.h>
+
 #include "Timing.h"
 #include "Tuning.h"
 
@@ -24,12 +26,36 @@ constexpr uint32_t HEARTBEAT_INTERVAL_MS = 1000;
 constexpr uint32_t HEARTBEAT_PONG_TIMEOUT_MS = 600;
 constexpr uint8_t HEARTBEAT_MISSES_TO_DROP = 2;
 
+// At most one log line to each client this often. A client that has just
+// connected is owed up to EventLog::CAPACITY of them, about 5 KB: sent in a
+// burst, they could fill the socket's send buffer, which telemetry shares,
+// and a client slow to acknowledge would then hold the loop in sendTXT(),
+// move deadlines and STOPs with it. Paced, a full backlog takes 1.6 s, and
+// the rover adds a line or two a second while it explores.
+constexpr uint32_t LOG_LINE_GAP_MS = 50;
+
 }  // namespace
 
-RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware)
-    : rover(rover), scheme(scheme), firmware(firmware), server(tuning::WEBSOCKET_PORT) {}
+RemoteControl::RemoteControl(Rover& rover, Control& control, Settings& settings, FirmwareUpdate& firmware,
+                             Gamepad& gamepad, EventLog& log)
+    : rover(rover),
+      control(control),
+      settings(settings),
+      firmware(firmware),
+      gamepad(gamepad),
+      log(log),
+      server(tuning::WEBSOCKET_PORT) {}
 
-void RemoteControl::begin() {
+void RemoteControl::begin(uint32_t now) {
+  // The loop's timing starts afresh with the link: the time offline is not
+  // a pass. From the `now` update() is called with next, in this same pass:
+  // millis() here, later than it, made the pass and the metrics' interval
+  // ~49.7 days, and sent a bogus metrics frame at once.
+  lastUpdateMs = now;
+  lastMetricsMs = now;
+  driverUnsaid = false;  // whoever drove before the link went is not news
+  passes = 0;
+  longestPassMs = 0;
   if (started) return;
   server.begin();
   server.onEvent([this](uint8_t client, WStype_t type, uint8_t* payload, size_t length) {
@@ -41,21 +67,36 @@ void RemoteControl::begin() {
 }
 
 void RemoteControl::update(uint32_t now) {
+  const uint32_t pass = timing::since(now, lastUpdateMs);
+  if (pass > longestPassMs) longestPassMs = pass;
+  passes++;
+  lastUpdateMs = now;
+  // Only while WiFi's command is still the one the rover acted on last: said
+  // after the pad or the console took over, it named a client that drove
+  // nothing. Not holder(): WiFi's hold can lapse within the pass that the
+  // line comes due in, and the change went unsaid.
+  if (driverUnsaid && timing::since(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS &&
+      control.lastDriver() == SOURCE_WIFI) {
+    sayDriver(now);
+  }
+
   if (firmware.restartDue(now)) {
     // At rest already: restartDue() waits for it. Standing down as well
     // writes the release once more on the way into the reset, as an
     // ArduinoOTA upload's start does.
-    rover.standDown(now);
-    Serial.println("Restarting into the new firmware.");
+    rover.standDown(now, "restarting into the new firmware");
     ESP.restart();
   }
   send(firmware.update(now));
 
   server.loop();
+  sendSettings(now);
+  sendLogLines(now);
 
+  if (timing::since(now, lastMetricsMs) >= tuning::METRICS_INTERVAL_MS) broadcastMetrics(now);
   if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
   lastBroadcastMs = now;
-  if (server.connectedClients() > 0) broadcastTelemetry();
+  if (server.connectedClients() > 0) broadcastTelemetry(now);
 }
 
 void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, size_t length) {
@@ -84,23 +125,39 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
       // which can count a miss after the disconnect cleared them, for the
       // slot's next client.
       server.forgetMissedPongs(client);
+      if (client < WEBSOCKETS_SERVER_CLIENT_MAX) {
+        // Every line still held, from the oldest: why the rover is as it is.
+        connected[client] = true;
+        nextLine[client] = log.oldestSeq();
+        lastLineMs[client] = millis() - LOG_LINE_GAP_MS;
+        ignoredOnce[client] = false;
+        settingsOwed[client] = true;
+      }
       const IPAddress remote = server.remoteIP(client);
-      Serial.printf("[%u] Connected from %d.%d.%d.%d\n", client, remote[0], remote[1],
-                    remote[2], remote[3]);
+      log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u connected from %d.%d.%d.%d", client,
+              remote[0], remote[1], remote[2], remote[3]);
       break;
     }
 
-    case WStype_DISCONNECTED:
-      Serial.printf("[%u] Disconnected\n", client);
+    case WStype_DISCONNECTED: {
+      // The library says so for a handshake it refused, too (an Origin
+      // originAllowed() turns down, a plain HTTP request to :81), with no
+      // connect before it: only a client that connected is news.
+      const bool wasConnected = client < WEBSOCKETS_SERVER_CLIENT_MAX && connected[client];
+      if (client < WEBSOCKETS_SERVER_CLIENT_MAX) connected[client] = false;
       server.forgetMissedPongs(client);  // the slot's next client starts afresh
       firmware.disconnected(client);
+      if (wasConnected) log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u disconnected", client);
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
-        // stopping leaves the rover driving on its last instruction.
+        // stopping leaves the rover driving on its last instruction, unless
+        // another controller has taken over since.
         driver = NO_CLIENT;
-        rover.stop(millis());
+        driverUnsaid = false;
+        control.lost(SOURCE_WIFI, millis());
       }
       break;
+    }
 
     default:
       break;
@@ -109,7 +166,7 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
 
 void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t length) {
   if (length > protocol::COMMAND_MAX_BYTES) {
-    Serial.printf("[%u] Ignored a %u-byte message\n", client, static_cast<unsigned>(length));
+    noteIgnored(client, "a message too long to read");
     return;
   }
 
@@ -118,28 +175,55 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
   // on the payload happening to be NUL-terminated.
   const DeserializationError error = deserializeJson(input, payload, length);
   if (error) {
-    Serial.printf("[%u] Bad JSON: %s\n", client, error.c_str());
+    noteIgnored(client, "a message that is not JSON");
     return;
   }
 
+  const uint32_t now = millis();
   const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
-  switch (message.kind) {
-    case protocol::Message::DRIVE:
-      driver = client;
-      rover.command(message.command.move, message.command.speed, message.command.durationMs,
-                    millis());
+  switch (control.apply(SOURCE_WIFI, message, now)) {
+    case Control::ACCEPTED:
+      if (driver != client) {
+        driver = client;
+        driverUnsaid = true;
+        if (timing::since(now, driverSaidAt) >= tuning::CONTROL_HOLD_MS) sayDriver(now);
+      }
       break;
-    case protocol::Message::SET_SCHEME:
-      scheme = message.scheme;  // takes no control: an exploring rover explores on
-      Serial.printf("[%u] Control scheme %s\n", client, protocol::schemeName(scheme));
+    case Control::STOPPED:  // a STOP from below the holder: WiFi drives nothing
+    case Control::REFUSED:  // Control says so in the log
+    case Control::SETTING:  // Settings does
       break;
-    case protocol::Message::IGNORE:
-      Serial.printf("[%u] Ignored an unknown control scheme\n", client);
+    case Control::IGNORED:
+      noteIgnored(client, "a setting with a value it does not know");
       break;
-    case protocol::Message::OTA:
+    case Control::UPDATE:
       onUpdateRequest(client, message.ota);  // its strings live in `input`
       break;
   }
+}
+
+// At most once a CONTROL_HOLD_MS: two clients holding moves at once take
+// the drive from each other with every re-send, and a line for each, ten a
+// second, pushed everything else out of the log. A change not said yet is
+// said once that time has passed, while WiFi's is still the command the
+// rover acted on last (or once it is again), so the log ends on the client
+// driving. since(), not ageOf(): driverSaidAt is never
+// later than the clock it is compared with (update()'s check runs before
+// server.loop(), and onCommand() reads millis()), and an ageOf() stamp
+// would have to be forgotten.
+void RemoteControl::sayDriver(uint32_t now) {
+  driverUnsaid = false;
+  if (driver == NO_CLIENT) return;
+  driverSaidAt = now;
+  log.add(now, EventLog::INFO, SOURCE_WIFI, "Link: client %u is driving", driver);
+}
+
+void RemoteControl::noteIgnored(uint8_t client, const char* what) {
+  if (client < WEBSOCKETS_SERVER_CLIENT_MAX) {
+    if (ignoredOnce[client]) return;
+    ignoredOnce[client] = true;
+  }
+  log.add(millis(), EventLog::WARN, SOURCE_WIFI, "Link: ignored %s from client %u", what, client);
 }
 
 void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& request) {
@@ -155,7 +239,7 @@ void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& 
       send(firmware.cancel(client));
       break;
     case protocol::OtaRequest::UNKNOWN:
-      Serial.printf("[%u] Ignored an unknown update message\n", client);
+      noteIgnored(client, "an update message it does not know");
       break;
   }
 }
@@ -166,22 +250,91 @@ void RemoteControl::send(const FirmwareUpdate::Reply& reply) {
   const size_t length = protocol::writeOtaReply(reply, frame, sizeof(frame));
   if (length == 0) return;  // nothing to say
   if (reply.kind == FirmwareUpdate::Reply::FAILED) {
-    Serial.printf("[%u] Firmware update failed: %s\n", reply.client, reply.reason);
+    log.add(millis(), EventLog::WARN, "Update failed: %s", reply.reason);
+  } else if (reply.kind == FirmwareUpdate::Reply::DONE) {
+    log.add(millis(), EventLog::INFO, "Update: the new firmware is written; restarting once still");
   }
   server.sendTXT(reply.client, frame, length);
 }
 
-void RemoteControl::broadcastTelemetry() {
+void RemoteControl::broadcastTelemetry(uint32_t now) {
+  protocol::Report report;
+  report.status = rover.status();
+  report.scheme = settings.scheme();
+  report.pad = gamepad.state();
+  report.control = control.holder(now);
+  report.temperatureC = temperatureRead();
+  report.firmware = firmware.running();
   char frame[protocol::TELEMETRY_MAX_BYTES];
-  const size_t length = protocol::writeTelemetry(rover.status(), scheme, temperatureRead(), firmware.running(),
-                                                 frame, sizeof(frame));
+  const size_t length = protocol::writeTelemetry(report, frame, sizeof(frame));
   if (length == 0) {
     // Clients would only see telemetry freeze. Say why once, not every
     // TELEMETRY_INTERVAL_MS.
     static bool reported = false;
-    if (!reported) Serial.println("Telemetry outgrew protocol::TELEMETRY_MAX_BYTES: frames that do not fit are not sent.");
+    if (!reported) log.add(millis(), EventLog::WARN, "Telemetry outgrew TELEMETRY_MAX_BYTES: not sent");
     reported = true;
     return;
   }
   server.broadcastTXT(frame, length);
+}
+
+// Every setting, to each client that has just connected, and to every client
+// as they change, at most every SETTINGS_BROADCAST_MS: the pad's right stick
+// changes the aim on every pass while it pans.
+void RemoteControl::sendSettings(uint32_t now) {
+  const bool changed = settings.version() != sentSettingsVersion &&
+                       timing::since(now, lastSettingsMs) >= tuning::SETTINGS_BROADCAST_MS;
+  bool owed = false;
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) owed = owed || settingsOwed[client];
+  if (!changed && !owed) return;
+  char frame[protocol::SETTINGS_MAX_BYTES];
+  const size_t length = protocol::writeSettings(settings, frame, sizeof(frame));
+  if (length == 0) return;  // test_settings_fit keeps this from happening
+  if (changed) {
+    sentSettingsVersion = settings.version();
+    lastSettingsMs = now;
+    server.broadcastTXT(frame, length);
+    for (bool& owing : settingsOwed) owing = false;
+    return;
+  }
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) {
+    if (!settingsOwed[client]) continue;
+    settingsOwed[client] = false;
+    if (connected[client]) server.sendTXT(client, frame, length);
+  }
+}
+
+void RemoteControl::sendLogLines(uint32_t now) {
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) {
+    if (!connected[client] || timing::since(now, lastLineMs[client]) < LOG_LINE_GAP_MS) continue;
+    const EventLog::Entry* entry = log.from(nextLine[client]);
+    if (entry == nullptr) continue;
+    nextLine[client] = entry->seq + 1;
+    lastLineMs[client] = now;
+    char frame[protocol::LOG_LINE_MAX_BYTES];
+    const size_t length = protocol::writeLogLine(*entry, frame, sizeof(frame));
+    if (length > 0) server.sendTXT(client, frame, length);
+  }
+}
+
+void RemoteControl::broadcastMetrics(uint32_t now) {
+  const uint32_t interval = timing::since(now, lastMetricsMs);
+  const Rover::Status status = rover.status();
+  protocol::Metrics metrics;
+  metrics.uptimeS = now / 1000;
+  metrics.loopHz = interval > 0 ? static_cast<uint32_t>(static_cast<uint64_t>(passes) * 1000 / interval) : 0;
+  metrics.loopMaxMs = longestPassMs;
+  metrics.heapFree = ESP.getFreeHeap();
+  metrics.heapMinFree = ESP.getMinFreeHeap();
+  metrics.rssi = WiFi.RSSI();
+  metrics.clients = server.connectedClients();
+  metrics.pings = status.pings;
+  metrics.silentPings = status.silentPings;
+  lastMetricsMs = now;
+  passes = 0;
+  longestPassMs = 0;
+  if (metrics.clients == 0) return;
+  char frame[protocol::METRICS_MAX_BYTES];
+  const size_t length = protocol::writeMetrics(metrics, frame, sizeof(frame));
+  if (length > 0) server.broadcastTXT(frame, length);
 }
