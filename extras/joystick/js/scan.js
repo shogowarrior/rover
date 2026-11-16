@@ -27,9 +27,12 @@
  * (data-held="yes" on their wedges and readings), as what was last seen.
  * While it aims, a ray from the rover to full reach shows where it points,
  * with a mark where its reading (telemetry's aimCm) falls and the reading
- * by it: "…" until one is in, "no echo" for none. Neither holds while the
- * rover explores or runs its checks (telemetry's check): those point the
- * sonar their own way, so every bearing is drawn live and no aim.
+ * by it: "…" until one is in, "no echo" for none. The checks' sonar steps
+ * (telemetry's check "sonar L" to "sonar R") point the sonar their own way,
+ * whatever the setting: the fan holds the step's bearing, the other four
+ * dimmed, and draws no aim. Their drive steps ("wheel FL", "forward" and
+ * the rest) leave the sonar to the setting, as with no check. While the
+ * rover explores it sweeps: every bearing is drawn live, and no aim.
  *
  * svg[data-empty] is "yes" from clear(), and as built, until the next
  * show(): the page's empty state keys on it (panel.css). A frame without
@@ -173,27 +176,48 @@ class ScanView {
   }
 
   show(data) {
-    // The setting points the sonar only in manual mode with no check
-    // running: exploring sweeps, and the checks' sonar steps point it at
-    // each bearing in turn, whatever the setting says. Read from the
-    // setting during the checks, the fan dimmed the bearing being measured
-    // and drew the aim where the sonar was not.
-    const bySetting = data.mode === MODE_MANUAL && typeof data.check !== "string";
-    // The one bearing the sonar is held at, in manual mode with it held
-    // still: undefined while it sweeps, and null where it is held between
-    // bearings, so that none is measured.
-    const held = bySetting && (data.sonar === "FRONT" || (data.sonar === "AIM" && typeof data.aim === "number"));
-    const at = held ? (data.sonar === "FRONT" ? 0 : data.aim) : undefined;
+    // In manual mode the setting points the sonar, but for the checks'
+    // sonar steps, each of which holds it at its own bearing whatever the
+    // setting says (Rover::update). Their drive steps leave it to the
+    // setting, as no check does. Exploring sweeps. Read from the setting
+    // during a sonar step, the fan dimmed the bearing being measured and
+    // drew the aim where the sonar was not; read from neither during a
+    // drive step, it drew frozen readings as live and hid an aim the rover
+    // still held and measured.
+    const manual = data.mode === MODE_MANUAL;
+    const step = manual ? ScanView.#stepBearing(data.check) : undefined;
+    const bySetting = manual && step === undefined;
+    const aiming = bySetting && data.sonar === "AIM" && typeof data.aim === "number";
+    // The one bearing the sonar is held at: undefined while it sweeps (or
+    // points where the fan cannot tell), and an aim between bearings holds
+    // it where none of the five is measured.
+    let at;
+    if (typeof step === "number") at = step;
+    else if (bySetting && data.sonar === "FRONT") at = 0;
+    else if (aiming) at = data.aim;
     for (const view of this.#views) {
       this.#showDistance(view, data[view.key]);
-      const kept = held && view.bearing !== at;
+      const kept = at !== undefined && view.bearing !== at;
       for (const node of [view.wedge, view.reading]) {
         if (kept) node.setAttribute("data-held", "yes");
         else node.removeAttribute("data-held");
       }
     }
-    this.#showAim(bySetting && data.sonar === "AIM" && typeof data.aim === "number" ? data.aim : null, data.aimCm);
+    this.#showAim(aiming ? data.aim : null, data.aimCm);
     this.#svg.dataset.empty = "no";
+  }
+
+  // The bearing a check holds the sonar at. The checks' sonar steps
+  // (SONAR_STEPS in src/SelfTest.cpp) are named "sonar " and the bearing's
+  // label, "sonar FL" for FL; rover.test.js reads them there. undefined for
+  // no check or any other step (the drive steps: "wheel FL", "forward"...),
+  // which leaves the sonar to the setting; null for a sonar step this table
+  // does not know, which holds no bearing the fan can name, so it holds none.
+  static #stepBearing(check) {
+    const name = typeof check === "string" ? /^sonar (.+)$/.exec(check) : null;
+    if (!name) return undefined;
+    const b = BEARINGS.find((x) => x.label === name[1]);
+    return b ? b.bearing : null;
   }
 
   aimable(on) {

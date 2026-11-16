@@ -11,7 +11,7 @@ const assert = require("node:assert/strict");
 const nodeTest = require("node:test");
 const harness = require("./harness.js");
 const { loadPage, all, flush, connectOpen } = require("./fake-dom.js");
-const { vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
+const { src, vectors, CODES, NAMES, FRAMES, telemetry } = require("./firmware.js");
 const { stylesheet, cssRules, outside } = require("./css.js");
 
 let failed = null; // the running test's failed checks
@@ -402,24 +402,65 @@ test("aim: the fan draws where the rover aims and what it reads there, and dims 
   check(!shown(group) && held().every((h) => !h), "sweeping");
 });
 
-test("aim: the checks and exploring point the sonar their own way: every bearing live, and no aim drawn", () => {
+// The checks' steps as src/SelfTest.cpp names them in telemetry's check:
+// each sonar step with the Explorer bearing it holds, and the drive steps.
+const SELF_TEST = src("SelfTest.cpp");
+const stepsIn = (table) => {
+  const body = SELF_TEST.match(new RegExp(`${table}\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`));
+  return body ? body[1] : "";
+};
+const SONAR_STEPS = [...stepsIn("SONAR_STEPS").matchAll(/\{\s*Explorer::([A-Z_]+),\s*"([^"]+)"/g)].map(([, bearing, name]) => ({ bearing, name }));
+const DRIVE_STEPS = [...stepsIn("DRIVE_STEPS").matchAll(/\{\s*"([^"]+)",/g)].map(([, name]) => name);
+// Explorer's bearings (src/Explorer.h) by the label the scan gives them.
+const LABELS = { LEFT: "L", FRONT_LEFT: "FL", FRONT: "F", FRONT_RIGHT: "FR", RIGHT: "R" };
+
+test("aim: the checks' sonar steps hold the sonar at their own bearing; their drive steps leave it to the setting", () => {
   const { page, ws } = connected({ frame: FRAMES.aiming, settings: AIMING });
   const svg = page.$("scan");
   const part = (name) => all(svg).find((n) => n.getAttribute("class") === name);
   const group = part("aim");
-  const held = () => all(svg).filter((n) => ["wedge", "reading"].includes(n.getAttribute("class")) && n.getAttribute("data-held") === "yes").length;
+  const nodes = () => all(svg).filter((n) => ["wedge", "reading"].includes(n.getAttribute("class")));
+  const held = () => nodes().filter((n) => n.getAttribute("data-held") === "yes").length;
+  // Which wedges are dimmed, L to R, and which of them is measured.
+  const wedges = () => all(svg).filter((n) => n.getAttribute("class") === "wedge").map((n) => n.getAttribute("data-held") === "yes");
+  const labels = page.evalIn("BEARINGS.map((b) => b.label)");
+  const liveAt = (label) => labels.map((l) => l !== label).join();
   check(shown(group) && held() === 10, "aiming in manual mode: the aim drawn, the five bearings held");
 
-  // The checks' sonar steps, with the setting at AIM.
-  ws.serverMsg({ ...FRAMES.aiming, check: "sonar FL" });
-  check(held() === 0, `a check measures the bearings: none dimmed (${held()} held)`);
-  check(!shown(group), "and no aim at the setting's angle, where the checks do not point it");
-  // With the setting at FRONT: the bearing a check measures is not dimmed.
-  ws.serverMsg(telemetry({ mode: "MANUAL", sonar: "FRONT", check: "sonar L" }));
-  check(held() === 0, `held ahead by the setting, the checks still point it: ${held()} held`);
-  // A wheel's check, with the setting at AIM: still the checks', not the setting's.
-  ws.serverMsg({ ...FRAMES.checking, sonar: "AIM", aim: -30, aimCm: 42 });
-  check(held() === 0 && !shown(group), "no aim while any check runs");
+  check(SONAR_STEPS.length === 5 && SONAR_STEPS.every((s) => s.bearing in LABELS),
+    `read the checks' five sonar steps from src/SelfTest.cpp: ${JSON.stringify(SONAR_STEPS)}`);
+  check(DRIVE_STEPS.length === 8 && DRIVE_STEPS.includes("wheel FL") && DRIVE_STEPS.includes("rotate cw"),
+    `and their eight drive steps: ${JSON.stringify(DRIVE_STEPS)}`);
+
+  // Each sonar step, with the setting at AIM and at FRONT: the step's
+  // bearing measured, the other four held as last seen, and no aim ray,
+  // since the step points the sonar, not the setting.
+  for (const { bearing, name } of SONAR_STEPS) {
+    const label = LABELS[bearing];
+    ws.serverMsg({ ...FRAMES.aiming, check: name });
+    check(wedges().join() === liveAt(label) && held() === 8, `${name}, the setting at AIM -30: ${label} alone measured (${wedges()})`);
+    check(!shown(group), `${name}: no aim at the setting's angle, where the step does not point it`);
+    ws.serverMsg(telemetry({ mode: "MANUAL", sonar: "FRONT", check: name }));
+    check(wedges().join() === liveAt(label) && held() === 8, `${name}, the setting at FRONT: ${label} alone measured (${wedges()})`);
+    check(!shown(group), `${name}, at FRONT: no aim`);
+  }
+  // A sonar step this panel cannot name holds nothing it could dim wrongly.
+  ws.serverMsg({ ...FRAMES.aiming, check: "sonar up" });
+  check(held() === 0 && !shown(group), "an unknown sonar step: every bearing live, no aim");
+
+  // Each drive step: the setting's, as with no check. At AIM -30, between
+  // bearings, every bearing held and the aim drawn with its reading.
+  for (const name of DRIVE_STEPS) {
+    ws.serverMsg({ ...FRAMES.checking, check: name, sonar: "AIM", aim: -30, aimCm: 42 });
+    check(held() === 10 && shown(group) && group.getAttribute("data-deg") === "-30", `${name}, at AIM -30: the five held, the aim drawn (${held()} held)`);
+    check(part("aimReading").textContent === "42cm", `${name}: the aim's reading (${part("aimReading").textContent})`);
+  }
+  ws.serverMsg({ ...FRAMES.checking, sonar: "AIM", aim: 35, aimCm: 60 });
+  check(wedges().join() === liveAt("FL") && shown(group) && group.getAttribute("data-deg") === "35", `wheel FL, aimed at FL: FL measured, the aim drawn (${wedges()})`);
+  ws.serverMsg({ ...FRAMES.checking, sonar: "FRONT" });
+  check(wedges().join() === liveAt("F") && !shown(group), `wheel FL, held ahead: F measured, no aim (${wedges()})`);
+  ws.serverMsg(FRAMES.checking); // the setting sweeps
+  check(held() === 0 && !shown(group), "wheel FL, sweeping: every bearing live");
 
   // Exploring with the setting at AIM: the explorer sweeps.
   ws.serverMsg({ ...FRAMES.sweeping, sonar: "AIM", aim: -30 });
