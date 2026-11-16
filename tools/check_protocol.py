@@ -3,13 +3,15 @@
 
 The firmware defines the protocol once, in src/, but the Python clients and
 the browser panel each carry copies of parts of it: move codes, the port,
-thresholds, sentinels and command timing (MIRRORS below), scan angles,
+thresholds, sentinels, command timing and how many log lines the recorder
+remembers against how many the rover resends (MIRRORS below), scan angles,
 telemetry keys and command fields, the keys of every frame the rover sends
-(telemetry, log lines, metrics, settings) that client/recorder.py and
-client/ws.py read, the control-scheme names and message, the mode names and
-pad states telemetry reports, the controllers' names, the settings message
-and the names in it (sonar modes, the controllers), and a firmware update's
-names and piece size.
+(telemetry, log lines, metrics, settings, and the keys inside the last two)
+that client/recorder.py, client/ws.py and client/drive.py read, the
+control-scheme names and message, the mode names and pad states telemetry
+reports, the controllers' names, the settings message and the names in it
+(sonar modes, the controllers), and a firmware update's names and piece
+size.
 Each Checker method says what it compares and why; main() runs them all.
 The panel's copies this script compares are in
 extras/joystick/js/protocol.js, except the bearings (BEARINGS, in
@@ -32,7 +34,9 @@ tables below to match.
 Not covered: client/rover.ipynb, which imports its numbers from drive.py, as
 client/ws.py does its port; where client/recorder.py keeps each key it
 reads (its database's columns, its exporter's series), which
-client/test_recorder.py checks against the frames in test/vectors/; the
+client/test_recorder.py checks against the frames in test/vectors/; a key
+a Python client reads through a variable (data.get(key)), which is checked
+only where the key comes from a table read here (BEARINGS, METRIC_KEYS); the
 default host address, which is per-network
 configuration every client lets the operator override; the panel's stick
 mapping and the move names telemetry reports, in
@@ -63,6 +67,7 @@ PROTOCOL_CPP = "src/Protocol.cpp"
 ROVER_H = "src/Rover.h"
 EXPLORER_H = "src/Explorer.h"
 SOURCE_H = "src/Source.h"
+EVENT_LOG_H = "src/EventLog.h"
 EXPLORER_CPP = "src/Explorer.cpp"
 DRIVE_PY = "client/drive.py"
 RECORDER_PY = "client/recorder.py"
@@ -98,6 +103,7 @@ COMPLETE_MOVE_CODE_CLIENTS = (PANEL_PROTOCOL_JS,)
 RELATIONS = {
     "==": (operator.eq, "equal"),
     "<=": (operator.le, "be at most"),
+    ">=": (operator.ge, "be at least"),
     "<=half": (lambda theirs, ours: 2 * theirs <= ours, "be at most half of"),
 }
 
@@ -154,6 +160,10 @@ MIRRORS = [
     (PANEL_PROTOCOL_JS, "REPEAT_MS", "<=half", PANEL_PROTOCOL_JS, "CHECK_HOLD_MS",
      "the panel holds the checks by re-sending RUN_CHECKS, with room for one frame to arrive late; "
      "otherwise the checks stop before a wheel's step"),
+    (RECORDER_PY, "LOG_LINES_REMEMBERED", ">=", EVENT_LOG_H, "CAPACITY",
+     "the rover resends every log line it holds to a client each time it connects, and the exporter "
+     "counts a line once only while it remembers it, so with a smaller memory every reconnect would "
+     "count the oldest lines resent over again"),
 ]
 
 # The names a settings message and the frames carry, which src/ returns as
@@ -186,26 +196,38 @@ NAME_LIST = {
     ".py": (r'^NAME\s*=\s*\(([^)]*)\)', '{name} = ("...", ...)'),
 }
 
-# Where client/recorder.py and client/ws.py read a key off one of the
-# rover's frames: `name.get("key")` or `name["key"]`, once their comments are
-# removed. The name says which frame, or which part of one, it holds, and so
-# which keys src/Protocol.cpp writes there:
+# Where client/recorder.py, client/ws.py and client/drive.py read a key off
+# one of the rover's frames: `name.get("key")` or `name["key"]`, once their
+# comments are removed. Each file has its own names, and each name says
+# which frame, or which part of one, it holds in that file, and so which keys
+# src/Protocol.cpp writes there:
 #   any        a whole frame of any kind (telemetry, a log line, metrics,
 #              settings), so any key at the top of one
 #   telemetry  a telemetry frame
 #   metrics    a metrics frame's "metrics" object
 #   settings   a settings frame's "settings" object
 #   None       not the rover's: a line of the panel's recording, {"at", "frame"}
-# A key read off any other name fails, so a new reader cannot slip past the
-# check: name what it reads off as these are, or add the name here.
-FRAME_READERS = (RECORDER_PY, WS_PY)
-FRAME_NAMES = {
+# A key read off a name its file does not list fails, so a new reader cannot
+# slip past the check: name what it reads off as these are, or add the name
+# here. A file in which no read is found at all fails too.
+FRAME_NAMES = {  # recorder.py's and ws.py's: ws.py hands the recorder every frame
     "frame": "any",
     "t": "telemetry",
     "metrics": "metrics",
     "m": "metrics",
     "settings": "settings",
     "entry": None,
+}
+FRAME_READERS = {
+    RECORDER_PY: FRAME_NAMES,
+    WS_PY: FRAME_NAMES,
+    # drive.py holds every frame in `data`, telemetry or not (describe_aside()
+    # tells them apart by their key), and a settings frame's object in
+    # `settings`.
+    DRIVE_PY: {
+        "data": "any",
+        "settings": "settings",
+    },
 }
 FRAME_READS = (
     re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\.get\(\s*[\"'](\w+)[\"']"),
@@ -265,8 +287,9 @@ OTA_NAME_H = r'\bconstexpr\s+char\s+NAME\s*\[\s*\]\s*=\s*"([^"]*)"\s*;'
 # Where each client reads telemetry keys and writes command fields, once its
 # comments are removed (a comment that mentions data.foo is not a read). A
 # client is one file, or a glob of the files it is made of:
-#   reads     patterns for a telemetry key read off the frame, which both
-#             clients hold in a variable named `data`;
+#   reads     patterns for a telemetry key read off the frame, which the
+#             panel holds in a variable named `data` (drive.py has none
+#             here: FRAME_READERS checks its reads, the settings among them);
 #   bearings  the table of scan keys the client shows, and a key in it;
 #   command   the object literal every command is sent as, and a field in it.
 KEY_READERS = {
@@ -283,10 +306,6 @@ KEY_READERS = {
                     re.compile(r"(?:^|,)\s*[\"']?([A-Za-z_$][\w$]*)[\"']?\s*(?=:|,|$)")),
     },
     DRIVE_PY: {
-        "reads": [
-            re.compile(r"(?<![\w.])data\.get\(\s*[\"'](\w+)[\"']"),
-            re.compile(r"(?<![\w.])data\[\s*[\"'](\w+)[\"']\s*\]"),
-        ],
         "bearings": (re.compile(r"^BEARINGS\s*=\s*\((.*?)^\)", re.M | re.S),
                      re.compile(r"\(\s*[\"'][^\"']*[\"']\s*,\s*[\"'](\w+)[\"']\s*\)")),
         # json.dumps({"move": move, "speed": speed, "duration": MOVE_DURATION_MS})
@@ -388,8 +407,9 @@ class Checker:
         return found
 
     def usage(self, client: str) -> dict[str, tuple[set[str], list[set[str]]]]:
-        """For each file of a client: the telemetry keys it reads, and the
-        fields of each command object it sends."""
+        """For each file of a client: the telemetry keys it reads (none for a
+        client without "reads"), and the fields of each command object it
+        sends."""
         where = KEY_READERS[client]
         literal, field = where["command"]
         found = {}
@@ -400,7 +420,7 @@ class Checker:
                 # one: {settings: {...}} sends the one field "settings", whose
                 # own fields settings_wire() checks, and {settings: {...},
                 # move} sends move too.
-                found[relpath] = ({key for pattern in where["reads"] for key in pattern.findall(code)},
+                found[relpath] = ({key for pattern in where.get("reads", ()) for key in pattern.findall(code)},
                                   [set(field.findall(top_level(body))) for body in literal.findall(code)])
         return found
 
@@ -584,14 +604,17 @@ class Checker:
         return found
 
     def frame_reads(self) -> int:
-        """Every key client/recorder.py and client/ws.py read off one of the
-        rover's frames is one src/Protocol.cpp writes there, and
-        recorder.py's BEARINGS holds every scan key telemetry sends.
+        """Every key client/recorder.py, client/ws.py and client/drive.py
+        read off one of the rover's frames, or inside a settings or metrics
+        frame, is one src/Protocol.cpp writes there, and recorder.py's
+        BEARINGS holds every scan key telemetry sends.
 
-        These clients only listen, and a renamed key fails as quietly there
-        as in the panel: the recorder keeps a column of NULLs, its exporter
-        drops a series from every graph, ws.py prints a dash. Which frame a
-        read is off goes by FRAME_NAMES. Returns how many keys it checked.
+        A renamed key fails as quietly in these clients as in the panel: the
+        recorder keeps a column of NULLs, its exporter drops a series from
+        every graph, ws.py prints a dash, and so does drive.py, in a row or
+        in its line of the rover's settings. Which frame a read is off goes
+        by the name it is read off, in FRAME_READERS. Returns how many keys
+        it checked.
         """
         sent, scan, _ = self.firmware_keys()
         inner = self.inner_keys()
@@ -619,17 +642,24 @@ class Checker:
                 self.problem(f'{relpath}: {how} "{key}", which {PROTOCOL_CPP} never writes {where[kind]}; '
                              f"what it keeps or shows of it would stay empty without a word")
 
-        for relpath in FRAME_READERS:
+        for relpath, names in FRAME_READERS.items():
             code = self.code(relpath)
             if code is None:
                 continue
+            found = 0
             for pattern in FRAME_READS:
                 for name, key in pattern.findall(code):
-                    if name not in FRAME_NAMES:
-                        self.problem(f'{relpath}: reads "{key}" off `{name}`, which is not a name FRAME_NAMES in '
-                                     f"tools/check_protocol.py knows a frame by; name it as those are, or add it")
-                    elif FRAME_NAMES[name] is not None:
-                        check(relpath, FRAME_NAMES[name], key, f"reads `{name}`'s key")
+                    if name not in names:
+                        found += 1
+                        self.problem(f'{relpath}: reads "{key}" off `{name}`, which is not a name FRAME_READERS in '
+                                     f"tools/check_protocol.py knows a frame by in {relpath}; name it as those "
+                                     f"are, or add it")
+                    elif names[name] is not None:
+                        found += 1
+                        check(relpath, names[name], key, f"reads `{name}`'s key")
+            if not found:
+                self.unreadable(relpath, f'any key read off a frame (name.get("key") or name["key"], the name one '
+                                f"of {', '.join(sorted(names))})")
 
         code = self.code(RECORDER_PY)
         for table, kind, item in RECORDER_TABLES:
@@ -648,8 +678,10 @@ class Checker:
         return sum(len(keys) for keys in read.values())
 
     def keys(self) -> int:
-        """Every telemetry key a client reads is one the firmware sends, and
-        every command field it sends is one the firmware reads.
+        """Every telemetry key the panel reads, and every scan key a client's
+        BEARINGS shows, is one the firmware sends, and every command field a
+        client sends is one the firmware reads. drive.py's reads off a frame
+        are frame_reads()'s.
 
         A renamed key fails quietly on both sides: the panel shows a dash
         forever, and a command field the firmware does not read falls back to
@@ -674,7 +706,7 @@ class Checker:
                 relpath, body = table
                 for name in sorted(set(KEY_READERS[client]["bearings"][1].findall(body)) - sent):
                     self.problem(f'{relpath}: BEARINGS shows telemetry key "{name}", which {PROTOCOL_CPP} never sends')
-            if not any(reads for reads, _ in usage.values()):
+            if "reads" in KEY_READERS[client] and not any(reads for reads, _ in usage.values()):
                 self.unreadable(client, 'any telemetry read (data.key or data["key"])')
             if not any(commands for _, commands in usage.values()):
                 self.unreadable(client, "a command object to check")
@@ -970,7 +1002,7 @@ def main() -> int:
         f"{', '.join(name_counts)}, the scheme and settings messages, {list_count} lists of names, "
         f"{ota_count} firmware update names, the names of "
         f"{key_count} telemetry keys and the command fields across {DRIVE_PY} and {PANEL_SCRIPTS}, and "
-        f"{read_count} frame keys {RECORDER_PY} and {WS_PY} read agree"
+        f"{read_count} frame keys {', '.join(FRAME_READERS)} read agree"
     )
     return 0
 
