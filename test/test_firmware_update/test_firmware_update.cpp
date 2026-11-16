@@ -29,6 +29,7 @@ const size_t IMAGE_SIZE = 2500;  // two whole chunks and a part
 
 FakeMotors* motors;
 FakeScanner* scanner;
+Settings* settings;
 EventLog* events;
 Rover* rover;
 FakeFirmwareSlot* slot;
@@ -112,7 +113,8 @@ void setUp(void) {
   motors = new FakeMotors();
   scanner = new FakeScanner();
   events = new EventLog();
-  rover = new Rover(*motors, *scanner, *events);
+  settings = new Settings(*events, kinematics::SCHEME_NORMAL);
+  rover = new Rover(*motors, *scanner, *settings, *events);
   rover->begin(Rover::MODE_MANUAL, 0);
   slot = new FakeFirmwareSlot();
   firmware = new FirmwareUpdate(*rover, *slot, false);
@@ -123,6 +125,7 @@ void tearDown(void) {
   delete firmware;
   delete slot;
   delete rover;
+  delete settings;
   delete events;
   delete scanner;
   delete motors;

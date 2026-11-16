@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
+#include "Control.h"
 #include "EventLog.h"
 #include "Kinematics.h"
-#include "Rover.h"
+#include "Settings.h"
 #include "Tuning.h"
 
 // The pad's buttons that GamepadSession acts on as presses, one bit each in
@@ -50,7 +51,8 @@ struct GamepadReport {
 //     so each press is acted on once.
 GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 
-// Turns gamepad reports into rover commands. Pure, like Rover: the PS3
+// Turns gamepad reports into rover commands, sent through Control as the
+// PAD controller's, and changes of setting. Pure, like Rover: the PS3
 // library stays in Gamepad, and this is host-tested (test/test_gamepad).
 //
 // The rules it keeps:
@@ -59,6 +61,9 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 //     GAMEPAD_SPEED_CHANGE_MS; a new direction at once.
 //   * Releasing sends one STOP, never a stream: a resting pad must not keep
 //     forcing manual mode while the rover explores.
+//   * A command Control refuses (another controller holds control, ranked
+//     above the pad) drives nothing, so letting go of it sends no STOP; the
+//     pad asks again each pass, and drives once that hold lapses.
 //   * A pad silent for GAMEPAD_SILENCE_MS is gone (the library never reports
 //     a disconnect), and whatever it was driving stops.
 //   * START hands control back to autonomous exploration.
@@ -68,19 +73,19 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 //     held through it must come back to centre before it drives again, or the
 //     next pass would re-drive it and Cross would do nothing under a thumb
 //     resting on the stick. Pressed with START in the same report, Cross wins.
-//   * SELECT toggles the rover's control scheme (kinematics::ControlScheme),
-//     the one the panel shows too.
+//   * SELECT toggles the rover's control scheme (Settings::scheme()), the
+//     one the panel shows too.
 //   * A scheme change never redirects a held stick. Whatever the pad was
 //     driving stops, and the stick must come back to centre before it drives
 //     again. The scheme is shared, so without this a toggle on anyone's panel
 //     would turn the diagonal under this operator's thumb into a pivot.
 //   * The D-pad's up and down step the top speed, which the stick reaches at
 //     full deflection and a trigger at a full pull, by GAMEPAD_SPEED_STEP.
-//   * The sonar's buttons are configuration, like the panel's (Rover::
+//   * The sonar's buttons are configuration, like the panel's (Settings::
 //     setSonar()): they take no control. The right stick pans the sonar,
 //     faster the further it is pushed, from where it is aimed (straight ahead
 //     unless it already aims); R3 points it ahead, Triangle sweeps.
-//   * Pad control can be turned off (setEnabled(), from a client): the pad
+//   * Pad control can be turned off (Settings::setPad(), by any controller): the pad
 //     then drives nothing and changes nothing, but Cross still stops the
 //     rover, so Stop is one press from every controller. Turned off or on,
 //     whatever the pad drove stops, and a stick held through it waits for
@@ -91,7 +96,7 @@ GamepadReport takeGamepadReport(GamepadReport& mailbox, uint32_t now);
 //     EventLog.
 class GamepadSession {
  public:
-  GamepadSession(Rover& rover, kinematics::ControlScheme& scheme, EventLog& log);
+  GamepadSession(Control& control, Settings& settings, EventLog& log);
 
   // `report` is what takeGamepadReport() returned for this same `now`, so its
   // stamp is never later than `now` (Gamepad::update says why).
@@ -110,8 +115,6 @@ class GamepadSession {
   //     is a Bluetooth write from the loop task.
   int playerLedToShow(bool padPresent, uint32_t now);
 
-  // Pad control on or off: a client's choice, configuration like the scheme.
-  void setEnabled(bool on, uint32_t now);
   // OFF, WAITING (on, no pad reporting) or CONNECTED, as of the last update().
   PadState state() const;
 
@@ -125,11 +128,11 @@ class GamepadSession {
   void stepTopSpeed(const GamepadReport& report, uint32_t now);
   void aimSonar(const GamepadReport& report, bool fresh, uint32_t now);
 
-  Rover& rover;
-  kinematics::ControlScheme& scheme;
+  Control& control;
+  Settings& settings;
   EventLog& log;
   kinematics::ControlScheme schemeInUse;  // what the pad last drove under
-  bool enabled = true;                    // pad control, on at boot
+  bool padInUse;                          // pad control as the last update() found it
   bool present = false;                   // reporting, as of the last update
   bool awaitingRelease = false;           // stopped by a scheme change, Cross, or a toggle
   kinematics::DriveRequest lastSent = {STOP, 0};

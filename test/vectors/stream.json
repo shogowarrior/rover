@@ -1,10 +1,17 @@
 {
-  "about": "The rover's other frames, exactly as src/Protocol.cpp writes them: lines of its EventLog (writeLogLine()) and its metrics (writeMetrics()). test/test_protocol writes each from the values it holds and checks the frame comes back key for key; the panel's tests feed them to the page. A line's \"seq\" numbers it from a random start each boot, and \"t\" is the rover's clock in ms.",
+  "about": "The rover's other frames, exactly as src/Protocol.cpp writes them: lines of its EventLog (writeLogLine()), its metrics (writeMetrics()) and its settings (writeSettings()). test/test_protocol writes each from the values it holds and checks the frame comes back key for key; the panel's tests feed them to the page. A line's \"seq\" numbers it from a random start each boot, \"t\" is the rover's clock in ms, and \"src\" says whose line it is. A settings frame reads back, as a client's message, to the same settings: the first holds the defaults.",
   "log": [
-    {"log": "Boot after a power-on or EN reset, in manual mode", "seq": 4294967294, "t": 312},
-    {"log": "Motor shield: no answer on I2C at 0x60; no wheel will turn", "seq": 4294967295, "t": 330, "warn": true},
-    {"log": "Sweep (cm): L 120, FL 80, F -, FR 60, R 150", "seq": 0, "t": 61234},
-    {"log": "Link: ignored a message that is not JSON from client 2 \"quoted\" \\ back", "seq": 1, "t": 4294967295, "warn": true}
+    {"log": "Boot after a power-on or EN reset, in manual mode", "seq": 4294967294, "t": 312, "src": "ROVER"},
+    {"log": "Motor shield: no answer on I2C at 0x60; no wheel will turn", "seq": 4294967295, "t": 330, "src": "ROVER", "warn": true},
+    {"log": "Sweep (cm): L 120, FL 80, F -, FR 60, R 150", "seq": 0, "t": 61234, "src": "ROVER"},
+    {"log": "Link: ignored a message that is not JSON from client 2 \"quoted\" \\ back", "seq": 1, "t": 4294967295, "src": "WIFI", "warn": true},
+    {"log": "PAD has control: MOVE_FORWARD", "seq": 2, "t": 62000, "src": "PAD"},
+    {"log": "Refused MOVE_LEFT: PAD has control", "seq": 3, "t": 62100, "src": "USB", "warn": true}
+  ],
+  "settings": [
+    {"settings": {"scheme": "NORMAL", "sonar": "FRONT", "aim": 0, "pad": "ON", "priority": ["USB", "PAD", "WIFI"], "checksAtBoot": false}},
+    {"settings": {"scheme": "ADVANCED", "sonar": "AIM", "aim": -80, "pad": "OFF", "priority": ["WIFI", "USB", "PAD"], "checksAtBoot": true}},
+    {"settings": {"scheme": "NORMAL", "sonar": "SWEEP", "aim": 35, "pad": "ON", "priority": ["PAD", "WIFI", "USB"], "checksAtBoot": false}}
   ],
   "metrics": [
     {"metrics": {"upS": 61, "loopHz": 412, "loopMaxMs": 38, "heap": 201344, "heapMin": 187220, "rssi": -58, "clients": 1, "pings": 870, "noEcho": 12}},

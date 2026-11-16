@@ -4,8 +4,7 @@
 
 #include "Features.h"
 
-Gamepad::Gamepad(Rover& rover, kinematics::ControlScheme& scheme, EventLog& log)
-    : session(rover, scheme, log), log(log) {}
+Gamepad::Gamepad(Control& control, Settings& settings, EventLog& log) : session(control, settings, log) {}
 
 #if ROVER_ENABLE_GAMEPAD
 #include <Ps3Controller.h>
@@ -81,8 +80,6 @@ void Gamepad::update() {
   if (led != 0) Ps3.setPlayer(led);
 }
 
-void Gamepad::setEnabled(bool on, uint32_t now) { session.setEnabled(on, now); }
-
 PadState Gamepad::state() const { return started ? session.state() : PAD_ABSENT; }
 
 #else  // gamepad support not compiled in
@@ -90,10 +87,6 @@ PadState Gamepad::state() const { return started ? session.state() : PAD_ABSENT;
 void Gamepad::begin(const char*) {}
 
 void Gamepad::update() {}
-
-void Gamepad::setEnabled(bool, uint32_t now) {
-  log.add(now, EventLog::WARN, "Pad: this build has no gamepad (Features.h)");
-}
 
 PadState Gamepad::state() const { return PAD_ABSENT; }
 

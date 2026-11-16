@@ -9,27 +9,33 @@
 #include "GamepadSession.h"
 #include "Kinematics.h"
 #include "Rover.h"
+#include "Settings.h"
+#include "Source.h"
 
 // The WebSocket JSON wire format, in both directions, in one place.
 //
 // ArduinoJson is header-only and builds on the host, so this is tested there
 // too (test/test_protocol). Clients: client/drive.py, client/ws.py,
-// client/rover.ipynb and the panel's extras/joystick/js/.
+// client/rover.ipynb and the panel's extras/joystick/js/. A WebSocket client
+// sends each message as a text frame; the serial console takes the same
+// messages, one to a line (SerialControl), all but a firmware update's.
 //
 //   client -> rover   {"move": <MoveCode>, "speed": 0..255, "duration": ms}
-//                     {"scheme": "NORMAL" | "ADVANCED"}
-//                     {"sonar": "SWEEP" | "FRONT" | "AIM", "aim"?: degrees}
-//                     {"pad": "ON" | "OFF"}
+//                     {"settings": {"scheme"?, "sonar"?, "aim"?, "pad"?,
+//                      "priority"?, "checksAtBoot"?}}, any of them
+//                     {"scheme": "NORMAL" | "ADVANCED"}, the older form
 //                     {"ota": "begin", "size": bytes, "md5": hex}
 //                     {"ota": "auth", "cnonce": hex, "response": hex}
 //                     {"ota": "cancel"}
 //                     binary frames: the image, from the offset "next" names
 //   rover -> clients  {"mode", "move", "moving", "temperature", "motorsReady",
 //                      "scheme", "firmware", "sonar", "aim"?, "aimCm"?,
-//                      "check"?, "pad"?, "phase"?, "halt"?,
+//                      "check"?, "pad"?, "control"?, "phase"?, "halt"?,
 //                      "distanceLeft"?, "distanceFrontLeft"?, "distanceFront"?,
 //                      "distanceFrontRight"?, "distanceRight"?}
-//                     {"log": text, "seq", "t", "warn"?}, one EventLog line
+//                     {"settings": {"scheme", "sonar", "aim", "pad",
+//                      "priority", "checksAtBoot"}}, every setting
+//                     {"log": text, "seq", "t", "src", "warn"?}, one EventLog line
 //                     {"metrics": {"upS", "loopHz", "loopMaxMs", "heap",
 //                      "heapMin", "rssi", "clients", "pings", "noEcho"}}
 //   rover -> the client updating it
@@ -45,18 +51,30 @@
 // updates over the link: older firmware reads an "ota" message as a STOP
 // that takes control, so a client sends none without it.
 //
-// "sonar" is where manual mode points the sonar (Rover::setSonar()), with
+// "sonar" is where manual mode points the sonar (Settings::sonar()), with
 // "aim" while that is AIM, and "aimCm" in manual mode once a reading at that
 // angle is in. "check" names the check under way (SelfTest.h). "pad" is the
 // gamepad, "OFF", "WAITING" or "CONNECTED", sent only by a build with one.
-// Like "sonar", "pad" from an older rover is simply absent.
+// Like "sonar", "pad" from an older rover is simply absent. "control" names
+// the controller holding control ("USB", "PAD" or "WIFI", Control.h), while
+// one does.
+//
+// A frame with "settings" holds every setting (Settings.h): "scheme",
+// "sonar", "aim" in degrees, "pad" ("ON" or "OFF"), "priority" (the three
+// controllers, first first) and "checksAtBoot". Sent to a client that has
+// just connected, and to every client as they change. A client changes them
+// with the same shape, holding only what it changes; a value the rover does
+// not know is ignored, and the rest of the message still applies. The
+// rover keeps its settings in flash in this same shape.
 //
 // A frame with "log" is a line of the rover's EventLog, not telemetry: "seq"
 // numbers it (a client drops a number it already holds), "t" is the rover's
-// clock in ms, and "warn" is true for a warning. A client that has just
-// connected is sent every line still held first. A frame with "metrics"
-// says how the rover itself is doing, every tuning::METRICS_INTERVAL_MS.
-// Neither has "mode", and a client tells them from telemetry by their key.
+// clock in ms, "src" says whose line it is ("USB", "PAD", "WIFI" or
+// "ROVER", Source.h), and "warn" is true for a warning. A client that has
+// just connected is sent every line still held first. A frame with
+// "metrics" says how the rover itself is doing, every
+// tuning::METRICS_INTERVAL_MS. None of these has "mode", and a client tells
+// them from telemetry by their key.
 namespace protocol {
 
 struct Command {
@@ -80,28 +98,23 @@ struct OtaRequest {
 // What one client message asks for.
 struct Message {
   enum Kind {
-    DRIVE,       // a drive command: `command`
-    SET_SCHEME,  // choose the control scheme: `scheme`
-    SET_SONAR,   // where manual mode points the sonar: `sonar`, and `aimDeg` if `hasAim`
-    SET_PAD,     // gamepad control on or off: `padOn`
-    IGNORE,      // a configuration message naming a value we do not know
-    OTA,         // part of a firmware update: `ota`
+    DRIVE,     // a drive command: `command`
+    SETTINGS,  // a change of setting: `settings`
+    IGNORE,    // configuration naming no value we know
+    OTA,       // part of a firmware update: `ota`
   };
   Kind kind;
   Command command;
-  kinematics::ControlScheme scheme;
-  Explorer::SonarMode sonar;
-  bool hasAim;
-  int aimDeg;
-  bool padOn;
+  Settings::Change settings;
   OtaRequest ota;
 };
 
-// Read any client message. One carrying a string "ota" (and no "move") is
-// part of a firmware update; one carrying a string "scheme", "sonar" or
-// "pad" (and no "move") is configuration. None of those takes control or
-// stops the rover by itself, and an unknown action or value changes
-// nothing. Everything else is a drive command, defaults and all.
+// Read any client message, from any controller. One carrying a string "ota"
+// (and no "move") is part of a firmware update; one carrying an object
+// "settings", or a string "scheme" (and no "move"), is configuration. None
+// of those takes control or stops the rover by itself, and an unknown
+// action or value changes nothing. Everything else is a drive command,
+// defaults and all.
 Message readMessage(JsonVariantConst json);
 
 // "NORMAL" or "ADVANCED".
@@ -171,6 +184,7 @@ struct Report {
   Rover::Status status;
   kinematics::ControlScheme scheme;
   PadState pad;
+  Source control;  // who holds control (Control::holder()); SOURCE_ROVER for no one
   float temperatureC;
   const char* firmware;  // the running image's MD5
 };
@@ -188,6 +202,15 @@ constexpr size_t LOG_LINE_MAX_BYTES = 256;
 // Serialise one EventLog line into `out`. Returns the length written, or 0
 // if it did not fit.
 size_t writeLogLine(const EventLog::Entry& entry, char* out, size_t capacity);
+
+// RemoteControl's buffer for the settings frame, and main.cpp's for the
+// copy in flash, terminator included; test_settings_fit checks the worst
+// case.
+constexpr size_t SETTINGS_MAX_BYTES = 192;
+
+// Serialise every setting into `out`, as {"settings": {...}}. Returns the
+// length written, or 0 if it did not fit.
+size_t writeSettings(const Settings& settings, char* out, size_t capacity);
 
 // How the rover itself is doing, for a client to watch over time.
 struct Metrics {

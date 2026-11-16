@@ -45,11 +45,14 @@ const int STEP_COUNT = SONAR_STEP_COUNT + sizeof(DRIVE_STEPS) / sizeof(DRIVE_STE
 
 }  // namespace
 
-void SelfTest::start(uint32_t now, bool motorsReady) {
+void SelfTest::start(uint32_t now, bool motorsReady, bool wheels) {
   this->motorsReady = motorsReady;
+  this->wheels = wheels;
   sonarSamples = 0;
   sonarHeard = 0;
-  log.add(now, EventLog::INFO, "Checks: the sonar at each bearing, then each wheel and four moves");
+  log.add(now, EventLog::INFO,
+          wheels ? "Checks: the sonar at each bearing, then each wheel and four moves"
+                 : "Checks: the sonar at each bearing; no wheel turns");
   if (motorsReady) {
     log.add(now, EventLog::INFO, "Motor shield: answered at boot");
   } else {
@@ -139,7 +142,9 @@ void SelfTest::next(uint32_t now) {
   heard = 0;
   sent = false;
   resting = false;
-  if (step == SONAR_STEP_COUNT && !motorsReady) {
+  if (step == SONAR_STEP_COUNT && !wheels) {
+    finish(now);
+  } else if (step == SONAR_STEP_COUNT && !motorsReady) {
     log.add(now, EventLog::WARN, "Wheels not checked: the motor shield did not answer");
     finish(now);
   } else if (step == STEP_COUNT) {

@@ -8,8 +8,8 @@
 using timing::elapsed;
 using timing::reached;
 
-Rover::Rover(Motors& motors, RangeScanner& scanner, EventLog& log)
-    : motors(motors), log(log), explorer(scanner, log), selfTest(explorer, log) {}
+Rover::Rover(Motors& motors, RangeScanner& scanner, const Settings& settings, EventLog& log)
+    : motors(motors), settings(settings), log(log), explorer(scanner, log), selfTest(explorer, log) {}
 
 void Rover::begin(Mode initialMode, uint32_t now) { restart(initialMode, now); }
 
@@ -26,7 +26,7 @@ void Rover::update(uint32_t now) {
   if (check.look) {
     explorer.survey(now, Explorer::SONAR_AIM, check.lookDeg);
   } else {
-    explorer.survey(now, sonarMode, aimDeg);
+    explorer.survey(now, settings.sonar(), settings.aimDeg());
   }
   if (check.drive != nullptr) drive(*check.drive, check.speed, check.durationMs, now);
 }
@@ -58,7 +58,7 @@ void Rover::command(int move, int speed, int durationMs, uint32_t now) {
   }
   if (move == RUN_CHECKS) {
     release(now);
-    selfTest.start(now, motors.ready());
+    selfTest.start(now, motors.ready(), true);
     return;
   }
   drive(static_cast<MoveCode>(move), speed, durationMs, now);
@@ -76,11 +76,9 @@ void Rover::standDown(uint32_t now, const char* why) {
   setMode(MODE_MANUAL, now, nullptr);
 }
 
-void Rover::setSonar(Explorer::SonarMode mode, int aimDeg, uint32_t now) {
-  static const char* const NAMES[] = {"sweeps", "looks ahead", "aims"};
-  if (mode != sonarMode) log.add(now, EventLog::INFO, "The sonar %s in manual mode", NAMES[mode]);
-  sonarMode = mode;
-  this->aimDeg = kinematics::clampInt(aimDeg, -tuning::SONAR_AIM_MAX_DEG, tuning::SONAR_AIM_MAX_DEG);
+void Rover::checkWithoutWheels(uint32_t now) {
+  if (currentMode != MODE_MANUAL) return;
+  selfTest.start(now, motors.ready(), false);
 }
 
 void Rover::servicePendingRelease(uint32_t now) {
@@ -102,12 +100,13 @@ Rover::Status Rover::status() const {
     status.scanCm[i] = explorer.distanceCm(static_cast<Explorer::Bearing>(i));
   }
   status.motorsReady = motors.ready();
-  status.sonar = sonarMode;
-  status.aimDeg = aimDeg;
+  status.sonar = settings.sonar();
+  status.aimDeg = settings.aimDeg();
   const Explorer::Look& look = explorer.lastLook();
   // Only while it aims there: a sweep, exploring's or manual's, also
   // passes through whatever angle aimDeg holds.
-  status.hasAimCm = !exploring && sonarMode == Explorer::SONAR_AIM && look.valid && look.angleDeg == aimDeg;
+  status.hasAimCm =
+      !exploring && status.sonar == Explorer::SONAR_AIM && look.valid && look.angleDeg == status.aimDeg;
   status.aimCm = look.cm;
   status.check = selfTest.stepName();
   status.pings = explorer.pingCount();

@@ -105,6 +105,21 @@ void test_each_line_is_echoed_as_it_is_added(void) {
   TEST_ASSERT_EQUAL_STRING("after echo", echoed[0].c_str());
 }
 
+// A line is the rover's own unless it names whose it is.
+void test_each_line_says_whose_it_is(void) {
+  EventLog log;
+  log.add(1, EventLog::INFO, "the rover's");
+  log.add(2, EventLog::WARN, SOURCE_PAD, "the pad's %d", 2);
+  log.add(3, EventLog::INFO, SOURCE_USB, "the cable's");
+  log.add(4, EventLog::INFO, SOURCE_WIFI, "a client's");
+  TEST_ASSERT_EQUAL_INT(SOURCE_ROVER, log.from(0)->source);
+  TEST_ASSERT_EQUAL_INT(SOURCE_PAD, log.from(1)->source);
+  TEST_ASSERT_EQUAL_STRING("the pad's 2", log.from(1)->text);
+  TEST_ASSERT_EQUAL_INT(EventLog::WARN, log.from(1)->level);
+  TEST_ASSERT_EQUAL_INT(SOURCE_USB, log.from(2)->source);
+  TEST_ASSERT_EQUAL_INT(SOURCE_WIFI, log.from(3)->source);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_lines_are_numbered_from_the_first_number);
@@ -113,5 +128,6 @@ int main(int, char**) {
   RUN_TEST(test_a_long_line_is_cut_short);
   RUN_TEST(test_lines_are_ascii);
   RUN_TEST(test_each_line_is_echoed_as_it_is_added);
+  RUN_TEST(test_each_line_says_whose_it_is);
   return UNITY_END();
 }

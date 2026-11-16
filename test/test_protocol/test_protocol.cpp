@@ -72,6 +72,16 @@ Explorer::SonarMode sonarNamed(const char* name) {
   return Explorer::SONAR_SWEEP;
 }
 
+// No "control" (or "src" naming the rover) is no controller's.
+Source sourceNamed(const char* name) {
+  if (name == nullptr) return SOURCE_ROVER;
+  if (strcmp(name, "USB") == 0) return SOURCE_USB;
+  if (strcmp(name, "PAD") == 0) return SOURCE_PAD;
+  if (strcmp(name, "WIFI") == 0) return SOURCE_WIFI;
+  TEST_ASSERT_EQUAL_STRING("ROVER", name);
+  return SOURCE_ROVER;
+}
+
 // No "pad" is a build without one.
 PadState padNamed(const char* name) {
   if (name == nullptr) return PAD_ABSENT;
@@ -109,6 +119,7 @@ protocol::Report reportOf(JsonObjectConst frame) {
   report.status = statusOf(frame);
   report.scheme = schemeNamed(frame["scheme"]);
   report.pad = padNamed(frame["pad"]);
+  report.control = sourceNamed(frame["control"]);
   report.temperatureC = frame["temperature"];
   report.firmware = frame["firmware"];
   return report;
@@ -220,7 +231,7 @@ void test_telemetry_frames_match_the_vectors(void) {
 // with seven significant digits, the running image's MD5, the sonar aiming
 // as far right as it goes with a reading, the longest a check's name may be
 // (SelfTest::STEP_NAME_MAX, which test_rover holds the checks to), and the
-// pad's longest state.
+// pad's longest state, and the longest controller holding control.
 void test_longest_telemetry_fits(void) {
   Rover::Status status;
   status.mode = Rover::MODE_AUTONOMOUS;
@@ -248,6 +259,7 @@ void test_longest_telemetry_fits(void) {
   report.status = status;
   report.scheme = kinematics::SCHEME_ADVANCED;
   report.pad = PAD_CONNECTED;
+  report.control = SOURCE_WIFI;
   report.temperatureC = -12.34568f;
   report.firmware = HEX32;
   const JsonDocument doc = written(report);
@@ -255,15 +267,21 @@ void test_longest_telemetry_fits(void) {
   TEST_ASSERT_EQUAL_STRING(HEX32, doc["firmware"]);
   TEST_ASSERT_EQUAL_STRING(check.c_str(), doc["check"]);
   TEST_ASSERT_EQUAL_STRING("CONNECTED", doc["pad"]);
+  TEST_ASSERT_EQUAL_STRING("WIFI", doc["control"]);
 }
 
+// The older form: a scheme alone, at the top level.
 void test_scheme_message_sets_the_scheme(void) {
   protocol::Message m = message("{\"scheme\":\"ADVANCED\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SCHEME, m.kind);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, m.scheme);
-  m = message("{\"scheme\":\"NORMAL\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SCHEME, m.kind);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, m.scheme);
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, m.kind);
+  TEST_ASSERT_TRUE(m.settings.hasScheme);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, m.settings.scheme);
+  TEST_ASSERT_FALSE(m.settings.hasSonar || m.settings.hasAim || m.settings.hasPad || m.settings.hasPriority ||
+                    m.settings.hasChecksAtBoot);
+  m = message("{\"scheme\":\"NORMAL\",\"sonar\":\"AIM\"}");  // only the scheme, in this form
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, m.kind);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, m.settings.scheme);
+  TEST_ASSERT_FALSE(m.settings.hasSonar);
 }
 
 // An unknown scheme changes nothing -- and in particular does not become the
@@ -291,62 +309,129 @@ void test_too_small_a_buffer_writes_nothing(void) {
   const JsonDocument vectors = loadVectors("telemetry.json");
   char out[16];
   TEST_ASSERT_EQUAL_UINT(0, protocol::writeTelemetry(reportOf(vectors["frames"]["cruising"]), out, sizeof(out)));
-  const EventLog::Entry entry = {7, 100, EventLog::INFO, "a line"};
+  const EventLog::Entry entry = {7, 100, EventLog::INFO, SOURCE_ROVER, "a line"};
   TEST_ASSERT_EQUAL_UINT(0, protocol::writeLogLine(entry, out, sizeof(out)));
   const protocol::Metrics metrics = {};
   TEST_ASSERT_EQUAL_UINT(0, protocol::writeMetrics(metrics, out, sizeof(out)));
+  EventLog log;
+  const Settings settings(log, kinematics::SCHEME_NORMAL);
+  TEST_ASSERT_EQUAL_UINT(0, protocol::writeSettings(settings, out, sizeof(out)));
 }
 
-// --- settings: the sonar and the pad ----------------------------------------
+// --- settings --------------------------------------------------------------
 
-void test_sonar_messages_are_read(void) {
-  protocol::Message m = message("{\"sonar\":\"FRONT\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
-  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, m.sonar);
-  TEST_ASSERT_FALSE(m.hasAim);
-  m = message("{\"sonar\":\"AIM\",\"aim\":-30}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
-  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_AIM, m.sonar);
-  TEST_ASSERT_TRUE(m.hasAim);
-  TEST_ASSERT_EQUAL_INT(-30, m.aimDeg);
-  m = message("{\"sonar\":\"SWEEP\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, m.kind);
-  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, m.sonar);
-  // An aim that is not a whole number is no aim: Rover keeps the one it has.
-  const char* const noAim[] = {"{\"sonar\":\"AIM\",\"aim\":\"30\"}", "{\"sonar\":\"AIM\",\"aim\":12.5}",
-                               "{\"sonar\":\"AIM\",\"aim\":null}", "{\"sonar\":\"AIM\"}"};
-  for (const char* json : noAim) {
-    m = message(json);
-    TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::SET_SONAR, m.kind, json);
-    TEST_ASSERT_FALSE_MESSAGE(m.hasAim, json);
+void test_settings_messages_are_read(void) {
+  protocol::Message m = message(
+      "{\"settings\":{\"scheme\":\"ADVANCED\",\"sonar\":\"AIM\",\"aim\":-30,\"pad\":\"OFF\","
+      "\"priority\":[\"WIFI\",\"PAD\",\"USB\"],\"checksAtBoot\":true}}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, m.kind);
+  const Settings::Change& c = m.settings;
+  TEST_ASSERT_TRUE(c.hasScheme && c.hasSonar && c.hasAim && c.hasPad && c.hasPriority && c.hasChecksAtBoot);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, c.scheme);
+  TEST_ASSERT_EQUAL_INT(Explorer::SONAR_AIM, c.sonar);
+  TEST_ASSERT_EQUAL_INT(-30, c.aimDeg);
+  TEST_ASSERT_FALSE(c.padOn);
+  TEST_ASSERT_EQUAL_INT(SOURCE_WIFI, c.priority[0]);
+  TEST_ASSERT_EQUAL_INT(SOURCE_PAD, c.priority[1]);
+  TEST_ASSERT_EQUAL_INT(SOURCE_USB, c.priority[2]);
+  TEST_ASSERT_TRUE(c.checksAtBoot);
+
+  // Only what a message holds.
+  m = message("{\"settings\":{\"sonar\":\"SWEEP\"}}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, m.kind);
+  TEST_ASSERT_TRUE(m.settings.hasSonar);
+  TEST_ASSERT_FALSE(m.settings.hasScheme || m.settings.hasAim || m.settings.hasPad || m.settings.hasPriority ||
+                    m.settings.hasChecksAtBoot);
+}
+
+// A value the rover does not know leaves its field out, and the rest of the
+// message still applies.
+void test_unknown_setting_values_are_left_out(void) {
+  const protocol::Message m = message(
+      "{\"settings\":{\"scheme\":\"TURBO\",\"sonar\":\"front\",\"aim\":12.5,\"pad\":\"on\","
+      "\"priority\":[\"USB\",\"PAD\"],\"checksAtBoot\":1,\"colour\":\"red\",\"pad \":\"OFF\"}}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::IGNORE, m.kind);
+  const protocol::Message some = message("{\"settings\":{\"sonar\":\"LEFT\",\"pad\":\"OFF\"}}");
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, some.kind);
+  TEST_ASSERT_FALSE(some.settings.hasSonar);
+  TEST_ASSERT_TRUE(some.settings.hasPad);
+  TEST_ASSERT_FALSE(some.settings.padOn);
+  // A priority naming the rover, an unknown name or a number is no priority.
+  const char* const badOrders[] = {"[\"USB\",\"PAD\",\"ROVER\"]", "[\"USB\",\"PAD\",\"wifi\"]",
+                                   "[0,1,2]", "\"USB\""};
+  for (const char* order : badOrders) {
+    char json[96];
+    snprintf(json, sizeof(json), "{\"settings\":{\"priority\":%s}}", order);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::IGNORE, message(json).kind, json);
   }
 }
 
-void test_pad_messages_are_read(void) {
-  protocol::Message m = message("{\"pad\":\"OFF\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_PAD, m.kind);
-  TEST_ASSERT_FALSE(m.padOn);
-  m = message("{\"pad\":\"ON\"}");
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_PAD, m.kind);
-  TEST_ASSERT_TRUE(m.padOn);
-}
-
-// A setting naming a value the rover does not know changes nothing, and is
-// not the STOP a malformed command is: it would take control.
-void test_unknown_settings_are_ignored(void) {
-  const char* const unknown[] = {"{\"sonar\":\"LEFT\"}", "{\"sonar\":\"front\"}", "{\"pad\":\"on\"}",
-                                 "{\"pad\":\"\"}"};
-  for (const char* json : unknown) TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::IGNORE, message(json).kind, json);
-}
-
-// As with the scheme: a setting only as a string and without "move";
-// otherwise the message drives, defaults and all.
-void test_settings_need_a_string_and_no_move(void) {
-  assertDefaultsToStop("{\"sonar\":1}");
-  assertDefaultsToStop("{\"pad\":false}");
-  const protocol::Message m = message("{\"move\":0,\"speed\":0,\"duration\":0,\"sonar\":\"FRONT\",\"pad\":\"OFF\"}");
+// Settings are never the STOP a malformed command is: it would take control
+// from an exploring rover. "settings" that is not an object is ignored (but
+// null, which reads as absent); a message with "move" drives, whatever else
+// it holds.
+void test_settings_never_stop_the_rover(void) {
+  const char* const ignored[] = {"{\"settings\":1}", "{\"settings\":\"FRONT\"}", "{\"settings\":[]}",
+                                 "{\"settings\":{}}"};
+  for (const char* json : ignored) {
+    TEST_ASSERT_EQUAL_INT_MESSAGE(protocol::Message::IGNORE, message(json).kind, json);
+  }
+  const protocol::Message m = message("{\"move\":0,\"speed\":0,\"duration\":0,\"settings\":{\"pad\":\"OFF\"}}");
   TEST_ASSERT_EQUAL_INT(protocol::Message::DRIVE, m.kind);
   TEST_ASSERT_EQUAL_INT(STOP, m.command.move);
+}
+
+// Each settings frame in test/vectors/stream.json reads back, as a client's
+// message, to settings that write that same frame: the format the rover
+// sends is the one it takes, and the one it keeps in flash.
+void test_settings_frames_match_the_vectors(void) {
+  const JsonDocument vectors = loadVectors("stream.json");
+  bool first = true;
+  for (JsonObjectConst frame : vectors["settings"].as<JsonArrayConst>()) {
+    EventLog log;
+    Settings settings(log, kinematics::SCHEME_NORMAL);
+    char out[protocol::SETTINGS_MAX_BYTES];
+    if (first) {  // the defaults
+      const size_t length = protocol::writeSettings(settings, out, sizeof(out));
+      JsonDocument doc;
+      TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+      assertSameFrame(frame["settings"], doc["settings"].as<JsonObjectConst>(), "defaults");
+      first = false;
+    }
+    std::string text;
+    serializeJson(frame, text);
+    const protocol::Message m = message(text.c_str());
+    TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, m.kind);
+    settings.apply(m.settings, SOURCE_WIFI, 0);
+    const size_t length = protocol::writeSettings(settings, out, sizeof(out));
+    TEST_ASSERT_TRUE(length > 0);
+    JsonDocument doc;
+    TEST_ASSERT_FALSE(deserializeJson(doc, out, length));
+    TEST_ASSERT_EQUAL_INT(1, doc.size());
+    assertSameFrame(frame["settings"], doc["settings"].as<JsonObjectConst>(), text.c_str());
+  }
+}
+
+// The settings frame at its longest fits its buffer; the longest settings
+// message a client sends, spaced as json.dumps writes it, fits the
+// command's.
+void test_settings_fit(void) {
+  EventLog log;
+  Settings settings(log, kinematics::SCHEME_ADVANCED);
+  settings.setSonar(Explorer::SONAR_SWEEP, SOURCE_WIFI, 0);
+  settings.setAim(-tuning::SONAR_AIM_MAX_DEG, SOURCE_WIFI, 0);
+  settings.setPad(false, SOURCE_WIFI, 0);
+  settings.setChecksAtBoot(false, SOURCE_WIFI, 0);
+  char out[protocol::SETTINGS_MAX_BYTES];
+  TEST_ASSERT_TRUE(protocol::writeSettings(settings, out, sizeof(out)) > 0);
+
+  char longest[protocol::COMMAND_MAX_BYTES + 1];
+  const int length = snprintf(longest, sizeof(longest),
+                              "{\"settings\": {\"scheme\": \"ADVANCED\", \"sonar\": \"SWEEP\", \"aim\": %d, "
+                              "\"pad\": \"OFF\", \"priority\": [\"WIFI\", \"USB\", \"PAD\"], \"checksAtBoot\": false}}",
+                              -2147483647 - 1);
+  TEST_ASSERT_TRUE(length > 0 && static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
+  TEST_ASSERT_EQUAL_INT(protocol::Message::SETTINGS, message(longest).kind);
 }
 
 // The names the wire uses, which the panel and drive.py copy.
@@ -358,13 +443,10 @@ void test_setting_names(void) {
   TEST_ASSERT_EQUAL_STRING("OFF", protocol::padName(PAD_OFF));
   TEST_ASSERT_EQUAL_STRING("WAITING", protocol::padName(PAD_WAITING));
   TEST_ASSERT_EQUAL_STRING("CONNECTED", protocol::padName(PAD_CONNECTED));
-}
-
-void test_longest_setting_fits(void) {
-  char longest[protocol::COMMAND_MAX_BYTES + 1];
-  const int length = snprintf(longest, sizeof(longest), "{\"sonar\": \"SWEEP\", \"aim\": %d}", -2147483647 - 1);
-  TEST_ASSERT_TRUE(length > 0 && static_cast<size_t>(length) <= protocol::COMMAND_MAX_BYTES);
-  TEST_ASSERT_EQUAL_INT(protocol::Message::SET_SONAR, message(longest).kind);
+  TEST_ASSERT_EQUAL_STRING("USB", sourceName(SOURCE_USB));
+  TEST_ASSERT_EQUAL_STRING("PAD", sourceName(SOURCE_PAD));
+  TEST_ASSERT_EQUAL_STRING("WIFI", sourceName(SOURCE_WIFI));
+  TEST_ASSERT_EQUAL_STRING("ROVER", sourceName(SOURCE_ROVER));
 }
 
 // --- the log and the metrics --------------------------------------------------
@@ -377,6 +459,7 @@ void test_log_lines_match_the_vectors(void) {
     entry.seq = frame["seq"];
     entry.atMs = frame["t"];
     entry.level = frame["warn"] | false ? EventLog::WARN : EventLog::INFO;
+    entry.source = sourceNamed(frame["src"]);
     snprintf(entry.text, sizeof(entry.text), "%s", frame["log"].as<const char*>());
     char out[protocol::LOG_LINE_MAX_BYTES];
     const size_t length = protocol::writeLogLine(entry, out, sizeof(out));
@@ -419,6 +502,7 @@ void test_longest_log_line_fits(void) {
   entry.seq = 4294967295u;
   entry.atMs = 4294967295u;
   entry.level = EventLog::WARN;
+  entry.source = SOURCE_ROVER;
   memset(entry.text, '"', sizeof(entry.text) - 1);
   entry.text[sizeof(entry.text) - 1] = '\0';
   char out[protocol::LOG_LINE_MAX_BYTES];
@@ -579,12 +663,12 @@ int main(int, char**) {
   RUN_TEST(test_unknown_scheme_is_ignored);
   RUN_TEST(test_other_messages_drive);
   RUN_TEST(test_a_move_with_a_scheme_still_drives);
-  RUN_TEST(test_sonar_messages_are_read);
-  RUN_TEST(test_pad_messages_are_read);
-  RUN_TEST(test_unknown_settings_are_ignored);
-  RUN_TEST(test_settings_need_a_string_and_no_move);
+  RUN_TEST(test_settings_messages_are_read);
+  RUN_TEST(test_unknown_setting_values_are_left_out);
+  RUN_TEST(test_settings_never_stop_the_rover);
+  RUN_TEST(test_settings_frames_match_the_vectors);
+  RUN_TEST(test_settings_fit);
   RUN_TEST(test_setting_names);
-  RUN_TEST(test_longest_setting_fits);
   RUN_TEST(test_log_lines_match_the_vectors);
   RUN_TEST(test_metrics_match_the_vectors);
   RUN_TEST(test_longest_log_line_fits);

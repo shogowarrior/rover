@@ -4,8 +4,10 @@
 
 #include "../fakes/FakeHardware.h"
 #include "../support/Loop.h"
+#include "Control.h"
 #include "EventLog.h"
 #include "GamepadSession.h"
+#include "Settings.h"
 #include "Tuning.h"
 
 // The gamepad's rules, on the host: what a held stick, a released stick, a
@@ -19,9 +21,14 @@ namespace {
 FakeMotors* motors;
 FakeScanner* scanner;
 EventLog* events;
+Settings* settings;
 Rover* rover;
-kinematics::ControlScheme scheme;
+Control* control;
 GamepadSession* session;
+
+// A change of scheme from elsewhere: the panel's, say.
+void setScheme(kinematics::ControlScheme scheme) { settings->setScheme(scheme, SOURCE_WIFI, 0); }
+void setPad(bool on, uint32_t now) { settings->setPad(on, SOURCE_WIFI, now); }
 
 GamepadReport pad(int lx, int ly, int l2, int r2, uint32_t reportedAt, bool l1 = false, bool r1 = false) {
   GamepadReport report;
@@ -76,14 +83,17 @@ void setUp(void) {
   motors = new FakeMotors();
   scanner = new FakeScanner();
   events = new EventLog();
-  rover = new Rover(*motors, *scanner, *events);
-  scheme = kinematics::SCHEME_NORMAL;
-  session = new GamepadSession(*rover, scheme, *events);
+  settings = new Settings(*events, kinematics::SCHEME_NORMAL);
+  rover = new Rover(*motors, *scanner, *settings, *events);
+  control = new Control(*rover, *settings, *events);
+  session = new GamepadSession(*control, *settings, *events);
 }
 
 void tearDown(void) {
   delete session;
+  delete control;
   delete rover;
+  delete settings;
   delete events;
   delete scanner;
   delete motors;
@@ -193,9 +203,9 @@ void test_speed_changes_are_rate_limited(void) {
 void test_select_toggles_the_scheme_without_taking_control(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   session->update(pressSelect(0), 0);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, scheme);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, settings->scheme());
   session->update(pressSelect(10), 10);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, settings->scheme());
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
 }
@@ -220,7 +230,7 @@ void test_scheme_change_stops_a_held_stick_until_released(void) {
   TEST_ASSERT_EQUAL_INT(MOVE_DIAGONAL225, motors->lastPattern->move);  // NORMAL: R1 ignored
   const int drivesBefore = motors->driveCalls;
 
-  scheme = kinematics::SCHEME_ADVANCED;
+  setScheme(kinematics::SCHEME_ADVANCED);
   now = hold(held, now, 1000);  // still held, well past the refresh
   TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_EQUAL_INT(drivesBefore, motors->driveCalls);
@@ -241,7 +251,7 @@ void test_select_mid_hold_stops_until_released(void) {
   select.lastReportMs = now;
   select.pressed = PAD_SELECT;
   session->update(select, now);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, scheme);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_ADVANCED, settings->scheme());
   TEST_ASSERT_FALSE(motors->driving);
   now = hold(held, now + 10, 500);
   TEST_ASSERT_FALSE(motors->driving);
@@ -255,7 +265,7 @@ void test_select_mid_hold_stops_until_released(void) {
 void test_scheme_change_at_rest_sends_nothing(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   uint32_t now = hold(pad(0, 0, 0, 0, 0), 0, 100);
-  scheme = kinematics::SCHEME_ADVANCED;
+  setScheme(kinematics::SCHEME_ADVANCED);
   hold(pad(0, 0, 0, 0, 0), now, 500);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
@@ -443,8 +453,8 @@ void test_led_writes_are_rate_limited_and_catch_up(void) {
   int writes = 0;
   int lastWritten = 0;
   for (uint32_t t = 2000; t < 2100; t += 10) {
-    scheme = scheme == kinematics::SCHEME_ADVANCED ? kinematics::SCHEME_NORMAL
-                                                   : kinematics::SCHEME_ADVANCED;
+    setScheme(settings->scheme() == kinematics::SCHEME_ADVANCED ? kinematics::SCHEME_NORMAL
+                                                                : kinematics::SCHEME_ADVANCED);
     const int led = session->playerLedToShow(true, t);
     if (led != 0) {
       writes++;
@@ -453,7 +463,7 @@ void test_led_writes_are_rate_limited_and_catch_up(void) {
   }
   TEST_ASSERT_EQUAL_INT(1, writes);
   TEST_ASSERT_EQUAL_INT(2, lastWritten);  // the first flip
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);  // where the ten left it
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, settings->scheme());  // where the ten left it
 
   const uint32_t limitPassed = 2000 + tuning::GAMEPAD_LED_MIN_INTERVAL_MS;
   for (uint32_t t = 2100; t < limitPassed; t += 10) TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, t));
@@ -467,12 +477,12 @@ void test_led_writes_are_rate_limited_and_catch_up(void) {
 // scheme, and the session sees only silence and then reports again: the LEDs
 // are rewritten when it comes back. A pad that is not reporting gets nothing.
 void test_led_is_rewritten_for_a_pad_that_reappears(void) {
-  scheme = kinematics::SCHEME_ADVANCED;
+  setScheme(kinematics::SCHEME_ADVANCED);
   TEST_ASSERT_EQUAL_INT(2, session->playerLedToShow(true, 1000));
   TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, 1500));
-  scheme = kinematics::SCHEME_NORMAL;
+  setScheme(kinematics::SCHEME_NORMAL);
   TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(false, 2000));  // gone, and changed meanwhile
-  scheme = kinematics::SCHEME_ADVANCED;
+  setScheme(kinematics::SCHEME_ADVANCED);
   TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(false, 2500));
   TEST_ASSERT_EQUAL_INT(2, session->playerLedToShow(true, 3000));  // back: the same LED again
 }
@@ -547,11 +557,13 @@ void test_the_right_stick_pans_the_sonar(void) {
 // From wherever a client aimed it; from straight ahead if it was not aiming.
 void test_a_pan_starts_from_the_current_aim(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  rover->setSonar(Explorer::SONAR_AIM, 30, 0);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 0);
+  settings->setAim(30, SOURCE_WIFI, 0);
   uint32_t now = hold(rightStick(-127, 0), 0, 200);
   TEST_ASSERT_INT_WITHIN(4, 30 + tuning::GAMEPAD_PAN_DEG_PER_S / 5, rover->status().aimDeg);
   now = hold(rightStick(0, 0), now, 100);
-  rover->setSonar(Explorer::SONAR_SWEEP, 60, now);
+  settings->setSonar(Explorer::SONAR_SWEEP, SOURCE_WIFI, now);
+  settings->setAim(60, SOURCE_WIFI, now);
   hold(rightStick(127, 0), now, 200);
   TEST_ASSERT_INT_WITHIN(4, -tuning::GAMEPAD_PAN_DEG_PER_S / 5, rover->status().aimDeg);
 }
@@ -560,7 +572,8 @@ void test_a_pan_starts_from_the_current_aim(void) {
 // keeps the aim for the next time it aims.
 void test_r3_looks_ahead_and_triangle_sweeps(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  rover->setSonar(Explorer::SONAR_AIM, 40, 0);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 0);
+  settings->setAim(40, SOURCE_WIFI, 0);
   session->update(with(PAD_R3, pad(0, 0, 0, 0, 10)), 10);
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);
   TEST_ASSERT_EQUAL_INT(40, rover->status().aimDeg);
@@ -593,9 +606,10 @@ void test_pad_control_off_leaves_only_cross(void) {
   uint32_t now = hold(pad(0, -127, 0, 0, 0), 0, 300);
   TEST_ASSERT_TRUE(motors->driving);
   const int releases = motors->releaseCalls;
-  session->setEnabled(false, now);
-  TEST_ASSERT_FALSE(motors->driving);
+  setPad(false, now);
   TEST_ASSERT_EQUAL_INT(PAD_OFF, session->state());
+  session->update(pad(0, -127, 0, 0, now), now);  // the next pass stops it
+  TEST_ASSERT_FALSE(motors->driving);
   TEST_ASSERT_TRUE(logged("Pad control off"));
   const int drives = motors->driveCalls;
   now = hold(pad(0, -127, 0, 0, 0), now + 10, 1000);
@@ -605,7 +619,7 @@ void test_pad_control_off_leaves_only_cross(void) {
   session->update(with(PAD_TRIANGLE, pad(0, 0, 0, 0, now + 20)), now + 20);
   session->update(with(PAD_START, pad(0, 0, 0, 0, now + 30)), now + 30);
   TEST_ASSERT_EQUAL_INT(drives, motors->driveCalls);
-  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, scheme);
+  TEST_ASSERT_EQUAL_INT(kinematics::SCHEME_NORMAL, settings->scheme());
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_MANUAL, rover->status().mode);
   // One STOP when it was turned off, and no stream of them since.
@@ -620,9 +634,9 @@ void test_pad_control_off_leaves_only_cross(void) {
 // change: nothing drives off under a thumb resting on the stick.
 void test_pad_control_on_waits_for_centre(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  session->setEnabled(false, 0);
+  setPad(false, 0);
   uint32_t now = hold(pad(0, -127, 0, 0, 0), 0, 300);
-  session->setEnabled(true, now);
+  setPad(true, now);
   TEST_ASSERT_TRUE(logged("Pad control on"));
   now = hold(pad(0, -127, 0, 0, 0), now, 1000);
   TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
@@ -642,18 +656,48 @@ void test_pad_state_and_presence_are_reported(void) {
   advance(now, tuning::GAMEPAD_SILENCE_MS + 100, 10, [&last](uint32_t t) { session->update(last, t); });
   TEST_ASSERT_EQUAL_INT(PAD_WAITING, session->state());
   TEST_ASSERT_TRUE(logged("Pad silent", EventLog::WARN));
-  session->setEnabled(false, now);
+  setPad(false, now);
   TEST_ASSERT_EQUAL_INT(PAD_OFF, session->state());
 }
 
 // LED 4 says pad control is off, rate-limited like the scheme's.
 void test_led_four_shows_pad_control_off(void) {
   TEST_ASSERT_EQUAL_INT(1, session->playerLedToShow(true, 1000));
-  session->setEnabled(false, 1100);
+  setPad(false, 1100);
   TEST_ASSERT_EQUAL_INT(0, session->playerLedToShow(true, 1100));
   TEST_ASSERT_EQUAL_INT(4, session->playerLedToShow(true, 1000 + tuning::GAMEPAD_LED_MIN_INTERVAL_MS));
-  session->setEnabled(true, 2000);
+  setPad(true, 2000);
   TEST_ASSERT_EQUAL_INT(1, session->playerLedToShow(true, 2000));
+}
+
+// --- control ---------------------------------------------------------------
+
+// Ranked below a controller still driving, the pad drives nothing, and
+// letting go of its stick sends no STOP: the other controller's move carries
+// on.
+void test_a_refused_pad_sends_no_stop(void) {
+  const Source order[] = {SOURCE_WIFI, SOURCE_PAD, SOURCE_USB};
+  settings->setPriority(order, SOURCE_WIFI, 0);
+  rover->begin(Rover::MODE_MANUAL, 0);
+  control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, 0);
+  const uint32_t now = hold(pad(0, -127, 0, 0, 0), 0, 150);
+  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, motors->lastPattern->move);
+  TEST_ASSERT_TRUE(logged("Refused MOVE_FORWARD: WIFI has control", EventLog::WARN));
+  hold(pad(0, 0, 0, 0, 0), now, 20);
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(MOVE_LEFT, motors->lastPattern->move);
+}
+
+// Once that hold lapses, the pad's held stick drives at once.
+void test_the_pad_drives_once_a_hold_lapses(void) {
+  const Source order[] = {SOURCE_WIFI, SOURCE_PAD, SOURCE_USB};
+  settings->setPriority(order, SOURCE_WIFI, 0);
+  rover->begin(Rover::MODE_MANUAL, 0);
+  control->command(SOURCE_WIFI, MOVE_LEFT, 100, 400, 0);
+  hold(pad(0, -127, 0, 0, 0), 0, tuning::CONTROL_HOLD_MS + 100);
+  TEST_ASSERT_TRUE(motors->driving);
+  TEST_ASSERT_EQUAL_INT(MOVE_FORWARD, motors->lastPattern->move);
+  TEST_ASSERT_EQUAL_INT(SOURCE_PAD, control->holder(tuning::CONTROL_HOLD_MS + 100));
 }
 
 int main(int, char**) {
@@ -691,5 +735,7 @@ int main(int, char**) {
   RUN_TEST(test_pad_control_on_waits_for_centre);
   RUN_TEST(test_pad_state_and_presence_are_reported);
   RUN_TEST(test_led_four_shows_pad_control_off);
+  RUN_TEST(test_a_refused_pad_sends_no_stop);
+  RUN_TEST(test_the_pad_drives_once_a_hold_lapses);
   return UNITY_END();
 }

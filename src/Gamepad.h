@@ -1,9 +1,10 @@
 #ifndef GAMEPAD_H
 #define GAMEPAD_H
 
+#include "Control.h"
 #include "EventLog.h"
 #include "GamepadSession.h"
-#include "Rover.h"
+#include "Settings.h"
 
 // PS3 gamepad input, compiled in only when ROVER_ENABLE_GAMEPAD is set (see
 // Features.h). Without it, begin() and update() do nothing, and state() is
@@ -16,7 +17,7 @@
 // Invariants).
 class Gamepad {
  public:
-  Gamepad(Rover& rover, kinematics::ControlScheme& scheme, EventLog& log);
+  Gamepad(Control& control, Settings& settings, EventLog& log);
 
   // Pair with the controller. `hostMac` is the address stored in the pad.
   void begin(const char* hostMac);
@@ -25,14 +26,12 @@ class Gamepad {
   // loop()'s `now` (Gamepad.cpp says why).
   void update();
 
-  // Pad control on or off, from a client (GamepadSession::setEnabled()).
-  // Ignored, and logged, by a build without the pad.
-  void setEnabled(bool on, uint32_t now);
+  // OFF, WAITING or CONNECTED (GamepadSession::state()); PAD_ABSENT in a
+  // build without the pad. Pad control on or off is a setting (Settings).
   PadState state() const;
 
  private:
   GamepadSession session;
-  EventLog& log;
   bool started = false;
 };
 

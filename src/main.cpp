@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <esp_system.h>
 
+#include "Control.h"
 #include "DriveTrain.h"
 #include "EventLog.h"
 #include "Features.h"
@@ -8,9 +9,13 @@
 #include "FlashSlot.h"
 #include "Gamepad.h"
 #include "Network.h"
+#include "Protocol.h"
 #include "RemoteControl.h"
 #include "Rover.h"
 #include "Scanner.h"
+#include "SerialControl.h"
+#include "Settings.h"
+#include "SettingsStore.h"
 #include "Tuning.h"
 
 // The whole object graph, in one place. Everything is allocated statically and
@@ -21,15 +26,20 @@ namespace {
 // What the rover did and why. Numbered from a random start each boot, so a
 // client never takes this boot's lines for an earlier one's (EventLog.h).
 EventLog eventLog(esp_random());
+// Every setting, one copy for every controller, so the gamepad, the panel
+// and the serial console agree; kept in flash by settingsStore.
+Settings settings(eventLog, features::DEFAULT_CONTROL_SCHEME);
+SettingsStore settingsStore;
 DriveTrain driveTrain;
 Scanner scanner;
-Rover rover(driveTrain, scanner, eventLog);
-// One control scheme for every controller, so the gamepad and the panel agree.
-kinematics::ControlScheme controlScheme = features::DEFAULT_CONTROL_SCHEME;
+Rover rover(driveTrain, scanner, settings, eventLog);
+// Every command, from every controller, goes through here to the rover.
+Control control(rover, settings, eventLog);
 FlashSlot flashSlot;
 FirmwareUpdate firmwareUpdate(rover, flashSlot, features::LINK_UPDATE_NEEDS_PASSWORD);
-Gamepad gamepad(rover, controlScheme, eventLog);
-RemoteControl remote(rover, controlScheme, firmwareUpdate, gamepad, eventLog);
+Gamepad gamepad(control, settings, eventLog);
+SerialControl serialControl(control, eventLog);
+RemoteControl remote(rover, control, settings, firmwareUpdate, gamepad, eventLog);
 Network network(rover, remote, firmwareUpdate, eventLog);
 
 // Only a power-on may explore, and only with AUTONOMOUS_AT_POWER_ON
@@ -60,11 +70,47 @@ const char* resetName(esp_reset_reason_t reason) {
   }
 }
 
-// The serial console's copy of each log line, as it is added.
+// The serial console's copy of each log line, as it is added, with whose
+// line it is.
 void echoToSerial(const EventLog::Entry& entry) {
-  Serial.printf("[%lu.%03lu] %s%s\n", static_cast<unsigned long>(entry.atMs / 1000),
-                static_cast<unsigned long>(entry.atMs % 1000), entry.level == EventLog::WARN ? "WARN " : "",
-                entry.text);
+  Serial.printf("[%lu.%03lu] %-5s %s%s\n", static_cast<unsigned long>(entry.atMs / 1000),
+                static_cast<unsigned long>(entry.atMs % 1000), sourceName(entry.source),
+                entry.level == EventLog::WARN ? "WARN " : "", entry.text);
+}
+
+// The settings as the last boot left them, if there are any. Before
+// anything reads them: the gamepad's scheme, the sonar's mode.
+void loadSettings(uint32_t now) {
+  char text[protocol::SETTINGS_MAX_BYTES];
+  if (!settingsStore.load(text, sizeof(text))) {
+    eventLog.add(now, EventLog::INFO, "Settings: the defaults (none in flash)");
+    settings.saved();
+    return;
+  }
+  JsonDocument doc;
+  const bool parsed = !deserializeJson(doc, text);
+  const protocol::Message message = protocol::readMessage(doc.as<JsonVariantConst>());
+  if (!parsed || message.kind != protocol::Message::SETTINGS) {
+    eventLog.add(now, EventLog::WARN, "Settings: the copy in flash does not read; the defaults");
+  } else {
+    eventLog.add(now, EventLog::INFO, "Settings: from flash");
+    settings.apply(message.settings, SOURCE_ROVER, now);
+  }
+  settings.saved();
+}
+
+// Write the settings to flash once they have been still for a while and the
+// rover is at rest (Settings::saveDue() says why).
+void saveSettings(uint32_t now) {
+  if (!settings.saveDue(now, rover.atRest())) return;
+  char text[protocol::SETTINGS_MAX_BYTES];
+  const size_t length = protocol::writeSettings(settings, text, sizeof(text));
+  if (length > 0 && settingsStore.save(text, length)) {
+    eventLog.add(now, EventLog::INFO, "Settings: saved");
+  } else {
+    eventLog.add(now, EventLog::WARN, "Settings: not saved; the next change tries again");
+  }
+  settings.saved();
 }
 
 }  // namespace
@@ -83,8 +129,10 @@ void setup() {
   if (!driveTrain.ready()) {
     eventLog.add(millis(), EventLog::WARN, "Motor shield: no answer on I2C at 0x60; no wheel will turn");
   }
+  loadSettings(millis());
   scanner.begin();
   rover.begin(mode, millis());
+  if (settings.checksAtBoot()) rover.checkWithoutWheels(millis());
   // Before WiFi: pairing rewrites the board's MAC address.
   if (features::GAMEPAD) gamepad.begin(features::PS3_HOST_MAC);
   flashSlot.begin();  // reads the whole running image, which loop() could not afford
@@ -102,5 +150,7 @@ void loop() {
   const uint32_t now = millis();
   rover.update(now);  // move deadlines first, then one step of exploration
   gamepad.update();   // reads its own clock: a pad report can be newer than `now`
+  serialControl.update(now);
   network.update(now);
+  saveSettings(now);
 }

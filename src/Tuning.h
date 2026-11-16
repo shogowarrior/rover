@@ -62,6 +62,27 @@ constexpr uint32_t CHECK_REST_MS = 400;
 // extras/joystick/js/protocol.js is the panel's copy.
 constexpr int SONAR_AIM_MAX_DEG = 80;
 
+// --- Control and settings (Control.h, Settings.h) ---------------------------
+
+// A controller that drove the rover keeps control this long after its last
+// command: another, ranked below it in the priority, is refused until then,
+// and one ranked above takes over at once. Longer than every client's
+// re-send interval (200 ms: the panel, the pad), so a held stick never loses
+// control between two of its re-sends; short enough that a controller let go
+// hands over within a second. CONTROL_HOLD_MS in extras/joystick/js/protocol.js
+// is the panel's copy.
+constexpr uint32_t CONTROL_HOLD_MS = 1000;
+
+// A change of setting is written to flash once nothing has changed for this
+// long and the rover is at rest: the pad's right stick changes the aim on
+// every pass while it pans, and each write can hold the loop for a flash
+// erase.
+constexpr uint32_t SETTINGS_SAVE_DELAY_MS = 3000;
+
+// The settings go to every client at most this often while they change (the
+// pad panning the sonar), and at once to a client that connects.
+constexpr uint32_t SETTINGS_BROADCAST_MS = 250;
+
 // --- Autonomy thresholds a client displays ---------------------------------
 
 // Exploration stops a cruise when something in the rover's path is this close

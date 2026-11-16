@@ -36,10 +36,11 @@ constexpr uint32_t LOG_LINE_GAP_MS = 50;
 
 }  // namespace
 
-RemoteControl::RemoteControl(Rover& rover, kinematics::ControlScheme& scheme, FirmwareUpdate& firmware,
+RemoteControl::RemoteControl(Rover& rover, Control& control, Settings& settings, FirmwareUpdate& firmware,
                              Gamepad& gamepad, EventLog& log)
     : rover(rover),
-      scheme(scheme),
+      control(control),
+      settings(settings),
       firmware(firmware),
       gamepad(gamepad),
       log(log),
@@ -78,12 +79,13 @@ void RemoteControl::update(uint32_t now) {
   send(firmware.update(now));
 
   server.loop();
+  sendSettings(now);
   sendLogLines(now);
 
   if (timing::since(now, lastMetricsMs) >= tuning::METRICS_INTERVAL_MS) broadcastMetrics(now);
   if (timing::since(now, lastBroadcastMs) < tuning::TELEMETRY_INTERVAL_MS) return;
   lastBroadcastMs = now;
-  if (server.connectedClients() > 0) broadcastTelemetry();
+  if (server.connectedClients() > 0) broadcastTelemetry(now);
 }
 
 void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, size_t length) {
@@ -118,10 +120,11 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
         nextLine[client] = log.oldestSeq();
         lastLineMs[client] = millis() - LOG_LINE_GAP_MS;
         ignoredOnce[client] = false;
+        settingsOwed[client] = true;
       }
       const IPAddress remote = server.remoteIP(client);
-      log.add(millis(), EventLog::INFO, "Link: client %u connected from %d.%d.%d.%d", client, remote[0],
-              remote[1], remote[2], remote[3]);
+      log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u connected from %d.%d.%d.%d", client,
+              remote[0], remote[1], remote[2], remote[3]);
       break;
     }
 
@@ -129,14 +132,13 @@ void RemoteControl::onEvent(uint8_t client, WStype_t type, uint8_t* payload, siz
       if (client < WEBSOCKETS_SERVER_CLIENT_MAX) connected[client] = false;
       server.forgetMissedPongs(client);  // the slot's next client starts afresh
       firmware.disconnected(client);
+      log.add(millis(), EventLog::INFO, SOURCE_WIFI, "Link: client %u disconnected", client);
       if (client == driver) {
         // The operator has lost the ability to steer. Anything other than
-        // stopping leaves the rover driving on its last instruction.
+        // stopping leaves the rover driving on its last instruction, unless
+        // another controller has taken over since.
         driver = NO_CLIENT;
-        log.add(millis(), EventLog::WARN, "Link: client %u, the driver, disconnected: stopped", client);
-        rover.stop(millis());
-      } else {
-        log.add(millis(), EventLog::INFO, "Link: client %u disconnected", client);
+        control.lost(SOURCE_WIFI, millis());
       }
       break;
 
@@ -162,29 +164,18 @@ void RemoteControl::onCommand(uint8_t client, const uint8_t* payload, size_t len
 
   const uint32_t now = millis();
   const protocol::Message message = protocol::readMessage(input.as<JsonVariantConst>());
-  switch (message.kind) {
-    case protocol::Message::DRIVE:
-      if (driver != client) log.add(now, EventLog::INFO, "Link: client %u took control", client);
+  switch (control.apply(SOURCE_WIFI, message, now)) {
+    case Control::ACCEPTED:
+      if (driver != client) log.add(now, EventLog::INFO, SOURCE_WIFI, "Link: client %u is driving", client);
       driver = client;
-      rover.command(message.command.move, message.command.speed, message.command.durationMs, now);
       break;
-    // Settings take no control: an exploring rover explores on.
-    case protocol::Message::SET_SCHEME:
-      if (scheme != message.scheme) {
-        log.add(now, EventLog::INFO, "Scheme %s, from client %u", protocol::schemeName(message.scheme), client);
-      }
-      scheme = message.scheme;
+    case Control::REFUSED:  // Control says so in the log
+    case Control::SETTING:  // Settings does
       break;
-    case protocol::Message::SET_SONAR:
-      rover.setSonar(message.sonar, message.hasAim ? message.aimDeg : rover.status().aimDeg, now);
-      break;
-    case protocol::Message::SET_PAD:
-      gamepad.setEnabled(message.padOn, now);
-      break;
-    case protocol::Message::IGNORE:
+    case Control::IGNORED:
       noteIgnored(client, "a setting with a value it does not know");
       break;
-    case protocol::Message::OTA:
+    case Control::UPDATE:
       onUpdateRequest(client, message.ota);  // its strings live in `input`
       break;
   }
@@ -195,7 +186,7 @@ void RemoteControl::noteIgnored(uint8_t client, const char* what) {
     if (ignoredOnce[client]) return;
     ignoredOnce[client] = true;
   }
-  log.add(millis(), EventLog::WARN, "Link: ignored %s from client %u", what, client);
+  log.add(millis(), EventLog::WARN, SOURCE_WIFI, "Link: ignored %s from client %u", what, client);
 }
 
 void RemoteControl::onUpdateRequest(uint8_t client, const protocol::OtaRequest& request) {
@@ -229,11 +220,12 @@ void RemoteControl::send(const FirmwareUpdate::Reply& reply) {
   server.sendTXT(reply.client, frame, length);
 }
 
-void RemoteControl::broadcastTelemetry() {
+void RemoteControl::broadcastTelemetry(uint32_t now) {
   protocol::Report report;
   report.status = rover.status();
-  report.scheme = scheme;
+  report.scheme = settings.scheme();
   report.pad = gamepad.state();
+  report.control = control.holder(now);
   report.temperatureC = temperatureRead();
   report.firmware = firmware.running();
   char frame[protocol::TELEMETRY_MAX_BYTES];
@@ -247,6 +239,32 @@ void RemoteControl::broadcastTelemetry() {
     return;
   }
   server.broadcastTXT(frame, length);
+}
+
+// Every setting, to each client that has just connected, and to every client
+// as they change, at most every SETTINGS_BROADCAST_MS: the pad's right stick
+// changes the aim on every pass while it pans.
+void RemoteControl::sendSettings(uint32_t now) {
+  const bool changed = settings.version() != sentSettingsVersion &&
+                       timing::since(now, lastSettingsMs) >= tuning::SETTINGS_BROADCAST_MS;
+  bool owed = false;
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) owed = owed || settingsOwed[client];
+  if (!changed && !owed) return;
+  char frame[protocol::SETTINGS_MAX_BYTES];
+  const size_t length = protocol::writeSettings(settings, frame, sizeof(frame));
+  if (length == 0) return;  // test_settings_fit keeps this from happening
+  if (changed) {
+    sentSettingsVersion = settings.version();
+    lastSettingsMs = now;
+    server.broadcastTXT(frame, length);
+    for (bool& owing : settingsOwed) owing = false;
+    return;
+  }
+  for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; client++) {
+    if (!settingsOwed[client]) continue;
+    settingsOwed[client] = false;
+    if (connected[client]) server.sendTXT(client, frame, length);
+  }
 }
 
 void RemoteControl::sendLogLines(uint32_t now) {

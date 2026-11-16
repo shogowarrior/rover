@@ -57,13 +57,6 @@ bool readOtaRequest(JsonVariantConst json, OtaRequest& request) {
   return json["ota"].is<const char*>() && json["move"].isNull();
 }
 
-// Whether `json` is a configuration message keyed `key`: a string there and
-// no "move", so a client that only changes a setting never takes control
-// from an exploring rover.
-bool isSetting(JsonVariantConst json, const char* key) {
-  return json[key].is<const char*>() && json["move"].isNull();
-}
-
 // The value of `count` choices whose name `name()` gives is `text`, or false.
 template <typename T>
 bool readName(const char* text, T& value, int count, const char* (*name)(T)) {
@@ -77,44 +70,61 @@ bool readName(const char* text, T& value, int count, const char* (*name)(T)) {
   return false;
 }
 
+// The fields of a "settings" object that hold a value we know. An unknown
+// value leaves its field out, and the rest still apply.
+Settings::Change readSettings(JsonVariantConst object) {
+  Settings::Change change;
+  const char* text = object["scheme"];
+  if (text != nullptr) change.hasScheme = readName<kinematics::ControlScheme>(text, change.scheme, 2, schemeName);
+  text = object["sonar"];
+  if (text != nullptr) change.hasSonar = readName<Explorer::SonarMode>(text, change.sonar, 3, sonarName);
+  // A number only; Settings::setAim() clamps it.
+  if (object["aim"].is<int>()) {
+    change.hasAim = true;
+    change.aimDeg = object["aim"];
+  }
+  text = object["pad"];
+  if (text != nullptr && (strcmp(text, "ON") == 0 || strcmp(text, "OFF") == 0)) {
+    change.hasPad = true;
+    change.padOn = strcmp(text, "ON") == 0;
+  }
+  JsonArrayConst order = object["priority"];
+  if (!order.isNull() && order.size() == CONTROLLER_COUNT) {
+    change.hasPriority = true;
+    for (int rank = 0; rank < CONTROLLER_COUNT && change.hasPriority; rank++) {
+      const char* name = order[rank];
+      change.hasPriority = name != nullptr && readName<Source>(name, change.priority[rank], CONTROLLER_COUNT, sourceName);
+    }
+  }
+  if (object["checksAtBoot"].is<bool>()) {
+    change.hasChecksAtBoot = true;
+    change.checksAtBoot = object["checksAtBoot"];
+  }
+  return change;
+}
+
 }  // namespace
 
 Message readMessage(JsonVariantConst json) {
   Message message;
   message.kind = Message::DRIVE;
   message.command = readCommand(json);
-  message.scheme = kinematics::SCHEME_NORMAL;
-  message.sonar = Explorer::SONAR_SWEEP;
-  message.hasAim = false;
-  message.aimDeg = 0;
-  message.padOn = true;
   if (readOtaRequest(json, message.ota)) {
     message.kind = Message::OTA;
     return message;
   }
+  if (!json["move"].isNull()) return message;
 
-  if (isSetting(json, "scheme")) {
-    message.kind = readName<kinematics::ControlScheme>(json["scheme"], message.scheme, 2, schemeName)
-                       ? Message::SET_SCHEME
-                       : Message::IGNORE;
-  } else if (isSetting(json, "sonar")) {
-    message.kind = readName<Explorer::SonarMode>(json["sonar"], message.sonar, 3, sonarName)
-                       ? Message::SET_SONAR
-                       : Message::IGNORE;
-    // A number only; Rover::setSonar() clamps it.
-    message.hasAim = json["aim"].is<int>();
-    message.aimDeg = json["aim"] | 0;
-  } else if (isSetting(json, "pad")) {
-    const char* name = json["pad"];
-    message.kind = Message::SET_PAD;
-    if (strcmp(name, "ON") == 0) {
-      message.padOn = true;
-    } else if (strcmp(name, "OFF") == 0) {
-      message.padOn = false;
-    } else {
-      message.kind = Message::IGNORE;
-    }
+  if (!json["settings"].isNull()) {
+    // Not an object, it names nothing we know: ignored, never a STOP.
+    if (json["settings"].is<JsonObjectConst>()) message.settings = readSettings(json["settings"]);
+  } else if (json["scheme"].is<const char*>()) {
+    message.settings.hasScheme =
+        readName<kinematics::ControlScheme>(json["scheme"], message.settings.scheme, 2, schemeName);
+  } else {
+    return message;  // a drive command
   }
+  message.kind = message.settings.empty() ? Message::IGNORE : Message::SETTINGS;
   return message;
 }
 
@@ -228,6 +238,7 @@ size_t writeTelemetry(const Report& report, char* out, size_t capacity) {
   if (status.hasAimCm) doc["aimCm"] = status.aimCm;
   if (status.check != nullptr) doc["check"] = status.check;
   if (padName(report.pad) != nullptr) doc["pad"] = padName(report.pad);
+  if (report.control != SOURCE_ROVER) doc["control"] = sourceName(report.control);
   if (status.phase != nullptr) doc["phase"] = status.phase;
   if (status.haltReason != nullptr) doc["halt"] = status.haltReason;
 
@@ -250,7 +261,22 @@ size_t writeLogLine(const EventLog::Entry& entry, char* out, size_t capacity) {
   doc["log"] = static_cast<const char*>(entry.text);
   doc["seq"] = entry.seq;
   doc["t"] = entry.atMs;
+  doc["src"] = sourceName(entry.source);
   if (entry.level == EventLog::WARN) doc["warn"] = true;
+  if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
+  return serializeJson(doc, out, capacity);
+}
+
+size_t writeSettings(const Settings& settings, char* out, size_t capacity) {
+  JsonDocument doc;
+  JsonObject values = doc["settings"].to<JsonObject>();
+  values["scheme"] = schemeName(settings.scheme());
+  values["sonar"] = sonarName(settings.sonar());
+  values["aim"] = settings.aimDeg();
+  values["pad"] = settings.padOn() ? "ON" : "OFF";
+  JsonArray order = values["priority"].to<JsonArray>();
+  for (int rank = 0; rank < CONTROLLER_COUNT; rank++) order.add(sourceName(settings.priority(rank)));
+  values["checksAtBoot"] = settings.checksAtBoot();
   if (measureJson(doc) >= capacity) return 0;  // leave room for the terminator
   return serializeJson(doc, out, capacity);
 }

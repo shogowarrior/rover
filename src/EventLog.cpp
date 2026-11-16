@@ -3,17 +3,29 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+void EventLog::add(uint32_t now, Level level, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  addLine(now, level, SOURCE_ROVER, format, args);
+  va_end(args);
+}
+
+void EventLog::add(uint32_t now, Level level, Source source, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  addLine(now, level, source, format, args);
+  va_end(args);
+}
+
 // The line numbered `seq` lives at seq % CAPACITY. CAPACITY divides 2^32, so
 // that holds across the counter's wrap too.
-void EventLog::add(uint32_t now, Level level, const char* format, ...) {
+void EventLog::addLine(uint32_t now, Level level, Source source, const char* format, va_list args) {
   Entry& entry = entries[next % CAPACITY];
   entry.seq = next;
   entry.atMs = now;
   entry.level = level;
-  va_list args;
-  va_start(args, format);
+  entry.source = source;
   vsnprintf(entry.text, TEXT_MAX, format, args);
-  va_end(args);
   // ASCII only. A line cut short at TEXT_MAX could split a multibyte
   // character, and a WebSocket text frame that is not valid UTF-8 makes a
   // browser close the link: the driver's, which stops the rover.

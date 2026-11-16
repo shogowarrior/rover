@@ -8,6 +8,7 @@
 #include "Hardware.h"
 #include "MoveCodes.h"
 #include "SelfTest.h"
+#include "Settings.h"
 
 // Mode arbitration, move deadlines and the one clamped path to the motors.
 // Pure core (AGENTS.md, Architecture), host-tested in test/test_rover. It
@@ -30,7 +31,7 @@ class Rover {
     bool hasScan;            // false until every bearing has been measured
     float scanCm[Explorer::BEARING_COUNT];
     bool motorsReady;        // false when the motor driver did not answer at boot
-    Explorer::SonarMode sonar;  // where manual mode points the sonar
+    Explorer::SonarMode sonar;  // where manual mode points the sonar (Settings)
     int aimDeg;                 // SONAR_AIM's angle, positive left
     bool hasAimCm;              // in manual mode aiming, aimCm is a reading taken at aimDeg
     float aimCm;
@@ -39,7 +40,8 @@ class Rover {
     uint32_t silentPings;       // ...and those that heard no echo
   };
 
-  Rover(Motors& motors, RangeScanner& scanner, EventLog& log);
+  // Manual mode points the sonar as `settings` say.
+  Rover(Motors& motors, RangeScanner& scanner, const Settings& settings, EventLog& log);
 
   void begin(Mode initialMode, uint32_t now);
 
@@ -66,11 +68,9 @@ class Rover {
   // client can reach it again. `why` goes in the log.
   void standDown(uint32_t now, const char* why);
 
-  // Where manual mode points the sonar: configuration, not a command, so it
-  // takes no control and stops nothing. Exploring sweeps its own way, and
-  // the setting applies again once manual. `aimDeg` (positive left) is
-  // clamped to tuning::SONAR_AIM_MAX_DEG and kept for SONAR_AIM.
-  void setSonar(Explorer::SonarMode mode, int aimDeg, uint32_t now);
+  // Run the checks that turn no wheel (SelfTest.h): main.cpp's, at boot,
+  // when Settings::checksAtBoot() says so. Any command ends them.
+  void checkWithoutWheels(uint32_t now);
 
   // Make a stop's pending second write once it is due (see release()), and
   // nothing else: no exploring, no sonar, no new motion. update() calls it
@@ -98,13 +98,12 @@ class Rover {
   void release(uint32_t now);
 
   Motors& motors;
+  const Settings& settings;
   EventLog& log;
   Explorer explorer;
   SelfTest selfTest;
 
   Mode currentMode = MODE_AUTONOMOUS;
-  Explorer::SonarMode sonarMode = Explorer::SONAR_FRONT;
-  int aimDeg = 0;
   const MovePattern* currentPattern = nullptr;  // meaningful only while moving
   int currentSpeed = 0;
   bool moving = false;

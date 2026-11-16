@@ -8,8 +8,10 @@
 #include "Explorer.h"
 #include "MovePatterns.h"
 
-// The rover's checks, run when a client sends RUN_CHECKS: what a bench check
-// would find, run by the rover itself, each result a line in the EventLog.
+// The rover's checks, run when a controller sends RUN_CHECKS, or at boot
+// without the wheels' steps when Settings::checksAtBoot() says so: what a
+// bench check would find, run by the rover itself, each result a line in the
+// EventLog.
 // Pure core, owned and stepped by Rover, host-tested in test/test_rover.
 //
 // In order:
@@ -38,7 +40,8 @@ class SelfTest {
 
   SelfTest(const Explorer& explorer, EventLog& log) : explorer(explorer), log(log) {}
 
-  void start(uint32_t now, bool motorsReady);
+  // `wheels` false runs steps 1 and 2 alone: nothing turns but the servo.
+  void start(uint32_t now, bool motorsReady, bool wheels);
   // End the checks early, saying why. Does nothing when none are running.
   void cancel(uint32_t now, const char* why);
   bool running() const { return step >= 0; }
@@ -64,6 +67,7 @@ class SelfTest {
 
   int step = -1;  // -1 while no checks run
   bool motorsReady = false;
+  bool wheels = false;
   // The sonar step: pings counted at its bearing, and those that heard.
   bool primed = false;  // seenPings holds Explorer's count from this step
   uint32_t seenPings = 0;

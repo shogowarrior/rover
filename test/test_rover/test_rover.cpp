@@ -20,6 +20,7 @@ namespace {
 FakeMotors* motors;
 FakeScanner* scanner;
 EventLog* events;
+Settings* settings;
 Rover* rover;
 uint32_t clockNow = 0;  // stamps the scanner's aims and pings
 
@@ -63,11 +64,13 @@ void setUp(void) {
   clockNow = 0;
   scanner->clock = &clockNow;
   events = new EventLog();
-  rover = new Rover(*motors, *scanner, *events);
+  settings = new Settings(*events, kinematics::SCHEME_NORMAL);
+  rover = new Rover(*motors, *scanner, *settings, *events);
 }
 
 void tearDown(void) {
   delete rover;
+  delete settings;
   delete events;
   delete scanner;
   delete motors;
@@ -516,7 +519,7 @@ std::vector<int> pingsFrom(size_t from) {
 void test_manual_mode_points_the_sonar_as_set(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_FRONT, rover->status().sonar);  // the default
-  rover->setSonar(Explorer::SONAR_SWEEP, 0, 0);
+  settings->setSonar(Explorer::SONAR_SWEEP, SOURCE_WIFI, 0);
   runFor(0, 4000);
   TEST_ASSERT_EQUAL_INT(Explorer::SONAR_SWEEP, rover->status().sonar);
   const std::vector<int> swept = pingsFrom(0);
@@ -528,7 +531,8 @@ void test_manual_mode_points_the_sonar_as_set(void) {
   }
 
   scanner->setArc(FRONT_SERVO - 30, FRONT_SERVO - 30, 42.0f);
-  rover->setSonar(Explorer::SONAR_AIM, 30, 4000);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 4000);
+  settings->setAim(30, SOURCE_WIFI, 4000);
   const size_t before = scanner->pingAngles.size();
   runFor(4000, 1000);
   for (int angle : pingsFrom(before)) TEST_ASSERT_EQUAL_INT(FRONT_SERVO - 30, angle);
@@ -544,9 +548,10 @@ void test_manual_mode_points_the_sonar_as_set(void) {
 // Past the servo's end stops, where a cheap servo strains and buzzes.
 void test_the_aim_is_clamped(void) {
   rover->begin(Rover::MODE_MANUAL, 0);
-  rover->setSonar(Explorer::SONAR_AIM, 200, 0);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, 0);
+  settings->setAim(200, SOURCE_WIFI, 0);
   TEST_ASSERT_EQUAL_INT(tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
-  rover->setSonar(Explorer::SONAR_AIM, -200, 0);
+  settings->setAim(-200, SOURCE_WIFI, 0);
   TEST_ASSERT_EQUAL_INT(-tuning::SONAR_AIM_MAX_DEG, rover->status().aimDeg);
   runFor(0, 3000);  // the one sweep, then the held aim
   const std::vector<int> held = pingsFrom(Explorer::BEARING_COUNT);
@@ -559,7 +564,8 @@ void test_the_aim_is_clamped(void) {
 void test_the_sonar_setting_takes_no_control(void) {
   rover->begin(Rover::MODE_AUTONOMOUS, 0);
   uint32_t now = runUntilCruising(0);
-  rover->setSonar(Explorer::SONAR_AIM, 50, now);
+  settings->setSonar(Explorer::SONAR_AIM, SOURCE_WIFI, now);
+  settings->setAim(50, SOURCE_WIFI, now);
   TEST_ASSERT_EQUAL_INT(Rover::MODE_AUTONOMOUS, rover->status().mode);
   TEST_ASSERT_TRUE(motors->driving);
   const size_t before = scanner->pingAngles.size();
@@ -761,13 +767,10 @@ void test_mode_changes_and_stand_downs_are_logged(void) {
   TEST_ASSERT_TRUE(logged("Stood down: WiFi lost", EventLog::WARN));
   rover->command(99, 100, 300, 40);
   TEST_ASSERT_TRUE(logged("Unknown move code 99: stopped", EventLog::WARN));
-  rover->setSonar(Explorer::SONAR_SWEEP, 0, 50);
-  TEST_ASSERT_TRUE(logged("The sonar sweeps in manual mode"));
   // A repeated command is not a mode change: one line, not one per command.
   const uint32_t lines = events->nextSeq();
   rover->command(MOVE_FORWARD, 100, 300, 60);
   rover->command(MOVE_FORWARD, 100, 300, 70);
-  rover->setSonar(Explorer::SONAR_SWEEP, 0, 80);
   TEST_ASSERT_EQUAL_UINT32(lines, events->nextSeq());
 }
 
