@@ -59,8 +59,9 @@ environment the rover should run.
 
 The serial console, `pio device monitor -e car_wire` (with the exception
 decoder), is operator-only too. Opening it can reset the board through EN,
-and an EN reset counts as a power-on, so the rover starts exploring: treat it
-like flashing, with the rover on a stand. It also never exits on its own.
+which restarts it: treat it like flashing, with the rover on a stand. Every
+boot comes up in manual mode (`AUTONOMOUS_AT_POWER_ON` is false), but a build
+that turns that on would start exploring. It also never exits on its own.
 
 ## Layout
 
@@ -223,12 +224,13 @@ released:
   the rover as the stand-down left it.
 - The gamepad goes silent for `GAMEPAD_SILENCE_MS` (500 ms). A report that old
   never reads as fresh again, however long the silence.
-- Any reset other than a power-on (OTA from either path, crash, watchdog,
-  brownout) starts in manual (`startupMode()` in `main.cpp`), so a recovering
-  rover stays put once `DriveTrain::begin()` has released the wheels (see
-  above). The EN button, and so a USB flash, resets like a power-on and
-  starts exploring. An update over the link restarts the rover only once it
-  is at rest.
+- Every boot starts in manual (`startupMode()` in `main.cpp`), so a
+  recovering rover stays put once `DriveTrain::begin()` has released the
+  wheels (see above). `AUTONOMOUS_AT_POWER_ON` in `Features.h`, off, would
+  let a power-on (the EN button, and so a USB flash, included) start
+  exploring; any other reset (OTA from either path, crash, watchdog,
+  brownout) starts in manual regardless. An update over the link restarts
+  the rover only once it is at rest.
 - A new image from either OTA path boots on trial (`verifyRollbackLater()`
   in `Network.cpp`): `Network` keeps it once `loop()` has run it for
   `tuning::IMAGE_TRIAL_MS` (30 s) since it first got online, and until then

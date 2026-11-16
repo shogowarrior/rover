@@ -5,9 +5,9 @@
     python3 client/drive.py --host rover.local
     python3 client/drive.py --listen        # telemetry only, no control
 
-After power-on the rover explores on its own. After any other reset -- an OTA
-flash, a crash, the watchdog, a brownout -- it starts in manual and waits,
-stopped; losing WiFi, or the start of an OTA flash, drops it to manual too.
+Every boot starts in manual: the rover waits, stopped, its sonar held ahead
+after one sweep; losing WiFi, or the start of an OTA flash, drops it to
+manual too.
 Any command takes control, a stop included. Press `t` to hand control back and
 let the rover explore; if exploration has halted (boxed in, sensor silent),
 `t` makes it look again.
@@ -82,13 +82,13 @@ MODE_AUTONOMOUS = "AUTONOMOUS"
 
 # Shown in place of the move while telemetry says "motorsReady": false. The
 # warning says what a reset does: whoever reads it may have hands on the
-# wiring, and a power-on or EN reset starts exploring.
+# wiring, and a reset must not start it moving.
 NO_MOTORS = "NO MOTORS"
 NO_MOTORS_WARNING = """\
   NO MOTORS: the motor shield did not answer when the rover booted, so the
   wheels cannot move. Check its I2C wiring and power, then reset the rover
-  with its wheels off the ground: after a power-on or the EN button it
-  starts exploring."""
+  with its wheels off the ground: it starts in manual, but the shield, once
+  it answers, holds whatever it was last told."""
 
 KEYS = {
     "w": (MOVE_FORWARD, "forward"),

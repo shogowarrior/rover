@@ -15,8 +15,12 @@ namespace {
 FakeMotors* motors;
 FakeScanner* scanner;
 Rover* rover;
+uint32_t clockNow = 0;  // stamps the scanner's aims and pings
 
-void updateRover(uint32_t now) { rover->update(now); }
+void updateRover(uint32_t now) {
+  clockNow = now;
+  rover->update(now);
+}
 
 // Runs rover.update() every 5 ms from `from` for `ms`, returning the new time.
 uint32_t runFor(uint32_t from, uint32_t ms) {
@@ -50,6 +54,8 @@ void assertStaysStopped(uint32_t from) {
 void setUp(void) {
   motors = new FakeMotors();
   scanner = new FakeScanner();
+  clockNow = 0;
+  scanner->clock = &clockNow;
   rover = new Rover(*motors, *scanner);
 }
 
@@ -228,6 +234,52 @@ void test_manual_mode_scans_but_never_drives(void) {
   TEST_ASSERT_TRUE(scanner->pings > 20);
   TEST_ASSERT_TRUE(rover->status().hasScan);
   TEST_ASSERT_NULL(rover->status().phase);
+}
+
+// A rover at rest does not sweep its servo back and forth: one sweep, so
+// every bearing has a reading, then the sonar held straight ahead, still,
+// its front reading kept live.
+void test_manual_mode_sweeps_once_then_holds_the_sonar_ahead(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  runFor(0, 20000);
+  TEST_ASSERT_TRUE(scanner->pingAngles.size() > 20);
+  const int sweep[] = {20, 55, 90, 125, 160};
+  bool swept[5] = {false, false, false, false, false};
+  for (size_t i = 0; i < 5; i++) {
+    for (int b = 0; b < 5; b++) {
+      if (scanner->pingAngles[i] == sweep[b]) swept[b] = true;
+    }
+  }
+  for (int b = 0; b < 5; b++) TEST_ASSERT_TRUE(swept[b]);
+  for (size_t i = 5; i < scanner->pingAngles.size(); i++) TEST_ASSERT_EQUAL_INT(90, scanner->pingAngles[i]);
+  // The servo moved to the front once, and not again.
+  size_t aimsAfterSweep = 0;
+  for (size_t i = 0; i < scanner->aimTimes.size(); i++) {
+    if (scanner->aimTimes[i] > scanner->pingTimes[4]) aimsAfterSweep++;
+  }
+  TEST_ASSERT_TRUE(aimsAfterSweep <= 1);
+  TEST_ASSERT_EQUAL_INT(90, scanner->aims.back());
+
+  scanner->setArc(90, 90, 37.0f);
+  runFor(20000, 1000);
+  TEST_ASSERT_EQUAL_FLOAT(37.0f, rover->status().scanCm[Explorer::FRONT]);
+  TEST_ASSERT_EQUAL_INT(0, motors->driveCalls);
+}
+
+// Handed back to exploring, the rover sweeps every bearing before it moves:
+// the readings held while it looked ahead are the front's alone.
+void test_exploring_after_looking_ahead_sweeps_first(void) {
+  rover->begin(Rover::MODE_MANUAL, 0);
+  uint32_t now = runFor(0, 3000);
+  const size_t before = scanner->pingAngles.size();
+  rover->command(RESUME_AUTONOMOUS, 0, 0, now);
+  now = runUntilCruising(now);
+  bool seen[181] = {false};
+  for (size_t i = before; i < scanner->pingAngles.size(); i++) {
+    if (scanner->pingTimes[i] <= now) seen[scanner->pingAngles[i]] = true;
+  }
+  const int sweep[] = {20, 55, 90, 125, 160};
+  for (int servo : sweep) TEST_ASSERT_TRUE(seen[servo]);
 }
 
 // Without a way back, the first command ever sent stranded the rover in
@@ -460,6 +512,8 @@ int main(int, char**) {
   RUN_TEST(test_stop_takes_control_from_exploration);
   RUN_TEST(test_unknown_code_takes_control_from_exploration);
   RUN_TEST(test_manual_mode_scans_but_never_drives);
+  RUN_TEST(test_manual_mode_sweeps_once_then_holds_the_sonar_ahead);
+  RUN_TEST(test_exploring_after_looking_ahead_sweeps_first);
   RUN_TEST(test_resume_autonomous_hands_control_back);
   RUN_TEST(test_stop_keeps_the_mode);
   RUN_TEST(test_losing_the_link_stops_exploration);

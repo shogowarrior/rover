@@ -13,8 +13,9 @@ has to repeat it.
 ## 0. Before you start
 
 1. **Put the rover on a stand with all four wheels off the ground before you
-   switch it on.** A power-on starts autonomous exploration straight away, and
-   the wheels will turn.
+   switch it on.** Every boot starts in manual, but the checks below turn the
+   wheels, and firmware built with `AUTONOMOUS_AT_POWER_ON` on would start
+   exploring straight away.
 2. Flash over USB and watch the serial monitor:
    ```
    ~/.platformio/penv/bin/pio run -e car_wire -t upload
@@ -235,8 +236,9 @@ With the rover on the stand, running and connected:
    After it reboots, telemetry must show `MANUAL` and the wheels must stay
    still. Any reset other than a power-on (OTA, crash, watchdog, brownout)
    starts in manual.
-2. Press EN or power-cycle: the mode is `AUTONOMOUS` and the wheels turn. A
-   USB flash resets the board through EN too, so it also comes up exploring.
+2. Press EN or power-cycle: the mode is `MANUAL` and the wheels stay still;
+   the sonar sweeps once, then holds straight ahead. A USB flash resets the
+   board through EN too, and comes up the same way.
    Press EN while the wheels turn: they keep turning while you hold it and
    for about half a second after, because the shield's PWM chip is not reset
    with the ESP32 and only the rebooted firmware releases them. If they never

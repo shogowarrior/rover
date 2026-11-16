@@ -1154,6 +1154,50 @@ void test_a_sweep_that_hears_an_echo_resets_the_silent_count(void) {
   TEST_ASSERT_FALSE(everHalted);
 }
 
+// --- manual mode ---------------------------------------------------------------
+
+// Held straight ahead, still, measuring the front alone.
+void test_look_ahead_holds_the_sonar_straight_ahead(void) {
+  Harness h;
+  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
+  TEST_ASSERT_TRUE(h.explorer.hasScan());
+  const size_t pings = h.scanner.pingAngles.size();
+  const size_t aims = h.scanner.aims.size();
+  h.scanner.setArc(FRONT_DEG, FRONT_DEG, 44.0f);
+  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.lookAhead(now); });
+  TEST_ASSERT_TRUE(h.scanner.pingAngles.size() - pings >= 10);
+  for (size_t i = pings; i < h.scanner.pingAngles.size(); i++) TEST_ASSERT_EQUAL_INT(FRONT_DEG, h.scanner.pingAngles[i]);
+  TEST_ASSERT_TRUE(h.scanner.aims.size() - aims <= 1);
+  TEST_ASSERT_EQUAL_FLOAT(44.0f, h.explorer.distanceCm(Explorer::FRONT));
+  for (size_t i = 1; i < h.scanner.pingTimes.size(); i++) {
+    TEST_ASSERT_TRUE(h.scanner.pingTimes[i] - h.scanner.pingTimes[i - 1] >=
+                     static_cast<uint32_t>(ExploreParams().pingIntervalMs));
+  }
+}
+
+// update() after a look starts with a whole sweep before any motion.
+void test_exploring_after_a_look_sweeps_before_it_moves(void) {
+  Harness h;
+  advance(h.now, 2000, 5, [&h](uint32_t now) { h.explorer.survey(now); });
+  advance(h.now, 500, 5, [&h](uint32_t now) { h.explorer.lookAhead(now); });
+  const size_t before = h.scanner.pingAngles.size();
+  h.run(3000);
+  size_t firstMove = h.motions.size();
+  for (size_t i = 0; i < h.motions.size(); i++) {
+    if (h.motions[i].move != STOP) {
+      firstMove = i;
+      break;
+    }
+  }
+  TEST_ASSERT_TRUE(firstMove < h.motions.size());
+  bool seen[181] = {false};
+  for (size_t i = before; i < h.scanner.pingAngles.size(); i++) {
+    if (h.scanner.pingTimes[i] <= h.motionTimes[firstMove]) seen[h.scanner.pingAngles[i]] = true;
+  }
+  const int bearings[] = {LEFT_DEG, FRONT_LEFT_DEG, FRONT_DEG, FRONT_RIGHT_DEG, RIGHT_DEG};
+  for (int servo : bearings) TEST_ASSERT_TRUE(seen[servo]);
+}
+
 // --- telemetry ---------------------------------------------------------------
 
 void test_phase_names(void) {
@@ -1221,6 +1265,9 @@ int main(int, char**) {
   RUN_TEST(test_silent_sensor_halts_without_ever_driving_forward);
   RUN_TEST(test_echo_after_silence_resumes_exploring);
   RUN_TEST(test_a_sweep_that_hears_an_echo_resets_the_silent_count);
+  // manual mode
+  RUN_TEST(test_look_ahead_holds_the_sonar_straight_ahead);
+  RUN_TEST(test_exploring_after_a_look_sweeps_before_it_moves);
   // telemetry
   RUN_TEST(test_phase_names);
   return UNITY_END();
